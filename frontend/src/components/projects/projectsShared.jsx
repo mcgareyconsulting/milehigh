@@ -6,12 +6,12 @@
  *   semantic (color is never the only signal). Formatting helpers/constants live in
  *   projectsFormat.js so this file exports components only (react-refresh lint rule).
  * exports:
- *   StatusPill, HealthTile, SectionCard, ProgressBar, MetaRow
+ *   StatusPill, HealthTile, HealthScore, SectionCard, ProgressBar, MetaRow
  * imports_from: [../../data/projectsDemo, ./projectsFormat]
  * imported_by: [frontend/src/pages/Projects.jsx, frontend/src/pages/ProjectDetail.jsx]
  */
 import { PROJECT_STATUS } from '../../data/projectsDemo';
-import { toneClasses } from './projectsFormat';
+import { toneClasses, bandClasses, STATE_LABEL } from './projectsFormat';
 
 const STATUS_TONE = {
   green: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 ring-green-600/20',
@@ -41,6 +41,58 @@ export function HealthTile({ label, value, tone = 'neutral' }) {
         <span className="mr-1 text-xs align-middle" aria-hidden>{t.glyph}</span>
         {value}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Composite project-health score: a big 0–100 number + band, with the itemized
+ * deductions listed beneath (the "why" behind the number). Non-scored states
+ * (complete / on hold / no data) render "—" with the state label instead.
+ * `data` is the backend `health_score` shape: {score, band, state, deductions[]}.
+ */
+export function HealthScore({ data, className = '' }) {
+  const band = bandClasses[data?.band] || bandClasses.neutral;
+  const scored = data?.state === 'scored' && data?.score != null;
+  const deductions = data?.deductions || [];
+
+  return (
+    <div className={`rounded-xl border ${band.border} ${band.bg} p-4 ${className}`}>
+      <div className="flex items-center gap-4">
+        <div className="flex items-baseline gap-1 shrink-0">
+          <span className={`text-4xl font-bold tabular-nums ${band.text}`}>
+            {scored ? data.score : '—'}
+          </span>
+          {scored && <span className="text-sm text-gray-400 dark:text-slate-500">/100</span>}
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${band.dot}`} />
+            <span className={`text-sm font-semibold ${band.text}`}>
+              {scored ? band.label : (STATE_LABEL[data?.state] || '—')}
+            </span>
+          </div>
+          <div className="text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 mt-0.5">
+            Project Health
+          </div>
+        </div>
+      </div>
+
+      {scored && deductions.length > 0 && (
+        <ul className="mt-3 pt-3 border-t border-gray-200/70 dark:border-slate-600/50 space-y-1.5">
+          {deductions.map(d => (
+            <li key={d.key} className="flex items-start gap-2 text-xs">
+              <span className={`font-bold tabular-nums w-7 shrink-0 text-right ${band.text}`}>{d.points}</span>
+              <span className="text-gray-600 dark:text-slate-300 leading-snug">{d.reason}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {scored && deductions.length === 0 && (
+        <p className="mt-3 pt-3 border-t border-gray-200/70 dark:border-slate-600/50 text-xs text-green-600 dark:text-green-400">
+          No open risk signals — full marks.
+        </p>
+      )}
     </div>
   );
 }

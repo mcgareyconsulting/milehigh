@@ -13,11 +13,41 @@
  * imports_from: [react, react-router-dom, ../data/projectsDemo, ../components/projects/projectsShared, ../components/projects/projectsFormat]
  * imported_by: [frontend/src/App.jsx]
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DEMO_PROJECTS } from '../data/projectsDemo';
 import { StatusPill } from '../components/projects/projectsShared';
-import { fmtMoney, toneClasses } from '../components/projects/projectsFormat';
+import {
+  fmtMoney, toneClasses, bandClasses, resolveHealthScore, resolveUpcoming,
+} from '../components/projects/projectsFormat';
+import { fetchProjectLive } from '../services/projectsApi';
+
+// Real jobs (no demo scaffold) surfaced on the index from live DB data. Start with Alta
+// Metro (560); extend this list as more jobs come online.
+const LIVE_JOB_NUMBERS = ['560'];
+
+// Adapt a live get_project_live payload into the shape ProjectCard reads. Demo-only fields
+// (financials, brief) are intentionally absent — the card guards on them.
+function liveToCardProject(live) {
+  return {
+    id: live.job_number,
+    job_number: live.job_number,
+    project_name: live.name,
+    status: live.is_active === false ? 'complete' : 'active',
+    live: true,
+    percent_complete: live.percent_complete,
+    customer: { general_contractor: live.gc || '—' },
+    team: { project_manager: live.pm || '—' },
+    financials: null,
+    releases: live.releases || [],
+    health: live.health || [],
+    health_score: live.health_score,
+    upcoming: live.upcoming || [],
+    lookahead: live.lookahead || null,
+    brief: null,
+    estimated_completion_date: null,
+  };
+}
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -36,32 +66,37 @@ const SORTS = [
 // The estimate → invoice module flow from the client's Brain-Hive-Mind mind map.
 const MODULE_FLOW = ['Estimate', 'Scope Sheet', 'Releases', 'Production', 'G703 Pay App', 'GC SOV'];
 
-// The three health signals worth surfacing at a glance on the card, with labels
-// short enough to survive the 3-column chip row without truncating.
-const CARD_HEALTH_KEYS = ['submittals_overdue', 'billing_available', 'installation_risk'];
+// Health signals worth surfacing on the card, in preference order — the first three that
+// exist for the project render (live jobs have no billing_available, so unsequenced fab /
+// production fill in). Labels short enough to survive the 3-column chip row.
+const CARD_HEALTH_KEYS = [
+  'submittals_overdue', 'billing_available', 'installation_risk',
+  'unsequenced_fab', 'production_progress',
+];
 const CARD_HEALTH_LABELS = {
   submittals_overdue: 'Subm. Overdue',
   billing_available: 'Billing Avail.',
   installation_risk: 'Install Risk',
+  unsequenced_fab: 'Unseq. Fab',
+  production_progress: 'Production',
 };
 
-const RISK_RANK = { High: 0, Medium: 1, Low: 2, 'On Hold': 3, Complete: 4 };
+// Count distinct GC-lookahead gaps (building+scope with a non-ok severity).
+function lookaheadGaps(lookahead) {
+  if (!lookahead?.activities) return 0;
+  const keys = new Set();
+  for (const a of lookahead.activities) {
+    if (a.severity !== 'ok') keys.add(`${a.building}|${a.scope}`);
+  }
+  return keys.size;
+}
 
-const RISK_CHIP = {
-  High: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
-  Medium: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  Low: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-  'On Hold': 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
-  Complete: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
-};
-
-// Left edge of each card — echoes the risk chip so a scan down the grid reads instantly.
-const RISK_BAR = {
-  High: 'bg-red-500',
-  Medium: 'bg-amber-400',
-  Low: 'bg-green-500',
-  'On Hold': 'bg-slate-400',
-  Complete: 'bg-slate-300 dark:bg-slate-600',
+// Left edge of each card — echoes the health band so a scan down the grid reads instantly.
+const BAND_BAR = {
+  green: 'bg-green-500',
+  amber: 'bg-amber-400',
+  red: 'bg-red-500',
+  neutral: 'bg-slate-300 dark:bg-slate-600',
 };
 
 // Release stage → dot color. The stage label always renders next to the dot,
@@ -81,14 +116,36 @@ function clampPct(n, d) {
   return d ? Math.max(0, Math.min(100, Math.round((n / d) * 100))) : 0;
 }
 
-// Per-project financial rollups the card needs; all computed, never stored.
+// Per-project financial rollups the card needs; all computed, never stored. Returns nulls
+// for a live job that has no financial scaffold yet.
 function derive(p) {
   const f = p.financials;
+  if (!f) return { contractValue: null, billedPct: 0, paidPct: 0 };
   return {
     contractValue: f.original_contract_value + f.approved_change_orders,
     billedPct: clampPct(f.current_billed, f.forecast_invoice_value),
     paidPct: clampPct(f.payments_received, f.forecast_invoice_value),
   };
+}
+
+// "Jul 24" style short date for the upcoming feed.
+function fmtDate(iso) {
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// One health-band counter tile for the portfolio-health summary.
+function BandCount({ band, count, label }) {
+  const b = bandClasses[band] || bandClasses.neutral;
+  return (
+    <div className={`rounded-lg border ${b.border} ${b.bg} px-3 py-2.5`}>
+      <div className={`text-2xl font-bold tabular-nums ${b.text}`}>{count}</div>
+      <div className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 dark:text-slate-400 mt-0.5">
+        <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${b.dot}`} />
+        {label}
+      </div>
+    </div>
+  );
 }
 
 function KpiTile({ label, value, caption }) {
@@ -153,8 +210,14 @@ function HealthChip({ metric }) {
 function ProjectCard({ project, onOpen }) {
   const d = derive(project);
   const healthByKey = Object.fromEntries(project.health.map(h => [h.key, h]));
-  const risk = project.brief?.risk_level || 'Low';
-  const shownReleases = project.releases.slice(0, 3);
+  const cardMetrics = CARD_HEALTH_KEYS.filter(k => healthByKey[k]).slice(0, 3);
+  const hs = resolveHealthScore(project);
+  const band = bandClasses[hs.band] || bandClasses.neutral;
+  const gaps = lookaheadGaps(project.lookahead);
+  // In-flight work first — a live card shouldn't lead with its completed releases.
+  const shownReleases = [...project.releases]
+    .sort((a, b) => ((a.pct ?? 0) >= 100 ? 1 : 0) - ((b.pct ?? 0) >= 100 ? 1 : 0))
+    .slice(0, 3);
   const moreReleases = project.releases.length - shownReleases.length;
 
   return (
@@ -163,7 +226,7 @@ function ProjectCard({ project, onOpen }) {
       onClick={onOpen}
       className="group relative text-left rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 hover:border-accent-400 dark:hover:border-accent-400 hover:shadow-lg hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400 transition-all p-4 pl-5 flex flex-col gap-3 overflow-hidden"
     >
-      <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${RISK_BAR[risk] || RISK_BAR.Low}`} />
+      <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${BAND_BAR[hs.band] || BAND_BAR.neutral}`} />
 
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 flex-wrap">
@@ -171,9 +234,19 @@ function ProjectCard({ project, onOpen }) {
             {project.job_number}
           </span>
           <StatusPill status={project.status} />
+          {project.live && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              Live
+            </span>
+          )}
         </div>
-        <span className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold ${RISK_CHIP[risk] || RISK_CHIP.Low}`}>
-          {risk === 'On Hold' || risk === 'Complete' ? risk : `${risk} risk`}
+        <span
+          title={`Project health: ${hs.state === 'scored' ? band.label : (hs.state || '').replace('_', ' ')}`}
+          className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${band.bg} ${band.text} ${band.border}`}
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${band.dot}`} />
+          {hs.score != null ? `${hs.score}` : '—'}
         </span>
       </div>
 
@@ -182,14 +255,18 @@ function ProjectCard({ project, onOpen }) {
           {project.project_name}
         </h3>
         <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400 truncate">
-          {project.customer.general_contractor} · PM {project.team.project_manager}
+          {project.customer.general_contractor}
+          {project.team.project_manager && project.team.project_manager !== '—' && <> · PM {project.team.project_manager}</>}
         </p>
       </div>
 
-      {/* Work done vs billed — the gap between the two bars is money on the table. */}
+      {/* Work done vs billed — the gap between the two bars is money on the table.
+          A live job has no billing scaffold yet, so only the work meter renders. */}
       <div className="space-y-1.5">
         <Meter label="Work" pct={project.percent_complete} barClass="bg-accent-400" display={`${project.percent_complete}%`} />
-        <Meter label="Billed" pct={d.billedPct} barClass="bg-emerald-500" display={`${d.billedPct}%`} tick={d.paidPct} />
+        {project.financials && (
+          <Meter label="Billed" pct={d.billedPct} barClass="bg-emerald-500" display={`${d.billedPct}%`} tick={d.paidPct} />
+        )}
       </div>
 
       <div className="flex flex-wrap gap-1.5">
@@ -201,17 +278,31 @@ function ProjectCard({ project, onOpen }) {
         )}
       </div>
 
+      {gaps > 0 && (
+        <div className="flex items-center gap-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/50 px-2.5 py-1.5 text-xs">
+          <span aria-hidden>📋</span>
+          <span className="font-semibold text-red-700 dark:text-red-300">
+            GC lookahead: {gaps} gap{gaps === 1 ? '' : 's'}
+          </span>
+          <span className="text-red-600/70 dark:text-red-300/70 truncate">vs {project.lookahead.gc} need dates</span>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-gray-100 dark:border-slate-700">
-        {CARD_HEALTH_KEYS.map(k => healthByKey[k] && <HealthChip key={k} metric={healthByKey[k]} />)}
+        {cardMetrics.map(k => <HealthChip key={k} metric={healthByKey[k]} />)}
       </div>
 
       <div className="flex items-center justify-between pt-2.5 border-t border-gray-100 dark:border-slate-700 text-xs">
         <span className="text-gray-400 dark:text-slate-500">
-          Est. completion <span className="tabular-nums text-gray-600 dark:text-slate-300">{project.estimated_completion_date || '—'}</span>
+          {project.live
+            ? <>{project.releases.length} release{project.releases.length === 1 ? '' : 's'} · live from job log</>
+            : <>Est. completion <span className="tabular-nums text-gray-600 dark:text-slate-300">{project.estimated_completion_date || '—'}</span></>}
         </span>
-        <span className="font-semibold tabular-nums text-gray-800 dark:text-slate-200">
-          {fmtMoney(project.financials.forecast_invoice_value)}
-        </span>
+        {project.financials && (
+          <span className="font-semibold tabular-nums text-gray-800 dark:text-slate-200">
+            {fmtMoney(project.financials.forecast_invoice_value)}
+          </span>
+        )}
       </div>
     </button>
   );
@@ -242,17 +333,32 @@ export default function Projects() {
   const [sort, setSort] = useState('risk');
   const [q, setQ] = useState('');
 
-  const counts = useMemo(() => {
-    const c = { all: DEMO_PROJECTS.length };
-    for (const p of DEMO_PROJECTS) c[p.status] = (c[p.status] || 0) + 1;
-    return c;
+  // Live jobs pulled from the DB (Alta Metro 560), prepended to the demo portfolio.
+  const [liveProjects, setLiveProjects] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(LIVE_JOB_NUMBERS.map(jn => fetchProjectLive(jn).catch(() => null)))
+      .then(payloads => {
+        if (!cancelled) setLiveProjects(payloads.filter(Boolean).map(liveToCardProject));
+      });
+    return () => { cancelled = true; };
   }, []);
 
+  const allProjects = useMemo(() => [...liveProjects, ...DEMO_PROJECTS], [liveProjects]);
+
+  const counts = useMemo(() => {
+    const c = { all: allProjects.length };
+    for (const p of allProjects) c[p.status] = (c[p.status] || 0) + 1;
+    return c;
+  }, [allProjects]);
+
   // Portfolio rollups over open (non-complete) projects — the numbers Bill's
-  // estimate-to-invoice engine exists to move.
+  // estimate-to-invoice engine exists to move. Money sums use only projects with a
+  // financial scaffold (demo); a live job counts toward openCount but not the dollars.
   const kpis = useMemo(() => {
-    const open = DEMO_PROJECTS.filter(p => p.status !== 'complete');
-    const sum = fn => open.reduce((acc, p) => acc + fn(p), 0);
+    const open = allProjects.filter(p => p.status !== 'complete');
+    const withFin = open.filter(p => p.financials);
+    const sum = fn => withFin.reduce((acc, p) => acc + fn(p), 0);
     const contract = sum(p => p.financials.original_contract_value + p.financials.approved_change_orders);
     const billed = sum(p => p.financials.current_billed);
     const forecast = sum(p => p.financials.forecast_invoice_value);
@@ -265,26 +371,45 @@ export default function Projects() {
       leftToBill: Math.max(0, forecast - billed),
       retainage: sum(p => p.financials.retainage),
       pendingCOs: sum(p => p.financials.pending_change_orders),
-      pendingCOCount: open.filter(p => p.financials.pending_change_orders > 0).length,
+      pendingCOCount: open.filter(p => p.financials?.pending_change_orders > 0).length,
     };
-  }, []);
+  }, [allProjects]);
+
+  // Health-band rollup across the portfolio (live score where present, demo fallback else).
+  const bandSummary = useMemo(() => {
+    const counts = { green: 0, amber: 0, red: 0, neutral: 0 };
+    for (const p of allProjects) {
+      const { band } = resolveHealthScore(p);
+      counts[band] = (counts[band] || 0) + 1;
+    }
+    return counts;
+  }, [allProjects]);
+
+  // Cross-project "what's upcoming" — installs/ships in the next 3 weeks, soonest first.
+  const upcoming = useMemo(() => {
+    const events = [];
+    for (const p of allProjects) {
+      for (const e of resolveUpcoming(p)) events.push({ ...e, project: p });
+    }
+    return events.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 12);
+  }, [allProjects]);
 
   // Every warn/risk health signal across the portfolio, risks first — the radar.
   const attention = useMemo(() => {
     const items = [];
-    for (const p of DEMO_PROJECTS) {
-      for (const h of p.health) {
+    for (const p of allProjects) {
+      for (const h of (p.health || [])) {
         if (h.tone === 'risk' || h.tone === 'warn') items.push({ project: p, metric: h });
       }
     }
     return items.sort((a, b) =>
       a.metric.tone === b.metric.tone ? 0 : a.metric.tone === 'risk' ? -1 : 1
     );
-  }, []);
+  }, [allProjects]);
 
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const filtered = DEMO_PROJECTS.filter(p => {
+    const filtered = allProjects.filter(p => {
       if (filter !== 'all' && p.status !== filter) return false;
       if (!needle) return true;
       return (
@@ -294,8 +419,11 @@ export default function Projects() {
         p.team.project_manager.toLowerCase().includes(needle)
       );
     });
-    const byRisk = (a, b) =>
-      (RISK_RANK[a.brief?.risk_level] ?? 2) - (RISK_RANK[b.brief?.risk_level] ?? 2);
+    const scoreOf = p => {
+      const hs = resolveHealthScore(p);
+      return hs.score == null ? 999 : hs.score; // neutral (complete/hold) sinks to the bottom
+    };
+    const byRisk = (a, b) => scoreOf(a) - scoreOf(b); // lowest score = needs attention first
     const sorters = {
       risk: byRisk,
       value: (a, b) => derive(b).contractValue - derive(a).contractValue,
@@ -303,7 +431,7 @@ export default function Projects() {
       job: (a, b) => Number(a.job_number) - Number(b.job_number),
     };
     return [...filtered].sort(sorters[sort] || byRisk);
-  }, [filter, sort, q]);
+  }, [filter, sort, q, allProjects]);
 
   return (
     <div className="flex-1 w-full bg-[#f8fafc] dark:bg-slate-900">
@@ -354,6 +482,56 @@ export default function Projects() {
               value={fmtMoney(kpis.pendingCOs)}
               caption={`across ${kpis.pendingCOCount} project${kpis.pendingCOCount === 1 ? '' : 's'}`}
             />
+          </div>
+        </div>
+
+        {/* Portfolio health band + cross-project what's-upcoming */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+          <div className="lg:col-span-1">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-2">
+              Portfolio Health
+            </h2>
+            <div className="grid grid-cols-2 gap-2.5">
+              <BandCount band="red" count={bandSummary.red} label="At Risk" />
+              <BandCount band="amber" count={bandSummary.amber} label="Needs Attention" />
+              <BandCount band="green" count={bandSummary.green} label="On Track" />
+              <BandCount band="neutral" count={bandSummary.neutral} label="Complete / Hold" />
+            </div>
+          </div>
+          <div className="lg:col-span-2">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-2">
+              Upcoming — Next 3 Weeks ({upcoming.length})
+            </h2>
+            <div className="rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 max-h-64 overflow-y-auto divide-y divide-gray-50 dark:divide-slate-700/50">
+              {upcoming.length === 0 ? (
+                <p className="p-4 text-sm text-gray-400 dark:text-slate-500">
+                  Nothing installing or shipping in the next three weeks.
+                </p>
+              ) : (
+                upcoming.map((e, i) => (
+                  <button
+                    key={`${e.project.id}-${e.kind}-${e.date}-${i}`}
+                    type="button"
+                    onClick={() => navigate(`/projects/${e.project.id}`)}
+                    className="w-full text-left flex items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-700/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400"
+                  >
+                    <span className="w-14 shrink-0 text-xs tabular-nums text-gray-500 dark:text-slate-400">{fmtDate(e.date)}</span>
+                    <span
+                      className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                        e.kind === 'install'
+                          ? 'bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300'
+                          : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      {e.kind}
+                    </span>
+                    <span className="shrink-0 font-mono text-[11px] font-semibold text-gray-700 dark:text-slate-200">{e.release}</span>
+                    <span className="truncate text-sm text-gray-600 dark:text-slate-300">{e.description}</span>
+                    <span className="ml-auto shrink-0 font-mono text-[11px] text-gray-400 dark:text-slate-500">{e.project.job_number}</span>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         </div>
 

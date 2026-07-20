@@ -3,22 +3,27 @@
 schema_version: 1
 purpose: Read-only rollup service for the Projects tab. Turns a `Projects` geofence row
   and its value-joined `Releases` / `Submittals` / event streams into the live payload
-  the ProjectDetail modal renders (identity, releases, submittals, merged activity, and
-  three computed health tiles). Financials/contract/customer sections have no backend
-  source yet and are intentionally NOT produced here — the frontend keeps those on demo
-  data with a "not yet wired" marker.
+  the ProjectDetail modal renders (identity, releases, submittals, merged activity, a set
+  of computed health tiles, and a composite 0-100 health SCORE). The score is the
+  lookahead cross-check (docs/lookahead-cross-check.md) run automatically: start at 100
+  and subtract a capped, itemized penalty per gap signal. Financials/contract/customer
+  sections have no backend source yet and are intentionally NOT produced here — the
+  frontend keeps those on demo data with a "not yet wired" marker.
 exports:
-  list_projects(): list of {job_number, name, is_active, pm, release_count, submittal_count}
+  list_projects(): index rows + counts, PM, computed health_score band, and upcoming dates
   get_project_live(job_number): full live payload for one project, or None if not found
-imports_from: [datetime, sqlalchemy, app.models, app.api.helpers]
+imports_from: [datetime, app.models, app.api.helpers]
 imported_by: [app/brain/projects/routes.py]
 invariants:
   - Read-only. SELECTs only; never mutates.
-  - Rollups are computed, never stored (percent_complete, health tiles, hours).
+  - Rollups are computed, never stored (percent_complete, health tiles, health_score).
   - job_number is the natural key; Releases.job is int, Submittals.project_number is str.
 """
-from datetime import date, datetime
+import re
+from datetime import date, datetime, timedelta
 
+from app.api.helpers import DEFAULT_FAB_ORDER
+from app.brain.lookahead import service as lookahead_service
 from app.models import (
     Projects,
     Releases,
@@ -84,13 +89,30 @@ def _hours(release):
 
 
 def _release_row(r):
-    """Shape one Releases row for the Releases tab / progress rollup."""
+    """Shape one Releases row for the Releases tab / progress + health rollups."""
     is_complete = (
         (r.stage or "").strip().lower() in ("complete", "install complete")
         or (r.job_comp or "").strip().upper() == "X"
         or (r.invoiced or "").strip().upper() == "X"
     )
     pct = 100 if is_complete else _pct_from_stage(r.stage)
+
+    # Install-at-risk: scheduled to install in the past but production isn't finished.
+    at_risk = bool(
+        not is_complete
+        and r.start_install is not None
+        and r.start_install < date.today()
+    )
+    # Unsequenced fab: a released item still sitting on the DEFAULT_FAB_ORDER placeholder
+    # (never given a shop-queue position) yet with a real install date — the exact
+    # "ready but not queued" gap the lookahead playbook flags.
+    unsequenced = bool(
+        not is_complete
+        and r.fab_order is not None
+        and abs(r.fab_order - DEFAULT_FAB_ORDER) < 1e-6
+        and r.start_install is not None
+    )
+
     return {
         "release": r.release,
         "job_name": r.job_name,
@@ -99,6 +121,8 @@ def _release_row(r):
         "stage_group": r.stage_group,
         "hours": _hours(r),
         "start_install": _iso(r.start_install),
+        "ship_date": _iso(r.ship_date),
+        "fab_order": r.fab_order,
         "pct": pct,
         "pm": r.pm,
         "installer": r.installer,
@@ -106,6 +130,8 @@ def _release_row(r):
         "invoiced": r.invoiced,
         "viewer_url": r.viewer_url,
         "is_blocked": (r.stage or "").strip().lower() == "hold",
+        "at_risk": at_risk,
+        "unsequenced": unsequenced,
     }
 
 
@@ -228,25 +254,15 @@ def _activity_feed(job_number_int, submittal_ids, limit=40):
 # ---- health tiles ---------------------------------------------------------
 
 def _health_tiles(releases, submittals):
-    """Three health signals with a real backend source. Each is a computed rollup."""
-    today = date.today()
-
+    """The health signals with a real backend source. Each is a computed rollup and
+    doubles as the drill-down detail behind the composite health_score."""
     overdue = sum(1 for s in submittals if s.get("overdue"))
     open_subs = sum(
         1 for s in submittals
         if (s.get("status") or "").strip().lower() not in _CLOSED_SUBMITTAL_STATUSES
     )
-
-    # Install risk: releases whose install date is in the past but production isn't complete.
-    at_risk = 0
-    for r in releases:
-        si = r.get("start_install")
-        if si and r.get("pct", 0) < 100:
-            try:
-                if date.fromisoformat(si) < today:
-                    at_risk += 1
-            except ValueError:
-                pass
+    at_risk = sum(1 for r in releases if r.get("at_risk"))
+    unsequenced = sum(1 for r in releases if r.get("unsequenced"))
 
     total = len(releases) or 1
     avg_pct = round(sum(r.get("pct", 0) for r in releases) / total)
@@ -263,6 +279,12 @@ def _health_tiles(releases, submittals):
             "label": "Install Risk",
             "value": f"{at_risk}",
             "tone": "risk" if at_risk else "good",
+        },
+        {
+            "key": "unsequenced_fab",
+            "label": "Unsequenced Fab",
+            "value": f"{unsequenced}",
+            "tone": "risk" if unsequenced else "good",
         },
         {
             "key": "production_progress",
@@ -285,6 +307,200 @@ def _health_tiles(releases, submittals):
     ]
 
 
+# ---- health score ---------------------------------------------------------
+
+# Composite 0-100 project-health score. Start at 100, subtract a capped penalty per
+# lookahead gap signal (docs/lookahead-cross-check.md), and return each deduction with
+# its evidence count so the number is never a mystery. The weights below are the single
+# tunable knob — (key, points_each, cap).
+SCORE_RUBRIC = [
+    ("install_at_risk", 10, 30),
+    ("unsequenced_fab", 10, 20),
+    ("overdue_submittal", 8, 24),
+    ("stale_drr", 6, 18),
+]
+
+# Score band cutoffs. >=85 green, 65-84 amber, <65 red.
+_GREEN_MIN = 85
+_AMBER_MIN = 65
+
+# GC-lookahead deductions — only fire when a lookahead cross-check is present. These are the
+# external-benchmark signals the internal rubric structurally can't see (does our schedule
+# meet the GC's need dates?). Points by cross-check status; a slip escalates past a week.
+_LOOKAHEAD_POINTS = {"no_record": 25, "in_drafting": 20, "slip": 6}
+_LOOKAHEAD_SLIP_HIGH_DAYS = 7
+_LOOKAHEAD_SLIP_HIGH_POINTS = 12
+
+# Human scope labels for lookahead deduction reasons.
+_SCOPE_LABEL = {"steel": "structural steel", "embed": "embeds"}
+
+
+def _short_building(building):
+    m = re.search(r"Building\s+([A-D])", building or "", re.IGNORECASE)
+    return f"Bldg {m.group(1).upper()}" if m else (building or "?")
+
+
+def _lookahead_deductions(activities):
+    """Turn GC cross-check results into itemized health deductions (one per real gap)."""
+    out = []
+    for a in activities or []:
+        status = a.get("status")
+        if status not in _LOOKAHEAD_POINTS:
+            continue  # on_track / complete cost nothing
+        bldg = _short_building(a.get("building"))
+        scope = _SCOPE_LABEL.get(a.get("scope"), a.get("scope") or "scope")
+        need = a.get("gc_need")
+        if status == "slip":
+            days = a.get("slip_days") or 0
+            pts = _LOOKAHEAD_SLIP_HIGH_POINTS if days > _LOOKAHEAD_SLIP_HIGH_DAYS else _LOOKAHEAD_POINTS["slip"]
+            reason = f"{bldg} {scope} installs {a.get('our_date')} — {days}d after GC need {need}"
+        elif status == "in_drafting":
+            pts = _LOOKAHEAD_POINTS["in_drafting"]
+            reason = f"{bldg} {scope} still in drafting — GC needs it {need}"
+        else:  # no_record
+            pts = _LOOKAHEAD_POINTS["no_record"]
+            reason = f"{bldg} {scope} has no release — GC needs it {need}"
+        out.append({"key": f"gc_{a.get('wbs_id')}", "count": 1, "points": pts, "reason": reason})
+    return out
+
+
+def _plural(n):
+    return "" if n == 1 else "s"
+
+
+def _deduction_reason(key, n):
+    if key == "install_at_risk":
+        their = "its" if n == 1 else "their"
+        return f"{n} release{_plural(n)} past {their} install date, not yet complete"
+    if key == "unsequenced_fab":
+        return f"{n} release{_plural(n)} not sequenced into the shop queue (placeholder fab order)"
+    if key == "overdue_submittal":
+        return f"{n} submittal{_plural(n)} overdue"
+    if key == "stale_drr":
+        return f"{n} drafting release{_plural(n)} open with no dates set"
+    return key
+
+
+def _is_stale_drr(s):
+    """A DRR still on the board (Open) with nothing scheduling it — no install or due date."""
+    return (
+        (s.type or "").strip().lower() == "drafting release review"
+        and (s.status or "").strip().lower() == "open"
+        and s.start_install is None
+        and s.due_date is None
+    )
+
+
+def _project_state(releases):
+    """Coarse lifecycle state that governs whether a numeric score is meaningful.
+
+    A completed or fully-blocked project reads as neutral ("—"), not red — penalizing a
+    paused or finished job would train the user to distrust the score.
+    """
+    if not releases:
+        return "no_data"
+    if all(r["pct"] >= 100 for r in releases):
+        return "complete"
+    non_complete = [r for r in releases if r["pct"] < 100]
+    if non_complete and all(r["is_blocked"] for r in non_complete):
+        return "on_hold"
+    return "scored"
+
+
+def _health_score(releases, submittal_models, submittals, lookahead=None):
+    """Composite health as {score, band, state, deductions[]}. Computed, never stored.
+
+    When `lookahead` (a crosscheck_for_job payload) is present, the GC-benchmark deductions
+    fire and the generic internal `stale_drr` signal is suppressed — the lookahead's dated
+    in_drafting/no_record deductions are the authoritative, non-duplicative version of it.
+    """
+    state = _project_state(releases)
+    if state != "scored":
+        return {"score": None, "band": "neutral", "state": state, "deductions": []}
+
+    has_lookahead = bool(lookahead and lookahead.get("activities"))
+    counts = {
+        "install_at_risk": sum(1 for r in releases if r.get("at_risk")),
+        "unsequenced_fab": sum(1 for r in releases if r.get("unsequenced")),
+        "overdue_submittal": sum(1 for s in submittals if s.get("overdue")),
+        # Superseded by the dated GC signal when a lookahead is present.
+        "stale_drr": 0 if has_lookahead else sum(1 for s in submittal_models if _is_stale_drr(s)),
+    }
+
+    score = 100
+    deductions = []
+    for key, points, cap in SCORE_RUBRIC:
+        n = counts.get(key, 0)
+        if not n:
+            continue
+        pts = min(n * points, cap)
+        score -= pts
+        deductions.append(
+            {"key": key, "count": n, "points": -pts, "reason": _deduction_reason(key, n)}
+        )
+
+    if has_lookahead:
+        for d in _lookahead_deductions(lookahead["activities"]):
+            score -= d["points"]
+            deductions.append(
+                {"key": d["key"], "count": d["count"], "points": -d["points"], "reason": d["reason"]}
+            )
+
+    score = max(0, score)
+    band = "green" if score >= _GREEN_MIN else "amber" if score >= _AMBER_MIN else "red"
+    deductions.sort(key=lambda d: d["points"])  # biggest hit first
+    return {"score": score, "band": band, "state": "scored", "deductions": deductions}
+
+
+def _upcoming_events(releases, within_days=21):
+    """Non-complete install/ship dates within the window — the 'what's upcoming' feed."""
+    today = date.today()
+    horizon = today + timedelta(days=within_days)
+    out = []
+    for r in releases:
+        if r["pct"] >= 100:
+            continue
+        for kind, iso in (("install", r.get("start_install")), ("ship", r.get("ship_date"))):
+            if not iso:
+                continue
+            try:
+                d = date.fromisoformat(iso)
+            except (ValueError, TypeError):
+                continue
+            if today <= d <= horizon:
+                out.append(
+                    {
+                        "kind": kind,
+                        "date": iso,
+                        "release": r["release"],
+                        "description": r["description"],
+                    }
+                )
+    out.sort(key=lambda e: e["date"])
+    return out
+
+
+def _project_rollup(release_models, submittal_models, lookahead=None):
+    """Shared computed rollup for one project — used by both the index and the detail.
+
+    `lookahead` (a crosscheck_for_job payload, or None) sharpens health_score with the
+    GC-benchmark deductions when present.
+    """
+    releases = [_release_row(r) for r in release_models]
+    submittals = [_submittal_row(s) for s in submittal_models]
+    percent_complete = (
+        round(sum(r["pct"] for r in releases) / len(releases)) if releases else 0
+    )
+    return {
+        "releases": releases,
+        "submittals": submittals,
+        "percent_complete": percent_complete,
+        "health": _health_tiles(releases, submittals),
+        "health_score": _health_score(releases, submittal_models, submittals, lookahead),
+        "upcoming": _upcoming_events(releases),
+    }
+
+
 # ---- public API -----------------------------------------------------------
 
 def _job_number_as_int(job_number):
@@ -294,13 +510,46 @@ def _job_number_as_int(job_number):
         return None
 
 
+def _active_release_models(job_int):
+    """Active Releases for a job number (int), ordered by release."""
+    if job_int is None:
+        return []
+    return (
+        Releases.query.filter(Releases.job == job_int)
+        .filter(Releases.is_active.isnot(False))
+        .order_by(Releases.release)
+        .all()
+    )
+
+
+def _active_releases(project):
+    """Value-joined Releases for a project (active only), ordered by release."""
+    return _active_release_models(_job_number_as_int(project.job_number))
+
+
+def _gc_and_name(job_name):
+    """Split a job-log name like 'Wood Partners - Alta Metro Center' into (gc, project_name).
+
+    The job log prefixes the GC; if there's no separator we treat the whole thing as the name.
+    """
+    if job_name and " - " in job_name:
+        gc, _, rest = job_name.partition(" - ")
+        return gc.strip(), rest.strip()
+    return None, (job_name or "").strip()
+
+
 def list_projects():
-    """Lightweight index: every project + its release/submittal counts and PM."""
+    """Index: every project + counts, PM, computed health_score band, and upcoming dates.
+
+    The composite score and upcoming feed power the portfolio dashboard (health-band
+    summary, cross-project "what's upcoming", at-risk callouts) on the overview page.
+    """
     projects = Projects.query.order_by(Projects.job_number).all()
     out = []
     for p in projects:
-        release_count = p.jobs.count()
-        submittal_count = p.submittals.count()
+        release_models = _active_releases(p)
+        submittal_models = p.submittals.all()
+        rollup = _project_rollup(release_models, submittal_models)
         out.append(
             {
                 "id": p.id,
@@ -310,65 +559,83 @@ def list_projects():
                 "address": p.address,
                 "pm": p.pm.name if p.pm else None,
                 "pm_color": p.pm.color if p.pm else None,
-                "release_count": release_count,
-                "submittal_count": submittal_count,
+                "release_count": len(release_models),
+                "submittal_count": len(submittal_models),
+                "percent_complete": rollup["percent_complete"],
+                "health_score": rollup["health_score"],
+                "upcoming": rollup["upcoming"],
             }
         )
     return out
 
 
 def get_project_live(job_number):
-    """Full live payload for one project, or None if no matching Projects row.
+    """Full live payload for one project, assembled from the job log.
 
-    Only the sections with a real backend source are populated: identity, releases,
-    submittals, activity, and computed health. The caller (frontend) overlays these
-    onto the demo scaffold for financials/contract/customer, which have no source yet.
+    Works two ways: if a `Projects` container row exists, identity comes from it; otherwise
+    (e.g. job 560, which has releases/submittals but no geofence row) identity is derived
+    from the job log itself, so any real job is viewable. Returns None only when the job
+    number has no releases AND no submittals. `has_project_row` tells the UI which case it is.
+
+    Populated from real sources: identity, releases, submittals, activity, health tiles, and
+    the composite health_score. Financials/contract/customer have no source yet — the frontend
+    supplies those from its demo scaffold (or marks them unavailable for a live-only job).
     """
-    project = Projects.query.filter(Projects.job_number == str(job_number)).first()
-    if project is None:
-        return None
+    jn = str(job_number)
+    job_int = _job_number_as_int(jn)
+    project = Projects.query.filter(Projects.job_number == jn).first()
 
-    job_int = _job_number_as_int(project.job_number)
+    if project is not None:
+        release_models = _active_releases(project)
+    else:
+        release_models = _active_release_models(job_int)
 
-    # The model documents the value-join as cast(Projects.job_number, Integer) == Releases.job;
-    # here job_int is that cast materialized, so we filter Releases.job directly.
-    release_rows = (
-        Releases.query.filter(Releases.job == job_int)
-        .filter(Releases.is_active.isnot(False))
-        .order_by(Releases.release)
-        .all()
-        if job_int is not None
-        else []
-    )
     submittal_models = (
-        Submittals.query.filter(Submittals.project_number == project.job_number)
+        Submittals.query.filter(Submittals.project_number == jn)
         .order_by(Submittals.order_number)
         .all()
     )
 
-    releases = [_release_row(r) for r in release_rows]
-    submittals = [_submittal_row(s) for s in submittal_models]
+    # Truly not found: no container row, no releases, no submittals.
+    if project is None and not release_models and not submittal_models:
+        return None
 
-    percent_complete = (
-        round(sum(r["pct"] for r in releases) / len(releases)) if releases else 0
-    )
+    # Mock GC-lookahead cross-check (None unless this job is wired to a sample schedule).
+    lookahead = lookahead_service.crosscheck_for_job(jn, release_models, submittal_models)
+    rollup = _project_rollup(release_models, submittal_models, lookahead)
+    activity = _activity_feed(job_int, [s.submittal_id for s in submittal_models])
 
-    activity = _activity_feed(
-        job_int, [s.submittal_id for s in submittal_models]
-    )
+    if project is not None:
+        name = project.name
+        gc = None
+        is_active = project.is_active
+        address = project.address
+        pm = project.pm.name if project.pm else None
+        pm_color = project.pm.color if project.pm else None
+    else:
+        job_name = release_models[0].job_name if release_models else jn
+        gc, name = _gc_and_name(job_name)
+        is_active = True
+        address = None
+        pm = pm_color = None
 
     return {
-        "job_number": project.job_number,
-        "name": project.name,
-        "is_active": project.is_active,
-        "address": project.address,
-        "pm": project.pm.name if project.pm else None,
-        "pm_color": project.pm.color if project.pm else None,
-        "percent_complete": percent_complete,
-        "releases": releases,
-        "submittals": submittals,
+        "job_number": jn,
+        "name": name,
+        "gc": gc,
+        "has_project_row": project is not None,
+        "is_active": is_active,
+        "address": address,
+        "pm": pm,
+        "pm_color": pm_color,
+        "percent_complete": rollup["percent_complete"],
+        "releases": rollup["releases"],
+        "submittals": rollup["submittals"],
         "activity": activity,
-        "health": _health_tiles(releases, submittals),
+        "health": rollup["health"],
+        "health_score": rollup["health_score"],
+        "upcoming": rollup["upcoming"],
+        "lookahead": lookahead,
         # Sections with no backend source yet — flagged so the UI can mark them.
         "unavailable_sections": ["financials", "contract", "customer", "contacts", "documents"],
     }
