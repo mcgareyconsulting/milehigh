@@ -17,6 +17,34 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.305',
+    date: 'July 21, 2026',
+    summary:
+      'Project health now measures itself against the GC\'s weekly lookahead, and Banana Boy has learned how MHMW actually drafts.',
+    changes: [
+      {
+        type: 'new',
+        title: 'GC lookahead cross-check on Project health',
+        adminOnly: true,
+        detail:
+          'A project\'s health score can now be checked against the general contractor\'s 3-week lookahead: each dated GC need is lined up against our releases and submittals, and the score is docked for real slips and gaps using the GC\'s own dates instead of a generic staleness signal. Running as a pilot on one live job while GC lookahead ingestion is built out.',
+      },
+      {
+        type: 'improved',
+        title: 'Banana Boy knows MHMW\'s conventions',
+        adminOnly: true,
+        detail:
+          'BB chat and the drawing reviewer now draw on a curated MHMW knowledge base — code conventions, abbreviations and lumber, fasteners and parts, weld symbols, and the DRR and submittal-for-GC workflows — so answers and reviews are grounded in how MHMW actually drafts.',
+      },
+      {
+        type: 'fixed',
+        title: 'Install-window cockpit hidden on shipping-lane Timeline cards',
+        detail:
+          'The install-window cockpit no longer shows on Timeline cards in the shipping lanes, where it doesn\'t apply — it now appears only where an install window is meaningful.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.301',
     date: 'July 19, 2026',
     summary:
