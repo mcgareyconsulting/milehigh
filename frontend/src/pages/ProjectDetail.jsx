@@ -16,11 +16,45 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getDemoProject } from '../data/projectsDemo';
 import { fetchProjectLive } from '../services/projectsApi';
 import {
-  StatusPill, HealthTile, SectionCard, ProgressBar, MetaRow,
+  StatusPill, HealthTile, HealthScore, SectionCard, ProgressBar, MetaRow,
 } from '../components/projects/projectsShared';
-import { fmtMoney, fmtPct } from '../components/projects/projectsFormat';
+import { fmtMoney, fmtPct, resolveHealthScore } from '../components/projects/projectsFormat';
 
 const TABS = ['Overview', 'Releases', 'Submittals', 'Schedule', 'Financials', 'Contacts & Docs', 'Activity'];
+
+// Build a project object for a live-only job (real DB data, no demo scaffold). Demo-only
+// sections are left null/empty and the render guards mark them "not available yet".
+function liveOnlyProject(live) {
+  return {
+    id: live.job_number,
+    job_number: live.job_number,
+    project_name: live.name,
+    status: live.is_active === false ? 'complete' : 'active',
+    live: true,
+    percent_complete: live.percent_complete,
+    created_date: null,
+    estimated_start_date: null,
+    estimated_completion_date: null,
+    actual_completion_date: null,
+    customer: { general_contractor: live.gc || '—', owner: '—', architect: '—', structural_engineer: '—' },
+    team: { project_manager: live.pm || '—', estimator: '—', field_superintendent: '—', drafting_lead: '—', account_manager: '—' },
+    contract: { contract_type: '—', retainage_pct: null, payment_terms: '—', billing_schedule: '—', review_complete: false },
+    financials: null,
+    production: null,
+    schedule: null,
+    releases: live.releases || [],
+    submittals: live.submittals || [],
+    contacts: [],
+    documents: [],
+    vendors: [],
+    activity: live.activity || [],
+    health: live.health || [],
+    health_score: live.health_score,
+    upcoming: live.upcoming || [],
+    lookahead: live.lookahead || null,
+    brief: null,
+  };
+}
 
 // Tabs whose data comes from the live /brain/projects endpoint once a real project
 // row matches this job_number. The rest stay on demo data (no backend source yet).
@@ -117,6 +151,97 @@ function ProjectBrief({ brief }) {
   );
 }
 
+const LA_STATUS = {
+  complete:    { label: 'Delivered',   cls: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
+  on_track:    { label: 'On track',    cls: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
+  slip:        { label: 'Slipped',     cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' },
+  in_drafting: { label: 'In drafting', cls: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' },
+  no_record:   { label: 'No release',  cls: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' },
+};
+const LA_SCOPE = { steel: 'Structural Steel', embed: 'Embeds' };
+const LA_SEV_RANK = { high: 0, medium: 1, ok: 2 };
+
+// Dedupe identical activity rows (the export lists a resourced + summary copy of some items).
+function dedupeActivities(activities) {
+  const seen = new Set();
+  const out = [];
+  for (const a of activities) {
+    const key = `${a.building}|${a.scope}|${a.gc_need}|${a.status}|${a.matched_ref}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(a);
+  }
+  return out;
+}
+
+// The GC Lookahead cross-check panel — each GC metal activity matched to our record, with
+// our date vs the GC need date and the resulting gap. Sourced (for now) from the forwarded
+// email's sample schedule; the math + health impact are real.
+function GcLookaheadPanel({ data }) {
+  const rows = dedupeActivities(data.activities).sort(
+    (a, b) => (LA_SEV_RANK[a.severity] ?? 9) - (LA_SEV_RANK[b.severity] ?? 9)
+  );
+  const gaps = rows.filter(r => r.severity !== 'ok').length;
+  return (
+    <SectionCard className="overflow-hidden">
+      <div className="-m-4 mb-0 px-4 py-3 bg-gradient-to-r from-slate-700 to-slate-800 dark:from-slate-800 dark:to-slate-900">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 text-white">
+            <span>📋</span>
+            <span className="font-semibold">GC Lookahead · {data.gc}</span>
+            {gaps > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-400/90 text-red-950">
+                {gaps} gap{gaps === 1 ? '' : 's'}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-white/70">issued {data.issued}</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-300/90 text-amber-950">
+              Mock · email
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="pt-4">
+        <p className="text-xs text-gray-400 dark:text-slate-500 mb-3">
+          From the forwarded email “{data.subject}” — GC need dates cross-checked live against our releases.
+        </p>
+        <div className="overflow-x-auto -mx-4 -mb-4">
+          <table className="w-full text-sm min-w-[680px]">
+            <thead className="border-b border-gray-100 dark:border-slate-700">
+              <tr><Th>Scope</Th><Th>Building</Th><Th>GC Need</Th><Th>Our Record</Th><Th>Our Date</Th><Th>Status</Th></tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
+              {rows.map((a, i) => {
+                const st = LA_STATUS[a.status] || LA_STATUS.on_track;
+                return (
+                  <tr key={`${a.wbs_id}-${i}`}>
+                    <Td className="font-medium">{LA_SCOPE[a.scope] || a.scope}</Td>
+                    <Td className="text-gray-500 dark:text-slate-400">{a.building}</Td>
+                    <Td className="tabular-nums">{a.gc_need}</Td>
+                    <Td className="font-mono text-xs">
+                      {a.matched_ref
+                        ? <span className="text-accent-600 dark:text-accent-300 font-semibold">{a.matched_kind === 'submittal' ? `DRR ${a.matched_ref}` : a.matched_ref}</span>
+                        : <span className="text-red-500">none</span>}
+                    </Td>
+                    <Td className="tabular-nums text-gray-500 dark:text-slate-400">
+                      {a.our_date || '—'}
+                      {a.slip_days > 0 && <span className="text-amber-600 dark:text-amber-400"> +{a.slip_days}d late</span>}
+                      {a.slip_days < 0 && <span className="text-green-600 dark:text-green-400"> {-a.slip_days}d early</span>}
+                    </Td>
+                    <Td><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}>{st.label}</span></Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
 function Th({ children, className = '' }) {
   return <th className={`text-left font-medium text-gray-500 dark:text-slate-400 px-3 py-2 ${className}`}>{children}</th>;
 }
@@ -128,6 +253,28 @@ function TabPanel({ tab, project }) {
   const money = project.financials;
 
   if (tab === 'Overview') {
+    // Live-only job: show what the job log actually knows, not a wall of empty demo fields.
+    if (project.live) {
+      const openSubs = project.submittals.filter(s => (s.status || '').toLowerCase() === 'open').length;
+      return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <SectionCard title="Job Facts">
+            <MetaRow label="General Contractor" value={project.customer.general_contractor} />
+            <MetaRow label="Job Number" value={project.job_number} />
+            <MetaRow label="Releases" value={project.releases.length} />
+            <MetaRow label="Submittals" value={`${project.submittals.length} (${openSubs} open)`} />
+            <MetaRow label="Production" value={`${project.percent_complete}% complete`} />
+          </SectionCard>
+          <SectionCard title="Team, Contract & Dates" className="lg:col-span-2">
+            <p className="text-sm text-gray-500 dark:text-slate-400">
+              Owner, architect, internal team, contract terms, and key dates aren’t in the job log —
+              they land here with the ingestion pipeline. Everything on this page now (releases,
+              submittals, activity, health, GC lookahead) is live.
+            </p>
+          </SectionCard>
+        </div>
+      );
+    }
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <SectionCard title="Customer">
@@ -155,15 +302,17 @@ function TabPanel({ tab, project }) {
               : <span className="text-amber-600 dark:text-amber-400">Pending</span>}
           />
         </SectionCard>
-        <SectionCard title="Production Quantities" className="lg:col-span-2">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <Metric label="Guardrail (LF)" value={project.production.linear_feet_guardrail.toLocaleString()} />
-            <Metric label="Stairs" value={project.production.stairs} />
-            <Metric label="Balconies" value={project.production.balconies} />
-            <Metric label="Awnings" value={project.production.awnings} />
-            <Metric label="Misc Metals" value={project.production.miscellaneous_metals} />
-          </div>
-        </SectionCard>
+        {project.production && (
+          <SectionCard title="Production Quantities" className="lg:col-span-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <Metric label="Guardrail (LF)" value={project.production.linear_feet_guardrail.toLocaleString()} />
+              <Metric label="Stairs" value={project.production.stairs} />
+              <Metric label="Balconies" value={project.production.balconies} />
+              <Metric label="Awnings" value={project.production.awnings} />
+              <Metric label="Misc Metals" value={project.production.miscellaneous_metals} />
+            </div>
+          </SectionCard>
+        )}
         <SectionCard title="Key Dates">
           <MetaRow label="Created" value={project.created_date} />
           <MetaRow label="Est. Start" value={project.estimated_start_date} />
@@ -227,6 +376,7 @@ function TabPanel({ tab, project }) {
   }
 
   if (tab === 'Schedule') {
+    if (!project.schedule) return <UnavailablePanel label="Schedule" />;
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <SectionCard title="Customer Schedule">
@@ -241,6 +391,7 @@ function TabPanel({ tab, project }) {
   }
 
   if (tab === 'Financials') {
+    if (!money) return <UnavailablePanel label="Financials" />;
     const billedPct = Math.round((money.current_billed / money.forecast_invoice_value) * 100);
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -260,10 +411,17 @@ function TabPanel({ tab, project }) {
             <ProgressBar pct={billedPct} />
           </div>
         </SectionCard>
-        <SectionCard title="Note" className="lg:col-span-1">
+        <SectionCard title="Change Orders & T&M" className="lg:col-span-1">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+              Coming soon
+            </span>
+          </div>
           <p className="text-sm text-gray-500 dark:text-slate-400">
-            In the live system these are <span className="font-medium text-gray-700 dark:text-slate-300">computed rollups</span> from
-            invoices, change orders, and T&M — not hand-entered. Only contract value and retainage % are inputs.
+            Open change orders and T&amp;M tickets will land here — computed from the
+            <span className="font-medium text-gray-700 dark:text-slate-300"> T&amp;M ingestion pipeline</span> (in progress),
+            not hand-entered. Until then contract value and retainage % are the only inputs; everything else is a
+            <span className="font-medium text-gray-700 dark:text-slate-300"> computed rollup</span>.
           </p>
         </SectionCard>
       </div>
@@ -338,6 +496,22 @@ function TabPanel({ tab, project }) {
   return null;
 }
 
+// Placeholder for a demo-only section on a live job that has no backend source yet.
+function UnavailablePanel({ label }) {
+  return (
+    <SectionCard>
+      <div className="py-8 text-center">
+        <p className="text-sm text-gray-500 dark:text-slate-400">
+          {label} isn’t wired for live jobs yet.
+        </p>
+        <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">
+          This job is pulled from the job log (releases, submittals, activity). {label} lands with the ingestion pipeline.
+        </p>
+      </div>
+    </SectionCard>
+  );
+}
+
 function Metric({ label, value }) {
   return (
     <div className="rounded-lg bg-gray-50 dark:bg-slate-700/40 px-3 py-2">
@@ -369,7 +543,7 @@ function DataSourceBanner({ status, jobNumber, health }) {
     return (
       <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-gray-500 dark:text-slate-400 flex items-center gap-2">
         <span className="inline-block w-2 h-2 rounded-full bg-gray-300 dark:bg-slate-500 animate-pulse" />
-        Checking the production database for live data on job {jobNumber}…
+        Checking the live database for job {jobNumber}…
       </div>
     );
   }
@@ -379,9 +553,9 @@ function DataSourceBanner({ status, jobNumber, health }) {
         <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
         <span className="font-semibold">Live data</span>
         <span className="text-green-700/80 dark:text-green-300/80">
-          — Releases, Submittals, Activity & Health are pulled from the production database
+          — Releases, Submittals, Activity & Health come from the live database
           {health != null && ` (${health.releaseCount} releases · ${health.submittalCount} submittals)`}.
-          Financials & Contract stay on demo data until ingestion lands.
+          Financials & Contract land with the ingestion pipeline.
         </span>
       </div>
     );
@@ -415,42 +589,62 @@ export default function ProjectDetail() {
   const [status, setStatus] = useState('loading');
 
   useEffect(() => {
-    if (!demoProject) { setStatus('none'); return; }
     let cancelled = false;
     setStatus('loading');
-    fetchProjectLive(demoProject.job_number)
+    // A demo project fetches by its job_number; a live-only route (e.g. /projects/560)
+    // treats the route id itself as the job number.
+    const jobNumber = demoProject ? demoProject.job_number : id;
+    fetchProjectLive(jobNumber)
       .then(data => {
         if (cancelled) return;
         if (data) { setLive(data); setStatus('live'); }
-        else { setStatus('none'); }
+        else { setStatus(demoProject ? 'none' : 'notfound'); }
       })
-      .catch(() => { if (!cancelled) setStatus('error'); });
+      .catch(() => { if (!cancelled) setStatus(demoProject ? 'error' : 'notfound'); });
     return () => { cancelled = true; };
-  }, [demoProject]);
+  }, [demoProject, id]);
 
-  // Overlay live sections onto the demo scaffold when available.
-  const project = (demoProject && live)
-    ? {
-        ...demoProject,
-        percent_complete: live.percent_complete,
-        releases: live.releases,
-        submittals: live.submittals,
-        activity: live.activity,
-        health: live.health,
-      }
-    : demoProject;
+  // Three cases: demo overlaid with live, demo-only, or a live-only job (no demo scaffold).
+  let project;
+  if (demoProject && live) {
+    project = {
+      ...demoProject,
+      percent_complete: live.percent_complete,
+      releases: live.releases,
+      submittals: live.submittals,
+      activity: live.activity,
+      health: live.health,
+      health_score: live.health_score,
+      upcoming: live.upcoming,
+      lookahead: live.lookahead,
+    };
+  } else if (demoProject) {
+    project = demoProject;
+  } else if (live) {
+    project = liveOnlyProject(live);
+  } else {
+    project = null;
+  }
+
+  // Live health_score when the backend supplied one; demo fallback otherwise.
+  const healthScore = project ? resolveHealthScore(project) : null;
 
   const liveMeta = live
     ? { releaseCount: live.releases.length, submittalCount: live.submittals.length }
     : null;
 
   if (!project) {
+    const loading = status === 'loading';
     return (
       <div className="flex-1 w-full bg-[#f8fafc] dark:bg-slate-900 flex flex-col items-center justify-center gap-3 py-20">
-        <p className="text-gray-500 dark:text-slate-400">Project not found.</p>
-        <button onClick={() => navigate('/projects')} className="px-4 py-2 text-sm font-medium rounded-lg bg-accent-500 text-white hover:bg-accent-600">
-          Back to Projects
-        </button>
+        <p className="text-gray-500 dark:text-slate-400">
+          {loading ? `Loading job ${id}…` : 'Project not found.'}
+        </p>
+        {!loading && (
+          <button onClick={() => navigate('/projects')} className="px-4 py-2 text-sm font-medium rounded-lg bg-accent-500 text-white hover:bg-accent-600">
+            Back to Projects
+          </button>
+        )}
       </div>
     );
   }
@@ -468,15 +662,27 @@ export default function ProjectDetail() {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-mono text-sm font-bold text-accent-600 dark:text-accent-300 bg-accent-50 dark:bg-accent-900/40 px-2 py-0.5 rounded">{project.job_number}</span>
                 <StatusPill status={project.status} />
+                {project.live && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wide bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                    Live from job log
+                  </span>
+                )}
               </div>
               <h1 className="mt-2 text-2xl font-bold text-gray-900 dark:text-slate-100">{project.project_name}</h1>
               <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
-                {project.customer.general_contractor} · PM {project.team.project_manager} · Est. completion {project.estimated_completion_date}
+                {project.customer.general_contractor}
+                {project.team.project_manager && project.team.project_manager !== '—' && <> · PM {project.team.project_manager}</>}
+                {project.estimated_completion_date && <> · Est. completion {project.estimated_completion_date}</>}
               </p>
             </div>
             <div className="text-right">
-              <div className="text-2xl font-bold text-gray-900 dark:text-slate-100 tabular-nums">{fmtMoney(project.financials.forecast_invoice_value)}</div>
-              <div className="text-xs text-gray-400 dark:text-slate-500">forecast invoice value</div>
+              {project.financials && (
+                <>
+                  <div className="text-2xl font-bold text-gray-900 dark:text-slate-100 tabular-nums">{fmtMoney(project.financials.forecast_invoice_value)}</div>
+                  <div className="text-xs text-gray-400 dark:text-slate-500">forecast invoice value</div>
+                </>
+              )}
               <div className="mt-2 w-40 ml-auto">
                 <div className="flex justify-between text-xs mb-1"><span className="text-gray-500 dark:text-slate-400">{project.percent_complete}% complete</span></div>
                 <ProgressBar pct={project.percent_complete} />
@@ -488,16 +694,22 @@ export default function ProjectDetail() {
         {/* Where the data comes from */}
         <DataSourceBanner status={status} jobNumber={project.job_number} health={liveMeta} />
 
-        {/* Project Brief */}
-        <ProjectBrief brief={project.brief} />
+        {/* Project Brief (demo scaffold only; a live-only job has no BB01 brief yet) */}
+        {project.brief && <ProjectBrief brief={project.brief} />}
 
-        {/* Health dashboard */}
+        {/* Health dashboard — composite score (the rating) + its tile breakdown */}
         <div>
           <h2 className="text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-2">Project Health</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2.5">
-            {project.health.map(h => <HealthTile key={h.key} label={h.label} value={h.value} tone={h.tone} />)}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <HealthScore data={healthScore} className="lg:col-span-1" />
+            <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-2.5 content-start">
+              {project.health.map(h => <HealthTile key={h.key} label={h.label} value={h.value} tone={h.tone} />)}
+            </div>
           </div>
         </div>
+
+        {/* GC Lookahead cross-check (present when the job is wired to a lookahead) */}
+        {project.lookahead && <GcLookaheadPanel data={project.lookahead} />}
 
         {/* Tabs */}
         <div>
