@@ -407,6 +407,8 @@ def create_app():
     # in frontend/src/App.jsx.
     SPA_PATHS_UNDER_API_PREFIX = {
         "admin/fc-collection",
+        "admin/metrics",
+        "admin/submittal-matching",
     }
 
     def is_api_route(path):
