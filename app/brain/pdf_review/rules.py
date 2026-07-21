@@ -220,6 +220,87 @@ RULES = [
             "unless clearly wrong."
         ),
     },
+    # --- MHMW shop-convention rules (distilled from
+    # bb-knowledge-base-mhmw-conventions/mhmw-code-conventions.md and
+    # mhmw-fasteners-and-parts.md). These encode what MHMW BUILDS TO — its own
+    # tolerances and preferences that sit on top of the code minimums above. Where a
+    # value here is tighter than the generic Division 05 rule, MHMW's value governs the
+    # shop drawing. ---
+    {
+        "id": "mhmw-guard-graduated-opening",
+        "title": "Guard opening exceeds MHMW graduated sphere limit for its height band",
+        "knowledge": (
+            "MHMW applies a graduated opening limit to guard infill, not a single 4\" rule: "
+            "from 0\"-36\" above the walking surface the max clear opening is <4\"; from 36\"-42\" "
+            "it is <4 3/8\". The classic 4\" sphere test governs the lower band, but a picket "
+            "spacing or triangular gap that is legal at 40\" height may still be illegal below "
+            "36\". Read the guard elevation and check the widest infill opening against the band "
+            "it falls in. Flag any 0\"-36\" opening >=4\", or any 36\"-42\" opening >=4 3/8\". "
+            "This REFINES guard-opening-limits for MHMW sets: an opening between 4\" and 4 3/8\" "
+            "that sits entirely in the 36\"-42\" band is compliant per MHMW standard (do not flag "
+            "it under the flat 4\" rule); the 6\" stair-triangle allowance still applies."
+        ),
+    },
+    {
+        "id": "mhmw-fall-protection-geometry",
+        "title": "Guard required by the 30\"-drop / 36\"-horizontal rule but missing",
+        "knowledge": (
+            "MHMW's fall-protection trigger is geometric, not just 'over 30\"'. Fall protection "
+            "(a guard) is REQUIRED where the grade/floor drops MORE THAN 30\" vertically WITHIN "
+            "36\" horizontally of the edge; it is NOT required if the surface does not drop more "
+            "than 30\" within that 36\" horizontal band (the grade may keep falling farther out "
+            "with no guard). At balconies/patios distinguish a balcony rail (above grade) from a "
+            "patio rail (at grade). Where a plan/section shows a walking edge with a drop, check "
+            "the 30\"/36\" geometry before clearing 'no guard needed', and confirm any required "
+            "guard is present and meets the MFB 42 1/2\" landing-guard height."
+        ),
+    },
+    {
+        "id": "mhmw-mfb-stair-build-dims",
+        "title": "Stair dims outside MHMW multi-family build standard (run < 11-1/16\", etc.)",
+        "knowledge": (
+            "For multi-family buildings (MFB) MHMW builds to: rise 4\"-7\" (~6 7/8\" typical), run "
+            "11\" min with a shop PREFERENCE of 11-1/16\" min so the 11\" clear is guaranteed after "
+            "tolerance, tread overhang 1 1/4\" max, rise variance <=3/8\" within a single flight, "
+            "tread slope <=1/4\"/ft any direction, 80\" min headroom, and 144\" (12') max "
+            "floor-to-floor before an intermediate landing. First establish single-family (SFD: "
+            "7 3/4\" max rise, 10\" min run) vs multi-family (the values above) because the limits "
+            "differ. Flag a called run < 11\" (or, as a preference note, < 11-1/16\"), any rise "
+            "outside 4\"-7\" for MFB, headroom < 80\", or a flight exceeding 144\" with no landing."
+        ),
+    },
+    {
+        "id": "mhmw-precast-tread-riser-construction",
+        "title": "Tread/riser construction departs from MHMW precast-tread standard",
+        "knowledge": (
+            "MHMW's typical tread/riser construction is a 2 1/4\" x 12\" precast tread (other sizes "
+            "available) seated on a standard tread clip over a 16 ga. closed riser. This 2 1/4\" "
+            "precast tread thickness is the value to use as tread_thickness when independently "
+            "computing a terminal (first) rise on a pad (see stair-terminal-rise-over-max) unless "
+            "the set calls out a different precast size. If the set shows open risers, a "
+            "non-precast tread, or a tread thickness inconsistent with the terminal-rise math, "
+            "surface it — Group R stairs require solid risers and the terminal geometry depends on "
+            "the actual tread thickness."
+        ),
+    },
+    {
+        "id": "mhmw-fastener-substrate-match",
+        "title": "Fastener callout wrong for its substrate (or missing hole oversizing)",
+        "knowledge": (
+            "MHMW's fastener-to-substrate standard: WOOD -> lag screw (holes 1/16\"-1/8\" oversized) "
+            "or Simpson SDS screw (1/4\"Ø only, holes 1/16\" oversized); STEEL -> self-tapping/Tek "
+            "screw (holes 1/16\" oversized); CONCRETE/MASONRY -> Simpson Titen HD (holes 1/8\" "
+            "oversized) or wedge anchor (holes 1/16\" oversized); DRYWALL -> toggle bolt (holes "
+            "1/16\"-1/8\" oversized). A connection detail whose fastener does not match its base "
+            "material is a defect: e.g. a lag or SDS screw anchored into concrete, a Titen HD/wedge "
+            "into wood, or a Tek screw into anything but steel. Check each anchoring detail's "
+            "fastener against the substrate it lands in (footpad FP42.3/.44.3 = SDS into wood; "
+            "FP42.5/.44.5 = 3/8\" Titen HD/lag into concrete) and flag mismatches. The same "
+            "substrate logic applies to tread clips: TCS is the WELD-ON clip for steel stringers, "
+            "TCW the BOLT-ON clip for wood stringers — a TCS called out on a wood stringer (or "
+            "vice versa) is a defect."
+        ),
+    },
 ]
 
 SYSTEM_PROMPT_HEADER = (
@@ -240,6 +321,15 @@ SYSTEM_PROMPT_HEADER = (
     "viewer — it does NOT replace the sheet label; still cite the sheet label (e.g. 'F1') in "
     "`location` and each `values_used[].sheet`. If a finding spans multiple sheets, return the "
     "page of the sheet most central to the issue.\n"
+    "MHMW CALLOUT CONVENTIONS (for reading the sheets): TS=tube steel, HSS=hollow structural "
+    "section, TOS/BOS=top/bottom of steel, TOC/BOC=top/bottom of concrete, AFF=above finish "
+    "floor, PL=plate, HAS=headed anchor stud, DBA=deformed bar anchor, GA=gauge, UNO=unless "
+    "noted otherwise, T&B=top and bottom, WHR=wall handrail, LHU/RHU=left/right hand up. "
+    "Footpad codes read FP<plate-size>.<fastener>: the '.3' family uses 1/4\"Ø SDS (wood), the "
+    "'.5' family uses 3/8\" Titen HD/lag (concrete); saddle clips are 'SC' codes. MHMW's build "
+    "standard runs slightly tighter than code ('reduce by 1/4\"'): brackets like [42 1/2\"] or "
+    "[13\"] on a drawing are MHMW build targets for the >42\"/12\" code minimums. Establish "
+    "single-family (SFD) vs multi-family (MFB) occupancy first — several limits split on it.\n"
 )
 
 SYSTEM_PROMPT_FOOTER = (
