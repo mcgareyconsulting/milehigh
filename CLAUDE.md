@@ -54,6 +54,20 @@ Tests use `TESTING=1` env var (set automatically in `tests/conftest.py`) to forc
 
 Test layering: pure unit (no Flask/DB) → service (real logic, in-memory DB or mocked DB) → integration (HTTP via `test_client` + in-memory DB). External services (Procore, Trello, OneDrive) are always mocked; the DB is always real (in-memory). Shared fixtures (`app`, `client`, `mock_admin_user`, `mock_non_admin_user`) live in `tests/conftest.py`. See `tests/README.md` for the full strategy, coverage map, and known gaps.
 
+## Roadmap and requirements
+
+**`docs/feature-catalog.md` is the source of truth for what is being built and
+why.** Every feature discussed with the client, with its current codebase state,
+a plan, dependencies, effort, and rank. Read it before planning new work — it
+records scope decisions (what was deferred, dropped, or already exists) that are
+not derivable from the code. `docs/ops-planning.md` is the meeting-level rollup
+behind it.
+
+Both cite source meetings by date and transcript line, e.g. `[L121–136]`. **Those
+transcripts are deliberately not in this repo** — they live locally at
+`~/Desktop/Transcripts/MHMW/`, with per-meeting findings in `processed/`. A
+citation you cannot open is expected, not a missing file.
+
 ## Architecture
 
 Flask backend + React 19 frontend. The frontend is built to `frontend/dist/` and served as static files by Flask in production. In local dev, run both servers separately and proxy API calls from Vite to Flask.
