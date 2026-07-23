@@ -17,6 +17,7 @@ _BRAIN_PATCH_TARGETS = (
     'app.brain.board.routes.get_current_user',
     'app.brain.pdf_review.routes.get_current_user',
     'app.brain.submittal_matching.routes.get_current_user',
+    'app.brain.layout_routes.get_current_user',
 )
 
 

@@ -2158,3 +2158,44 @@ class AiUsage(db.Model):
             "entity_id": self.entity_id,
             "created_at": _dt(self.created_at),
         }
+
+
+class UserPanelLayout(db.Model):
+    """Per-user, per-surface dashboard layout for the K2 configurable grid engine.
+
+    One row per (user, surface) pair. ``surface_key`` names the grid instance
+    ("projects", "employee_home", "metrics", ...); for project-scoped grids the
+    key carries the binding (e.g. "projects:560") so a user's layout of one
+    project doesn't overwrite another.
+
+    ``layout`` is the ordered list the frontend renders, one entry per panel:
+    ``{"id": str, "span": 1|2|3, "hidden": bool}`` — order is the list order,
+    span is the S/M/L size class, hidden parks a widget in the "available"
+    tray. Ids are NOT validated against a canonical set here; the client
+    reconciles unknown/missing ids against the panels it actually renders (see
+    layoutMerge.js), so a stale entry is harmless. A layout saved before size
+    classes existed is a bare id array and still reads correctly.
+
+    The grid falls back to localStorage when this endpoint is unavailable, so
+    the row is a convenience (cross-device), never a hard dependency.
+    """
+    __tablename__ = "user_panel_layouts"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    surface_key = db.Column(db.String(120), nullable=False)
+    layout = db.Column(db.JSON, nullable=False, default=list)
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "surface_key", name="uq_user_panel_layout"),
+    )
+
+    def to_dict(self):
+        return {
+            "surface_key": self.surface_key,
+            "layout": self.layout or [],
+            "updated_at": _dt(self.updated_at),
+        }

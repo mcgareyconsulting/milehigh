@@ -23,6 +23,7 @@ import ReleasesLayout from './pages/ReleasesLayout';
 import JobLogContent from './pages/JobLogContent';
 import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
+import GridDemo from './pages/GridDemo'; // TEMPORARY: K2 grid harness, remove when D1 ships
 import Archive from './pages/Archive';
 import PMBoardContent from './pages/PMBoardContent';
 import Login from './pages/Login';
@@ -78,6 +79,8 @@ function AppContent() {
               </Route>
               <Route path="projects" element={<Projects />} />
               <Route path="projects/:id" element={<ProjectDetail />} />
+              {/* TEMPORARY: K2 grid engine harness. Delete with GridDemo.jsx once D1 ships. */}
+              <Route path="grid-demo" element={<GridDemo />} />
               <Route path="archive" element={<Archive />} />
               <Route path="events" element={<Events />} />
               <Route path="drafting-work-load" element={<DraftingWorkLoad />} />

@@ -38,6 +38,7 @@ from app.brain.board import photo_routes as board_photo_routes  # noqa: F401  (r
 from app.brain.meetings import routes as meetings_routes
 from app.brain.bb_chat import routes as bb_chat_routes  # noqa: F401  (registers /bb-chat endpoints)
 from app.brain import notification_routes
+from app.brain import layout_routes  # noqa: F401  (registers /layout grid-persistence endpoints)
 from app.brain import todos_routes  # noqa: F401  (registers /todos endpoints)
 from app.brain.material_orders import routes as material_orders_routes  # noqa: F401  (registers /material-orders endpoints)
 from app.brain.projects import routes as projects_routes  # noqa: F401  (registers /projects read endpoints)
