@@ -1,0 +1,56 @@
+/*
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: The K2 grid's colour contract. The shell (PanelGrid/Panel) never names a colour
+ *   directly — it reads these custom properties — so one engine can render light on the
+ *   app's existing surfaces and dark on Bill's new design-package surfaces. Light values are
+ *   the app's current Tailwind slate/accent palette; `.k2-dark` carries the exact hex from
+ *   docs/projects-page-mockup.html so the Projects page matches the template it was drawn from.
+ * imported_by: [components/grid/PanelGrid.jsx]
+ * invariants:
+ *   - Every token is defined in BOTH blocks. A token that only exists in one theme renders
+ *     as an invalid value (usually transparent) in the other, which is silent and ugly.
+ *   - `.k2-dark` is a modifier on `.k2-surface`, never standalone — it only overrides.
+ */
+
+.k2-surface {
+  --k2-page: #f8fafc;
+  --k2-panel: #ffffff;
+  --k2-border: #e2e8f0;
+  --k2-title: #1e293b;
+  --k2-text: #334155;
+  --k2-muted: #64748b;
+  --k2-faint: #94a3b8;
+  --k2-accent: #264093;
+  --k2-accent-strong: #1e336e;
+  --k2-chip: #f1f5f9;
+  --k2-handle: #cbd5e1;
+  --k2-handle-hover: #64748b;
+}
+
+.k2-surface.k2-dark {
+  --k2-page: #0a0c14;
+  --k2-panel: #0d1117;
+  --k2-border: #1e293b;
+  --k2-title: #f8fafc;
+  --k2-text: #cbd5e1;
+  --k2-muted: #64748b;
+  --k2-faint: #475569;
+  --k2-accent: #60a5fa;
+  --k2-accent-strong: #2563eb;
+  --k2-chip: #1e293b;
+  --k2-handle: #334155;
+  --k2-handle-hover: #64748b;
+}
+
+/* Panel bodies scroll when their content outruns the quantized row height. The default
+   webkit scrollbar is a bright light-mode artifact on a #0d1117 panel, so tone it down. */
+.k2-surface.k2-dark ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.k2-surface.k2-dark ::-webkit-scrollbar-thumb {
+  background: #1e293b;
+}
+.k2-surface.k2-dark ::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}

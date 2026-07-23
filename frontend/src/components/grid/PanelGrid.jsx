@@ -41,6 +41,10 @@
  *
  * The panel list is a CLOSED catalog: users choose from what the caller supplies and cannot
  * add anything else. The tray only ever re-offers panels the caller already declared.
+ *
+ * Theming: `theme="dark"` switches the shell to the palette in docs/projects-page-mockup.html.
+ * Colours live in gridTheme.css as --k2-* tokens; nothing here or in Panel.jsx names one
+ * directly, so the same engine can serve a dark Projects page and light surfaces elsewhere.
  */
 import { useMemo, useState } from 'react';
 import {
@@ -58,6 +62,7 @@ import {
 } from '@dnd-kit/sortable';
 import { SortablePanel } from './Panel';
 import { useGridLayout } from './useGridLayout';
+import './gridTheme.css';
 
 const COLUMN_CLASS = {
   2: 'grid-cols-1 md:grid-cols-2',
@@ -76,6 +81,7 @@ export default function PanelGrid({
   columns = 3,
   className = '',
   editable = true,
+  theme = 'light',
 }) {
   const { visible, hidden, reorder, setSpan, setRows, hide, show, reset } = useGridLayout(surfaceKey, panels);
   const [editing, setEditing] = useState(false);
@@ -94,29 +100,38 @@ export default function PanelGrid({
   }
 
   return (
-    <div>
+    <div className={`k2-surface ${theme === 'dark' ? 'k2-dark' : ''}`}>
       {editable && (
-        <div className="flex items-center justify-end gap-3 mb-2">
-          {editing && (
+        <div className="flex items-center justify-between gap-3 mb-2">
+          {/* The mockup's `.drag-hint` strip — it's the only thing telling a first-time user
+              the ⠿ handle does anything, so it stays visible outside edit mode. */}
+          <p className="text-[11px] text-[var(--k2-handle)] min-w-0 truncate">
+            {editing
+              ? '↔ width · ↕ height — on list panels, bigger shows more rows'
+              : '⠿  Drag cards to rearrange your layout — positions are saved automatically'}
+          </p>
+          <div className="flex items-center gap-3 shrink-0">
+            {editing && (
+              <button
+                type="button"
+                onClick={reset}
+                className="text-xs text-[var(--k2-muted)] hover:text-[var(--k2-accent)] transition-colors"
+              >
+                Reset layout
+              </button>
+            )}
             <button
               type="button"
-              onClick={reset}
-              className="text-xs text-gray-400 dark:text-slate-500 hover:text-accent-600 dark:hover:text-accent-300 transition-colors"
+              onClick={() => setEditing(e => !e)}
+              className={`text-[11px] font-semibold px-2.5 py-1 rounded-md transition-colors ${
+                editing
+                  ? 'bg-[var(--k2-accent-strong)] text-white'
+                  : 'bg-[var(--k2-chip)] text-[var(--k2-accent)] hover:bg-[var(--k2-accent-strong)] hover:text-white'
+              }`}
             >
-              Reset layout
+              {editing ? 'Done' : 'Edit layout'}
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setEditing(e => !e)}
-            className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${
-              editing
-                ? 'bg-accent-500 text-white hover:bg-accent-600'
-                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600'
-            }`}
-          >
-            {editing ? 'Done' : 'Edit layout'}
-          </button>
+          </div>
         </div>
       )}
 
@@ -148,12 +163,12 @@ export default function PanelGrid({
 
       {/* Removed widgets live here in edit mode, ready to be added back. */}
       {editing && (
-        <div className="mt-4 rounded-lg border border-dashed border-gray-300 dark:border-slate-600 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-2">
+        <div className="mt-4 rounded-[10px] border border-dashed border-[var(--k2-border)] p-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.5px] text-[var(--k2-muted)] mb-2">
             Available widgets
           </p>
           {hidden.length === 0 ? (
-            <p className="text-xs text-gray-400 dark:text-slate-500">
+            <p className="text-[11px] text-[var(--k2-muted)]">
               All widgets are on the dashboard. Remove one with ✕ to park it here.
             </p>
           ) : (
@@ -166,9 +181,9 @@ export default function PanelGrid({
                     key={entry.id}
                     type="button"
                     onClick={() => show(entry.id)}
-                    className="px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-200 dark:border-slate-600
-                      bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300
-                      hover:border-accent-400 hover:text-accent-600 dark:hover:text-accent-300 transition-colors"
+                    className="px-2.5 py-1 rounded-md text-[11px] font-semibold
+                      bg-[var(--k2-chip)] text-[var(--k2-accent)]
+                      hover:bg-[var(--k2-accent-strong)] hover:text-white transition-colors"
                   >
                     + {panel.title}
                   </button>
