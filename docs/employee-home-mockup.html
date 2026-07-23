@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Brain — Employee Home</title>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3350;
+    --accent: #4f8ef7;
+    --accent2: #7c5cbf;
+    --green: #22c55e;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --orange: #f97316;
+    --purple: #a855f7;
+    --teal: #14b8a6;
+    --pink: #ec4899;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --gold: #f59e0b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; }
+
+  /* NAV */
+  nav { background: #0a0d14; border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 52px; position: sticky; top: 0; z-index: 100; }
+  .nav-logo { font-size: 18px; font-weight: 800; letter-spacing: 2px; color: var(--accent); }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a { color: var(--muted); text-decoration: none; padding: 6px 14px; border-radius: 6px; font-size: 13px; transition: all .2s; }
+  .nav-links a:hover, .nav-links a.active { background: var(--surface2); color: var(--text); }
+  .nav-user { display: flex; align-items: center; gap: 10px; }
+  .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--accent2); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+  .notif-bell { position: relative; cursor: pointer; color: var(--muted); font-size: 18px; }
+  .notif-dot { position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; background: var(--red); border-radius: 50%; }
+
+  /* HERO HEADER */
+  .hero { background: linear-gradient(135deg, #0f1117 0%, #1a1d27 50%, #1e1a2e 100%); border-bottom: 1px solid var(--border); padding: 20px 24px; }
+  .hero-top { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+  .hero-avatar { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 20px; border: 2px solid var(--accent); }
+  .hero-info h1 { font-size: 22px; font-weight: 700; }
+  .hero-info p { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .hero-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge { display: flex; align-items: center; gap: 6px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 600; }
+  .badge.gold { border-color: var(--gold); color: var(--gold); }
+  .badge.green { border-color: var(--green); color: var(--green); }
+  .badge.purple { border-color: var(--purple); color: var(--purple); }
+  .badge.blue { border-color: var(--accent); color: var(--accent); }
+  .badge-icon { font-size: 14px; }
+
+  /* STATS BAR */
+  .stats-bar { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+  .stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 16px; flex: 1; min-width: 100px; text-align: center; }
+  .stat-val { font-size: 22px; font-weight: 800; color: var(--accent); }
+  .stat-val.red { color: var(--red); }
+  .stat-val.green { color: var(--green); }
+  .stat-val.yellow { color: var(--yellow); }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: .5px; }
+
+  /* DRAG HINT */
+  .drag-hint { background: var(--surface2); border: 1px dashed var(--border); border-radius: 8px; padding: 8px 16px; margin: 12px 24px 0; font-size: 12px; color: var(--muted); text-align: center; }
+
+  /* DASHBOARD GRID */
+  .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 16px 24px 32px; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; cursor: pointer; transition: border-color .2s, box-shadow .2s; }
+  .card:hover { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(79,142,247,.2); }
+  .card.full-width { grid-column: 1 / -1; }
+  .card.two-thirds { grid-column: span 2; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
+  .card-title { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
+  .card-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .drag-handle { color: var(--muted); cursor: grab; font-size: 16px; margin-right: 4px; }
+  .card-action { color: var(--accent); font-size: 12px; text-decoration: none; }
+  .card-body { padding: 12px 16px; }
+
+  /* OPEN ITEMS */
+  .open-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .open-item:last-child { border-bottom: none; }
+  .item-type { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; margin-top: 1px; }
+  .item-type.task { background: rgba(79,142,247,.15); color: var(--accent); }
+  .item-type.review { background: rgba(168,85,247,.15); color: var(--purple); }
+  .item-type.submittal { background: rgba(249,115,22,.15); color: var(--orange); }
+  .item-type.todo { background: rgba(34,197,94,.15); color: var(--green); }
+  .item-type.rfi { background: rgba(245,158,11,.15); color: var(--yellow); }
+  .item-info { flex: 1; }
+  .item-title { font-weight: 600; font-size: 13px; }
+  .item-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .item-due { font-size: 11px; font-weight: 600; }
+  .item-due.overdue { color: var(--red); }
+  .item-due.soon { color: var(--yellow); }
+  .item-due.ok { color: var(--green); }
+
+  /* NEWS FEED */
+  .feed-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .feed-item:last-child { border-bottom: none; }
+  .feed-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
+  .feed-content { flex: 1; }
+  .feed-text { font-size: 13px; line-height: 1.4; }
+  .feed-text strong { color: var(--accent); }
+  .feed-time { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .feed-tag { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; margin-left: 6px; }
+  .feed-tag.milestone { background: rgba(34,197,94,.15); color: var(--green); }
+  .feed-tag.badge-award { background: rgba(245,158,11,.15); color: var(--gold); }
+  .feed-tag.order { background: rgba(79,142,247,.15); color: var(--accent); }
+  .feed-tag.photo { background: rgba(168,85,247,.15); color: var(--purple); }
+  .feed-tag.alert { background: rgba(239,68,68,.15); color: var(--red); }
+
+  /* PHOTO TIMELINE */
+  .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .photo-card { border-radius: 8px; overflow: hidden; background: var(--surface2); border: 1px solid var(--border); }
+  .photo-placeholder { height: 90px; display: flex; align-items: center; justify-content: center; font-size: 28px; background: linear-gradient(135deg, var(--surface2), #1e2235); }
+  .photo-info { padding: 6px 8px; }
+  .photo-title { font-size: 11px; font-weight: 600; }
+  .photo-meta { font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .photo-stage { font-size: 10px; font-weight: 700; margin-top: 3px; }
+  .photo-stage.shop { color: var(--yellow); }
+  .photo-stage.paint { color: var(--purple); }
+  .photo-stage.installed { color: var(--green); }
+
+  /* PIZZA TRACKER */
+  .tracker-item { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .tracker-item:last-child { border-bottom: none; }
+  .tracker-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .tracker-name { font-weight: 600; font-size: 13px; }
+  .tracker-code { font-size: 11px; color: var(--muted); }
+  .tracker-steps { display: flex; gap: 4px; }
+  .step { flex: 1; height: 6px; border-radius: 3px; background: var(--surface2); }
+  .step.done { background: var(--green); }
+  .step.active { background: var(--yellow); }
+  .step-labels { display: flex; justify-content: space-between; margin-top: 4px; }
+  .step-label { font-size: 10px; color: var(--muted); flex: 1; text-align: center; }
+  .step-label.done { color: var(--green); }
+  .step-label.active { color: var(--yellow); }
+
+  /* MATERIAL ORDERS */
+  .order-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .order-item:last-child { border-bottom: none; }
+  .order-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .order-info { flex: 1; }
+  .order-name { font-weight: 600; font-size: 13px; }
+  .order-meta { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .order-status { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+  .order-status.ordered { background: rgba(79,142,247,.15); color: var(--accent); }
+  .order-status.shipped { background: rgba(245,158,11,.15); color: var(--yellow); }
+  .order-status.delivered { background: rgba(34,197,94,.15); color: var(--green); }
+  .order-status.pending { background: rgba(100,116,139,.15); color: var(--muted); }
+
+  /* BADGES SHOWCASE */
+  .badges-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .badge-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 8px; text-align: center; }
+  .badge-card.earned { border-color: var(--gold); }
+  .badge-card.locked { opacity: .4; }
+  .badge-emoji { font-size: 28px; margin-bottom: 6px; }
+  .badge-name { font-size: 11px; font-weight: 700; }
+  .badge-desc { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .badge-earned-tag { font-size: 10px; color: var(--gold); margin-top: 4px; font-weight: 600; }
+
+  /* MY PROJECTS */
+  .project-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .project-row:last-child { border-bottom: none; }
+  .project-code { font-size: 11px; font-weight: 700; color: var(--accent); background: rgba(79,142,247,.1); padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+  .project-name { flex: 1; font-weight: 600; font-size: 13px; }
+  .project-role { font-size: 11px; color: var(--muted); }
+  .project-status { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+  .project-status.active { background: rgba(34,197,94,.15); color: var(--green); }
+  .project-status.drafting { background: rgba(79,142,247,.15); color: var(--accent); }
+  .project-status.bidding { background: rgba(245,158,11,.15); color: var(--yellow); }
+
+  /* MODAL */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 200; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; width: 90%; max-width: 700px; max-height: 85vh; overflow-y: auto; }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 1; }
+  .modal-title { font-size: 18px; font-weight: 700; }
+  .modal-close { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 16px; }
+  .modal-body { padding: 20px 24px; }
+  .modal-section { margin-bottom: 20px; }
+  .modal-section h3 { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* RESPONSIVE */
+  @media (max-width: 900px) {
+    .dashboard { grid-template-columns: 1fr 1fr; }
+    .card.two-thirds { grid-column: span 2; }
+  }
+  @media (max-width: 600px) {
+    .dashboard { grid-template-columns: 1fr; }
+    .card.two-thirds, .card.full-width { grid-column: 1; }
+    .stats-bar { gap: 8px; }
+    .stat { min-width: 80px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">THE BRAIN</div>
+  <div class="nav-links">
+    <a href="#" class="active">Home</a>
+    <a href="#">Projects</a>
+    <a href="#">Job Log</a>
+    <a href="#">Drafting</a>
+    <a href="#">T&M</a>
+    <a href="#">Reports</a>
+  </div>
+  <div class="nav-user">
+    <div class="notif-bell">🔔<div class="notif-dot"></div></div>
+    <div class="avatar">DS</div>
+    <span style="font-size:13px; color:var(--muted)">David Servold · Lead Drafter</span>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-top">
+    <div class="hero-avatar">DS</div>
+    <div class="hero-info">
+      <h1>Good morning, David 👋</h1>
+      <p>Lead Drafter · Mile High Metal Works · Tuesday, July 22, 2026</p>
+    </div>
+  </div>
+  <div class="hero-badges">
+    <div class="badge gold"><span class="badge-icon">🏆</span> Zero-Error Week</div>
+    <div class="badge green"><span class="badge-icon">⚡</span> 5 FC Releases This Month</div>
+    <div class="badge purple"><span class="badge-icon">🎯</span> On-Time Streak: 12</div>
+    <div class="badge blue"><span class="badge-icon">⭐</span> Top Drafter — Q2</div>
+  </div>
+  <div class="stats-bar">
+    <div class="stat"><div class="stat-val red">4</div><div class="stat-label">Open Items</div></div>
+    <div class="stat"><div class="stat-val yellow">2</div><div class="stat-label">Due This Week</div></div>
+    <div class="stat"><div class="stat-val green">8</div><div class="stat-label">Completed This Month</div></div>
+    <div class="stat"><div class="stat-val">3</div><div class="stat-label">Active Projects</div></div>
+    <div class="stat"><div class="stat-val green">0</div><div class="stat-label">Overdue Items</div></div>
+    <div class="stat"><div class="stat-val">12</div><div class="stat-label">On-Time Streak</div></div>
+  </div>
+</div>
+
+<div class="drag-hint">⠿ Drag cards to rearrange your layout — positions are saved automatically</div>
+
+<!-- DASHBOARD -->
+<div class="dashboard" id="dashboard">
+
+  <!-- MY OPEN ITEMS -->
+  <div class="card" onclick="openModal('openitems')">
+    <div class="card-header">
+      <div class="card-title"><span class="drag-handle">⠿</span><div class="card-dot" style="background:var(--red)"></div> My Open Items</div>
+      <a class="card-action" onclick="event.stopPropagation()">View All</a>
+    </div>
+    <div class="card-body">
+      <div class="open-item">
+        <span class="item-type review">Review</span>
+        <div class="item-info">
+          <div class="item-title">DRR Review — Bld A Stair #3</div>
+          <div class="item-meta">450-747 · Assigned by Danny R.</div>
+        </div>
+        <div class="item-due soon">Due Jul 24</div>
+      </div>
+      <div class="open-item">
+        <span class="item-type submittal">Submittal</span>
+        <div class="item-info">
+          <div class="item-title">FC Package — Bld B Guardrails</div>
+          <div class="item-meta">450-381 · Finalize drawings for FC</div>
+        </div>
+        <div class="item-due soon">Due Jul 25</div>
+      </div>
+      <div class="open-item">
+        <span class="item-type task">Task</span>
+        <div class="item-info">
+          <div class="item-title">Update hardware callouts — Stair #2</div>
+          <div class="item-meta">450-759 · Per DRR Rev 2 comments</div>
+        </div>
+        <div class="item-due ok">Due Jul 28</div>
+      </div>
+      <div class="open-item">
+        <span class="item-type todo">To-Do</span>
+        <div class="item-info">
+          <div class="item-title">Confirm cane rail detail — Bld B</div>
+          <div class="item-meta">450-381 · BB01 flagged for review</div>
+        </div>
+        <div class="item-due ok">Due Jul 30</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEWS FEED - PHOTO FORWARD -->
+  <div class="card two-thirds" onclick="openModal('newsfeed')">
+    <div class="card-header">
+      <div class="card-title"><span class="drag-handle">⠿</span><div class="card-dot" style="background:var(--accent)"></div> Company News Feed</div>
+      <a class="card-action" onclick="event.stopPropagation()">All Updates</a>
+    </div>
+    <div class="card-body" style="padding:0">
+      <!-- FEATURED PHOTO POST -->
+      <div style="position:relative; background:linear-gradient(180deg,#1a1d27 0%,#0f1117 100%); border-bottom:1px solid var(--border)">
+        <div style="height:180px; background:linear-gradient(135deg,#1e3a2f,#0f2a1a); display:flex; align-items:center; justify-content:center; font-size:72px; position:relative; overflow:hidden">
+          🏗️
+          <div style="position:absolute; bottom:0; left:0; right:0; background:linear-gradient(transparent,rgba(0,0,0,.8)); padding:12px 16px">
+            <div style="font-weight:700; font-size:14px">Bld A Stair #1 — Fully Installed ✓</div>
+            <div style="font-size:11px; color:rgba(255,255,255,.7); margin-top:2px">450-760 · Sandstone Ranch · Frederick, CO</div>
+          </div>
+          <div style="position:absolute; top:10px; right:10px; background:rgba(34,197,94,.9); color:#fff; font-size:10px; font-weight:700; padding:3px 8px; border-radius:4px">✓ INSTALLED</div>
+        </div>
+        <div style="padding:10px 14px; display:flex; align-items:center; justify-content:space-between">
+          <div style="display:flex; align-items:center; gap:8px">
+            <div style="width:28px; height:28px; border-radius:50%; background:rgba(79,142,247,.2); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--accent)">DR</div>
+            <div><div style="font-size:12px; font-weight:600">Danny Riddell</div><div style="font-size:10px; color:var(--muted)">Posted 6 install photos · Yesterday 2:15 PM</div></div>
+          </div>
+          <span class="feed-tag milestone" style="font-size:10px">Install Complete</span>
+        </div>
+      </div>
+      <!-- FEED ITEMS -->
+      <div style="padding:8px 14px">
+        <div class="feed-item">
+          <div class="feed-avatar" style="background:rgba(245,158,11,.2); color:var(--gold)">🏆</div>
+          <div class="feed-content">
+            <div class="feed-text"><strong>Shop Team</strong> hit a new production record — 38 stair stringers in one week! <span class="feed-tag milestone">Milestone</span></div>
+            <div class="feed-time">Today, 7:14 AM</div>
+          </div>
+        </div>
+        <!-- INLINE PHOTO POST -->
+        <div class="feed-item" style="flex-direction:column; gap:8px">
+          <div style="display:flex; align-items:center; gap:8px">
+            <div class="feed-avatar" style="background:rgba(168,85,247,.2); color:var(--purple)">LS</div>
+            <div class="feed-content">
+              <div class="feed-text"><strong>Luis Solano</strong> posted shop progress photos for <strong>450-759 Bld A Stair #2</strong> <span class="feed-tag photo">Photos</span></div>
+              <div class="feed-time">Yesterday, 11:20 AM</div>
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-left:36px">
+            <div style="height:64px; background:linear-gradient(135deg,#1a2535,#0f1a28); border-radius:6px; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:24px; position:relative">
+              🔩
+              <div style="position:absolute; bottom:3px; left:3px; font-size:9px; color:rgba(255,255,255,.6)">Stringers</div>
+            </div>
+            <div style="height:64px; background:linear-gradient(135deg,#1a2535,#0f1a28); border-radius:6px; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:24px; position:relative">
+              ⚙️
+              <div style="position:absolute; bottom:3px; left:3px; font-size:9px; color:rgba(255,255,255,.6)">Treads</div>
+            </div>
+            <div style="height:64px; background:linear-gradient(135deg,#1a2535,#0f1a28); border-radius:6px; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:24px; position:relative">
+              🪜
+              <div style="position:absolute; bottom:3px; left:3px; font-size:9px; color:rgba(255,255,255,.6)">Assembly</div>
+            </div>
+          </div>
+        </div>
+        <div class="feed-item">
+          <div class="feed-avatar" style="background:rgba(245,158,11,.2); color:var(--gold)">🥇</div>
+          <div class="feed-content">
+            <div class="feed-text"><strong>David Servold</strong> earned <strong style="color:var(--gold)">Zero-Error Week</strong> badge! <span class="feed-tag badge-award">Badge</span></div>
+            <div class="feed-time">Yesterday, 4:30 PM</div>
+          </div>
+        </div>
+        <div class="feed-item">
+          <div class="feed-avatar" style="background:rgba(239,68,68,.2); color:var(--red)">⚠️</div>
+          <div class="feed-content">
+            <div class="feed-text"><strong>Carmen Alert:</strong> Submittal 450-344 is 16 days out to GC — follow-up sent. <span class="feed-tag alert">Alert</span></div>
+            <div class="feed-time">Jul 20, 9:00 AM</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHOTO TIMELINE - RELEASE GALLERY -->
+  <div class="card two-thirds" onclick="openModal('photos')">
+    <div class="card-header">
+      <div class="card-title"><span class="drag-handle">⠿</span><div class="card-dot" style="background:var(--purple)"></div> Work in Progress & Installed</div>
+      <a class="card-action" onclick="event.stopPropagation()">View All Photos</a>
+    </div>
+    <div class="card-body" style="padding:0">
+      <!-- FILTER TABS -->
+      <div style="display:flex; gap:0; border-bottom:1px solid var(--border); padding:0 14px">
+        <div style="padding:8px 12px; font-size:11px; font-weight:700; color:var(--accent); border-bottom:2px solid var(--accent); cursor:pointer">All</div>
+        <div style="padding:8px 12px; font-size:11px; font-weight:600; color:var(--muted); cursor:pointer">✓ Installed</div>
+        <div style="padding:8px 12px; font-size:11px; font-weight:600; color:var(--muted); cursor:pointer">⚙ In Shop</div>
+        <div style="padding:8px 12px; font-size:11px; font-weight:600; color:var(--muted); cursor:pointer">🎨 Paint</div>
+        <div style="padding:8px 12px; font-size:11px; font-weight:600; color:var(--muted); cursor:pointer">📐 Drafting</div>
+      </div>
+      <!-- HERO INSTALLED PHOTO -->
+      <div style="position:relative; margin:12px 14px 8px; border-radius:10px; overflow:hidden; border:1px solid var(--border)">
+        <div style="height:160px; background:linear-gradient(135deg,#0d2b1a,#1a3d28,#0f2a1a); display:flex; align-items:center; justify-content:center; font-size:80px">🏗️</div>
+        <div style="position:absolute; bottom:0; left:0; right:0; background:linear-gradient(transparent,rgba(0,0,0,.85)); padding:14px 14px 12px">
+          <div style="display:flex; justify-content:space-between; align-items:flex-end">
+            <div>
+              <div style="font-weight:700; font-size:14px">Bld A Stair #1 — Installed & Signed Off</div>
+              <div style="font-size:11px; color:rgba(255,255,255,.65); margin-top:2px">450-760 · Sandstone Ranch · Frederick, CO · Posted by Danny Riddell</div>
+            </div>
+            <span style="background:rgba(34,197,94,.9); color:#fff; font-size:10px; font-weight:700; padding:3px 8px; border-radius:4px; white-space:nowrap">✓ INSTALLED</span>
+          </div>
+        </div>
+      </div>
+      <!-- PHOTO GRID -->
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; padding:0 14px 14px">
+        <div class="photo-card">
+          <div class="photo-placeholder" style="height:80px; font-size:32px; background:linear-gradient(135deg,#1a2535,#0f1a28)">🔩</div>
+          <div class="photo-info">
+            <div class="photo-title">Stair #2 — Fab</div>
+            <div class="photo-meta">450-759 · Jul 20</div>
+            <div class="photo-stage shop">⚙ In Shop</div>
+          </div>
+        </div>
+        <div class="photo-card">
+          <div class="photo-placeholder" style="height:80px; font-size:32px; background:linear-gradient(135deg,#2a1a35,#1a0f28)">🎨</div>
+          <div class="photo-info">
+            <div class="photo-title">Balcony Rails</div>
+            <div class="photo-meta">450-344 · Jul 19</div>
+            <div class="photo-stage paint">🎨 In Paint</div>
+          </div>
+        </div>
+        <div class="photo-card">
+          <div class="photo-placeholder" style="height:80px; font-size:32px; background:linear-gradient(135deg,#1a2a1a,#0f1f0f)">🏢</div>
+          <div class="photo-info">
+            <div class="photo-title">Structural Steel</div>
+            <div class="photo-meta">450-700 · Jul 15</div>
+            <div class="photo-stage installed">✓ Installed</div>
+          </div>
+        </div>
+        <div class="photo-card">
+          <div class="photo-placeholder" style="height:80px; font-size:32px; background:linear-gradient(135deg,#1a2535,#0f1a28)">🪜</div>
+          <div class="photo-info">
+            <div class="photo-title">Stair #3 — Fab</div>
+            <div class="photo-meta">450-747 · Jul 18</div>
+            <div class="photo-stage shop">⚙ In Shop</div>
+          </div>
+        </div>
+        <div class="photo-card">
+          <div class="photo-placeholder" style="height:80px; font-size:32px; background:linear-gradient(135deg,#2a2a1a,#1f1f0f)">🛡️</div>
+          <div class="photo-info">
+            <div class="photo-title">Bld B Rails</div>
+            <div class="photo-meta">450-381 · Jul 16</div>
+            <div class="photo-stage shop">📋 DRR Review</div>
+          </div>
+        </div>
+        <div class="photo-card" style="display:flex; align-items:center; justify-content:center; background:var(--surface2); border:1px dashed var(--border); border-radius:8px; min-height:110px; cursor:pointer">
+          <div style="text-align:center; color:var(--muted)">
+            <div style="font-size:24px">📸</div>
+            <div style="font-size:11px; margin-top:4px">Upload Photos</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RELEASE TRACKER (PIZZA TRACKER) -->
+  <div class="card" onclick="openModal('tracker')">
+    <div class="card-header">
+      <div class="card-title"><span class="drag-handle">⠿</span><div class="card-dot" style="background:var(--green)"></div> My Release Tracker</div>
+      <a class="card-action" onclick="event.stopPropagation()">Manage</a>
+    </div>
+    <div class="card-body">
+      <div style="font-size:11px; color:var(--muted); margin-bottom:10px;">Subscribed releases — tap to see full progress</div>
+      <div class="tracker-item">
+        <div class="tracker-top">
+          <div><div class="tracker-name">Bld A Stair #3</div><div class="tracker-code">450-747</div></div>
+          <span style="font-size:11px; color:var(--yellow); font-weight:700">In Drafting</span>
+        </div>
+        <div class="tracker-steps">
+          <div class="step done"></div>
+          <div class="step active"></div>
+          <div class="step"></div>
+          <div class="step"></div>
+        </div>
+        <div class="step-labels">
+          <span class="step-label done">Draft</span>
+          <span class="step-label active">Shop</span>
+          <span class="step-label">Paint</span>
+          <span class="step-label">Install</span>
+        </div>
+      </div>
+      <div class="tracker-item">
+        <div class="tracker-top">
+          <div><div class="tracker-name">Bld B Guardrails</div><div class="tracker-code">450-381</div></div>
+          <span style="font-size:11px; color:var(--accent); font-weight:700">DRR Review</span>
+        </div>
+        <div class="tracker-steps">
+          <div class="step active"></div>
+          <div class="step"></div>
+          <div class="step"></div>
+          <div class="step"></div>
+        </div>
+        <div class="step-labels">
+          <span class="step-label active">Draft</span>
+          <span class="step-label">Shop</span>
+          <span class="step-label">Paint</span>
+          <span class="step-label">Install</span>
+        </div>
+      </div>
+      <div class="tracker-item">
+        <div class="tracker-top">
+          <div><div class="tracker-name">Bld A Stair #1</div><div class="tracker-code">450-760</div></div>
+          <span style="font-size:11px; color:var(--green); font-weight:700">Complete</span>
+        </div>
+        <div class="tracker-steps">
+          <div class="step done"></div>
+          <div class="step done"></div>
+          <div class="step done"></div>
+          <div class="step done"></div>
+        </div>
+        <div class="step-labels">
+          <span class="step-label done">Draft</span>
+          <span class="step-label done">Shop</span>
+          <span class="step-label done">Paint</span>
+          <span class="step-label done">Install</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MATERIAL ORDERS -->
+  <div class="card" onclick="openModal('orders')">
+    <div class="card-header">
+      <div class="card-title"><span class="drag-handle">⠿</span><div class="card-dot" style="background:var(--teal)"></div> Material Order Updates</div>
+      <a class="card-action" onclick="event.stopPropagation()">All Orders</a>
+    </div>
+    <div class="card-body">
+      <div style="font-size:11px; color:var(--muted); margin-bottom:10px;">Subscribed to orders on your projects</div>
+      <div class="order-item">
+        <div class="order-icon" style="background:rgba(20,184,166,.15)">📦</div>
+        <div class="order-info">
+          <div class="order-name">Ultralox Balcony Rail Panels</div>
+          <div class="order-meta">450-381 · Sandstone Ranch · Ultralox</div>
+        </div>
+        <span class="order-status shipped">Shipped</span>
+      </div>
+      <div class="order-item">
+        <div class="order-icon" style="background:rgba(79,142,247,.15)">🔩</div>
+        <div class="order-info">
+          <div class="order-name">Spring Closers (F23) × 24</div>
+          <div class="order-meta">450-381 · Spring Creek Products</div>
+        </div>
+        <span class="order-status ordered">Ordered</span>
+      </div>
+      <div class="order-item">
+        <div class="order-icon" style="background:rgba(34,197,94,.15)">🏗️</div>
+        <div class="order-info">
+          <div class="order-name">HSS Tube Steel — Stair #3</div>
+          <div class="order-meta">450-747 · Metal Supermarkets</div>
+        </div>
+        <span class="order-status delivered">Delivered</span>
+      </div>
+      <div class="order-item">
+        <div class="order-icon" style="background:rgba(100,116,139,.15)">🎨</div>
+        <div class="order-info">
+          <div class="order-name">Powder Coat — Bld B Rails</div>
+          <div class="order-meta">450-381 · Colorado Powder Coating</div>
+        </div>
+        <span class="order-status pending">Pending</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MY BADGES -->
+  <div class="card" onclick="openModal('badges')">
+    <div class="card-header">
+      <div class="card-title"><span class="drag-handle">⠿</span><div class="card-dot" style="background:var(--gold)"></div> My Badges & Recognition</div>
+      <a class="card-action" onclick="event.stopPropagation()">All Badges</a>
+    </div>
+    <div class="card-body">
+      <div class="badges-grid">
+        <div class="badge-card earned">
+          <div class="badge-emoji">🏆</div>
+          <div class="badge-name">Zero-Error Week</div>
+          <div class="badge-desc">100% accuracy all week</div>
+          <div class="badge-earned-tag">✓ Earned Jul 18</div>
+        </div>
+        <div class="badge-card earned">
+          <div class="badge-emoji">⚡</div>
+          <div class="badge-name">5 FC Releases</div>
+          <div class="badge-desc">5 FCs in one month</div>
+          <div class="badge-earned-tag">✓ Earned Jul 15</div>
+        </div>
+        <div class="badge-card earned">
+          <div class="badge-emoji">🎯</div>
+          <div class="badge-name">On-Time Streak</div>
+          <div class="badge-desc">12 on-time deliveries</div>
+          <div class="badge-earned-tag">✓ Streak: 12</div>
+        </div>
+        <div class="badge-card earned">
+          <div class="badge-emoji">⭐</div>
+          <div class="badge-name">Top Drafter Q2</div>
+          <div class="badge-desc">Highest output Q2</div>
+          <div class="badge-earned-tag">✓ Earned Jul 1</div>
+        </div>
+        <div class="badge-card locked">
+          <div class="badge-emoji">🔥</div>
+          <div class="badge-name">20 FC Streak</div>
+          <div class="badge-desc">20 on-time FCs in a row</div>
+          <div class="badge-earned-tag">8 to go</div>
+        </div>
+        <div class="badge-card locked">
+          <div class="badge-emoji">💎</div>
+          <div class="badge-name">Diamond Drafter</div>
+          <div class="badge-desc">100 FCs completed</div>
+          <div class="badge-earned-tag">87 completed</div>
+        </div>
+        <div class="badge-card locked">
+          <div class="badge-emoji">🛡️</div>
+          <div class="badge-name">Zero Punch Items</div>
+          <div class="badge-desc">No punch items on 5 jobs</div>
+          <div class="badge-earned-tag">3 of 5</div>
+        </div>
+        <div class="badge-card locked">
+          <div class="badge-emoji">🚀</div>
+          <div class="badge-name">Speed Demon</div>
+          <div class="badge-desc">FC in under 3 days</div>
+          <div class="badge-earned-tag">Best: 4 days</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MY PROJECTS -->
+  <div class="card" onclick="openModal('myprojects')">
+    <div class="card-header">
+      <div class="card-title"><span class="drag-handle">⠿</span><div class="card-dot" style="background:var(--accent2)"></div> My Projects</div>
+      <a class="card-action" onclick="event.stopPropagation()">All Projects</a>
+    </div>
+    <div class="card-body">
+      <div class="project-row">
+        <span class="project-code">#450</span>
+        <div>
+          <div class="project-name">Sandstone Ranch</div>
+          <div class="project-role">Lead Drafter · 4 active releases</div>
+        </div>
+        <span class="project-status active">Active</span>
+      </div>
+      <div class="project-row">
+        <span class="project-code">#448</span>
+        <div>
+          <div class="project-name">Prospect Village</div>
+          <div class="project-role">Drafter · 2 active releases</div>
+        </div>
+        <span class="project-status drafting">Drafting</span>
+      </div>
+      <div class="project-row">
+        <span class="project-code">#445</span>
+        <div>
+          <div class="project-name">Baseline Flats</div>
+          <div class="project-role">Drafter · Submittal review</div>
+        </div>
+        <span class="project-status active">Active</span>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- MY EOS ROCKS WIDGET -->
+  <div class="card" onclick="openModal('eos')">
+    <div class="card-header">
+      <div class="card-title"><span class="drag-handle">⠿</span><div class="card-dot" style="background:var(--purple)"></div> 🎯 My EOS Rocks</div>
+      <a class="card-action" href="#" onclick="event.stopPropagation()">Go to EOS</a>
+    </div>
+    <div class="card-body">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid var(--border)">
+        <div style="font-size:20px">🍌</div>
+        <div style="font-size:12px; color:var(--muted)"><strong style="color:var(--purple)">Carmen Miranda</strong> is tracking your Rocks. Q3 ends Sep 30.</div>
+      </div>
+      <div class="tracker-item">
+        <div class="tracker-top">
+          <div>
+            <div class="tracker-name">BB Rules Rev 5 in Carmen</div>
+            <div class="tracker-code">Due Aug 15 · Technology</div>
+          </div>
+          <span style="font-size:11px; font-weight:700; background:rgba(34,197,94,.15); color:var(--green); padding:2px 8px; border-radius:4px">On Track</span>
+        </div>
+        <div class="tracker-steps">
+          <div class="step done"></div>
+          <div class="step done"></div>
+          <div class="step active"></div>
+          <div class="step"></div>
+        </div>
+        <div class="step-labels">
+          <span class="step-label done">Defined</span>
+          <span class="step-label done">In Progress</span>
+          <span class="step-label active">Review</span>
+          <span class="step-label">Complete</span>
+        </div>
+      </div>
+      <div class="tracker-item">
+        <div class="tracker-top">
+          <div>
+            <div class="tracker-name">Zero Punch Items — 3 Consecutive Jobs</div>
+            <div class="tracker-code">Due Sep 30 · Quality</div>
+          </div>
+          <span style="font-size:11px; font-weight:700; background:rgba(34,197,94,.15); color:var(--green); padding:2px 8px; border-radius:4px">On Track</span>
+        </div>
+        <div class="tracker-steps">
+          <div class="step done"></div>
+          <div class="step done"></div>
+          <div class="step active"></div>
+          <div class="step"></div>
+        </div>
+        <div class="step-labels">
+          <span class="step-label done">Job 1 ✓</span>
+          <span class="step-label done">Job 2 ✓</span>
+          <span class="step-label active">Job 3...</span>
+          <span class="step-label">Done</span>
+        </div>
+      </div>
+      <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border); display:flex; justify-content:space-between; font-size:12px">
+        <span style="color:var(--green); font-weight:700">2/2 Rocks On Track</span>
+        <span style="color:var(--muted)">Q3 2026 · 6 days to L10</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Detail View</div>
+      <button class="modal-close" onclick="closeModal()">✕ Close</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+// MODAL CONTENT
+const modals = {
+  openitems: {
+    title: "My Open Items — David Servold",
+    body: `
+      <div class="modal-section">
+        <h3>Due This Week</h3>
+        <div class="open-item" style="padding:10px 0; border-bottom:1px solid var(--border)">
+          <span class="item-type review">Review</span>
+          <div class="item-info">
+            <div class="item-title">DRR Review — Bld A Stair #3</div>
+            <div class="item-meta">450-747 · Assigned by Danny Riddell · Jul 20</div>
+            <div class="item-meta" style="margin-top:4px; color:var(--text)">Review fabrication drawings for completeness, hardware callouts, and code compliance. BB01 pre-review complete — 2 flags to address.</div>
+          </div>
+          <div class="item-due soon">Due Jul 24</div>
+        </div>
+        <div class="open-item" style="padding:10px 0; border-bottom:1px solid var(--border)">
+          <span class="item-type submittal">Submittal</span>
+          <div class="item-info">
+            <div class="item-title">FC Package — Bld B Guardrails</div>
+            <div class="item-meta">450-381 · Finalize all drawings, attach hardware list, generate FC PDF</div>
+          </div>
+          <div class="item-due soon">Due Jul 25</div>
+        </div>
+      </div>
+      <div class="modal-section">
+        <h3>Upcoming</h3>
+        <div class="open-item" style="padding:10px 0; border-bottom:1px solid var(--border)">
+          <span class="item-type task">Task</span>
+          <div class="item-info">
+            <div class="item-title">Update hardware callouts — Stair #2</div>
+            <div class="item-meta">450-759 · Per DRR Rev 2 comments from Bill O. — update F-page quantities on tread clips</div>
+          </div>
+          <div class="item-due ok">Due Jul 28</div>
+        </div>
+        <div class="open-item" style="padding:10px 0">
+          <span class="item-type todo">To-Do</span>
+          <div class="item-info">
+            <div class="item-title">Confirm cane rail detail — Bld B</div>
+            <div class="item-meta">450-381 · BB01 flagged potential cane detection hazard — confirm under-stair clearance and add cane rail if needed</div>
+          </div>
+          <div class="item-due ok">Due Jul 30</div>
+        </div>
+      </div>
+    `
+  },
+  newsfeed: {
+    title: "Company News Feed",
+    body: `<p style="color:var(--muted); font-size:13px; margin-bottom:16px;">All company updates, milestones, badges, and alerts — most recent first.</p>
+    <div class="feed-item"><div class="feed-avatar" style="background:rgba(245,158,11,.2); color:var(--gold)">🏆</div><div class="feed-content"><div class="feed-text"><strong>Shop Team</strong> hit a new production record — 38 stair stringers fabricated in a single week! <span class="feed-tag milestone">Milestone</span></div><div class="feed-time">Today, 7:14 AM</div></div></div>
+    <div class="feed-item"><div class="feed-avatar" style="background:rgba(245,158,11,.2); color:var(--gold)">🥇</div><div class="feed-content"><div class="feed-text"><strong>David Servold</strong> earned the <strong style="color:var(--gold)">Zero-Error Week</strong> badge — 100% accuracy on all DRR reviews this week! <span class="feed-tag badge-award">Badge</span></div><div class="feed-time">Yesterday, 4:30 PM</div></div></div>
+    <div class="feed-item"><div class="feed-avatar" style="background:rgba(34,197,94,.2); color:var(--green)">✅</div><div class="feed-content"><div class="feed-text"><strong>450-760 Bld A Stair #1</strong> is fully installed and signed off at Sandstone Ranch. Great work Crew 1! <span class="feed-tag milestone">Milestone</span></div><div class="feed-time">Yesterday, 2:15 PM</div></div></div>
+    <div class="feed-item"><div class="feed-avatar" style="background:rgba(79,142,247,.2); color:var(--accent)">📦</div><div class="feed-content"><div class="feed-text"><strong>Ultralox order</strong> for 450-381 Bld B Guardrails has shipped — ETA July 28. <span class="feed-tag order">Material Order</span></div><div class="feed-time">Jul 21, 3:45 PM</div></div></div>
+    <div class="feed-item"><div class="feed-avatar" style="background:rgba(168,85,247,.2); color:var(--purple)">📸</div><div class="feed-content"><div class="feed-text"><strong>Danny Riddell</strong> posted 6 new install photos for <strong>450-700 Structural Steel</strong> at Sandstone Ranch. <span class="feed-tag photo">Photos</span></div><div class="feed-time">Jul 21, 11:20 AM</div></div></div>
+    <div class="feed-item"><div class="feed-avatar" style="background:rgba(239,68,68,.2); color:var(--red)">⚠️</div><div class="feed-content"><div class="feed-text"><strong>BB01 Alert:</strong> Submittal for <strong>450-344 Bld A Balcony Rails</strong> is 16 days out to GC — follow-up email sent to PermaCorp. <span class="feed-tag alert">Alert</span></div><div class="feed-time">Jul 20, 9:00 AM</div></div></div>`
+  },
+  photos: {
+    title: "Work in Progress & Installed Photos",
+    body: `<p style="color:var(--muted); font-size:13px; margin-bottom:16px;">Photos uploaded by field crews, shop supervisors, and PMs across all your active projects. Subscribe to any release to get notified when new photos are added.</p>
+    <div class="photo-grid">
+      <div class="photo-card"><div class="photo-placeholder" style="height:120px">🏗️</div><div class="photo-info"><div class="photo-title">Stair #1 — Final Install</div><div class="photo-meta">450-760 · Sandstone Ranch · Jul 21</div><div class="photo-stage installed">✓ Installed & Signed Off</div></div></div>
+      <div class="photo-card"><div class="photo-placeholder" style="height:120px">🔩</div><div class="photo-info"><div class="photo-title">Stair #2 — In Shop</div><div class="photo-meta">450-759 · Sandstone Ranch · Jul 20</div><div class="photo-stage shop">⚙ In Fabrication</div></div></div>
+      <div class="photo-card"><div class="photo-placeholder" style="height:120px">🎨</div><div class="photo-info"><div class="photo-title">Balcony Rails — Paint</div><div class="photo-meta">450-344 · Sandstone Ranch · Jul 19</div><div class="photo-stage paint">🎨 In Powder Coat</div></div></div>
+    </div>`
+  },
+  tracker: {
+    title: "My Release Tracker — Subscribed Releases",
+    body: `<p style="color:var(--muted); font-size:13px; margin-bottom:16px;">Subscribe to any release to track its progress from Drafting through Installation. You'll get a notification every time it advances a stage.</p>
+    <div class="tracker-item"><div class="tracker-top"><div><div class="tracker-name">Bld A Stair #3</div><div class="tracker-code">450-747 · Sandstone Ranch</div></div><span style="font-size:12px; color:var(--yellow); font-weight:700">Currently: In Drafting</span></div><div class="tracker-steps"><div class="step done"></div><div class="step active"></div><div class="step"></div><div class="step"></div></div><div class="step-labels"><span class="step-label done">Draft</span><span class="step-label active">Shop</span><span class="step-label">Paint</span><span class="step-label">Install</span></div><div style="font-size:11px; color:var(--muted); margin-top:8px">Install target: Aug 11 (Hard date) · Drafting deadline: Jul 28</div></div>
+    <div class="tracker-item"><div class="tracker-top"><div><div class="tracker-name">Bld B Guardrails</div><div class="tracker-code">450-381 · Sandstone Ranch</div></div><span style="font-size:12px; color:var(--accent); font-weight:700">Currently: DRR Review</span></div><div class="tracker-steps"><div class="step active"></div><div class="step"></div><div class="step"></div><div class="step"></div></div><div class="step-labels"><span class="step-label active">Draft</span><span class="step-label">Shop</span><span class="step-label">Paint</span><span class="step-label">Install</span></div><div style="font-size:11px; color:var(--muted); margin-top:8px">Install target: Sep 8 (Projected) · Ultralox ETA: Jul 28</div></div>`
+  },
+  orders: {
+    title: "Material Order Updates",
+    body: `<p style="color:var(--muted); font-size:13px; margin-bottom:16px;">Orders on your subscribed projects. BB01 monitors vendor emails and updates status automatically when orders ship or are delivered.</p>
+    <div class="order-item"><div class="order-icon" style="background:rgba(20,184,166,.15)">📦</div><div class="order-info"><div class="order-name">Ultralox Balcony Rail Panels</div><div class="order-meta">450-381 · Sandstone Ranch · Ordered Jul 10 · Shipped Jul 21 · ETA Jul 28</div></div><span class="order-status shipped">Shipped</span></div>
+    <div class="order-item"><div class="order-icon" style="background:rgba(79,142,247,.15)">🔩</div><div class="order-info"><div class="order-name">Spring Closers (F23) × 24</div><div class="order-meta">450-381 · Spring Creek Products · Ordered Jul 18 · Processing</div></div><span class="order-status ordered">Ordered</span></div>
+    <div class="order-item"><div class="order-icon" style="background:rgba(34,197,94,.15)">🏗️</div><div class="order-info"><div class="order-name">HSS Tube Steel — Stair #3</div><div class="order-meta">450-747 · Metal Supermarkets · Delivered Jul 15</div></div><span class="order-status delivered">Delivered</span></div>`
+  },
+  badges: {
+    title: "My Badges & Recognition",
+    body: `<p style="color:var(--muted); font-size:13px; margin-bottom:16px;">Badges are awarded automatically when you hit key milestones. Keep your streak going — the team can see your achievements in the news feed!</p>
+    <div class="badges-grid">
+      <div class="badge-card earned"><div class="badge-emoji">🏆</div><div class="badge-name">Zero-Error Week</div><div class="badge-desc">100% accuracy on all reviews in a single week</div><div class="badge-earned-tag">✓ Earned Jul 18, 2026</div></div>
+      <div class="badge-card earned"><div class="badge-emoji">⚡</div><div class="badge-name">5 FC Releases</div><div class="badge-desc">5 FC packages completed in one calendar month</div><div class="badge-earned-tag">✓ Earned Jul 15, 2026</div></div>
+      <div class="badge-card earned"><div class="badge-emoji">🎯</div><div class="badge-name">On-Time Streak: 12</div><div class="badge-desc">12 consecutive on-time deliveries to the shop</div><div class="badge-earned-tag">✓ Current streak: 12</div></div>
+      <div class="badge-card earned"><div class="badge-emoji">⭐</div><div class="badge-name">Top Drafter Q2</div><div class="badge-desc">Highest FC output in the drafting department Q2 2026</div><div class="badge-earned-tag">✓ Earned Jul 1, 2026</div></div>
+      <div class="badge-card locked"><div class="badge-emoji">🔥</div><div class="badge-name">20 FC Streak</div><div class="badge-desc">20 consecutive on-time FCs</div><div class="badge-earned-tag">Progress: 12/20</div></div>
+      <div class="badge-card locked"><div class="badge-emoji">💎</div><div class="badge-name">Diamond Drafter</div><div class="badge-desc">100 total FC packages completed</div><div class="badge-earned-tag">Progress: 87/100</div></div>
+    </div>`
+  },
+  myprojects: {
+    title: "My Projects",
+    body: `<p style="color:var(--muted); font-size:13px; margin-bottom:16px;">All projects you are assigned to as drafter, reviewer, or team member.</p>
+    <div class="project-row"><span class="project-code">#450</span><div><div class="project-name">Sandstone Ranch — Frederick, CO</div><div class="project-role">Lead Drafter · GC: PermaCorp · 4 active releases · Install target: Aug–Sep 2026</div></div><span class="project-status active">Active</span></div>
+    <div class="project-row"><span class="project-code">#448</span><div><div class="project-name">Prospect Village — Longmont, CO</div><div class="project-role">Drafter · 2 active releases · Submittals in progress</div></div><span class="project-status drafting">Drafting</span></div>
+    <div class="project-row"><span class="project-code">#445</span><div><div class="project-name">Baseline Flats — Boulder, CO</div><div class="project-role">Drafter · Submittal review stage · GC: Hensel Phelps</div></div><span class="project-status active">Active</span></div>`
+  },
+  eos: {
+    title: "🎯 My EOS Rocks — Q3 2026",
+    body: `
+      <div style="background:rgba(168,85,247,.08); border:1px solid rgba(168,85,247,.3); border-radius:10px; padding:14px 16px; margin-bottom:16px; display:flex; align-items:center; gap:12px">
+        <div style="font-size:28px">🍌</div>
+        <div><div style="font-weight:700; color:var(--purple)">Carmen Miranda — Your EOS Assistant</div><div style="font-size:12px; color:var(--muted); margin-top:3px">Carmen tracks your Rock progress, flags at-risk items before your Level 10 meetings, and helps your Integrator keep the team on the EOS journey. First meeting with Margaret Dixon is next week — Carmen is ready.</div></div>
+      </div>
+      <div class="modal-section">
+        <h3>My Q3 Rocks</h3>
+        <div style="display:flex; flex-direction:column; gap:14px">
+          <div style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:14px">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px">
+              <div><div style="font-weight:700">BB Rules Rev 5 complete and in Carmen</div><div style="font-size:11px; color:var(--muted); margin-top:2px">Due Aug 15, 2026 · Technology</div></div>
+              <span style="font-size:11px; font-weight:700; background:rgba(34,197,94,.15); color:var(--green); padding:3px 10px; border-radius:4px">On Track</span>
+            </div>
+            <div class="tracker-steps"><div class="step done"></div><div class="step done"></div><div class="step active"></div><div class="step"></div></div>
+            <div class="step-labels"><span class="step-label done">Defined</span><span class="step-label done">In Progress</span><span class="step-label active">Review</span><span class="step-label">Complete</span></div>
+            <div style="font-size:11px; color:var(--muted); margin-top:8px">Carmen note: Rev 4 sent to Daniel Jul 22. Rev 5 pending hardware count validation.</div>
+          </div>
+          <div style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:14px">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px">
+              <div><div style="font-weight:700">Zero punch list items on 3 consecutive projects</div><div style="font-size:11px; color:var(--muted); margin-top:2px">Due Sep 30, 2026 · Quality</div></div>
+              <span style="font-size:11px; font-weight:700; background:rgba(34,197,94,.15); color:var(--green); padding:3px 10px; border-radius:4px">On Track</span>
+            </div>
+            <div class="tracker-steps"><div class="step done"></div><div class="step done"></div><div class="step active"></div><div class="step"></div></div>
+            <div class="step-labels"><span class="step-label done">Job 1 ✓</span><span class="step-label done">Job 2 ✓</span><span class="step-label active">Job 3...</span><span class="step-label">Done</span></div>
+            <div style="font-size:11px; color:var(--muted); margin-top:8px">Carmen note: 2 of 3 consecutive zero-punch projects complete. Currently tracking 450-760 Stair #1 closeout.</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-section">
+        <h3>EOS Snapshot</h3>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px">
+          <div style="background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center"><div style="font-size:20px; font-weight:800; color:var(--green)">2/2</div><div style="font-size:11px; color:var(--muted); margin-top:2px">Rocks On Track</div></div>
+          <div style="background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center"><div style="font-size:20px; font-weight:800; color:var(--accent)">6</div><div style="font-size:11px; color:var(--muted); margin-top:2px">Days to L10 Meeting</div></div>
+          <div style="background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center"><div style="font-size:20px; font-weight:800; color:var(--purple)">Q3</div><div style="font-size:11px; color:var(--muted); margin-top:2px">Current Quarter</div></div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:8px"><a href="#" style="color:var(--purple); font-size:13px; font-weight:600">→ Open Full EOS Module</a></div>
+    `
+  }
+};
+
+function openModal(key) {
+  const m = modals[key];
+  if (!m) return;
+  document.getElementById('modal-title').textContent = m.title;
+  document.getElementById('modal-body').innerHTML = m.body;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// DRAG AND DROP
+const dashboard = document.getElementById('dashboard');
+new Sortable(dashboard, {
+  animation: 150,
+  handle: '.drag-handle',
+  ghostClass: 'sortable-ghost',
+  onEnd: function() {
+    const order = [...dashboard.children].map(c => c.querySelector('.card-title')?.textContent?.trim() || '');
+    localStorage.setItem('employee-home-order', JSON.stringify(order));
+  }
+});
+</script>
+</body>
+</html>

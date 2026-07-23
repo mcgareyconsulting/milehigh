@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Brain — EOS Module</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3350;
+    --accent: #4f8ef7;
+    --green: #22c55e;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --orange: #f97316;
+    --purple: #a855f7;
+    --teal: #14b8a6;
+    --gold: #f59e0b;
+    --text: #e2e8f0;
+    --muted: #64748b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; }
+
+  nav { background: #0a0d14; border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 52px; position: sticky; top: 0; z-index: 100; }
+  .nav-logo { font-size: 18px; font-weight: 800; letter-spacing: 2px; color: var(--accent); }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a { color: var(--muted); text-decoration: none; padding: 6px 14px; border-radius: 6px; font-size: 13px; transition: all .2s; }
+  .nav-links a:hover, .nav-links a.active { background: var(--surface2); color: var(--text); }
+  .nav-user { display: flex; align-items: center; gap: 10px; }
+  .avatar { width: 34px; height: 34px; border-radius: 50%; background: #7c5cbf; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+
+  /* PAGE HEADER */
+  .page-header { background: linear-gradient(135deg, #0f1117, #1a1d27, #1e1a2e); border-bottom: 1px solid var(--border); padding: 20px 24px; }
+  .page-header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .page-title { font-size: 24px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+  .eos-badge { background: linear-gradient(135deg, var(--accent), var(--purple)); padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+  .quarter-selector { display: flex; gap: 8px; }
+  .q-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 6px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .q-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+  /* CARMEN BANNER */
+  .carmen-banner { background: linear-gradient(135deg, rgba(168,85,247,.1), rgba(79,142,247,.1)); border: 1px solid rgba(168,85,247,.3); border-radius: 10px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .carmen-icon { font-size: 24px; }
+  .carmen-text { flex: 1; font-size: 13px; }
+  .carmen-text strong { color: var(--purple); }
+
+  /* STATS BAR */
+  .eos-stats { display: flex; gap: 12px; flex-wrap: wrap; }
+  .eos-stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 20px; flex: 1; min-width: 120px; text-align: center; }
+  .eos-stat-val { font-size: 26px; font-weight: 800; }
+  .eos-stat-val.green { color: var(--green); }
+  .eos-stat-val.yellow { color: var(--yellow); }
+  .eos-stat-val.red { color: var(--red); }
+  .eos-stat-val.blue { color: var(--accent); }
+  .eos-stat-label { font-size: 11px; color: var(--muted); margin-top: 3px; text-transform: uppercase; letter-spacing: .5px; }
+
+  /* TABS */
+  .tabs { display: flex; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .tab { padding: 12px 20px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all .2s; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab:hover { color: var(--text); }
+
+  /* CONTENT */
+  .content { padding: 20px 24px; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* SECTION HEADERS */
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .section-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .section-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .btn { background: var(--accent); border: none; color: white; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .btn-ghost { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
+
+  /* ROCKS */
+  .rocks-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+  .rock-owner-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .rock-owner-header { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .rock-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+  .rock-owner-info { flex: 1; }
+  .rock-owner-name { font-weight: 700; font-size: 14px; }
+  .rock-owner-role { font-size: 11px; color: var(--muted); }
+  .rock-progress-summary { font-size: 12px; font-weight: 700; }
+  .rock-list { padding: 12px 16px; }
+  .rock-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .rock-item:last-child { border-bottom: none; }
+  .rock-status { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .rock-status.on-track { background: var(--green); }
+  .rock-status.off-track { background: var(--red); }
+  .rock-status.at-risk { background: var(--yellow); }
+  .rock-status.not-started { background: var(--muted); }
+  .rock-info { flex: 1; }
+  .rock-title { font-weight: 600; font-size: 13px; }
+  .rock-due { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .rock-tag { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; }
+  .rock-tag.on-track { background: rgba(34,197,94,.15); color: var(--green); }
+  .rock-tag.off-track { background: rgba(239,68,68,.15); color: var(--red); }
+  .rock-tag.at-risk { background: rgba(245,158,11,.15); color: var(--yellow); }
+  .rock-tag.not-started { background: rgba(100,116,139,.15); color: var(--muted); }
+
+  /* COMPANY ROCKS */
+  .company-rocks { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 24px; overflow: hidden; }
+  .company-rock-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .company-rock-row:last-child { border-bottom: none; }
+  .rock-num { font-size: 11px; font-weight: 700; color: var(--muted); width: 20px; }
+  .rock-main { flex: 1; }
+  .rock-main-title { font-weight: 600; font-size: 13px; }
+  .rock-main-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .rock-owner-chip { font-size: 11px; font-weight: 700; background: var(--surface2); border: 1px solid var(--border); padding: 2px 10px; border-radius: 12px; white-space: nowrap; }
+
+  /* SCORECARD */
+  .scorecard-table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .scorecard-table th { background: var(--surface2); padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); border-bottom: 1px solid var(--border); }
+  .scorecard-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .scorecard-table tr:last-child td { border-bottom: none; }
+  .score-cell { text-align: center; font-weight: 700; font-size: 13px; }
+  .score-green { color: var(--green); }
+  .score-red { color: var(--red); }
+  .score-yellow { color: var(--yellow); }
+  .score-dot { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; }
+  .score-dot.g { background: rgba(34,197,94,.2); color: var(--green); }
+  .score-dot.r { background: rgba(239,68,68,.2); color: var(--red); }
+  .score-dot.y { background: rgba(245,158,11,.2); color: var(--yellow); }
+  .score-dot.n { background: rgba(100,116,139,.15); color: var(--muted); }
+  .metric-owner { font-size: 11px; color: var(--muted); }
+
+  /* ISSUES LIST (IDS) */
+  .issues-list { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .issue-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .15s; }
+  .issue-row:hover { background: var(--surface2); }
+  .issue-row:last-child { border-bottom: none; }
+  .issue-priority { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; white-space: nowrap; margin-top: 2px; }
+  .issue-priority.high { background: rgba(239,68,68,.15); color: var(--red); }
+  .issue-priority.medium { background: rgba(245,158,11,.15); color: var(--yellow); }
+  .issue-priority.low { background: rgba(79,142,247,.15); color: var(--accent); }
+  .issue-info { flex: 1; }
+  .issue-title { font-weight: 600; font-size: 13px; }
+  .issue-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .issue-status { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+  .issue-status.discuss { background: rgba(79,142,247,.15); color: var(--accent); }
+  .issue-status.solve { background: rgba(245,158,11,.15); color: var(--yellow); }
+  .issue-status.done { background: rgba(34,197,94,.15); color: var(--green); }
+
+  /* VTO */
+  .vto-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .vto-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .vto-card h3 { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .vto-item { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .vto-item:last-child { border-bottom: none; }
+  .vto-placeholder { color: var(--muted); font-style: italic; font-size: 13px; padding: 8px 0; }
+  .vto-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .vto-value { font-size: 14px; font-weight: 600; line-height: 1.5; }
+
+  /* ACCOUNTABILITY CHART */
+  .ac-placeholder { background: var(--surface); border: 2px dashed var(--border); border-radius: 12px; padding: 48px 24px; text-align: center; }
+  .ac-placeholder-icon { font-size: 48px; margin-bottom: 16px; }
+  .ac-placeholder-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .ac-placeholder-text { color: var(--muted); font-size: 13px; max-width: 400px; margin: 0 auto 20px; line-height: 1.6; }
+  .ac-team { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 24px; }
+  .ac-member { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; text-align: center; min-width: 120px; }
+  .ac-member-avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; margin: 0 auto 8px; }
+  .ac-member-name { font-weight: 700; font-size: 13px; }
+  .ac-member-role { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .ac-member-seat { font-size: 10px; font-weight: 700; color: var(--yellow); margin-top: 4px; }
+
+  /* ROCK STARS */
+  .rockstars-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .rockstar-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; position: relative; overflow: hidden; }
+  .rockstar-card.featured { border-color: var(--gold); }
+  .rockstar-crown { position: absolute; top: 10px; right: 10px; font-size: 18px; }
+  .rockstar-avatar { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 20px; margin: 0 auto 10px; }
+  .rockstar-name { font-weight: 700; font-size: 15px; }
+  .rockstar-role { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .rockstar-rocks { display: flex; gap: 6px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+  .rockstar-rock { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; }
+  .rockstar-stat { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .rockstar-stat-val { font-size: 22px; font-weight: 800; color: var(--green); }
+  .rockstar-stat-label { font-size: 11px; color: var(--muted); }
+
+  /* MODAL */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 200; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; width: 90%; max-width: 640px; max-height: 85vh; overflow-y: auto; }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
+  .modal-title { font-size: 18px; font-weight: 700; }
+  .modal-close { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 16px; }
+  .modal-body { padding: 20px 24px; }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">THE BRAIN</div>
+  <div class="nav-links">
+    <a href="#">Home</a>
+    <a href="#">Projects</a>
+    <a href="#">Job Log</a>
+    <a href="#">Drafting</a>
+    <a href="#">T&M</a>
+    <a href="#" class="active">EOS</a>
+    <a href="#">Reports</a>
+  </div>
+  <div class="nav-user">
+    <div class="avatar">BO</div>
+    <span style="font-size:13px; color:var(--muted)">Bill O'Neill · Visionary</span>
+  </div>
+</nav>
+
+<!-- PAGE HEADER -->
+<div class="page-header">
+  <div class="page-header-top">
+    <div class="page-title">
+      🎯 EOS — Entrepreneurial Operating System
+      <span class="eos-badge">Q3 2026</span>
+    </div>
+    <div class="quarter-selector">
+      <button class="q-btn">Q1</button>
+      <button class="q-btn">Q2</button>
+      <button class="q-btn active">Q3</button>
+      <button class="q-btn">Q4</button>
+    </div>
+  </div>
+
+  <div class="carmen-banner">
+    <div class="carmen-icon">🍌</div>
+    <div class="carmen-text">
+      <strong>Carmen Miranda</strong> is your EOS assistant. She tracks Rock progress, flags off-track items before your Level 10 meetings, surfaces issues that need to move to the IDS, and helps your Integrator keep the team on the EOS journey. First meeting with Margaret Dixon scheduled for next week — Carmen is ready.
+    </div>
+  </div>
+
+  <div class="eos-stats">
+    <div class="eos-stat"><div class="eos-stat-val green">7</div><div class="eos-stat-label">Rocks On Track</div></div>
+    <div class="eos-stat"><div class="eos-stat-val yellow">2</div><div class="eos-stat-label">Rocks At Risk</div></div>
+    <div class="eos-stat"><div class="eos-stat-val red">1</div><div class="eos-stat-label">Rocks Off Track</div></div>
+    <div class="eos-stat"><div class="eos-stat-val blue">5</div><div class="eos-stat-label">Open Issues (IDS)</div></div>
+    <div class="eos-stat"><div class="eos-stat-val green">8</div><div class="eos-stat-label">Scorecard Green</div></div>
+    <div class="eos-stat"><div class="eos-stat-val red">2</div><div class="eos-stat-label">Scorecard Red</div></div>
+    <div class="eos-stat"><div class="eos-stat-val" style="color:var(--purple)">6</div><div class="eos-stat-label">Days to L10 Meeting</div></div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" onclick="showTab('rocks')">🪨 Rocks</div>
+  <div class="tab" onclick="showTab('scorecard')">📊 Scorecard</div>
+  <div class="tab" onclick="showTab('ids')">💡 Issues (IDS)</div>
+  <div class="tab" onclick="showTab('vto')">🗺️ V/TO</div>
+  <div class="tab" onclick="showTab('accountability')">📋 Accountability Chart</div>
+  <div class="tab" onclick="showTab('rockstars')">⭐ Rock Stars</div>
+</div>
+
+<!-- CONTENT -->
+<div class="content">
+
+  <!-- ROCKS TAB -->
+  <div class="tab-panel active" id="tab-rocks">
+    <div class="section-header">
+      <div class="section-title"><div class="section-dot" style="background:var(--accent)"></div> Q3 2026 Company Rocks</div>
+      <button class="btn">+ Add Rock</button>
+    </div>
+
+    <div class="company-rocks" style="margin-bottom:24px">
+      <div style="padding:12px 16px; border-bottom:1px solid var(--border); font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px">Company Rocks — Q3 2026</div>
+      <div class="company-rock-row">
+        <div class="rock-num">1</div>
+        <div class="rock-main">
+          <div class="rock-main-title">Launch The Brain EOS Module — ready to receive Q4 Rocks</div>
+          <div class="rock-main-meta">Due Sep 30, 2026 · Technology</div>
+        </div>
+        <span class="rock-owner-chip">Bill O.</span>
+        <span class="rock-tag on-track">On Track</span>
+      </div>
+      <div class="company-rock-row">
+        <div class="rock-num">2</div>
+        <div class="rock-main">
+          <div class="rock-main-title">Complete EOS Foundational Training with Margaret Dixon</div>
+          <div class="rock-main-meta">Due Aug 15, 2026 · Leadership</div>
+        </div>
+        <span class="rock-owner-chip">Full Team</span>
+        <span class="rock-tag not-started">Not Started</span>
+      </div>
+      <div class="company-rock-row">
+        <div class="rock-num">3</div>
+        <div class="rock-main">
+          <div class="rock-main-title">Define Accountability Chart — all seats and roles confirmed</div>
+          <div class="rock-main-meta">Due Aug 15, 2026 · Leadership</div>
+        </div>
+        <span class="rock-owner-chip">Bill O.</span>
+        <span class="rock-tag not-started">Not Started</span>
+      </div>
+      <div class="company-rock-row">
+        <div class="rock-num">4</div>
+        <div class="rock-main">
+          <div class="rock-main-title">Complete T&M Module build and go live on first project</div>
+          <div class="rock-main-meta">Due Sep 15, 2026 · Operations</div>
+        </div>
+        <span class="rock-owner-chip">Daniel M.</span>
+        <span class="rock-tag at-risk">At Risk</span>
+      </div>
+      <div class="company-rock-row">
+        <div class="rock-num">5</div>
+        <div class="rock-main">
+          <div class="rock-main-title">Implement Production Capacity Scheduling — tee time system live</div>
+          <div class="rock-main-meta">Due Sep 30, 2026 · Operations</div>
+        </div>
+        <span class="rock-owner-chip">Daniel M.</span>
+        <span class="rock-tag on-track">On Track</span>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <div class="section-title"><div class="section-dot" style="background:var(--purple)"></div> Individual Rocks by Owner</div>
+    </div>
+    <div class="rocks-grid">
+
+      <div class="rock-owner-card">
+        <div class="rock-owner-header">
+          <div class="rock-avatar" style="background:linear-gradient(135deg,#4f8ef7,#7c5cbf)">BO</div>
+          <div class="rock-owner-info">
+            <div class="rock-owner-name">Bill O'Neill</div>
+            <div class="rock-owner-role">Visionary</div>
+          </div>
+          <div class="rock-progress-summary" style="color:var(--green)">2/3 ✓</div>
+        </div>
+        <div class="rock-list">
+          <div class="rock-item">
+            <div class="rock-status on-track"></div>
+            <div class="rock-info">
+              <div class="rock-title">EOS Module live in The Brain</div>
+              <div class="rock-due">Due Sep 30</div>
+            </div>
+            <span class="rock-tag on-track">On Track</span>
+          </div>
+          <div class="rock-item">
+            <div class="rock-status not-started"></div>
+            <div class="rock-info">
+              <div class="rock-title">Accountability Chart finalized</div>
+              <div class="rock-due">Due Aug 15</div>
+            </div>
+            <span class="rock-tag not-started">Not Started</span>
+          </div>
+          <div class="rock-item">
+            <div class="rock-status on-track"></div>
+            <div class="rock-info">
+              <div class="rock-title">Projects Page live for all PMs</div>
+              <div class="rock-due">Due Sep 1</div>
+            </div>
+            <span class="rock-tag on-track">On Track</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rock-owner-card">
+        <div class="rock-owner-header">
+          <div class="rock-avatar" style="background:linear-gradient(135deg,#ec4899,#a855f7)">LO</div>
+          <div class="rock-owner-info">
+            <div class="rock-owner-name">Lexi O'Neill</div>
+            <div class="rock-owner-role">Leadership Team</div>
+          </div>
+          <div class="rock-progress-summary" style="color:var(--yellow)">1/2 ✓</div>
+        </div>
+        <div class="rock-list">
+          <div class="rock-item">
+            <div class="rock-status on-track"></div>
+            <div class="rock-info">
+              <div class="rock-title">Project kickoff checklist in Carmen</div>
+              <div class="rock-due">Due Sep 15</div>
+            </div>
+            <span class="rock-tag on-track">On Track</span>
+          </div>
+          <div class="rock-item">
+            <div class="rock-status at-risk"></div>
+            <div class="rock-info">
+              <div class="rock-title">Insurance & billing onboarding process documented</div>
+              <div class="rock-due">Due Aug 30</div>
+            </div>
+            <span class="rock-tag at-risk">At Risk</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rock-owner-card">
+        <div class="rock-owner-header">
+          <div class="rock-avatar" style="background:linear-gradient(135deg,#14b8a6,#22c55e)">DS</div>
+          <div class="rock-owner-info">
+            <div class="rock-owner-name">David Servold</div>
+            <div class="rock-owner-role">Lead Drafter</div>
+          </div>
+          <div class="rock-progress-summary" style="color:var(--green)">2/2 ✓</div>
+        </div>
+        <div class="rock-list">
+          <div class="rock-item">
+            <div class="rock-status on-track"></div>
+            <div class="rock-info">
+              <div class="rock-title">BB Rules Rev 5 complete and in Carmen</div>
+              <div class="rock-due">Due Aug 15</div>
+            </div>
+            <span class="rock-tag on-track">On Track</span>
+          </div>
+          <div class="rock-item">
+            <div class="rock-status on-track"></div>
+            <div class="rock-info">
+              <div class="rock-title">Zero punch list items on 3 consecutive projects</div>
+              <div class="rock-due">Due Sep 30</div>
+            </div>
+            <span class="rock-tag on-track">On Track</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rock-owner-card">
+        <div class="rock-owner-header">
+          <div class="rock-avatar" style="background:linear-gradient(135deg,#f97316,#f59e0b)">KH</div>
+          <div class="rock-owner-info">
+            <div class="rock-owner-name">Katie Hearn</div>
+            <div class="rock-owner-role">Leadership Team</div>
+          </div>
+          <div class="rock-progress-summary" style="color:var(--red)">0/2 ✓</div>
+        </div>
+        <div class="rock-list">
+          <div class="rock-item">
+            <div class="rock-status off-track"></div>
+            <div class="rock-info">
+              <div class="rock-title">Estimate tracking system — first 5 projects entered</div>
+              <div class="rock-due">Due Aug 30</div>
+            </div>
+            <span class="rock-tag off-track">Off Track</span>
+          </div>
+          <div class="rock-item">
+            <div class="rock-status not-started"></div>
+            <div class="rock-info">
+              <div class="rock-title">SOV process documented and trained</div>
+              <div class="rock-due">Due Sep 15</div>
+            </div>
+            <span class="rock-tag not-started">Not Started</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rock-owner-card">
+        <div class="rock-owner-header">
+          <div class="rock-avatar" style="background:linear-gradient(135deg,#3b82f6,#06b6d4)">DF</div>
+          <div class="rock-owner-info">
+            <div class="rock-owner-name">Doug Ferrin</div>
+            <div class="rock-owner-role">Leadership Team</div>
+          </div>
+          <div class="rock-progress-summary" style="color:var(--green)">2/3 ✓</div>
+        </div>
+        <div class="rock-list">
+          <div class="rock-item">
+            <div class="rock-status on-track"></div>
+            <div class="rock-info">
+              <div class="rock-title">Shop capacity hours baseline documented</div>
+              <div class="rock-due">Due Aug 15</div>
+            </div>
+            <span class="rock-tag on-track">On Track</span>
+          </div>
+          <div class="rock-item">
+            <div class="rock-status on-track"></div>
+            <div class="rock-info">
+              <div class="rock-title">Fabrication tee time windows defined by product type</div>
+              <div class="rock-due">Due Sep 1</div>
+            </div>
+            <span class="rock-tag on-track">On Track</span>
+          </div>
+          <div class="rock-item">
+            <div class="rock-status at-risk"></div>
+            <div class="rock-info">
+              <div class="rock-title">Zero rework rate on 10 consecutive releases</div>
+              <div class="rock-due">Due Sep 30</div>
+            </div>
+            <span class="rock-tag at-risk">At Risk</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rock-owner-card">
+        <div class="rock-owner-header">
+          <div class="rock-avatar" style="background:linear-gradient(135deg,#22c55e,#14b8a6)">LS</div>
+          <div class="rock-owner-info">
+            <div class="rock-owner-name">Luis Solano</div>
+            <div class="rock-owner-role">Leadership Team</div>
+          </div>
+          <div class="rock-progress-summary" style="color:var(--green)">1/2 ✓</div>
+        </div>
+        <div class="rock-list">
+          <div class="rock-item">
+            <div class="rock-status on-track"></div>
+            <div class="rock-info">
+              <div class="rock-title">Install crew scheduling in job log — all crews assigned</div>
+              <div class="rock-due">Due Aug 30</div>
+            </div>
+            <span class="rock-tag on-track">On Track</span>
+          </div>
+          <div class="rock-item">
+            <div class="rock-status not-started"></div>
+            <div class="rock-info">
+              <div class="rock-title">Field photo upload process trained to all crews</div>
+              <div class="rock-due">Due Sep 15</div>
+            </div>
+            <span class="rock-tag not-started">Not Started</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SCORECARD TAB -->
+  <div class="tab-panel" id="tab-scorecard">
+    <div class="section-header">
+      <div class="section-title"><div class="section-dot" style="background:var(--green)"></div> Weekly Scorecard — Week of Jul 21, 2026</div>
+      <button class="btn-ghost">Export</button>
+    </div>
+    <table class="scorecard-table">
+      <thead>
+        <tr>
+          <th>Measurable</th>
+          <th>Owner</th>
+          <th>Goal</th>
+          <th style="text-align:center">This Week</th>
+          <th style="text-align:center">W-1</th>
+          <th style="text-align:center">W-2</th>
+          <th style="text-align:center">W-3</th>
+          <th style="text-align:center">W-4</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>FC Releases Completed</strong></td>
+          <td class="metric-owner">David S.</td>
+          <td>≥ 3/week</td>
+          <td class="score-cell"><span class="score-dot g">4</span></td>
+          <td class="score-cell"><span class="score-dot g">3</span></td>
+          <td class="score-cell"><span class="score-dot g">5</span></td>
+          <td class="score-cell"><span class="score-dot r">1</span></td>
+          <td class="score-cell"><span class="score-dot g">4</span></td>
+        </tr>
+        <tr>
+          <td><strong>Submittals Out to GC (on time)</strong></td>
+          <td class="metric-owner">Danny R.</td>
+          <td>100%</td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot r">✗</span></td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+        </tr>
+        <tr>
+          <td><strong>T&M Tickets Submitted Same Day</strong></td>
+          <td class="metric-owner">Field Crew</td>
+          <td>100%</td>
+          <td class="score-cell"><span class="score-dot y">75%</span></td>
+          <td class="score-cell"><span class="score-dot r">50%</span></td>
+          <td class="score-cell"><span class="score-dot g">100%</span></td>
+          <td class="score-cell"><span class="score-dot g">100%</span></td>
+          <td class="score-cell"><span class="score-dot y">80%</span></td>
+        </tr>
+        <tr>
+          <td><strong>Install Dates Hit (Hard Dates)</strong></td>
+          <td class="metric-owner">Luis S.</td>
+          <td>100%</td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot r">✗</span></td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+        </tr>
+        <tr>
+          <td><strong>Open RFIs > 14 Days</strong></td>
+          <td class="metric-owner">Danny R.</td>
+          <td>0</td>
+          <td class="score-cell"><span class="score-dot r">1</span></td>
+          <td class="score-cell"><span class="score-dot g">0</span></td>
+          <td class="score-cell"><span class="score-dot g">0</span></td>
+          <td class="score-cell"><span class="score-dot g">0</span></td>
+          <td class="score-cell"><span class="score-dot g">0</span></td>
+        </tr>
+        <tr>
+          <td><strong>New Estimates Submitted</strong></td>
+          <td class="metric-owner">Bill O.</td>
+          <td>≥ 2/week</td>
+          <td class="score-cell"><span class="score-dot g">3</span></td>
+          <td class="score-cell"><span class="score-dot g">2</span></td>
+          <td class="score-cell"><span class="score-dot r">0</span></td>
+          <td class="score-cell"><span class="score-dot g">4</span></td>
+          <td class="score-cell"><span class="score-dot g">2</span></td>
+        </tr>
+        <tr>
+          <td><strong>Invoices Sent on Time</strong></td>
+          <td class="metric-owner">Lexi O.</td>
+          <td>100%</td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+        </tr>
+        <tr>
+          <td><strong>Punch List Items Closed</strong></td>
+          <td class="metric-owner">Luis S.</td>
+          <td>≥ 90%</td>
+          <td class="score-cell"><span class="score-dot g">95%</span></td>
+          <td class="score-cell"><span class="score-dot y">85%</span></td>
+          <td class="score-cell"><span class="score-dot g">92%</span></td>
+          <td class="score-cell"><span class="score-dot g">98%</span></td>
+          <td class="score-cell"><span class="score-dot g">91%</span></td>
+        </tr>
+        <tr>
+          <td><strong>DRR Review Turnaround ≤ 48hrs</strong></td>
+          <td class="metric-owner">David S.</td>
+          <td>100%</td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot r">✗</span></td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+        </tr>
+        <tr>
+          <td><strong>Material Orders Placed on Time</strong></td>
+          <td class="metric-owner">Doug F.</td>
+          <td>100%</td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot g">✓</span></td>
+          <td class="score-cell"><span class="score-dot r">✗</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- IDS TAB -->
+  <div class="tab-panel" id="tab-ids">
+    <div class="section-header">
+      <div class="section-title"><div class="section-dot" style="background:var(--yellow)"></div> Issues List (Identify · Discuss · Solve)</div>
+      <button class="btn">+ Add Issue</button>
+    </div>
+    <div class="issues-list">
+      <div class="issue-row">
+        <span class="issue-priority high">High</span>
+        <div class="issue-info">
+          <div class="issue-title">T&M tickets not being submitted same day — field crew compliance</div>
+          <div class="issue-meta">Raised by Bill O. · Jul 18 · Scorecard red 2 of last 5 weeks</div>
+        </div>
+        <span class="issue-status discuss">Discuss</span>
+      </div>
+      <div class="issue-row">
+        <span class="issue-priority high">High</span>
+        <div class="issue-info">
+          <div class="issue-title">PM install date stacking — capacity conflicts in shop and field</div>
+          <div class="issue-meta">Raised by Bill O. · Jul 15 · Scheduling module in development</div>
+        </div>
+        <span class="issue-status solve">Solve</span>
+      </div>
+      <div class="issue-row">
+        <span class="issue-priority medium">Med</span>
+        <div class="issue-info">
+          <div class="issue-title">Ultralox and Superior Decks lead time communication — need better process</div>
+          <div class="issue-meta">Raised by Danny R. · Jul 10 · Long lead items being ordered late</div>
+        </div>
+        <span class="issue-status discuss">Discuss</span>
+      </div>
+      <div class="issue-row">
+        <span class="issue-priority medium">Med</span>
+        <div class="issue-info">
+          <div class="issue-title">Procore cutoff October — transition plan needed for all active projects</div>
+          <div class="issue-meta">Raised by Bill O. · Jul 22 · Brain must be fully operational by Oct 1</div>
+        </div>
+        <span class="issue-status discuss">Discuss</span>
+      </div>
+      <div class="issue-row">
+        <span class="issue-priority low">Low</span>
+        <div class="issue-info">
+          <div class="issue-title">Integrator role — who on the leadership team is best fit?</div>
+          <div class="issue-meta">Raised by Bill O. · Jul 22 · To be decided at first EOS meeting with Margaret</div>
+        </div>
+        <span class="issue-status discuss">Discuss</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- VTO TAB -->
+  <div class="tab-panel" id="tab-vto">
+    <div class="section-header">
+      <div class="section-title"><div class="section-dot" style="background:var(--teal)"></div> Vision / Traction Organizer (V/TO)</div>
+      <div style="font-size:12px; color:var(--muted)">To be completed with Margaret Dixon — first meeting next week</div>
+    </div>
+    <div class="vto-grid">
+      <div class="vto-card">
+        <h3>🎯 Core Values</h3>
+        <div class="vto-placeholder">To be defined with Margaret Dixon in Session 1</div>
+      </div>
+      <div class="vto-card">
+        <h3>🔭 Core Focus</h3>
+        <div class="vto-label">Purpose / Cause / Passion</div>
+        <div class="vto-placeholder">To be defined in Session 1</div>
+        <div class="vto-label" style="margin-top:12px">Niche — What We Do Best</div>
+        <div class="vto-placeholder">Miscellaneous metals fabrication — Colorado Front Range</div>
+      </div>
+      <div class="vto-card">
+        <h3>🚀 10-Year Target</h3>
+        <div class="vto-placeholder">To be defined in Session 1</div>
+      </div>
+      <div class="vto-card">
+        <h3>📣 Marketing Strategy</h3>
+        <div class="vto-label">Target Market</div>
+        <div class="vto-placeholder">To be defined in Session 1</div>
+        <div class="vto-label" style="margin-top:12px">Uniques</div>
+        <div class="vto-placeholder">To be defined in Session 1</div>
+      </div>
+      <div class="vto-card">
+        <h3>📅 3-Year Picture</h3>
+        <div class="vto-label">Revenue Goal</div>
+        <div class="vto-placeholder">To be defined in Session 1</div>
+        <div class="vto-label" style="margin-top:12px">What Does It Look Like?</div>
+        <div class="vto-placeholder">To be defined in Session 1</div>
+      </div>
+      <div class="vto-card">
+        <h3>📆 1-Year Plan</h3>
+        <div class="vto-label">Revenue</div>
+        <div class="vto-placeholder">To be defined in Session 1</div>
+        <div class="vto-label" style="margin-top:12px">Goals (3-7)</div>
+        <div class="vto-placeholder">To be defined in Session 1</div>
+      </div>
+    </div>
+    <div style="margin-top:16px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; text-align:center;">
+      <div style="font-size:32px; margin-bottom:10px">🍌</div>
+      <div style="font-weight:700; font-size:15px; margin-bottom:6px">Carmen Miranda is standing by</div>
+      <div style="color:var(--muted); font-size:13px; max-width:400px; margin:0 auto">After your first session with Margaret Dixon, Carmen will help you fill in every section of the V/TO and keep it updated as your vision evolves. She'll also surface V/TO alignment questions during your Level 10 meetings.</div>
+    </div>
+  </div>
+
+  <!-- ACCOUNTABILITY CHART TAB -->
+  <div class="tab-panel" id="tab-accountability">
+    <div class="section-header">
+      <div class="section-title"><div class="section-dot" style="background:var(--orange)"></div> Accountability Chart</div>
+      <div style="font-size:12px; color:var(--muted)">To be built with Margaret Dixon — first meeting next week</div>
+    </div>
+    <div class="ac-placeholder">
+      <div class="ac-placeholder-icon">📋</div>
+      <div class="ac-placeholder-title">Accountability Chart Coming Soon</div>
+      <div class="ac-placeholder-text">Your Accountability Chart will be built in your first EOS session with Margaret Dixon. Once complete, Carmen will load it here and use it to route Rocks, issues, and to-dos to the right seat — not just the right person.</div>
+      <div style="font-size:13px; color:var(--muted); margin-bottom:16px">Your leadership team is ready to be seated:</div>
+      <div class="ac-team">
+        <div class="ac-member">
+          <div class="ac-member-avatar" style="background:linear-gradient(135deg,#4f8ef7,#7c5cbf)">BO</div>
+          <div class="ac-member-name">Bill O'Neill</div>
+          <div class="ac-member-role">Director of Ops</div>
+          <div class="ac-member-seat">Visionary (likely)</div>
+        </div>
+        <div class="ac-member">
+          <div class="ac-member-avatar" style="background:linear-gradient(135deg,#ec4899,#a855f7)">LO</div>
+          <div class="ac-member-name">Lexi O'Neill</div>
+          <div class="ac-member-role">Leadership Team</div>
+          <div class="ac-member-seat">TBD — Session 1</div>
+        </div>
+        <div class="ac-member">
+          <div class="ac-member-avatar" style="background:linear-gradient(135deg,#f97316,#f59e0b)">KH</div>
+          <div class="ac-member-name">Katie Hearn</div>
+          <div class="ac-member-role">Leadership Team</div>
+          <div class="ac-member-seat">TBD — Session 1</div>
+        </div>
+        <div class="ac-member">
+          <div class="ac-member-avatar" style="background:linear-gradient(135deg,#14b8a6,#22c55e)">DS</div>
+          <div class="ac-member-name">David Servold</div>
+          <div class="ac-member-role">Lead Drafter</div>
+          <div class="ac-member-seat">TBD — Session 1</div>
+        </div>
+        <div class="ac-member">
+          <div class="ac-member-avatar" style="background:linear-gradient(135deg,#3b82f6,#06b6d4)">DF</div>
+          <div class="ac-member-name">Doug Ferrin</div>
+          <div class="ac-member-role">Leadership Team</div>
+          <div class="ac-member-seat">TBD — Session 1</div>
+        </div>
+        <div class="ac-member">
+          <div class="ac-member-avatar" style="background:linear-gradient(135deg,#22c55e,#14b8a6)">LS</div>
+          <div class="ac-member-name">Luis Solano</div>
+          <div class="ac-member-role">Leadership Team</div>
+          <div class="ac-member-seat">TBD — Session 1</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROCK STARS TAB -->
+  <div class="tab-panel" id="tab-rockstars">
+    <div class="section-header">
+      <div class="section-title"><div class="section-dot" style="background:var(--gold)"></div> Rock Stars — Q3 2026</div>
+      <div style="font-size:12px; color:var(--muted)">Employees crushing their Rocks and setting the standard</div>
+    </div>
+    <div class="rockstars-grid">
+      <div class="rockstar-card featured">
+        <div class="rockstar-crown">👑</div>
+        <div class="rockstar-avatar" style="background:linear-gradient(135deg,#14b8a6,#22c55e)">DS</div>
+        <div class="rockstar-name">David Servold</div>
+        <div class="rockstar-role">Lead Drafter</div>
+        <div class="rockstar-rocks">
+          <span class="rockstar-rock" style="background:rgba(34,197,94,.15); color:var(--green)">✓ BB Rules Rev 5</span>
+          <span class="rockstar-rock" style="background:rgba(34,197,94,.15); color:var(--green)">✓ Zero Punch Items</span>
+        </div>
+        <div class="rockstar-stat">
+          <div class="rockstar-stat-val">2/2</div>
+          <div class="rockstar-stat-label">Rocks On Track · On-Time Streak: 12</div>
+        </div>
+      </div>
+      <div class="rockstar-card">
+        <div class="rockstar-avatar" style="background:linear-gradient(135deg,#4f8ef7,#7c5cbf)">BO</div>
+        <div class="rockstar-name">Bill O'Neill</div>
+        <div class="rockstar-role">Visionary</div>
+        <div class="rockstar-rocks">
+          <span class="rockstar-rock" style="background:rgba(34,197,94,.15); color:var(--green)">✓ EOS Module</span>
+          <span class="rockstar-rock" style="background:rgba(34,197,94,.15); color:var(--green)">✓ Projects Page</span>
+          <span class="rockstar-rock" style="background:rgba(100,116,139,.15); color:var(--muted)">⏳ Acct. Chart</span>
+        </div>
+        <div class="rockstar-stat">
+          <div class="rockstar-stat-val">2/3</div>
+          <div class="rockstar-stat-label">Rocks On Track</div>
+        </div>
+      </div>
+      <div class="rockstar-card">
+        <div class="rockstar-avatar" style="background:linear-gradient(135deg,#22c55e,#14b8a6)">LS</div>
+        <div class="rockstar-name">Luis Solano</div>
+        <div class="rockstar-role">Leadership Team</div>
+        <div class="rockstar-rocks">
+          <span class="rockstar-rock" style="background:rgba(34,197,94,.15); color:var(--green)">✓ Crew Scheduling</span>
+          <span class="rockstar-rock" style="background:rgba(100,116,139,.15); color:var(--muted)">⏳ Field Photos</span>
+        </div>
+        <div class="rockstar-stat">
+          <div class="rockstar-stat-val">1/2</div>
+          <div class="rockstar-stat-label">Rocks On Track</div>
+        </div>
+      </div>
+      <div class="rockstar-card">
+        <div class="rockstar-avatar" style="background:linear-gradient(135deg,#ec4899,#a855f7)">LO</div>
+        <div class="rockstar-name">Lexi O'Neill</div>
+        <div class="rockstar-role">Leadership Team</div>
+        <div class="rockstar-rocks">
+          <span class="rockstar-rock" style="background:rgba(34,197,94,.15); color:var(--green)">✓ Kickoff Checklist</span>
+          <span class="rockstar-rock" style="background:rgba(245,158,11,.15); color:var(--yellow)">⚠ Billing Process</span>
+        </div>
+        <div class="rockstar-stat">
+          <div class="rockstar-stat-val" style="color:var(--yellow)">1/2</div>
+          <div class="rockstar-stat-label">Rocks On Track · 1 At Risk</div>
+        </div>
+      </div>
+      <div class="rockstar-card">
+        <div class="rockstar-avatar" style="background:linear-gradient(135deg,#3b82f6,#06b6d4)">DF</div>
+        <div class="rockstar-name">Doug Ferrin</div>
+        <div class="rockstar-role">Leadership Team</div>
+        <div class="rockstar-rocks">
+          <span class="rockstar-rock" style="background:rgba(34,197,94,.15); color:var(--green)">✓ Capacity Baseline</span>
+          <span class="rockstar-rock" style="background:rgba(34,197,94,.15); color:var(--green)">✓ Tee Times</span>
+          <span class="rockstar-rock" style="background:rgba(245,158,11,.15); color:var(--yellow)">⚠ Zero Rework</span>
+        </div>
+        <div class="rockstar-stat">
+          <div class="rockstar-stat-val" style="color:var(--yellow)">2/3</div>
+          <div class="rockstar-stat-label">Rocks On Track · 1 At Risk</div>
+        </div>
+      </div>
+      <div class="rockstar-card">
+        <div class="rockstar-avatar" style="background:linear-gradient(135deg,#f97316,#f59e0b)">KH</div>
+        <div class="rockstar-name">Katie Hearn</div>
+        <div class="rockstar-role">Leadership Team</div>
+        <div class="rockstar-rocks">
+          <span class="rockstar-rock" style="background:rgba(239,68,68,.15); color:var(--red)">✗ Estimate Tracking</span>
+          <span class="rockstar-rock" style="background:rgba(100,116,139,.15); color:var(--muted)">⏳ SOV Process</span>
+        </div>
+        <div class="rockstar-stat">
+          <div class="rockstar-stat-val" style="color:var(--red)">0/2</div>
+          <div class="rockstar-stat-label">Needs Support — Carmen flagged</div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:20px; background:var(--surface); border:1px solid rgba(245,158,11,.3); border-radius:12px; padding:16px; display:flex; align-items:center; gap:12px;">
+      <div style="font-size:24px">🍌</div>
+      <div>
+        <div style="font-weight:700; font-size:14px; color:var(--gold)">Carmen's Rock Star Spotlight</div>
+        <div style="font-size:13px; color:var(--muted); margin-top:4px"><strong style="color:var(--text)">David Servold</strong> is this quarter's standout — 2/2 Rocks on track, 12-game on-time streak, and zero punch list items on his last two projects. That's the standard. 🏆</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Rock Detail</div>
+      <button class="modal-close" onclick="closeModal()">✕ Close</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+function showTab(id) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+</script>
+</body>
+</html>

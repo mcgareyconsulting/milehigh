@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>The Brain — Project Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#0a0c14;color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;}
+
+  /* NAV */
+  .nav{background:#0d1117;border-bottom:1px solid #1e293b;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:48px;position:sticky;top:0;z-index:100;}
+  .nav-brand{font-size:15px;font-weight:800;letter-spacing:2px;color:#60a5fa;}
+  .nav-links{display:flex;gap:4px;}
+  .nav-links a{font-size:12px;color:#64748b;padding:5px 12px;border-radius:6px;text-decoration:none;transition:all .15s;}
+  .nav-links a:hover,.nav-links a.active{background:#1e293b;color:#f8fafc;}
+  .nav-user{font-size:12px;color:#94a3b8;}
+
+  /* PROJECT HEADER */
+  .proj-header{background:#0d1117;border-bottom:1px solid #1e293b;padding:14px 24px;}
+  .proj-title-row{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+  .proj-num{font-size:22px;font-weight:800;color:#60a5fa;}
+  .proj-name{font-size:22px;font-weight:700;color:#f8fafc;}
+  .proj-meta{display:flex;gap:20px;font-size:12px;color:#64748b;}
+  .proj-meta span strong{color:#94a3b8;}
+  .status-badges{display:flex;gap:8px;margin-left:auto;}
+  .sbadge{font-size:11px;padding:3px 10px;border-radius:12px;font-weight:600;}
+  .sbadge-blue{background:#1e3a5f;color:#60a5fa;}
+  .sbadge-yellow{background:#2d2010;color:#fbbf24;}
+  .sbadge-red{background:#2d1010;color:#f87171;}
+
+  /* KPI BAR */
+  .kpi-bar{display:grid;grid-template-columns:repeat(8,1fr);gap:1px;background:#1e293b;border-bottom:1px solid #1e293b;}
+  .kpi{background:#0d1117;padding:12px 16px;text-align:center;}
+  .kpi-val{font-size:20px;font-weight:800;color:#60a5fa;}
+  .kpi-val.green{color:#4ade80;}
+  .kpi-val.yellow{color:#fbbf24;}
+  .kpi-val.red{color:#f87171;}
+  .kpi-val.purple{color:#c084fc;}
+  .kpi-label{font-size:10px;color:#64748b;margin-top:2px;text-transform:uppercase;letter-spacing:.4px;}
+
+  /* DRAG HINT */
+  .drag-hint{padding:8px 24px;font-size:11px;color:#334155;display:flex;align-items:center;gap:6px;background:#0a0c14;}
+
+  /* DASHBOARD GRID */
+  .dashboard{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:12px 24px 32px;}
+
+  /* PANEL */
+  .panel{background:#0d1117;border:1px solid #1e293b;border-radius:10px;overflow:hidden;cursor:grab;transition:box-shadow .2s,transform .2s;}
+  .panel:active{cursor:grabbing;}
+  .panel.sortable-ghost{opacity:.4;background:#1e293b;}
+  .panel.sortable-drag{box-shadow:0 8px 32px #000a;transform:scale(1.02);cursor:grabbing;}
+  .panel-span2{grid-column:span 2;}
+  .panel-span3{grid-column:span 3;}
+
+  .panel-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px;border-bottom:1px solid #1e293b;cursor:pointer;}
+  .panel-header:hover .panel-title{color:#60a5fa;}
+  .panel-title{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;color:#f8fafc;letter-spacing:.3px;transition:color .15s;}
+  .panel-action{font-size:11px;color:#3b82f6;text-decoration:none;padding:2px 8px;border-radius:5px;background:#1e293b;}
+  .panel-action:hover{background:#2563eb;color:#fff;}
+  .panel-body{padding:12px 14px;}
+  .drag-handle{color:#334155;font-size:14px;margin-right:4px;cursor:grab;}
+
+  /* DOTS */
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+  .dot-blue{background:#3b82f6;}
+  .dot-green{background:#22c55e;}
+  .dot-yellow{background:#eab308;}
+  .dot-orange{background:#f97316;}
+  .dot-red{background:#ef4444;}
+  .dot-purple{background:#a855f7;}
+  .dot-pink{background:#ec4899;}
+  .dot-teal{background:#14b8a6;}
+  .dot-indigo{background:#6366f1;}
+  .dot-cyan{background:#06b6d4;}
+  .dot-gray{background:#64748b;}
+
+  /* BADGES */
+  .badge{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;white-space:nowrap;}
+  .badge-green{background:#0d2010;color:#4ade80;}
+  .badge-yellow{background:#2d2010;color:#fbbf24;}
+  .badge-red{background:#2d1010;color:#f87171;}
+  .badge-blue{background:#0d1a2d;color:#60a5fa;}
+  .badge-purple{background:#1e0d3a;color:#c084fc;}
+  .badge-orange{background:#2d1408;color:#fb923c;}
+  .badge-gray{background:#1e293b;color:#94a3b8;}
+  .badge-pink{background:#2d0a1a;color:#f472b6;}
+
+  /* SUBMITTALS */
+  .sub-legend{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;}
+  .sub-item{padding:8px 0;border-bottom:1px solid #1e293b11;display:flex;justify-content:space-between;align-items:flex-start;}
+  .sub-item:last-child{border-bottom:none;}
+  .sub-name{font-size:12px;color:#f8fafc;font-weight:500;}
+  .sub-date{font-size:10px;color:#64748b;margin-top:2px;}
+  .sub-flag{display:flex;flex-direction:column;align-items:flex-end;gap:3px;}
+  .out-to-gc{background:#2d1a08;border:1px solid #ea580c44;border-radius:6px;padding:3px 8px;font-size:10px;color:#fb923c;font-weight:600;}
+  .overdue-flag{background:#2d1010;border:1px solid #ef444444;border-radius:6px;padding:3px 8px;font-size:10px;color:#f87171;font-weight:600;}
+  .days-counter{font-size:10px;color:#64748b;margin-top:1px;text-align:right;}
+
+  /* RELEASES */
+  .release-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #1e293b11;}
+  .release-row:last-child{border-bottom:none;}
+  .release-code{font-size:11px;color:#60a5fa;font-weight:700;min-width:56px;}
+  .release-name{font-size:12px;color:#f8fafc;flex:1;}
+  .tracker{display:flex;gap:3px;}
+  .tracker-dot{width:10px;height:10px;border-radius:50%;}
+  .td-done{background:#22c55e;}
+  .td-active{background:#3b82f6;}
+  .td-pending{background:#1e293b;}
+  .tracker-label{font-size:9px;color:#64748b;display:flex;gap:12px;margin-top:4px;}
+
+  /* SCHEDULE */
+  .schedule-item{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #1e293b11;}
+  .schedule-item:last-child{border-bottom:none;}
+  .schedule-date-block{text-align:center;min-width:40px;}
+  .schedule-date-block .month{font-size:9px;color:#64748b;text-transform:uppercase;}
+  .schedule-date-block .day{font-size:18px;font-weight:800;line-height:1;}
+  .day.hard{color:#4ade80;}
+  .day.proj{color:#fbbf24;}
+  .schedule-date-block .type-label{font-size:8px;font-weight:700;text-transform:uppercase;margin-top:1px;}
+  .hard-label{color:#4ade80;}
+  .proj-label{color:#fbbf24;}
+  .schedule-info .title{font-size:12px;color:#f8fafc;font-weight:500;}
+  .schedule-info .sub{font-size:10px;color:#64748b;margin-top:1px;}
+
+  /* BUDGET */
+  .budget-section{margin-bottom:10px;}
+  .budget-label{font-size:11px;color:#94a3b8;margin-bottom:4px;}
+  .budget-bar-wrap{background:#1e293b;border-radius:4px;height:6px;margin-bottom:3px;}
+  .budget-numbers{display:flex;justify-content:space-between;font-size:10px;}
+  .budget-spent{color:#64748b;}
+  .budget-remaining{color:#94a3b8;}
+  .budget-divider{border:none;border-top:1px solid #1e293b;margin:8px 0;}
+  .fill-green{background:#22c55e;}
+  .fill-yellow{background:#eab308;}
+  .fill-red{background:#ef4444;}
+
+  /* T&M */
+  .tm-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b11;font-size:12px;}
+  .tm-row:last-child{border-bottom:none;}
+  .tm-id{color:#60a5fa;font-size:10px;font-weight:700;margin-right:6px;}
+  .tm-desc{color:#cbd5e1;}
+  .tm-amount{color:#4ade80;font-weight:700;font-size:12px;}
+
+  /* RENTALS */
+  .rental-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b11;}
+  .rental-row:last-child{border-bottom:none;}
+  .rental-name{font-size:12px;color:#f8fafc;font-weight:500;}
+  .rental-dates{font-size:10px;color:#64748b;margin-top:1px;}
+  .rental-cost{font-size:12px;color:#fbbf24;font-weight:700;}
+
+  /* CHANGE ORDERS */
+  .co-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b11;font-size:12px;}
+  .co-row:last-child{border-bottom:none;}
+  .co-id{color:#ec4899;font-size:10px;font-weight:700;margin-right:6px;}
+  .co-desc{color:#cbd5e1;}
+  .co-amount{color:#f8fafc;font-weight:700;}
+
+  /* CONTACTS */
+  .contact-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #1e293b11;}
+  .contact-row:last-child{border-bottom:none;}
+  .contact-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;}
+  .contact-info .name{font-size:12px;color:#f8fafc;font-weight:600;}
+  .contact-info .role{font-size:10px;color:#64748b;margin-top:1px;}
+
+  /* RFI */
+  .rfi-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b11;font-size:12px;}
+  .rfi-row:last-child{border-bottom:none;}
+  .rfi-id{color:#06b6d4;font-size:10px;font-weight:700;margin-right:6px;}
+  .rfi-desc{color:#cbd5e1;}
+  .rfi-days{font-size:10px;color:#64748b;}
+
+  /* PUNCH */
+  .punch-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #1e293b11;font-size:12px;}
+  .punch-row:last-child{border-bottom:none;}
+  .punch-check{width:14px;height:14px;border-radius:50%;border:2px solid #334155;flex-shrink:0;}
+  .punch-check.done{background:#22c55e;border-color:#22c55e;}
+  .punch-desc{flex:1;color:#cbd5e1;}
+  .punch-desc.done-text{color:#475569;text-decoration:line-through;}
+  .punch-owner{font-size:10px;color:#64748b;}
+
+  /* NOTES */
+  .note-card{border-radius:6px;padding:10px 12px;margin-bottom:8px;}
+  .note-card:last-child{margin-bottom:0;}
+  .note-type{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+  .note-meta{font-size:10px;color:#64748b;}
+  .note-body{font-size:12px;color:#cbd5e1;line-height:1.5;margin-top:5px;}
+  .note-footer{margin-top:6px;display:flex;gap:6px;align-items:center;}
+  .carmen-tag{font-size:10px;color:#64748b;}
+
+  /* TO-DO */
+  .todo-filters{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;}
+  .todo-filter{font-size:11px;padding:3px 10px;border-radius:12px;cursor:pointer;}
+  .todo-header{display:grid;grid-template-columns:24px 1fr 110px 100px 80px 75px;gap:0;font-size:10px;color:#475569;padding:0 4px 6px;border-bottom:1px solid #1e293b;}
+  .todo-row{display:grid;grid-template-columns:24px 1fr 110px 100px 80px 75px;gap:0;align-items:center;padding:7px 4px;border-bottom:1px solid #0d1117;}
+  .todo-row:last-child{border-bottom:none;}
+  .todo-circle{width:14px;height:14px;border-radius:50%;border:2px solid #f472b6;cursor:pointer;flex-shrink:0;}
+  .todo-circle.done{background:#22c55e;border-color:#22c55e;display:flex;align-items:center;justify-content:center;}
+  .todo-task{font-size:12px;color:#f8fafc;font-weight:500;}
+  .todo-task.done{color:#475569;text-decoration:line-through;}
+  .todo-link{font-size:10px;color:#475569;margin-top:1px;}
+  .todo-assignee{display:flex;align-items:center;gap:5px;}
+  .mini-avatar{width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .todo-due{font-size:11px;}
+  .todo-footer{margin-top:8px;padding-top:8px;border-top:1px solid #1e293b;display:flex;justify-content:space-between;font-size:11px;color:#475569;}
+
+  /* DRAWINGS */
+  .drawing-cover{background:#111827;border:1px solid #334155;border-radius:6px;padding:12px;margin-bottom:10px;font-family:monospace;}
+  .drawing-sets{display:flex;flex-direction:column;gap:5px;}
+  .drawing-set-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;}
+
+  /* MODAL OVERLAY */
+  .modal-overlay{display:none;position:fixed;inset:0;background:#000000cc;z-index:500;align-items:center;justify-content:center;padding:20px;}
+  .modal-overlay.open{display:flex;}
+  .modal{background:#0d1117;border:1px solid #1e293b;border-radius:12px;width:100%;max-width:720px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px #000;}
+  .modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #1e293b;position:sticky;top:0;background:#0d1117;z-index:1;}
+  .modal-title{font-size:16px;font-weight:700;color:#f8fafc;}
+  .modal-close{background:none;border:none;color:#64748b;font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px;}
+  .modal-close:hover{background:#1e293b;color:#f8fafc;}
+  .modal-body{padding:20px;}
+  .modal-section{margin-bottom:20px;}
+  .modal-section-title{font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #1e293b;}
+  .modal-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #1e293b11;font-size:13px;}
+  .modal-row:last-child{border-bottom:none;}
+  .modal-label{color:#64748b;}
+  .modal-value{color:#f8fafc;font-weight:500;}
+
+  /* CARMEN BANNER */
+  .carmen-banner{display:flex;align-items:center;gap:8px;background:#1a1d2f;border:1px solid #2563eb33;border-radius:6px;padding:7px 10px;margin-bottom:12px;font-size:11px;color:#60a5fa;}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand">THE BRAIN</div>
+  <div class="nav-links">
+    <a href="#">Dashboard</a>
+    <a href="#" class="active">Projects</a>
+    <a href="#">Job Log</a>
+    <a href="#">Drafting</a>
+    <a href="#">T&amp;M</a>
+    <a href="#">Reports</a>
+  </div>
+  <div class="nav-user">Bill O'Neill &nbsp;·&nbsp; Director of Ops</div>
+</nav>
+
+<!-- PROJECT HEADER -->
+<div class="proj-header">
+  <div class="proj-title-row">
+    <span class="proj-num">#450</span>
+    <span style="color:#475569;font-size:20px;">—</span>
+    <span class="proj-name">Sandstone Ranch</span>
+    <div class="status-badges">
+      <span class="sbadge sbadge-blue">In Production</span>
+      <span class="sbadge sbadge-yellow">Submittals: 4/6 Approved</span>
+      <span class="sbadge sbadge-yellow">2 Open RFIs</span>
+      <span class="sbadge sbadge-red">1 CO Pending GC</span>
+    </div>
+  </div>
+  <div class="proj-meta">
+    <span><strong>GC:</strong> PermaCorp Group</span>
+    <span><strong>PM:</strong> Danny Riddell</span>
+    <span><strong>Contract:</strong> $487,200</span>
+    <span><strong>Start:</strong> Mar 2025</span>
+  </div>
+</div>
+
+<!-- KPI BAR -->
+<div class="kpi-bar">
+  <div class="kpi"><div class="kpi-val">6</div><div class="kpi-label">Total Releases</div></div>
+  <div class="kpi"><div class="kpi-val green">4</div><div class="kpi-label">FC Released</div></div>
+  <div class="kpi"><div class="kpi-val yellow">2</div><div class="kpi-label">In Drafting</div></div>
+  <div class="kpi"><div class="kpi-val green">$312,400</div><div class="kpi-label">Billed to Date</div></div>
+  <div class="kpi"><div class="kpi-val">$174,800</div><div class="kpi-label">Remaining</div></div>
+  <div class="kpi"><div class="kpi-val yellow">3</div><div class="kpi-label">Open T&amp;M Tickets</div></div>
+  <div class="kpi"><div class="kpi-val red">$28,400</div><div class="kpi-label">CO Value Pending</div></div>
+  <div class="kpi"><div class="kpi-val purple">1</div><div class="kpi-label">Overdue Item</div></div>
+</div>
+
+<!-- DRAG HINT -->
+<div class="drag-hint">⠿ &nbsp;Drag cards to rearrange your layout — positions are saved automatically</div>
+
+<!-- DASHBOARD GRID (drag-and-drop) -->
+<div class="dashboard" id="dashboard">
+
+  <!-- SUBMITTALS -->
+  <div class="panel" data-id="submittals">
+    <div class="panel-header" onclick="openModal('submittals')">
+      <div class="panel-title"><span class="drag-handle">⠿</span><span class="dot dot-blue"></span>Submittals</div>
+      <a class="panel-action" href="#" onclick="event.stopPropagation()">View All</a>
+    </div>
+    <div class="panel-body">
+      <div class="sub-legend">
+        <span class="badge badge-green">Approved</span>
+        <span class="badge badge-purple">Appr. as Noted</span>
+        <span class="badge badge-orange">⏳ Out to GC</span>
+        <span class="badge badge-red">⚠ Overdue</span>
+        <span class="badge badge-yellow">Rev. &amp; Resubmit</span>
+        <span class="badge badge-gray">In Prep</span>
+      </div>
+      <div class="sub-item">
+        <div><div class="sub-name">Structural Steel</div><div class="sub-date">Submitted Mar 12 · Returned Mar 24</div></div>
+        <div class="sub-flag"><span class="badge badge-green">Approved</span></div>
+      </div>
+      <div class="sub-item">
+        <div><div class="sub-name">Bld A Stair #1</div><div class="sub-date">Submitted Apr 2 · Returned Apr 18</div></div>
+        <div class="sub-flag"><span class="badge badge-purple">Appr. as Noted</span></div>
+      </div>
+      <div class="sub-item">
+        <div><div class="sub-name">Bld A Stair #3</div><div class="sub-date">Submitted Jul 13 · Awaiting GC response</div></div>
+        <div class="sub-flag"><span class="out-to-gc">⏳ Out to GC</span><div class="days-counter">9 days · follow-up in 5 days</div></div>
+      </div>
+      <div class="sub-item">
+        <div><div class="sub-name">Bld A Balcony Rails</div><div class="sub-date">Submitted Jul 6 · Awaiting GC response</div></div>
+        <div class="sub-flag"><span class="overdue-flag">⚠ Overdue</span><div class="days-counter" style="color:#f87171;">16 days · BB01 follow-up sent Jul 20</div></div>
+      </div>
+      <div class="sub-item">
+        <div><div class="sub-name">Bld B Guardrails</div><div class="sub-date">Returned Jul 15 · Revisions in progress</div></div>
+        <div class="sub-flag"><span class="badge badge-yellow">Rev. &amp; Resubmit</span></div>
+      </div>
+      <div style="margin-top:8px;padding-top:6px;border-top:1px solid #1e293b;font-size:11px;color:#64748b;">3 approved &nbsp;·&nbsp; 2 out to GC &nbsp;·&nbsp; 1 revising &nbsp;<span style="color:#f87171;">1 overdue ⚠</span></div>
+    </div>
+  </div>
+
+  <!-- RELEASES -->
+  <div class="panel" data-id="releases">
+    <div class="panel-header" onclick="openModal('releases')">
+      <div class="panel-title"><span class="drag-handle">⠿</span><span class="dot dot-green"></span>Releases</div>
+      <a class="panel-action" href="#" onclick="event.stopPropagation()">View All</a>
+    </div>
+    <div class="panel-body">
+      <div class="release-row"><span class="release-code">450-700</span><span class="release-name">Structural Steel</span><div class="tracker"><div class="tracker-dot td-done"></div><div class="tracker-dot td-done"></div><div class="tracker-dot td-done"></div><div class="tracker-dot td-done"></div></div><span class="badge badge-green" style="margin-left:6px;">Complete</span></div>
+      <div class="release-row"><span class="release-code">450-760</span><span class="release-name">Bld A Stair #1</span><div class="tracker"><div class="tracker-dot td-done"></div><div class="tracker-dot td-done"></div><div class="tracker-dot td-done"></div><div class="tracker-dot td-active"></div></div><span class="badge badge-blue" style="margin-left:6px;">Installing</span></div>
+      <div class="release-row"><span class="release-code">450-759</span><span class="release-name">Bld A Stair #2</span><div class="tracker"><div class="tracker-dot td-done"></div><div class="tracker-dot td-done"></div><div class="tracker-dot td-active"></div><div class="tracker-dot td-pending"></div></div><span class="badge badge-purple" style="margin-left:6px;">In Paint</span></div>
+      <div class="release-row"><span class="release-code">450-747</span><span class="release-name">Bld A Stair #3</span><div class="tracker"><div class="tracker-dot td-done"></div><div class="tracker-dot td-active"></div><div class="tracker-dot td-pending"></div><div class="tracker-dot td-pending"></div></div><span class="badge badge-yellow" style="margin-left:6px;">In Shop</span></div>
+      <div class="release-row"><span class="release-code">450-344</span><span class="release-name">Bld A Balcony Rails</span><div class="tracker"><div class="tracker-dot td-active"></div><div class="tracker-dot td-pending"></div><div class="tracker-dot td-pending"></div><div class="tracker-dot td-pending"></div></div><span class="badge badge-gray" style="margin-left:6px;">Drafting</span></div>
+      <div class="release-row"><span class="release-code">450-381</span><span class="release-name">Bld B Guardrails</span><div class="tracker"><div class="tracker-dot td-active"></div><div class="tracker-dot td-pending"></div><div class="tracker-dot td-pending"></div><div class="tracker-dot td-pending"></div></div><span class="badge badge-orange" style="margin-left:6px;">DRR Needed</span></div>
+      <div class="tracker-label"><span>● Draft</span><span>● Shop</span><span>● Paint</span><span>● Install</span></div>
+    </div>
+  </div>
+
+  <!-- SCHEDULE -->
+  <div class="panel" data-id="schedule">
+    <div class="panel-header" onclick="openModal('schedule')">
+      <div class="panel-title"><span class="drag-handle">⠿</span><span class="dot dot-yellow"></span>Schedule</div>
+      <a class="panel-action" href="#" onclick="event.stopPropagation()">Full Timeline</a>
+    </div>
+    <div class="panel-body">
+      <div class="schedule-item"><div class="schedule-date-block"><div class="month">Jul</div><div class="day hard">28</div><div class="type-label hard-label">Hard</div></div><div class="schedule-info"><div class="title">Bld A Stair #1 Install</div><div class="sub">Crew 1 · 450-760 · 2 days est.</div></div></div>
+      <div class="schedule-item"><div class="schedule-date-block"><div class="month">Aug</div><div class="day proj">4</div><div class="type-label proj-label">Proj</div></div><div class="schedule-info"><div class="title">Bld A Stair #2 Install</div><div class="sub">Crew 1 · 450-759 · 2 days est.</div></div></div>
+      <div class="schedule-item"><div class="schedule-date-block"><div class="month">Aug</div><div class="day hard">11</div><div class="type-label hard-label">Hard</div></div><div class="schedule-info"><div class="title">Bld A Stair #3 Install</div><div class="sub">Crew 2 · 450-747 · 2 days est.</div></div></div>
+      <div class="schedule-item"><div class="schedule-date-block"><div class="month">Aug</div><div class="day proj">18</div><div class="type-label proj-label">Proj</div></div><div class="schedule-info"><div class="title">Bld A Balcony Rails Install</div><div class="sub">Crew 1 · 450-344 · 3 days est.</div></div></div>
+      <div class="schedule-item"><div class="schedule-date-block"><div class="month">Sep</div><div class="day proj">8</div><div class="type-label proj-label">Proj</div></div><div class="schedule-info"><div class="title">Bld B Guardrails Install</div><div class="sub">Crew 2 · 450-381 · 2 days est.</div></div></div>
+    </div>
+  </div>
+
+  <!-- BUDGET -->
+  <div class="panel" data-id="budget">
+    <div class="panel-header" onclick="openModal('budget')">
+      <div class="panel-title"><span class="drag-handle">⠿</span><span class="dot dot-teal"></span>Budget</div>
+      <a class="panel-action" href="#" onclick="event.stopPropagation()">Full Report</a>
+    </div>
+    <div class="panel-body">
+      <div class="budget-section"><div class="budget-label">Labor</div><div class="budget-bar-wrap"><div class="fill-yellow" style="width:68%;height:100%;border-radius:4px;"></div></div><div class="budget-numbers"><span class="budget-spent">$89,200 spent</span><span class="budget-remaining">$41,800 left</span></div></div>
+      <div class="budget-section"><div class="budget-label">Materials</div><div class="budget-bar-wrap"><div class="fill-green" style="width:52%;height:100%;border-radius:4px;"></div></div><div class="budget-numbers"><span class="budget-spent">$124,600 spent</span><span class="budget-remaining">$115,400 left</span></div></div>
+      <div class="budget-section"><div class="budget-label">Subcontractors</div><div class="budget-bar-wrap"><div class="fill-red" style="width:88%;height:100%;border-radius:4px;"></div></div><div class="budget-numbers"><span class="budget-spent">$44,000 spent</span><span class="budget-remaining" style="color:#f87171;">$6,000 left</span></div></div>
+      <hr class="budget-divider"/>
+      <div class="budget-numbers" style="font-size:13px;font-weight:600;"><span style="color:#94a3b8;">Contract Total</span><span>$487,200</span></div>
+      <div class="budget-numbers" style="margin-top:4px;"><span style="color:#64748b;font-size:11px;">Billed to Date</span><span style="color:#60a5fa;font-size:12px;font-weight:600;">$312,400 (64%)</span></div>
+    </div>
+  </div>
+
+  <!-- T&M TICKETS -->
+  <div class="panel" data-id="tm">
+    <div class="panel-header" onclick="openModal('tm')">
+      <div class="panel-title"><span class="drag-handle">⠿</span><span class="dot dot-purple"></span>T&amp;M Tickets</div>
+      <a class="panel-action" href="#" onclick="event.stopPropagation()">View All</a>
+    </div>
+    <div class="panel-body">
+      <div class="tm-row"><div><span class="tm-id">TM-001</span><span class="tm-desc">Extra blocking — Stair #1 landing</span></div><div style="display:flex;align-items:center;gap:6px;"><span class="tm-amount">$1,840</span><span class="badge badge-green">Approved</span></div></div>
+      <div class="tm-row"><div><span class="tm-id">TM-002</span><span class="tm-desc">Field weld — Stair #2 stringer</span></div><div style="display:flex;align-items:center;gap:6px;"><span class="tm-amount">$620</span><span class="badge badge-yellow">Pending GC</span></div></div>
+      <div class="tm-row"><div><span class="tm-id">TM-003</span><span class="tm-desc">Railing mod — Balcony B2</span></div><div style="display:flex;align-items:center;gap:6px;"><span class="tm-amount">$2,100</span><span class="badge badge-yellow">Pending GC</span></div></div>
+      <div class="tm-row"><div><span class="tm-id">TM-004</span><span class="tm-desc">Misc hardware — Stair #3</span></div><div style="display:flex;align-items:center;gap:6px;"><span class="tm-amount">$390</span><span class="badge badge-gray">Draft</span></div></div>
+      <div style="margin-top:8px;padding-top:6px;border-top:1px solid #1e293b;display:flex;justify-content:space-between;font-size:12px;"><span style="color:#64748b;">Total T&amp;M Value</span><span style="color:#4ade80;font-weight:700;">$4,950</span></div>
+    </div>
+  </div>
+
+  <!-- RENTALS -->
+  <div class="panel" data-id="rentals">
+    <div class="panel-header" onclick="openModal('rentals')">
+      <div class="panel-title"><span class="drag-handle">⠿</span><span class="dot dot-orange"></span>Rentals</div>
+      <a class="panel-action" href="#" onclick="event.stopPropagation()">Manage</a>
+    </div>
+    <div class="panel-body">
+      <div class="rental-row"><div><div class="rental-name">Scissor Lift — 26ft</div><div class="rental-dates">Jul 14 – Aug 2 · United Rentals</div></div><span class="rental-cost">$3,200</span></div>
+      <div class="rental-row"><div><div class="rental-name">Boom Lift — 60ft</div><div class="rental-dates">Jul 28 – Aug 15 · Sunbelt</div></div><span class="rental-cost">$5,800</span></div>
+      <div class="rental-row"><div><div class="rental-name">Welding Machine</div><div class="rental-dates">Jul 1 – Aug 30 · MHMW Owned</div></div><span class="badge badge-gray">Internal</span></div>
+      <div style="margin-top:8px;padding-top:6px;border-top:1px solid #1e293b;display:flex;justify-content:space-between;font-size:12px;"><span style="color:#64748b;">Active Rental Cost</span><span style="color:#fbbf24;font-weight:700;">$9,000</span></div>
+    </div>
+  </div>
+
+  <!-- CHANGE ORDERS -->
+  <div class="panel" data-id="co">
+    <div class="panel-header" onclick="openModal('co')">
+      <div class="panel-title"><span class="drag-handle">⠿</span><span class="dot dot-pink"></span>Change Orders</div>
+      <a class="panel-action" href="#" onclick="event.stopPropagation()">View All</a>
+    </div>
+    <div class="panel-body">
+      <div class="co-row"><div><span class="co-id">CO-001</span><span class="co-desc">Stair #1 landing extension</span></div><div style="display:flex;align-items:center;gap:6px;"><span class="co-amount">$8,400</span><span class="badge badge-green">Executed</span></div></div>
+      <div class="co-row"><div><span class="co-id">CO-002</span><span class="co-desc">Balcony rail height revision</span></div><div style="display:flex;align-items:center;gap:6px;"><span class="co-amount">$12,600</span><span class="badge badge-green">Executed</span></div></div>
+      <div class="co-row"><div><span class="co-id">CO-003</span><span class="co-desc">Bld B scope addition</span></div><div style="display:flex;align-items:center;gap:6px;"><span class="co-amount">$28,400</span><span class="badge badge-red">Pending GC</span></div></div>
+      <div style="margin-top:8px;padding-top:6px;border-top:1px solid #1e293b;display:flex;justify-content:space-between;font-size:12px;"><span style="color:#64748b;">Executed CO Value</span><span style="color:#4ade80;font-weight:700;">$21,000</span></div>
+    </div>
+  </div>
+
+  <!-- RFI LOG -->
+  <div class="panel" data-id="rfi">
+    <div class="panel-header" onclick="openModal('rfi')">
+      <div class="panel-title"><span class="drag-handle">⠿</span><span class="dot dot-cyan"></span>RFI Log</div>
+      <a class="panel-action" href="#" onclick="event.stopPropagation()">View All</a>
+    </div>
+    <div class="panel-body">
+      <div class="rfi-row"><div><span class="rfi-id">RFI-001</span><span class="rfi-desc">Stair #3 top connection detail</span></div><div style="display:flex;align-items:center;gap:6px;"><span class="rfi-days">Answered</span><span class="badge badge-green">Closed</span></div></div>
+      <div class="rfi-row"><div><span class="rfi-id">RFI-002</span><span class="rfi-desc">Balcony rail post embed depth</span></div><div style="display:flex;align-items:center;gap:6px;"><span class="rfi-days" style="color:#fbbf24;">8 days open</span><span class="badge badge-yellow">Open</span></div></div>
+      <div class="rfi-row"><div><span class="rfi-id">RFI-003</span><span class="rfi-desc">Bld B guardrail height variance</span></div><div style="display:flex;align-items:center;gap:6px;"><span class="rfi-days" style="color:#f87171;">14 days open</span><span class="badge badge-red">Overdue</span></div></div>
+    </div>
+  </div>
+
+  <!-- PUNCH LIST -->
+  <div class="panel" data-id="punch">
+    <div class="panel-header" onclick="openModal('punch')">
+      <div class="panel-title"><span class="drag-handle">⠿</span><span class="dot dot-green"></span>Punch List</div>
+      <a class="panel-action" href="#" onclick="event.stopPropagation()">View All</a>
+    </div>
+    <div class="panel-body">
+      <div class="punch-row"><div class="punch-check done"></div><span class="punch-desc done-text">Touch-up paint — Stair #1 handrail</span><span class="punch-owner">Crew 1</span></div>
+      <div class="punch-row"><div class="punch-check done"></div><span class="punch-desc done-text">Tighten loose post — Stair #1 landing</span><span class="punch-owner">Crew 1</span></div>
+      <div class="punch-row"><div class="punch-check"></div><span class="punch-desc">Missing cap plate — Stair #2 top post</span><span class="punch-owner">Crew 2</span></div>
+      <div class="punch-row"><div class="punch-check"></div><span class="punch-desc">Grout anchor — Balcony B3 post</span><span class="punch-owner">Crew 1</span></div>
+      <div class="punch-row"><div class="punch-check"></div><span class="punch-desc">Final inspection sign-off — Stair #1</span><span class="punch-owner">Danny R.</span></div>
+      <div style="margin-top:8px;padding-top:6px;border-top:1px solid #1e293b;display:flex;justify-content:space-between;font-size:11px;"><span style="color:#64748b;">2 of 5 complete</span><div style="background:#1e293b;border-radius:3px;height:6px;width:80px;margin-top:3px;"><div style="background:#22c55e;width:40%;height:100%;border-radius:3px;"></div></div></div>
+    </div>
+  </div>
+
+  <!-- PROJECT CONTACTS -->
+  <div class="panel" data-id="contacts">
+    <div class="panel-header" onclick="openModal('contacts')">
+      <div class="panel-title"><span class="drag-handle">⠿</span><span class="dot dot-indigo"></span>Project Contacts</div>
+      <a class="panel-action" href="#" onclick="event.stopPropagation()">Edit</a>
+    </div>
+    <div class="panel-body">
+      <div class="contact-row"><div class="contact-avatar" style="background:#1e3a5f;color:#60a5fa;">DR</div><div class="contact-info"><div class="name">Danny Riddell</div><div class="role">MHMW Project Manager · driddell@mhmw.com</div></div></div>
+      <div class="contact-row"><div class="contact-avatar" style="background:#14532d;color:#4ade80;">SK</div><div class="contact-info"><div class="name">Steve Kalynchuk</div><div class="role">GC — PermaCorp President · 780-999-5725</div></div></div>
+      <div class="contact-row"><div class="contact-avatar" style="background:#3b1f6e;color:#a78bfa;">ST</div><div class="contact-info"><div class="name">Scott Tatum</div><div class="role">GC — Site Super · statum@permacorp.com</div></div></div>
+      <div class="contact-row"><div class="contact-avatar" style="background:#78350f;color:#fbbf24;">BO</div><div class="contact-info"><div class="name">Bill O'Neill</div><div class="role">MHMW Director of Ops · boneill@mhmw.com</div></div></div>
+    </div>
+  </div>
+
+  <!-- DRAWINGS -->
+  <div class="panel" data-id="drawings">
+    <div class="panel-header" onclick="openModal('drawings')">
+      <div class="panel-title"><span class="drag-handle">⠿</span><span class="dot dot-blue"></span>Drawings</div>
+      <a class="panel-action" href="#" onclick="event.stopPropagation()">View All</a>
+    </div>
+    <div class="panel-body">
+      <div class="drawing-cover">
+        <div style="font-size:9px;color:#64748b;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Architectural Drawing Set — Cover Sheet</div>
+        <div style="font-size:13px;font-weight:700;color:#f8fafc;margin-bottom:4px;">Sandstone Ranch</div>
+        <div style="font-size:10px;color:#94a3b8;margin-bottom:8px;">Frederick, CO · Project #450</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:9px;color:#64748b;">
+          <span>GC: PermaCorp Group</span><span>Arch: Studio West</span>
+          <span>Struct. Eng: RME</span><span>Rev: IFC Set 03-06-25</span>
+          <span>Contract: $487,200</span><span>Sheets: 142</span>
+        </div>
+        <div style="margin-top:8px;padding-top:6px;border-top:1px solid #1e293b;font-size:9px;color:#64748b;">S-001 · S-101 · S-102 · S-103 <span style="color:#60a5fa;">+138 more</span></div>
+      </div>
+      <div class="drawing-sets">
+        <div class="drawing-set-row"><span style="color:#cbd5e1;font-size:12px;">📄 Structural Steel — IFC Set</span><span class="badge badge-green">Current</span></div>
+        <div class="drawing-set-row"><span style="color:#cbd5e1;font-size:12px;">📄 Architectural Plans — Full Set</span><span class="badge badge-blue">Rev 08</span></div>
+        <div class="drawing-set-row"><span style="color:#cbd5e1;font-size:12px;">📄 Geotechnical Report</span><span class="badge badge-gray">Reference</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROJECT NOTES -->
+  <div class="panel panel-span2" data-id="notes">
+    <div class="panel-header" onclick="openModal('notes')">
+      <div class="panel-title"><span class="drag-handle">⠿</span><span class="dot dot-yellow"></span>Project Notes</div>
+      <a class="panel-action" href="#" onclick="event.stopPropagation()">+ Add Note</a>
+    </div>
+    <div class="panel-body">
+      <div class="carmen-banner">🤖 <span><strong>Carmen Miranda</strong> monitors all project notes and surfaces them during reviews, billing cycles, and follow-up actions.</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="note-card" style="background:#1c1408;border:1px solid #ea580c44;border-left:3px solid #ea580c;">
+          <div style="display:flex;justify-content:space-between;"><span class="note-type" style="color:#fb923c;">⚠ Follow-Up Required</span><span class="note-meta">Jul 18 · Danny R.</span></div>
+          <div class="note-body">GC confirmed closure plates for Bld A rails are delayed — back-order. Steve K. advised to proceed with install and return. <strong>Do not close out 450-344 until plates are installed.</strong></div>
+          <div class="note-footer"><span class="badge badge-orange">Open</span><span class="carmen-tag">Carmen: flagged for billing review</span></div>
+        </div>
+        <div class="note-card" style="background:#0d1117;border:1px solid #2a2d3e;border-left:3px solid #2563eb;">
+          <div style="display:flex;justify-content:space-between;"><span class="note-type" style="color:#60a5fa;">📋 Contract Note</span><span class="note-meta">Mar 5 · Bill O.</span></div>
+          <div class="note-body">O&amp;P on T&amp;M work is 15% overhead / 10% profit per Exhibit B, Section 4.2. All T&amp;M must have GC rep signature on site — no exceptions.</div>
+          <div class="note-footer"><span class="badge badge-blue">Permanent</span><span class="carmen-tag">Carmen: applied to all T&amp;M tickets</span></div>
+        </div>
+        <div class="note-card" style="background:#0d1117;border:1px solid #2a2d3e;border-left:3px solid #22c55e;">
+          <div style="display:flex;justify-content:space-between;"><span class="note-type" style="color:#4ade80;">📅 Schedule Note</span><span class="note-meta">Jul 21 · Danny R.</span></div>
+          <div class="note-body">GC look-ahead (week of Jul 28): Stair #1 area open for install. Stair #2 area concrete in progress — do NOT schedule Crew 1 for Stair #2 until Aug 4. Confirmed with Scott T.</div>
+          <div class="note-footer"><span class="badge badge-green">Noted</span><span class="carmen-tag">Carmen: applied to schedule</span></div>
+        </div>
+        <div class="note-card" style="background:#0d1117;border:1px solid #2a2d3e;border-left:3px solid #a855f7;">
+          <div style="display:flex;justify-content:space-between;"><span class="note-type" style="color:#c084fc;">📦 Material Note</span><span class="note-meta">Jul 15 · Danny R.</span></div>
+          <div class="note-body">Architect confirmed Ultralox infill panels are acceptable VE substitution for Bld B guardrails (CO-003 scope). Saves ~$4,200. Proceed with Ultralox for 450-381.</div>
+          <div class="note-footer"><span class="badge badge-purple">VE Approved</span><span class="carmen-tag">Carmen: linked to 450-381</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROJECT TO-DO -->
+  <div class="panel panel-span3" data-id="todo">
+    <div class="panel-header" onclick="openModal('todo')">
+      <div class="panel-title"><span class="drag-handle">⠿</span><span class="dot dot-pink"></span>Project To-Do</div>
+      <a class="panel-action" href="#" onclick="event.stopPropagation()">+ Add Task</a>
+    </div>
+    <div class="panel-body">
+      <div class="todo-filters">
+        <span class="todo-filter" style="background:#1e293b;color:#64748b;">All</span>
+        <span class="todo-filter" style="background:#2d1a26;color:#f472b6;">Open</span>
+        <span class="todo-filter" style="background:#2d1010;color:#f87171;">Overdue</span>
+        <span class="todo-filter" style="background:#0d2010;color:#4ade80;">Completed</span>
+        <span class="todo-filter" style="background:#0d1a2d;color:#60a5fa;">My Tasks</span>
+      </div>
+      <div class="todo-header"><span></span><span>Task</span><span>Assigned To</span><span>Due Date</span><span>Priority</span><span>Status</span></div>
+      <div class="todo-row">
+        <div class="todo-circle" style="border-color:#f87171;"></div>
+        <div><div class="todo-task">Confirm closure plate delivery date with Steve K.</div><div class="todo-link">Linked: 450-344 · Bld A Balcony Rails</div></div>
+        <div class="todo-assignee"><div class="mini-avatar" style="background:#1e3a5f;color:#60a5fa;">DR</div><span style="font-size:11px;color:#94a3b8;">Danny R.</span></div>
+        <div class="todo-due" style="color:#f87171;">⚠ Jul 20 — Overdue</div>
+        <div><span class="badge badge-red">High</span></div>
+        <div><span class="badge badge-red">Overdue</span></div>
+      </div>
+      <div class="todo-row">
+        <div class="todo-circle"></div>
+        <div><div class="todo-task">Submit CO-003 backup documentation to PermaCorp</div><div class="todo-link">Linked: CO-003 · Bld B scope addition</div></div>
+        <div class="todo-assignee"><div class="mini-avatar" style="background:#78350f;color:#fbbf24;">BO</div><span style="font-size:11px;color:#94a3b8;">Bill O.</span></div>
+        <div class="todo-due" style="color:#fbbf24;">Jul 25</div>
+        <div><span class="badge badge-yellow">High</span></div>
+        <div><span class="badge badge-pink">Open</span></div>
+      </div>
+      <div class="todo-row">
+        <div class="todo-circle"></div>
+        <div><div class="todo-task">Order Ultralox panels for 450-381 — confirm qty with David S.</div><div class="todo-link">Linked: 450-381 · Bld B Guardrails</div></div>
+        <div class="todo-assignee"><div class="mini-avatar" style="background:#1e3a5f;color:#60a5fa;">DR</div><span style="font-size:11px;color:#94a3b8;">Danny R.</span></div>
+        <div class="todo-due" style="color:#94a3b8;">Jul 28</div>
+        <div><span class="badge badge-gray">Medium</span></div>
+        <div><span class="badge badge-pink">Open</span></div>
+      </div>
+      <div class="todo-row">
+        <div class="todo-circle"></div>
+        <div><div class="todo-task">Schedule final inspection sign-off with GC for Stair #1</div><div class="todo-link">Linked: 450-760 · Punch List</div></div>
+        <div class="todo-assignee"><div class="mini-avatar" style="background:#1e3a5f;color:#60a5fa;">DR</div><span style="font-size:11px;color:#94a3b8;">Danny R.</span></div>
+        <div class="todo-due" style="color:#94a3b8;">Aug 1</div>
+        <div><span class="badge badge-gray">Medium</span></div>
+        <div><span class="badge badge-pink">Open</span></div>
+      </div>
+      <div class="todo-row">
+        <div class="todo-circle"></div>
+        <div><div class="todo-task">Verify Bld C Entry Gate scope with architect before DRR submission</div><div class="todo-link">Linked: Bld C Entry Gate · Submittals</div></div>
+        <div class="todo-assignee"><div class="mini-avatar" style="background:#14532d;color:#4ade80;">DS</div><span style="font-size:11px;color:#94a3b8;">David S.</span></div>
+        <div class="todo-due" style="color:#94a3b8;">Aug 5</div>
+        <div><span class="badge badge-gray">Medium</span></div>
+        <div><span class="badge badge-pink">Open</span></div>
+      </div>
+      <div class="todo-row" style="opacity:.45;">
+        <div class="todo-circle done"><span style="color:#000;font-size:9px;font-weight:900;">✓</span></div>
+        <div><div class="todo-task done">Send Structural Steel submittal to PermaCorp</div><div class="todo-link">Completed Mar 12</div></div>
+        <div class="todo-assignee"><div class="mini-avatar" style="background:#1e3a5f;color:#60a5fa;">DR</div><span style="font-size:11px;color:#475569;">Danny R.</span></div>
+        <div class="todo-due" style="color:#475569;">Mar 12</div>
+        <div><span class="badge badge-green">Done</span></div>
+        <div><span class="badge badge-green">Complete</span></div>
+      </div>
+      <div class="todo-footer"><span>5 open &nbsp;·&nbsp; <span style="color:#f87171;">1 overdue</span> &nbsp;·&nbsp; 1 completed</span><span>Assigned: Danny R. (3) &nbsp;·&nbsp; Bill O. (1) &nbsp;·&nbsp; David S. (1)</span></div>
+    </div>
+  </div>
+
+</div><!-- /dashboard -->
+
+<!-- MODAL OVERLAY -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal" id="modalBox">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">Detail View</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+// ── DRAG AND DROP (SortableJS) ──────────────────────────────────────────────
+const dashboard = document.getElementById('dashboard');
+const STORAGE_KEY = 'brain_panel_order_450';
+
+function saveOrder() {
+  const ids = [...dashboard.querySelectorAll('.panel')].map(p => p.dataset.id);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+}
+
+function restoreOrder() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (!saved) return;
+  const ids = JSON.parse(saved);
+  ids.forEach(id => {
+    const el = dashboard.querySelector(`[data-id="${id}"]`);
+    if (el) dashboard.appendChild(el);
+  });
+}
+
+restoreOrder();
+
+Sortable.create(dashboard, {
+  animation: 150,
+  handle: '.drag-handle',
+  ghostClass: 'sortable-ghost',
+  dragClass: 'sortable-drag',
+  onEnd: saveOrder
+});
+
+// ── MODAL ───────────────────────────────────────────────────────────────────
+const modals = {
+  submittals: {
+    title: '📋 Submittals — Full Detail',
+    body: `<div class="modal-section"><div class="modal-section-title">Submittal Status Overview</div>
+      <div class="modal-row"><span class="modal-label">Structural Steel</span><span class="modal-value"><span class="badge badge-green">Approved</span> &nbsp; Submitted Mar 12 · Returned Mar 24</span></div>
+      <div class="modal-row"><span class="modal-label">Bld A Stair #1</span><span class="modal-value"><span class="badge badge-purple">Approved as Noted</span> &nbsp; Returned Apr 18</span></div>
+      <div class="modal-row"><span class="modal-label">Bld A Stair #2</span><span class="modal-value"><span class="badge badge-green">Approved</span> &nbsp; Returned Apr 20</span></div>
+      <div class="modal-row"><span class="modal-label">Bld A Stair #3</span><span class="modal-value"><span class="badge badge-orange">⏳ Out to GC — 9 days</span> &nbsp; Follow-up in 5 days</span></div>
+      <div class="modal-row"><span class="modal-label">Bld A Balcony Rails</span><span class="modal-value"><span class="badge badge-red">⚠ Overdue — 16 days</span> &nbsp; BB01 follow-up sent Jul 20</span></div>
+      <div class="modal-row"><span class="modal-label">Bld B Guardrails</span><span class="modal-value"><span class="badge badge-yellow">Rev. &amp; Resubmit</span> &nbsp; Returned Jul 15</span></div>
+      <div class="modal-row"><span class="modal-label">Bld C Entry Gate</span><span class="modal-value"><span class="badge badge-gray">In Prep</span> &nbsp; Drafting in progress</span></div>
+    </div>
+    <div class="modal-section"><div class="modal-section-title">GC Review Window Settings</div>
+      <div class="modal-row"><span class="modal-label">Standard Review Window</span><span class="modal-value">14 days</span></div>
+      <div class="modal-row"><span class="modal-label">Warning Threshold</span><span class="modal-value">9 days (yellow flag)</span></div>
+      <div class="modal-row"><span class="modal-label">Overdue Threshold</span><span class="modal-value">15 days (red flag + BB01 follow-up)</span></div>
+      <div class="modal-row"><span class="modal-label">GC Contact for Follow-ups</span><span class="modal-value">Steve Kalynchuk · Scott Tatum</span></div>
+    </div>`
+  },
+  releases: {
+    title: '🔩 Releases — Full Detail',
+    body: `<div class="modal-section"><div class="modal-section-title">Release Status</div>
+      <div class="modal-row"><span class="modal-label">450-700 Structural Steel</span><span class="modal-value"><span class="badge badge-green">Complete</span></span></div>
+      <div class="modal-row"><span class="modal-label">450-760 Bld A Stair #1</span><span class="modal-value"><span class="badge badge-blue">Installing</span> &nbsp; Crew 1 on site Jul 28</span></div>
+      <div class="modal-row"><span class="modal-label">450-759 Bld A Stair #2</span><span class="modal-value"><span class="badge badge-purple">In Paint</span> &nbsp; Red Oxide Prime</span></div>
+      <div class="modal-row"><span class="modal-label">450-747 Bld A Stair #3</span><span class="modal-value"><span class="badge badge-yellow">In Shop</span> &nbsp; Fabrication in progress</span></div>
+      <div class="modal-row"><span class="modal-label">450-344 Bld A Balcony Rails</span><span class="modal-value"><span class="badge badge-gray">Drafting</span> &nbsp; DRR pending</span></div>
+      <div class="modal-row"><span class="modal-label">450-381 Bld B Guardrails</span><span class="modal-value"><span class="badge badge-orange">DRR Needed</span> &nbsp; Awaiting GC submittal approval</span></div>
+    </div>
+    <div class="modal-section"><div class="modal-section-title">Department Progress Legend</div>
+      <div class="modal-row"><span class="modal-label">● Draft</span><span class="modal-value">Drafting &amp; DRR complete</span></div>
+      <div class="modal-row"><span class="modal-label">● Shop</span><span class="modal-value">Fabrication complete</span></div>
+      <div class="modal-row"><span class="modal-label">● Paint</span><span class="modal-value">Paint &amp; finish complete</span></div>
+      <div class="modal-row"><span class="modal-label">● Install</span><span class="modal-value">Field installation complete</span></div>
+    </div>`
+  },
+  schedule: {
+    title: '📅 Schedule — Full Timeline',
+    body: `<div class="modal-section"><div class="modal-section-title">Upcoming Install Dates</div>
+      <div class="modal-row"><span class="modal-label" style="color:#4ade80;">Jul 28 — HARD DATE</span><span class="modal-value">Bld A Stair #1 · Crew 1 · 450-760 · 2 days est.</span></div>
+      <div class="modal-row"><span class="modal-label" style="color:#fbbf24;">Aug 4 — Projected</span><span class="modal-value">Bld A Stair #2 · Crew 1 · 450-759 · 2 days est.</span></div>
+      <div class="modal-row"><span class="modal-label" style="color:#4ade80;">Aug 11 — HARD DATE</span><span class="modal-value">Bld A Stair #3 · Crew 2 · 450-747 · 2 days est.</span></div>
+      <div class="modal-row"><span class="modal-label" style="color:#fbbf24;">Aug 18 — Projected</span><span class="modal-value">Bld A Balcony Rails · Crew 1 · 450-344 · 3 days est.</span></div>
+      <div class="modal-row"><span class="modal-label" style="color:#fbbf24;">Sep 8 — Projected</span><span class="modal-value">Bld B Guardrails · Crew 2 · 450-381 · 2 days est.</span></div>
+    </div>
+    <div class="modal-section"><div class="modal-section-title">GC Look-Ahead (Week of Jul 28)</div>
+      <div class="modal-row"><span class="modal-label">Stair #1 Area</span><span class="modal-value" style="color:#4ade80;">Open for install ✓</span></div>
+      <div class="modal-row"><span class="modal-label">Stair #2 Area</span><span class="modal-value" style="color:#f87171;">Concrete in progress — DO NOT schedule until Aug 4</span></div>
+    </div>`
+  },
+  budget: {
+    title: '💰 Budget — Full Report',
+    body: `<div class="modal-section"><div class="modal-section-title">Budget Breakdown</div>
+      <div class="modal-row"><span class="modal-label">Labor Budget</span><span class="modal-value">$131,000 total</span></div>
+      <div class="modal-row"><span class="modal-label">Labor Spent</span><span class="modal-value" style="color:#fbbf24;">$89,200 (68%)</span></div>
+      <div class="modal-row"><span class="modal-label">Labor Remaining</span><span class="modal-value">$41,800</span></div>
+      <div class="modal-row"><span class="modal-label">Materials Budget</span><span class="modal-value">$240,000 total</span></div>
+      <div class="modal-row"><span class="modal-label">Materials Spent</span><span class="modal-value" style="color:#4ade80;">$124,600 (52%)</span></div>
+      <div class="modal-row"><span class="modal-label">Subcontractor Budget</span><span class="modal-value">$50,000 total</span></div>
+      <div class="modal-row"><span class="modal-label">Subcontractor Spent</span><span class="modal-value" style="color:#f87171;">$44,000 (88%) ⚠</span></div>
+    </div>
+    <div class="modal-section"><div class="modal-section-title">Billing Summary</div>
+      <div class="modal-row"><span class="modal-label">Contract Total</span><span class="modal-value">$487,200</span></div>
+      <div class="modal-row"><span class="modal-label">Billed to Date</span><span class="modal-value" style="color:#60a5fa;">$312,400 (64%)</span></div>
+      <div class="modal-row"><span class="modal-label">Remaining to Bill</span><span class="modal-value">$174,800</span></div>
+      <div class="modal-row"><span class="modal-label">Executed CO Value</span><span class="modal-value" style="color:#4ade80;">+$21,000</span></div>
+      <div class="modal-row"><span class="modal-label">Pending CO Value</span><span class="modal-value" style="color:#f87171;">$28,400 awaiting GC approval</span></div>
+    </div>`
+  },
+  tm: {
+    title: '🔧 T&M Tickets — Full Detail',
+    body: `<div class="modal-section"><div class="modal-section-title">Active Tickets</div>
+      <div class="modal-row"><span class="modal-label">TM-001 — Extra blocking, Stair #1</span><span class="modal-value">$1,840 &nbsp;<span class="badge badge-green">Approved</span></span></div>
+      <div class="modal-row"><span class="modal-label">TM-002 — Field weld, Stair #2 stringer</span><span class="modal-value">$620 &nbsp;<span class="badge badge-yellow">Pending GC Signature</span></span></div>
+      <div class="modal-row"><span class="modal-label">TM-003 — Railing mod, Balcony B2</span><span class="modal-value">$2,100 &nbsp;<span class="badge badge-yellow">Pending GC Signature</span></span></div>
+      <div class="modal-row"><span class="modal-label">TM-004 — Misc hardware, Stair #3</span><span class="modal-value">$390 &nbsp;<span class="badge badge-gray">Draft</span></span></div>
+    </div>
+    <div class="modal-section"><div class="modal-section-title">O&amp;P Structure (Per Contract Exhibit B, Sec 4.2)</div>
+      <div class="modal-row"><span class="modal-label">Overhead</span><span class="modal-value">15%</span></div>
+      <div class="modal-row"><span class="modal-label">Profit</span><span class="modal-value">10%</span></div>
+      <div class="modal-row"><span class="modal-label">GC Signature Required</span><span class="modal-value" style="color:#4ade80;">Yes — on-site, no exceptions</span></div>
+    </div>`
+  },
+  rentals: {
+    title: '🏗 Rentals — Full Detail',
+    body: `<div class="modal-section"><div class="modal-section-title">Active Equipment Rentals</div>
+      <div class="modal-row"><span class="modal-label">Scissor Lift — 26ft</span><span class="modal-value">$3,200 · Jul 14 – Aug 2 · United Rentals</span></div>
+      <div class="modal-row"><span class="modal-label">Boom Lift — 60ft</span><span class="modal-value">$5,800 · Jul 28 – Aug 15 · Sunbelt</span></div>
+      <div class="modal-row"><span class="modal-label">Welding Machine</span><span class="modal-value">Internal · Jul 1 – Aug 30</span></div>
+    </div>
+    <div class="modal-section"><div class="modal-section-title">Rental Budget Summary</div>
+      <div class="modal-row"><span class="modal-label">Active Rental Cost</span><span class="modal-value" style="color:#fbbf24;">$9,000</span></div>
+      <div class="modal-row"><span class="modal-label">Rental Budget (450-760)</span><span class="modal-value">$12,000</span></div>
+      <div class="modal-row"><span class="modal-label">Remaining</span><span class="modal-value" style="color:#4ade80;">$3,000</span></div>
+    </div>`
+  },
+  co: {
+    title: '📝 Change Orders — Full Detail',
+    body: `<div class="modal-section"><div class="modal-section-title">Change Order Log</div>
+      <div class="modal-row"><span class="modal-label">CO-001 — Stair #1 landing extension</span><span class="modal-value">$8,400 &nbsp;<span class="badge badge-green">Executed</span></span></div>
+      <div class="modal-row"><span class="modal-label">CO-002 — Balcony rail height revision</span><span class="modal-value">$12,600 &nbsp;<span class="badge badge-green">Executed</span></span></div>
+      <div class="modal-row"><span class="modal-label">CO-003 — Bld B scope addition</span><span class="modal-value">$28,400 &nbsp;<span class="badge badge-red">Pending GC Approval</span></span></div>
+    </div>
+    <div class="modal-section"><div class="modal-section-title">Summary</div>
+      <div class="modal-row"><span class="modal-label">Executed CO Value</span><span class="modal-value" style="color:#4ade80;">$21,000</span></div>
+      <div class="modal-row"><span class="modal-label">Pending CO Value</span><span class="modal-value" style="color:#f87171;">$28,400</span></div>
+      <div class="modal-row"><span class="modal-label">Total CO Potential</span><span class="modal-value">$49,400</span></div>
+    </div>`
+  },
+  rfi: {
+    title: '❓ RFI Log — Full Detail',
+    body: `<div class="modal-section"><div class="modal-section-title">RFI Status</div>
+      <div class="modal-row"><span class="modal-label">RFI-001 — Stair #3 top connection detail</span><span class="modal-value"><span class="badge badge-green">Closed</span> &nbsp; Answered</span></div>
+      <div class="modal-row"><span class="modal-label">RFI-002 — Balcony rail post embed depth</span><span class="modal-value"><span class="badge badge-yellow">Open</span> &nbsp; 8 days open</span></div>
+      <div class="modal-row"><span class="modal-label">RFI-003 — Bld B guardrail height variance</span><span class="modal-value"><span class="badge badge-red">Overdue</span> &nbsp; 14 days open</span></div>
+    </div>`
+  },
+  punch: {
+    title: '✅ Punch List — Full Detail',
+    body: `<div class="modal-section"><div class="modal-section-title">Punch Items</div>
+      <div class="modal-row"><span class="modal-label" style="color:#475569;text-decoration:line-through;">Touch-up paint — Stair #1 handrail</span><span class="modal-value"><span class="badge badge-green">Done</span> &nbsp; Crew 1</span></div>
+      <div class="modal-row"><span class="modal-label" style="color:#475569;text-decoration:line-through;">Tighten loose post — Stair #1 landing</span><span class="modal-value"><span class="badge badge-green">Done</span> &nbsp; Crew 1</span></div>
+      <div class="modal-row"><span class="modal-label">Missing cap plate — Stair #2 top post</span><span class="modal-value"><span class="badge badge-yellow">Open</span> &nbsp; Crew 2</span></div>
+      <div class="modal-row"><span class="modal-label">Grout anchor — Balcony B3 post</span><span class="modal-value"><span class="badge badge-yellow">Open</span> &nbsp; Crew 1</span></div>
+      <div class="modal-row"><span class="modal-label">Final inspection sign-off — Stair #1</span><span class="modal-value"><span class="badge badge-yellow">Open</span> &nbsp; Danny R.</span></div>
+    </div>
+    <div class="modal-section"><div class="modal-section-title">Progress</div>
+      <div class="modal-row"><span class="modal-label">Complete</span><span class="modal-value">2 of 5 items (40%)</span></div>
+    </div>`
+  },
+  contacts: {
+    title: '👥 Project Contacts',
+    body: `<div class="modal-section"><div class="modal-section-title">MHMW Team</div>
+      <div class="modal-row"><span class="modal-label">Bill O'Neill</span><span class="modal-value">Director of Operations · boneill@mhmw.com · 303-210-0885</span></div>
+      <div class="modal-row"><span class="modal-label">Danny Riddell</span><span class="modal-value">Project Manager · driddell@mhmw.com · 303-485-8283</span></div>
+      <div class="modal-row"><span class="modal-label">David Servold</span><span class="modal-value">Lead Drafter · dservold@mhmw.com</span></div>
+    </div>
+    <div class="modal-section"><div class="modal-section-title">GC — PermaCorp Group</div>
+      <div class="modal-row"><span class="modal-label">Steve Kalynchuk</span><span class="modal-value">President · 780-999-5725</span></div>
+      <div class="modal-row"><span class="modal-label">Scott Tatum</span><span class="modal-value">Site Superintendent · statum@permacorp.com</span></div>
+    </div>`
+  },
+  drawings: {
+    title: '📐 Drawings — Full Set',
+    body: `<div class="modal-section"><div class="modal-section-title">Active Drawing Sets</div>
+      <div class="modal-row"><span class="modal-label">Structural Steel — IFC Set</span><span class="modal-value"><span class="badge badge-green">Current</span> &nbsp; Rev IFC Set 03-06-25</span></div>
+      <div class="modal-row"><span class="modal-label">Architectural Plans — Full Set</span><span class="modal-value"><span class="badge badge-blue">Rev 08</span></span></div>
+      <div class="modal-row"><span class="modal-label">Geotechnical Report</span><span class="modal-value"><span class="badge badge-gray">Reference</span></span></div>
+    </div>
+    <div class="modal-section"><div class="modal-section-title">Cover Sheet Info</div>
+      <div class="modal-row"><span class="modal-label">Project</span><span class="modal-value">Sandstone Ranch — Frederick, CO</span></div>
+      <div class="modal-row"><span class="modal-label">GC</span><span class="modal-value">PermaCorp Group</span></div>
+      <div class="modal-row"><span class="modal-label">Architect</span><span class="modal-value">Studio West</span></div>
+      <div class="modal-row"><span class="modal-label">Structural Engineer</span><span class="modal-value">RME</span></div>
+      <div class="modal-row"><span class="modal-label">Total Sheets</span><span class="modal-value">142</span></div>
+    </div>`
+  },
+  notes: {
+    title: '📌 Project Notes — Full View',
+    body: `<div class="carmen-banner">🤖 <span><strong>Carmen Miranda</strong> monitors all project notes and surfaces them during reviews, billing cycles, and follow-up actions.</span></div>
+    <div class="modal-section"><div class="modal-section-title">All Notes</div>
+      <div class="modal-row"><span class="modal-label" style="color:#fb923c;">⚠ Follow-Up — Jul 18 · Danny R.</span><span class="modal-value">Closure plates back-ordered. Do not close out 450-344 until installed.</span></div>
+      <div class="modal-row"><span class="modal-label" style="color:#60a5fa;">📋 Contract — Mar 5 · Bill O.</span><span class="modal-value">O&amp;P: 15% overhead / 10% profit. GC signature required on all T&amp;M.</span></div>
+      <div class="modal-row"><span class="modal-label" style="color:#4ade80;">📅 Schedule — Jul 21 · Danny R.</span><span class="modal-value">Stair #2 area blocked until Aug 4. Confirmed with Scott T.</span></div>
+      <div class="modal-row"><span class="modal-label" style="color:#c084fc;">📦 Material — Jul 15 · Danny R.</span><span class="modal-value">Ultralox VE approved for 450-381. Saves ~$4,200.</span></div>
+    </div>`
+  },
+  todo: {
+    title: '✏️ Project To-Do — All Tasks',
+    body: `<div class="modal-section"><div class="modal-section-title">Open Tasks</div>
+      <div class="modal-row"><span class="modal-label" style="color:#f87171;">⚠ Confirm closure plate delivery — Danny R.</span><span class="modal-value"><span class="badge badge-red">Overdue — Jul 20</span></span></div>
+      <div class="modal-row"><span class="modal-label">Submit CO-003 backup docs — Bill O.</span><span class="modal-value"><span class="badge badge-yellow">Due Jul 25</span></span></div>
+      <div class="modal-row"><span class="modal-label">Order Ultralox panels for 450-381 — Danny R.</span><span class="modal-value"><span class="badge badge-gray">Due Jul 28</span></span></div>
+      <div class="modal-row"><span class="modal-label">Schedule Stair #1 final inspection — Danny R.</span><span class="modal-value"><span class="badge badge-gray">Due Aug 1</span></span></div>
+      <div class="modal-row"><span class="modal-label">Verify Bld C Entry Gate scope — David S.</span><span class="modal-value"><span class="badge badge-gray">Due Aug 5</span></span></div>
+    </div>
+    <div class="modal-section"><div class="modal-section-title">Completed</div>
+      <div class="modal-row"><span class="modal-label" style="color:#475569;text-decoration:line-through;">Send Structural Steel submittal — Danny R.</span><span class="modal-value"><span class="badge badge-green">Done — Mar 12</span></span></div>
+    </div>`
+  }
+};
+
+function openModal(id) {
+  const m = modals[id];
+  if (!m) return;
+  document.getElementById('modalTitle').textContent = m.title;
+  document.getElementById('modalBody').innerHTML = m.body;
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modalOverlay') || e.target.classList.contains('modal-close')) {
+    document.getElementById('modalOverlay').classList.remove('open');
+  }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal({}); });
+</script>
+</body>
+</html>

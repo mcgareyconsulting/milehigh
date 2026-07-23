@@ -25,7 +25,68 @@ Already modeled: `SunbeltRental`, `ReleasePhoto`, `BBReviewFeedback`,
 `DrawingVersionComment`, `Notification`. Not on main: `app/brain/tm/` (empty
 package — the real work is on `feature/tm-ingestion`).
 
----
+> ### Bill's UI design package is source of truth — landed 2026-07-22, expanded 2026-07-23
+>
+> **First email (7/22):** the projects-page mockup. **Second (a UI package, 7/23):**
+> the projects mockup again (identical) **plus two new pages and a written spec for
+> each**. Six files, now in `docs/`:
+>
+> | Page | Mockup | Written spec |
+> |---|---|---|
+> | **Projects** (D1) | [`projects-page-mockup.html`](projects-page-mockup.html) | [`design-spec-projects-page.md`](design-spec-projects-page.md) |
+> | **Employee Home** (D2 + more) | [`employee-home-mockup.html`](employee-home-mockup.html) | [`design-spec-employee-home.md`](design-spec-employee-home.md) |
+> | **EOS Module** (new — D8) | [`eos-module-mockup.html`](eos-module-mockup.html) | [`design-spec-eos-module.md`](design-spec-eos-module.md) |
+>
+> **Where the package overrides this catalog, the package wins.** It revises:
+> **A6 RFIs** (un-deferred — Projects ships an RFI Log panel), **project contacts**
+> (split out of A5 — a Contacts panel), **submittal GC approval + 14-day aging**
+> (specified in full), **D2** (the Employee Home spec is far larger than "My Open
+> Items"), **D3 photo feedback** (was deferred — now the spine of Employee Home),
+> and **C9 Carmen** (*"BB01 is retired,"* Carmen is the AI going forward). It adds
+> two net-new things with no prior catalog entry: **EOS Module** (D8) and an
+> employee **Badges / Banana Award** recognition system (D9, part of D2).
+>
+> **Two open questions the written spec resolves, one it doesn't.** Resolved:
+> the Budget panel's **Billed to Date** is *"sum of all approved Pay App line
+> items"* and **Remaining** is contract − billed. Still open: nothing in The Brain
+> models Pay Apps or per-department budget/spent today, so the source is *named*
+> but does not yet *exist* — see D1.
+>
+> **Mockup vs written spec — a few self-conflicts to resolve with Bill**, not
+> blockers: the Projects mockup shows **8 KPI tiles**, its spec lists **7** (drops
+> "Overdue Item"); the mockup's Budget has 3 rows, the spec adds **Equipment** (4);
+> the spec's header adds a **Field Superintendent** row the mockup omits; and the
+> Projects mockup still stamps **"BB01 follow-up sent"** while the cover email
+> retires BB01. Where they differ, the **written spec is newer** — treat it as
+> controlling and confirm the KPI count.
+>
+> Each affected entry carries a *Revised by the package* line. The transcript
+> ranking stands everywhere the package is silent.
+
+> ### Triage decisions — Daniel, 2026-07-23
+>
+> Walked the code-vs-spec drift item by item. Dispositions below are now folded
+> into each entry; they resolve *what ships in v1* against what Bill drew.
+>
+> | # | Drift | Decision |
+> |---|---|---|
+> | 1 | D8 EOS timing | **Build after the 7/28 Margaret session** — not a this-week build; K4 backups stay uncontested |
+> | 2 | D1 Budget / billed-remaining KPIs | **Ship labeled "pending data source"** — no invented spend bars; Pay App/cost path scoped separately |
+> | 3 | D1 header financials | **Add nullable columns to `Projects`** — `contract_value`, `gc_name`, `field_super`; PM-editable, GC pre-filled from submittal text |
+> | 4 | Submittal 14-day aging | **Visual 9/14-day flags only in v1** (clock anchored on the `SubmittalEvents` "out to GC" transition); **defer** Carmen's outbound GC email — no GC-contact store yet |
+> | 5 | Releases Product Type | **Add nullable `product_type` to `Releases` now** — shared with E1 tee-time; land it once |
+> | 6 | D2 scope | **My Open Items core first**; feed / gallery / subscriptions / badges / EOS-widget are separate later slices, off the critical path |
+> | 7 | A6 RFI panel | **Build record + panel** (manual entry), rides D1; ASI drift engine stays deferred |
+> | 8 | Project Contacts | **Build `ProjectContact` model + panel**, rides D1; A5 origination stays deferred |
+> | 9 | Project Notes | **Panel + 4 manual note types**; **no** fabricated "Carmen: …" tags; auto-linking stays C10-deferred |
+> | — | C9 Carmen rename | **Under a separate Carmen audit (another agent)** — untouched here to avoid collision |
+> | — | KPI 7 vs 8 tiles | **Bill's call** — logged in "Still needing Bill's call" |
+>
+> **Schema footprint** (idempotent migrations to be written, handed over, and run
+> per-environment by Daniel — never executed from here):
+> - `projects`: `+contract_value`, `+gc_name`, `+field_super` (3 nullable columns)
+> - `releases`: `+product_type` (1 nullable column)
+> - New tables: an **RFI** record and a **`ProjectContact`** record (both project-scoped)
 
 ## A. Data capture — the ranked list
 
@@ -119,7 +180,7 @@ receive rates in an API response.
 |---|---|
 | **Capture only — the Brain does not generate the CO PDF** | It records the CO you already sent. No contract terms, no O&P math, no PDF rendering. |
 | **No T&M → CO conversion yet** | The two modules stay independent in v1 |
-| **No 14-day GC follow-up in v1** | Deferred to a follow-up pass |
+| **No 14-day GC follow-up in v1** | Deferred to a follow-up pass — **but see below: Bill's spec now specifies the aging rules** |
 | **Backfill from the existing Excel CO log — yes** | Bill confirmed it exists and agreed to send it (transcript L1190–1196) |
 
 **State:** Nothing built. The ingestion machinery exists — `RawSourceRecord`,
@@ -153,6 +214,18 @@ and follow-up are all out.
 generation with O&P separation · automated GC distribution · 14-day aging
 chase. All four are described in `docs/specs/tm-module-build-doc.md`, which is a
 long-term vision document — **do not build to it.**
+
+**Revised by Bill's spec — the aging chase now has concrete rules.** The
+projects-page spec specifies it on **submittals**, not COs: 14-day window, yellow
+at 9 days with a "follow-up in N days" hint, red at 15+ with an automatic BB01 /
+Carmen follow-up stamped on the record. See D1.
+
+Three modules now want the same behavior — submittals (spec'd), COs, T&M. **Build
+it once as a shared aging rule** (record + threshold config + follow-up trigger +
+a stamped "last chased" field), applied to the submittal panel first because that
+is where it is specified. Standing it up three times is the C1/C3 failure this
+catalog already documents twice. The v1 defer above still holds for **COs** —
+what changes is that when it is picked up, the mechanism will already exist.
 
 ---
 
@@ -249,14 +322,27 @@ rollout, not after.
 
 ---
 
-### A5. New project origination — **DEFERRED**
+### A5. New project origination — **DEFERRED. Contacts split out and revived.**
 
 > **Fully deferred by Daniel 2026-07-22**, with the October context in view.
 > Ranked HIGH by Bill in the meeting; not being worked now.
+>
+> **Revised by Bill's spec:** the projects page ships a **Project Contacts**
+> panel — name, role, org (MHMW / GC), email or phone, avatar initials. Contacts
+> were deferred only because they rode inside origination's intake form. A
+> contacts table with a project FK and a CRUD panel does not require origination
+> and should not wait on it. **Split out, rides D1, effort S.** The rest of A5
+> stays deferred exactly as written below.
+>
+> **Triage 2026-07-23 — GO on contacts.** Confirmed: build a **`ProjectContact`**
+> record (project FK, name, role, org MHMW/GC, email/phone) + the D1 panel now.
+> `ProjectManager` today holds only `name`+`color`, so this is a genuinely new
+> table, not an extension of it. Manual CRUD to start. **A5 origination itself
+> stays deferred.**
 
 **State:** Nothing built. `Projects` exists but is a geofence/job-site record
 linked to the job log by `job_number` string, not a foreign key — it is not a
-project container.
+project container. No `ProjectContact` model exists.
 
 **What it would be:** intake of contract, project schedule, estimate, and
 drawings at project creation; project contacts form; spec-section generation
@@ -284,9 +370,21 @@ with it. **Resolve when B2 is planned**, not before.
 
 ---
 
-### A6. RFIs — **DEFERRED**
+### A6. RFIs — **REVIVED (record + panel). Drift engine stays deferred.**
 
-> **Deferred by Daniel 2026-07-22.** Not even a placeholder for now.
+> **Deferred by Daniel 2026-07-22** — *"not even a placeholder for now."*
+> **Revised the same day by Bill's projects-page spec**, which ships a populated
+> **RFI Log** panel: id, description, days-open counter, status (Closed / Open /
+> Overdue) with the same red-at-14-days treatment the submittals panel uses.
+>
+> The defer was a ranking call made before the spec existed. The spec is source
+> of truth, so **the record and the panel are back in scope** — sized S, riding
+> D1. Everything expensive behind RFIs stays deferred (below).
+>
+> **Triage 2026-07-23 — GO on the record + panel.** Confirmed: build a simple RFI
+> record (RFI#, subject, submitted-by, date, days-open, status) + the D1 panel,
+> **manual entry to start**, email ingestion later on the A2 pattern. **The ASI
+> drift engine stays fully deferred.**
 
 **State:** Nothing built.
 
@@ -305,7 +403,12 @@ the embeds in this area, you need to review,"* pull in the estimator, spin
 action items. That is a drawing-diff engine, not an RFI record, and it should be
 scoped separately if it's ever picked up.
 
-**Effort if revived:** S for the record + section, L for the drift engine.
+**Scope now:** the record + the D1 panel — **S**. Manual entry to start; email
+ingestion follows the A2 pattern once that path is proven. **The ASI drift
+engine stays fully deferred (L)** — the spec shows an RFI list, not a
+drawing-diff, and nothing in it revives that.
+
+**Rides:** D1. **Effort:** S
 
 ---
 
@@ -670,14 +773,51 @@ which is what Bill saw.
 
 ---
 
-### C9. Carmen Miranda rename — **DEFERRED, waiting on Bill. Conversion confirmed.**
+### C9. Carmen Miranda rename — **UNDER SEPARATE AUDIT (2026-07-23). Do not modify from the UI-package work.**
 
 > **Confirmed 2026-07-22:** BB **will** be converted to Carmen Miranda.
 > Deferred until Bill delivers.
+>
+> **Triage 2026-07-23:** the package's *"BB01 is retired"* would normally drive a
+> disposition here, but Daniel is **running a dedicated Carmen Miranda audit with a
+> separate agent.** To avoid two efforts colliding on the same rename, **this entry
+> is intentionally left unchanged by the UI-package pass** — the recommendation
+> below (display-only, BB internal stays) is the standing proposal, not a decision.
+> The separate audit owns the call. The one concrete package fact to hand that
+> audit: the Projects mockup still stamps *"BB01 follow-up sent"*, which the cover
+> email contradicts.
 
 **Blocked on Bill:** an avatar image, and a decision on the email — keep BB's or
 mint a new one. He raised the wrinkle himself: *"you could keep BB internal if
 you want, but then there's two of them"* [L98–100].
+
+**Revised by the package — the rename is now decided, and the direction matches
+the display-only recommendation below.** The 7/23 cover email states it flatly:
+*"Carmen Miranda is the AI going forward, BB01 is retired."* Across all three
+pages she is **Carmen** — the Notes banner (*"Carmen Miranda monitors all project
+notes…"*), the note tags (*"Carmen: flagged for billing review,"* *"applied to
+schedule,"* *"linked to 450-381"*), the EOS assistant, and the Employee Home EOS
+widget. **Carmen is the user-facing persona everywhere; there is no user-facing
+BB01 left.**
+
+**One inconsistency to clean up:** the Projects *mockup* still stamps *"BB01
+follow-up sent Jul 20"* on an overdue submittal — a leftover the cover email
+contradicts. When the submittal aging chase is built, that stamp reads
+**"Carmen follow-up sent."**
+
+**Internal `BB*` still stays** — this does not touch the recommendation below.
+*"BB01 is retired"* is a **display** decision; the mailbox (`bb@mhmw.com`), models
+(`BBReviewFeedback`, `BBChat*`), and modules (`app/brain/bb_chat/`) remain the
+internal identifiers, renamed only at the string/avatar layer. The avatar is
+still owed; nothing on these pages blocks without it.
+
+**The notes panel also assigns her behavior**, which the rename scope did not
+cover: she reads project notes and links them to releases, T&M tickets, and
+schedule items, then resurfaces them at review / billing / follow-up time. That
+is C10 (Carmen runs Brain actions, deferred) in read-only form. The **panel** is
+buildable now with the tags as manual metadata; the **automatic linking** is the
+deferred part. Ship the panel, do not fake the intelligence — a "Carmen: applied
+to schedule" tag that no rule produced is worse than no tag.
 
 **Recommended scope — display layer only** (proposed, not yet confirmed):
 
@@ -712,12 +852,17 @@ leash off on that one"* [L536–544].
 
 ## D. Views and pages
 
-### D1. Projects page rework — **ELEVATED. Ships with A1 (T&M) and A2 (COs).**
+### D1. Projects page rework — **ELEVATED. Ships with A1 (T&M) and A2 (COs). Spec received.**
 
 > **Elevated by Daniel 2026-07-22**, alongside T&M and change orders —
 > *"ideally that will give us more reason to interact with this page."* The
 > three are one push: the page is the reason the data is worth capturing, and
 > the data is the reason the page is worth visiting.
+>
+> **Spec received 2026-07-22 and is source of truth:**
+> [`projects-page-mockup.html`](projects-page-mockup.html) — a working mockup of
+> #450 Sandstone Ranch. The open item at the bottom of this entry ("Bill owes a
+> markdown/full-page spec") is **closed**. Build to the mockup.
 
 **State:** Shipped and seen. `app/brain/projects/`, `Projects.jsx`,
 `ProjectDetail.jsx`. Alta Metro carries live data; the rest is mock. Bill's
@@ -749,62 +894,198 @@ the DWL is one more box, showing your rows instead of everyone's.
 
 ---
 
-**Sections, sorted by data availability** (the defers made this scopeable):
+#### The spec — 13 panels, a KPI bar, drag, and click-to-modal
 
-| Status | Sections |
+Page chrome, above the grid:
+
+- **Project header** — number, name, GC, PM, contract value, field super, start
+  date, plus status badges (`In Production`, `Submittals: 4/6 Approved`,
+  `2 Open RFIs`, `1 CO Pending GC`).
+  **Triage 2026-07-23:** `Projects` has no `contract_value`, `gc_name`, or
+  `field_super` column (only name/job_number/pm_id/geofence). Decision: **add
+  three nullable columns**, PM-editable inline. `gc_name` can pre-fill by parsing
+  `Submittals.project_name`; contract value and field super are manual entry.
+  Cheap, no ingestion. Number/name/PM already resolve today.
+- **KPI bar** — total releases · FC released · in drafting · billed to date ·
+  remaining · open T&M tickets · CO value pending · (overdue items). Counts
+  resolve now; billed/remaining are **budget-gated** (see below). **Count
+  mismatch unresolved:** the mockup shows **8** tiles, the written spec lists
+  **7** (no "Overdue Item") — **Bill's call**, logged in "Still needing Bill's
+  call."
+
+The 13 panels, against data availability:
+
+| Status | Panels |
 |---|---|
-| **Available now** | Releases · submittals · schedule/lookahead · **rentals** |
+| **Available now** | Releases · submittals · schedule/lookahead · **rentals** · drawings |
 | **Landing soon** | T&M (A1) · change orders (A2) · punch list (A3) |
-| **Deferred** | RFIs (A6) · project contacts (rides with A5) |
-| **Never specified** | Budget items — Bill said *"some of this is going to be really hard to backfill"* and no source was ever named |
+| **Revived — GO 2026-07-23** | **RFI Log** (A6 — build record + panel, manual) · **Project Contacts** (new `ProjectContact` model + panel) |
+| **Ship labeled "pending data source"** | **Budget** — labor / materials / subcontractors / **equipment**, each budget-spent-remaining-%; billed-to-date. Named source is *Pay App line items*, which The Brain does not model. **Decision: render an empty/"no source yet" state, not invented spend bars.** Pay App / cost ingestion is a separate later project |
+| **Adjacent** | Project Notes (**panel + manual note types**, Carmen auto-linking deferred, see below) · Project To-Do (shares D2's model) |
+
+**Attributions in the written spec** (useful when confirming scope): Change
+Orders — *"Requested by Danny Riddell."* Punch List and Project Contacts —
+*"Requested by Rich Losasso."*
 
 **Rentals is pure wiring** — `SunbeltRental`, `SunbeltRentalSnapshot`, and
 `RentalReports.jsx` all exist. Bill: *"for sure we can get rentals in there."*
 Cheapest real data on the page.
 
-**First slice:** the box-grid shell plus the four sections whose data exists,
-labelled slots for the three landing soon, and **drop the deferred ones rather
-than shipping empty tabs.**
+**Two panels are wider than one cell** in the mockup — Notes spans 2, To-Do
+spans 3. The box contract (K2) needs a span property; it was scoped as uniform
+boxes before the spec landed.
+
+**First slice:** the box-grid shell plus the sections whose data exists, with
+labelled slots for the three landing soon. The spec ships all 13 populated, so
+**empty-state design matters now** — a slot that says what will fill it, not a
+blank card.
 
 **Plan:**
-1. Box-grid shell — draggable, positions persisted, shared with D2.
-2. Admin vs non-admin gating. **Open:** Bill flagged it but never said where the
-   line falls. With no budget or O&P data in v1, there may be nothing to gate
-   yet — worth confirming rather than building speculative gates.
+1. Box-grid shell — draggable, positions persisted **server-side per user**
+   (the mockup uses `localStorage`; Bill's note says server-side in production).
+   Shared with D2. Add box span to the contract.
+2. Admin vs non-admin gating. **Still open:** Bill flagged it but never drew the
+   line. The header now carries contract value and (later) billed/remaining, so
+   there *is* financial data to gate — but with Budget shipping as an empty
+   "pending source" state in v1, the gate has little to hide yet. Build the header
+   financial columns behind a simple admin check and revisit the fuller gate when
+   real budget data lands.
 3. Keep all projects as tiles. Bill converted from expecting a dropdown.
-4. Click a summary box → drill into the full list.
-5. Wire the four available sections.
-6. **Keep the four-dot stage indicator untouched.** Unrequested, and the warmest
+4. Click any panel header → detail modal with that panel's full data. Every
+   panel also carries a secondary action in its header (`View All`, `+ Add Note`,
+   `+ Add Task`, `Manage`, `Edit`, `Full Timeline`, `Full Report`).
+5. Wire the available sections.
+6. **Keep the four-dot stage indicator untouched.** Unrequested, the warmest
    reaction in the meeting — *"the Domino's pizza tracker… it's so simple, it's
-   so small."*
+   so small."* The spec keeps it: Draft · Shop · Paint · Install, per release
+   row, with a status chip beside it.
 
-**Open:** Bill owes a markdown/full-page spec he was updating with the meeting's
-notes. Building the layout before it lands risks rework on exactly the part he
-is specifying.
+**Submittals panel — the spec settles the GC approval vocabulary:**
 
-**Effort:** L
+| | |
+|---|---|
+| **GC statuses** | Approved · Approved as Noted · Rev. & Resubmit |
+| **In-flight flag** | **Out to GC**, with a days-out counter |
+| **Aging (v1)** | **Visual flags only** — 14-day window · **9 days → yellow** ("follow-up in 5 days") · **15+ days → red**. Read-only, computed from dates |
+| **Aging (deferred)** | The automated **Carmen follow-up email** at day 14 — see the ball-in-court note below |
+| **DRRs** | Internal only — **no GC status tracking** |
+| **Panel footer** | Counts by bucket: approved · out to GC · revising · overdue |
+
+**Triage 2026-07-23 — split the aging chase.** The **visual half ships in v1**
+(the yellow/red badges + counter); the **outbound email defers**. Two reasons the
+send is not v1: it needs a stored GC-contact email (none exists — see the
+ball-in-court note), and the 14-day chase was already deferred out of A1/A2. When
+it does land, the mechanism should be built once and shared across
+submittals/COs/T&M, not three times.
+
+**Clock anchor (implementation note).** `Submittals` has **no explicit
+"submitted-to-GC" date** — only `created_at`/`last_updated`. So the aging clock
+is anchored on the **`SubmittalEvents` transition into the "out to GC" status**,
+not a column. Resolve the exact status value at build; don't count off
+`created_at`.
+
+**Releases panel — Product Type: GO 2026-07-23.** The spec adds a **Product Type**
+column and maps the pizza tracker to Draft→Shop→Paint→Install. `Releases` has
+**no `product_type` field** — the same gap E1 (tee-time) hit. Decision: **add one
+nullable `product_type` column now**, populated manually or from
+Trello/description, read by both D1 and E1. Land it once. (Value taxonomy —
+stairs / rails / embeds / etc. — can start free-text and tighten later.)
+
+**Ball-in-court outbound email — DEFERRED 2026-07-23.** The written spec §1 has
+Carmen **send** a follow-up email to the GC at day 14. That needs a stored,
+verified GC-contact email — which **does not exist** (the new `gc_name` header
+column is a display name, not an address) — plus outbox plumbing. Not in v1.
+When picked up, scope it as a real outbound action (outbox-backed, idempotent),
+same care as any Procore/Trello write.
+
+**Project Notes — panel now, intelligence later (2026-07-23).** The spec shows 4
+typed note categories (Follow-Up / Contract / Schedule / Material) **and** Carmen
+auto-monitoring/auto-linking notes to releases, T&M, and schedule, with mockup
+tags like *"Carmen: applied to schedule."* Decision: **ship the panel with the 4
+manual note types, entered by PMs. Do not render any "Carmen: …" tag until a real
+rule produces it** — a fabricated provenance tag is worse than none. The
+automatic linking is **C10 (Carmen-runs-actions), which stays deferred.**
+
+**Budget — RESOLVED 2026-07-23: ship labeled "pending data source."** The written
+spec names **Billed to Date = "sum of all approved Pay App line items,"**
+**Remaining = contract − billed** — but **The Brain models no Pay Apps**, and no
+per-department budget/spent/equipment cost data lives anywhere in it
+(`projects/service.py` already returns `financials` in `unavailable_sections`).
+Decision: **render the Budget panel and the billed/remaining KPI tiles as an
+empty "no source yet" state — never invented spend bars.** The Pay App / cost
+ingestion path is its own later project; until it exists, this panel shows what
+it's waiting on, not fabricated numbers.
+
+**v1 scope, after triage:** box-grid shell (K2) · header with the 3 new columns ·
+Releases (+product_type) · submittals (visual aging) · schedule · rentals ·
+drawings · RFI panel (new) · contacts panel (new) · notes panel (manual) · to-do.
+**Landing with A1/A2/A3:** T&M · CO · punch. **Empty "pending source":** Budget +
+its 2 KPI tiles.
+
+**Effort:** L (the page). The Budget panel's real data is **gated on a Pay App /
+cost source that does not yet exist** — a separate later slice; v1 ships its
+empty state.
 
 ---
 
-### D2. Personal "My Open Items" page — **ELEVATED. Ships on the K2 grid engine.**
+### D2. Employee Home page — **ELEVATED. Ships on the K2 grid engine. Spec received, and it grew.**
 
 > **Elevated by Daniel 2026-07-22**, alongside D1 — *"we will build a similar
 > grid engine to display custom metrics."* See **K2**.
+>
+> **Spec received 2026-07-23:** [`employee-home-mockup.html`](employee-home-mockup.html)
+> + [`design-spec-employee-home.md`](design-spec-employee-home.md). It is source
+> of truth, and it is **much bigger than "My Open Items."** What the catalog
+> scoped as a personal task aggregate is now the *"social heartbeat of the
+> company"* — photo feeds, a gallery, subscriptions, badges, and an EOS widget.
+> Renamed here to **Employee Home** to match Bill.
+>
+> **Triage 2026-07-23 — core first, then layer.** D2 v1 = **My Open Items** only
+> (the committed meeting scope, buildable on existing to-do/review/submittal
+> data). The news feed, photo gallery, release subscriptions, badges (D9), and the
+> EOS widget (D8) are **separate later slices, off the critical path** — several
+> ride net-new backends (see below). This holds the committed thing on track and
+> keeps the scope Bill added from swallowing it.
 
 **State:** `ToDos.jsx` and `app/brain/todos_routes.py` exist; `Notification`
-exists. No per-user aggregate view. Bill traces the idea to a text Daniel sent
-him — *"the cover page where you would open up the brain and it would tell you,
-hey you're Dalton, this is what you need to do"* [L690].
+exists; `ReleasePhoto` exists and photos flow; `app/brain/material_orders/` is on
+main. No per-user aggregate view, no feed, no badges, no subscription model. Bill
+traces the idea to a text Daniel sent him — *"the cover page where you would open
+up the brain and it would tell you, hey you're Dalton, this is what you need to
+do"* [L690].
 
-**Plan:**
-1. Render the **K2 grid engine** bound to a user instead of a project.
-2. Aggregate everything under your open responsibility: to-dos, tasks,
-   submittal reviews, drawing reviews, RFIs, punch list items.
-3. Outstanding vs accomplished, with checkboxes.
-4. Any role — a fabricator clicks their name and sees their assignments. PMs
-   will be the heaviest users, but Bill sees value *"across the board."*
-5. Photo feedback in the feed (D3).
-6. Opt-in streams — *"do you want to know what orders are happening in Dencol."*
+**The spec's 8 panels + a hero header**, mapped to what exists:
+
+| # | Panel | Backend today | Notes |
+|---|---|---|---|
+| — | **Hero header** | — | Greeting, avatar, role, date, earned-badge pills, **6-stat KPI bar** (open · due this week · completed this month · active projects · overdue · on-time streak) |
+| 1 | **My Open Items** | partial | The original D2 core. Type badges Review/Submittal/Task/To-Do, each color-coded, aggregated across projects |
+| 2 | **Company News Feed** | **new** | Photo-forward. Install-complete, photos, milestone, badge, material-order, Carmen-alert item types. Hero image + 3-thumb grid. This is **D3 revived** — see below |
+| 3 | **Work-in-Progress & Installed gallery** | `ReleasePhoto` | Filter tabs by stage; hero + thumbnails; phone upload to a release. Also D3 |
+| 4 | **My Release Tracker** | **new (subscription)** | Subscribe to releases, pizza tracker, feed notification on stage advance |
+| 5 | **Material Order Updates** | `material_orders/` | Subscribe to orders; Ordered/Confirmed/Shipped/Delivered/Pending |
+| 6 | **My Badges & Recognition** | **new** | Earned + locked-with-progress. The **Banana Award** system — see below |
+| 7 | **My Projects** | partial | Assigned projects, role, active-release count, status |
+| 8 | **My EOS Rocks** | **new (D8)** | Condensed Rocks widget; links to the EOS Module |
+
+**Plan (revised):**
+1. Render the **K2 grid engine** bound to a user instead of a project — same
+   shell as D1, drag + per-user server-side positions.
+2. **My Open Items** first — it is the original committed scope and rides purely
+   on existing to-do/review/submittal data. Ship this as the D2 v1.
+3. Layer the feed, gallery, subscriptions, badges, and EOS widget as **separate
+   slices** behind it. Several are net-new backends (see below); do not let them
+   block the aggregate view Bill actually asked for in the meeting.
+
+**Net-new backends this spec introduces** (none exist today, each is its own
+slice):
+- **Release subscription model** — a (user, release) follow with stage-change
+  notification. Panel 4, and the feed's stage events.
+- **Badge / recognition engine** — badge definitions, award records, progress
+  counters, auto-post to the feed on earn. Panel 6 + Banana (below).
+- **Company news feed** — an activity stream aggregating install-complete, photo
+  posts, milestones, badge awards, material-order changes, and Carmen alerts.
+  This is the D3 revival.
 
 **One constraint that shapes the model:** **only PMs are project-scoped.**
 Everyone else touches every project — *"it's pretty rare… the only ones that
@@ -826,13 +1107,19 @@ meeting's answer was propose-then-human-confirms. Worth noting the weekly DWL
 pass **is** a meeting where assignments get spoken — the same machinery as F1/F2,
 pointed at drafting.
 
-**Depends on:** K2. Needed by: A3 punch list, B2 workflows. **Effort:** L
+**Depends on:** K2. Needed by: A3 punch list, B2 workflows. **Effort:** L for the
+My-Open-Items core. The feed, gallery, subscriptions, and badges are **additional
+M-each slices** riding net-new backends — not part of that L.
 
 ---
 
-### D3. Photo feedback loop — **DEFERRED**
+### D3. Photo feedback loop — **REVIVED. It is the spine of Employee Home (D2).**
 
-> **Deferred by Daniel 2026-07-22** — *"cute idea, defer."*
+> **Deferred by Daniel 2026-07-22** — *"cute idea, defer."* **Un-deferred by the
+> 7/23 package**, which makes exactly this the centerpiece of the Employee Home
+> page: a photo-forward **Company News Feed** (panel 2) and a **Work-in-Progress
+> & Installed gallery** (panel 3), both closing the fab→install loop Bill
+> described. It is no longer a "cute idea, defer" — it is spec'd and central.
 
 **State:** `ReleasePhoto` exists and photos already flow. Would be a query and a
 surface, not a capability.
@@ -842,14 +1129,23 @@ comes back to you. *"We never see what's going on… that's probably one of the
 biggest things guys like — I've never seen it when it's done."* Morale. He was
 clear it cuts both ways: *"Yeah. Oh look how short it is."*
 
-**Solved design question, recorded for whenever this revives:** attribution
-needs no new fields. There is no "drafted by" or "fabricated by" column, but
-`ReleaseEvents.internal_user_id` already records who moved a release through
-each stage — so *everyone who touched this release* is derivable from the event
-stream. That is also the better definition: it includes the fabricator who
-welded it, not just whoever's name is on the drawing.
+**Solved design question:** attribution needs no new fields. There is no "drafted
+by" or "fabricated by" column, but `ReleaseEvents.internal_user_id` already
+records who moved a release through each stage — so *everyone who touched this
+release* is derivable from the event stream. That is also the better definition:
+it includes the fabricator who welded it, not just whoever's name is on the
+drawing. **The gallery/feed should attribute from the event stream, not invent a
+new author column.**
 
-**Depends on:** D2 for the surface. **Effort:** S
+**What the package adds beyond the meeting ask:** the feed is not only install
+photos — it aggregates milestones, badge awards, material-order changes, and
+Carmen alerts into one stream (see D2's "company news feed" net-new backend), and
+the gallery supports phone upload straight to a release. The photo half is the
+easy part (`ReleasePhoto` is there); the **feed as an activity stream is the new
+build**.
+
+**Depends on:** D2 for the surface, and the feed backend listed under D2.
+**Effort:** S for the gallery (query over `ReleasePhoto`), **M for the feed**.
 
 ---
 
@@ -892,6 +1188,104 @@ can sequence their lane. The timeline becomes the live calendar.
 
 **Effort:** L combined. D7's bug is the cheapest piece and can ship early on its
 own.
+
+---
+
+### D8. EOS Module — **NEW 2026-07-23. Container-first. Build AFTER the 7/28 session.**
+
+> **Added by Bill's UI package**, no prior catalog entry.
+> [`eos-module-mockup.html`](eos-module-mockup.html) +
+> [`design-spec-eos-module.md`](design-spec-eos-module.md). This is a **net-new
+> section of The Brain**, not a view rework — a home for running EOS
+> (Entrepreneurial Operating System, *Traction* by Gino Wickman).
+>
+> **Triage 2026-07-23 — build *after* the first Margaret session, not this week.**
+> The structure follows Margaret's guidance rather than pre-empting it, and it
+> keeps K4 backups (TIER-0, this week) uncontested. Ships as a normal M-slice once
+> training is under way — **not** a time-boxed scramble for the 28th.
+
+**The deadline is real and external.** EOS training starts **the week of
+2026-07-28** with implementor **Margaret Dixon** (Boulder, CO). Bill built it as
+a **container first**: structure in place, ready to receive data as the team
+works through the process. *"Nothing is locked in yet."* Two tabs (V/TO,
+Accountability Chart) are explicit placeholders until after the first Margaret
+meeting.
+
+**State:** Nothing built. No EOS models, no Rocks, no scorecard. This is
+green-field.
+
+**6 tabs** (mockup uses tab panels, not the K2 grid — a different shell from
+D1/D2):
+
+| Tab | v1 scope | Data readiness |
+|---|---|---|
+| **Rocks** | Company + individual quarterly Rocks, 4-step progress, On/At-Risk/Off-Track, Rock Stars section | Buildable now — needs a `Rock` model |
+| **Scorecard** | Weekly metric table, green/red per metric | Structure now; **metrics TBD with Margaret**. Several proposed metrics already exist as Brain data (releases FC'd, open T&M, submittals overdue) and could auto-feed |
+| **Issues List (IDS)** | Issue · owner · priority · date · status (Open/In IDS/Resolved) | Buildable now — needs an `Issue` model |
+| **V/TO** | 8-section single-page plan | **Placeholder** until Margaret |
+| **Accountability Chart** | Seats + responsibilities org chart | **Placeholder**; 6 leadership members pre-loaded, seats TBD |
+| **Rock Stars** | Recognition wall | Ties to D9 Banana + D2 feed |
+
+**Carmen is the EOS assistant** — monitors Rocks, flags at-risk, and does **L10
+meeting prep on a timer**: 48h before, nudge owners to update Rock status; 24h
+before, generate a prep summary (scorecard + Rock statuses + issues by priority);
+after, log the summary and any new Rocks/Issues. Some of this is Carmen-runs-
+actions (C10) territory — the **timed nudges and summary generation are net-new
+scheduled jobs**, not read-only. She can also auto-add issues on detected
+patterns (*"3+ submittals overdue in a week"* → adds an issue), which is the same
+drift-detection machinery as the BB meeting work.
+
+**The cut (decided 2026-07-23):** first slice = **container + Rocks + Issues List +
+Scorecard shell**, built **after** training starts; V/TO and Accountability Chart
+stay the labeled placeholders Bill designed (blocked on Margaret regardless);
+Carmen's L10 automation is a **later second slice** once the manual flow is in use.
+Nothing here is a this-week build.
+
+**Leadership team pre-loaded** (roles TBD after first meeting): Bill O'Neill
+(Visionary, presumed), Lexi O'Neill, Katie Hearn, David Servold, Doug Ferrin,
+Luis Solano. Integrator TBD.
+
+**~~Open~~ Resolved:** *"live for or after the first Margaret session?"* → **after.**
+V/TO and Accountability Chart remain blocked on Margaret in either case.
+
+**Effort:** M for the container + the three data-ready tabs; the two placeholders
+are S; Carmen's L10 automation is a separate M.
+
+---
+
+### D9. Badges / Banana Award recognition — **NEW 2026-07-23. Backend for D2 panel 6.**
+
+> **Added by Bill's UI package** as a *"key design decision locked in."* Standalone
+> here because it is a **net-new engine** several surfaces read from — D2 panel 6,
+> the D2/D3 news feed, and D8's Rock Stars wall.
+>
+> **Triage 2026-07-23 — later slice, off the critical path.** Per the D2 decision
+> (My Open Items core first), badges and the Banana Award are **not in D2 v1**.
+> They sequence after the D2 core and depend on the news-feed backend, which is
+> also a later slice. No committed deadline.
+
+**State:** Nothing built. No badge definitions, awards, or recognition records.
+
+**Two halves:**
+1. **Automated badges** — definitions with triggers (Zero-Error Week, 5 FC
+   Releases, On-Time Streak, Diamond Drafter = 100 FCs, etc.), earned/locked
+   state, progress counters (*"87/100"*), and an **auto-post to the news feed on
+   earn**. Most triggers are computable from existing event/release data; the
+   engine is the work, not the data.
+2. **The Banana Award (🍌)** — a **manual peer-nomination** flow, not automated:
+   any employee nominates a teammate with a specific reason (*"David caught a
+   hardware error on 450-759 before it hit the shop floor"*), it posts to the
+   feed, the recipient gets a 🍌 badge, and Bananas tally monthly for the company
+   meeting. This is the one recognition piece that is **social, not metric** — it
+   needs a nomination UI and a light approval/visibility model, not a rule engine.
+
+**Dependency it shares with D2:** both post to the **company news feed**, which
+does not exist yet (D2 net-new backend). Build the feed once; badges and Bananas
+are two producers into it.
+
+**Depends on:** D2 feed backend. **Effort:** M for the badge engine, S for the
+Banana nomination flow. Neither is on any committed deadline — sequence after the
+D2 My-Open-Items core.
 
 ---
 
@@ -1285,8 +1679,19 @@ the shell once, bind it three ways.
 5. Retrofit metrics opportunistically — not urgent, and it validates the
    contract against a surface that already exists.
 
-**Open:** do box positions persist per user, per role, or per (user, surface)?
-Per (user, surface) is the safe default and costs nothing extra.
+**~~Open:~~ Resolved by Bill's spec — positions persist per user, server-side.**
+His note: drag-and-drop repositioning where *"each user saves their own layout
+(localStorage in the mockup, should be server-side per user in production)."*
+Per **(user, surface)** remains the implementation — it satisfies "per user" and
+costs nothing extra once there is a second surface.
+
+**Two things the spec adds to the box contract:**
+1. **Span.** Panels are not uniform — Notes spans 2 columns, To-Do spans 3. The
+   contract needs a span property, not just an ordered list.
+2. **A header action slot**, distinct from the drill-through. Clicking the header
+   opens the detail modal; a separate right-aligned action does something else
+   (`+ Add Note`, `+ Add Task`, `Manage`, `Edit`). In the mockup that action
+   stops propagation so it never opens the modal.
 
 **Effort:** M for the shell. It is a prerequisite for D1 and D2, not additional
 work beside them.
@@ -1560,9 +1965,11 @@ Ordered by sequence, not just importance. Prerequisites first.
 | 1 | **A1 Time & materials** | M | Committed **Mon 2026-07-27**. Origination path only — paper ingestion dropped, which means this is a **build**, not a merge |
 | 2 | **I3 External user access** | L | Elevated *with* T&M — the fill-it-out step lands on sub foremen. Same work as A1's deferred sub-facing layer |
 | 3 | **K2 Grid engine** | M | **Prerequisite for D1 and D2.** Not extra work beside them |
-| 4 | **D1 Projects page** | L | Elevated with A1/A2 — *"gives us more reason to interact with this page"* |
+| 4 | **D1 Projects page** | L | Build to the spec. **Triaged 7/23:** +3 `Projects` columns (contract/gc/super); Budget ships empty "pending source"; submittals = visual aging only; +`product_type` on Releases; Notes panel manual |
+| 4a | **A6 RFI record + panel** | S | **GO** — record + panel, manual entry, rides D1. Drift engine still deferred |
+| 4b | **Project contacts panel** | S | **GO** — new `ProjectContact` model + panel, rides D1. A5 origination stays deferred |
 | 5 | **A2 Change orders** | M | Email capture only. **Blocked on Bill** for the CO log + a sample email |
-| 6 | **D2 Personal page** | L | Renders K2 bound to a user |
+| 6 | **D2 Employee Home** | L | **v1 = My Open Items only** (triaged 7/23). Feed / gallery / subscriptions / badges / EOS-widget = later slices, off critical path |
 | 7 | **G1 Desktop notifications** | S | *"Huge near-term win."* Makes every existing mention surface visible |
 | 8 | **C1 Note field defect** | S | Diagnosed: the control exists on one surface, missing on the one Bill uses |
 | 9 | **C8 Procore markup rotation** | S | Elevated. Fix despite the October exit |
@@ -1587,8 +1994,11 @@ independent — they can land while the larger items are in flight.
 
 | Item | Note |
 |---|---|
-| **K3 Data infra: object storage migration** | **L.** All binaries sit on a single Render disk — no object storage exists. Caps scaling at one instance. Pulling it forward is one way to solve K4 step 3 |
-| **L1 Styling v3 — full redesign** | **XL.** Recommendation: v3 foundation first, new surfaces built native, legacy migrated progressively — otherwise K2/D1/D2/D4 get built twice |
+| **D8 EOS Module** | **M** for container + Rocks/Issues/Scorecard. **Triaged 7/23: build AFTER the 7/28 Margaret session** — not this week, does not compete with K4. Carmen L10 automation is a later second slice |
+| **D9 Badges / Banana Award** | **M+S.** Net-new recognition engine feeding D2 panel 6 + the news feed. **Triaged 7/23: later slice**, sequences after D2 core; no deadline |
+| **D2/D3 news feed + gallery + subscriptions** | **Triaged 7/23: later slices** behind D2's My-Open-Items core. Feed is a **net-new activity-stream backend**; gallery rides `ReleasePhoto` (S); subscriptions are a new (user, release) model |
+| **K3 Data infra: object storage migration** | **L.** All binaries sit on a single Render disk — no object storage exists. Caps scaling at one instance. Pulling it forward is one way to solve K4 step 3. **Note:** the photo-heavy Employee Home feed/gallery raises the stakes on this |
+| **L1 Styling v3 — full redesign** | **XL.** Recommendation: v3 foundation first, new surfaces built native, legacy migrated progressively — otherwise K2/D1/D2/D4/D8 get built twice |
 
 ---
 
@@ -1631,15 +2041,15 @@ now the first loops that would invent their own tables.** Decide before either.
 
 | Item | Why |
 |---|---|
-| **A5 Project origination** | Full defer. Was B2's stated precondition |
-| **A6 RFIs** | Full defer, not even a placeholder |
+| **A5 Project origination** | Still deferred. Was B2's stated precondition. **Contacts split out** and promoted to D1 |
+| **A6 RFI drift engine (ASI diff)** | Still deferred. **The RFI record + panel came back** — see Tier 1 |
 | **B1 Procore data export** | **Bill owns.** October expiry unchanged |
 | **B2 Submittal workflows** | Waits on the working session + Bill's lifecycle flowchart |
 | **B3 Soft-link sub/DRR/FC** | Deferred as a feature — **but carries an open correctness question** |
 | **B4 Customer Procore access** | **Bill owns** — a question for his Procore rep |
-| **C9 Carmen rename** | Confirmed happening; waiting on Bill's avatar + email decision |
+| **C9 Carmen rename** | Confirmed happening; waiting on Bill's avatar. **The spec settles the scope** — Carmen user-facing, BB internal |
 | **C10 Carmen runs actions** | — |
-| **D3 Photo feedback loop** | *"Cute idea, defer"* |
+| ~~**D3 Photo feedback loop**~~ | **Un-deferred by the 7/23 package** — now the spine of D2 Employee Home (feed + gallery). See D3 |
 | **G2 Photo-gated stages** | Gate after adoption, not to force it |
 | **I4 Installer invoicing** | Gated behind I3 |
 
@@ -1673,15 +2083,17 @@ blocked on another person; all were explicitly flagged as needing more thought.
 
 ## Blocked on Bill
 
-Eight items, none of which Daniel can unblock:
+Eight items, none of which Daniel can unblock. **One cleared 2026-07-22** — the
+projects page spec was delivered; **one added** — the budget data source.
 
 | Owed | Blocks |
 |---|---|
 | Change order log (Excel) | A2 backfill |
 | Sample change order email | **A2 — the classifier can't start without it** |
-| Projects page markdown / full-page spec | D1 layout |
+| ~~Projects page markdown / full-page spec~~ | ✅ **Delivered 2026-07-22** — [`projects-page-mockup.html`](projects-page-mockup.html) |
+| **Budget data source** | **D1's Budget panel + billed/remaining getting *real* data.** Triaged 7/23: v1 ships an empty "pending source" state, so this no longer blocks D1 shipping — but Bill still owes a source (Pay App feed / export / manual) before the numbers are real |
 | Parts page "brain stem" Excel | C2 quantitative comparison |
-| Carmen avatar + email decision | C9 |
+| Carmen avatar | C9 — **now under a separate Carmen audit (another agent);** the avatar is still owed by Bill regardless |
 | Stage weight approval | E2 |
 | Lifecycle flowchart + AI steps | B2 |
 | Procore export plan; customer-Procore question to his rep | B1, B4 |
@@ -1694,6 +2106,28 @@ Eight items, none of which Daniel can unblock:
    next thing," 300 lines apart, neither referencing the other. B2 is now
    deferred, which defers the question rather than answering it — and October
    does not move.
+2. **What is the Budget data source?** Labor/materials/subs/equipment spend, plus
+   billed-to-date. The spec names *"approved Pay App line items,"* but The Brain
+   models no Pay Apps or cost data. **Triaged 7/23:** v1 ships the panel as an
+   empty "pending source" state, so this no longer blocks D1 — but the real
+   numbers still need a source Bill can point to (a Pay App feed, an export, or
+   manual entry). **Answer sets whether/when Budget gets real data**, not whether
+   D1 ships.
+3. **Projects KPI bar — 7 tiles or 8?** The mockup and its own written spec
+   disagree (mockup includes "Overdue Item," spec drops it). Trivial, but it is a
+   visible number. *(Admin-gating of the financial columns is decided on the dev
+   side — behind a simple admin check — and revisited when real budget data
+   lands; not a Bill question for now.)*
 
 *(Resolved during the walkthrough: B1 ownership → Bill. D2 vs the DWL → the DWL
 becomes one box on the personal page rather than being retired.)*
+
+*(Resolved by the spec, 2026-07-22: D1's layout. Box positions → per user,
+server-side. Submittal GC statuses + 14-day aging thresholds. RFIs and project
+contacts → back in scope.)*
+
+*(Resolved by triage, 2026-07-23: **EOS (D8) → build after the 7/28 session**, not
+this week. **D2 → My Open Items core first.** **Budget → ship empty "pending
+source."** **RFI + contacts → GO.** **product_type → add to Releases.** **Submittal
+aging → visual only, defer the send.** **Notes → manual, no auto-linking.** Carmen
+rename **C9 → under a separate audit**, deliberately untouched here.)*
