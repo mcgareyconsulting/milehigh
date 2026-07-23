@@ -64,6 +64,11 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
 
     const [cite, setCite] = useState(null); // { doc, page, nonce } — active drawing shown in the right pane
     const openCite = (doc, page = 1) => setCite({ doc, page: page || 1, nonce: Date.now() });
+    // attachment_id → cache-buster, stamped when a row is re-pulled. The file endpoint serves
+    // whatever bytes are cached under a URL that never changes, so a re-pull needs a new URL
+    // to make the viewer drop the copy it already loaded.
+    const [docVersions, setDocVersions] = useState({});
+    const markDocRefreshed = (attachmentId) => setDocVersions((v) => ({ ...v, [attachmentId]: Date.now() }));
     const [docs, setDocs] = useState(null);        // array | null (null = not loaded)
     const [meta, setMeta] = useState(null);        // documents.submittal (enriched metadata)
     const [docsLoading, setDocsLoading] = useState(false);
@@ -267,6 +272,7 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
                                             onUpdate={patchDoc}
                                             onView={(doc) => openCite(doc, 1)}
                                             onCiteSource={(doc, finding) => openCite(doc, finding?.page)}
+                                            onRefreshed={markDocRefreshed}
                                             activeAttachmentId={cite?.doc?.attachment_id}
                                         />
                                     ))}
@@ -369,7 +375,9 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
                                 inline
                                 mode="view"
                                 title={cite.doc?.name || 'Drawing'}
-                                fileUrl={`${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/documents/${encodeURIComponent(cite.doc.attachment_id)}/file`}
+                                fileUrl={`${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/documents/${encodeURIComponent(cite.doc.attachment_id)}/file${
+                                    docVersions[cite.doc.attachment_id] ? `?v=${docVersions[cite.doc.attachment_id]}` : ''
+                                }`}
                                 initialPage={cite.page}
                                 citeNonce={cite.nonce}
                                 onClose={() => setCite(null)}

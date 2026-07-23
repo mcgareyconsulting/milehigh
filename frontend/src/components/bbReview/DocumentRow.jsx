@@ -6,6 +6,11 @@
  *   not downloaded → [Pull]      downloaded → [Review]
  *   reviewing      → progress    reviewed   → verdict tally + [Findings ▾] + [Re-run]
  *
+ * A downloaded row also carries [Re-pull], which re-downloads from Procore over the cached
+ * copy. The cache is written once at pull time, so it never picks up markups an approver
+ * added since — and a drawing pulled by a buggy build stays bad until it's pulled again.
+ * Disabled mid-review: the background review reads those same cached bytes.
+ *
  * Findings expand IN PLACE (accordion). Download state and the completed-review summary
  * are lifted to the parent via onUpdate so they survive a collapse; the findings list and
  * accept/reject feedback are row-local UI. Severity colors come from ./urgency.js — the
@@ -188,7 +193,7 @@ function FindingRow({ finding, index, submittalId, attachmentId, reviewId, initi
     );
 }
 
-export default function DocumentRow({ submittalId, doc, model, onUpdate, onView, onCiteSource, activeAttachmentId }) {
+export default function DocumentRow({ submittalId, doc, model, onUpdate, onView, onCiteSource, onRefreshed, activeAttachmentId }) {
     const [pulling, setPulling] = useState(false);
     const [reviewing, setReviewing] = useState(false);
     const [expanded, setExpanded] = useState(false);
@@ -212,7 +217,10 @@ export default function DocumentRow({ submittalId, doc, model, onUpdate, onView,
 
     const clearError = () => { setError(null); setErrorDebug(null); setShowDebug(false); };
 
-    const handlePull = async () => {
+    // The pull endpoint always re-downloads and overwrites, so one handler covers both the
+    // first pull and a re-pull; a re-pull additionally tells the parent to bust the viewer's
+    // URL, otherwise an open pane keeps showing the copy it already loaded.
+    const handlePull = async ({ refresh = false } = {}) => {
         clearError();
         setPulling(true);
         try {
@@ -223,6 +231,7 @@ export default function DocumentRow({ submittalId, doc, model, onUpdate, onView,
                 name: res.name || doc.name,
                 source: res.source || doc.source,
             });
+            if (refresh && onRefreshed) onRefreshed(attachmentId);
         } catch (e) {
             setError(e?.message || 'Pull failed');
             setErrorDebug(debugFrom(e));
@@ -384,7 +393,7 @@ export default function DocumentRow({ submittalId, doc, model, onUpdate, onView,
         statusEl = <span className="text-sm text-gray-500 dark:text-slate-400">Not downloaded</span>;
         actionEl = (
             <button
-                onClick={handlePull}
+                onClick={() => handlePull()}
                 disabled={pulling}
                 className="px-3 py-1.5 text-sm font-medium bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shrink-0"
             >
@@ -413,6 +422,18 @@ export default function DocumentRow({ submittalId, doc, model, onUpdate, onView,
             <div className="mt-2 flex items-start justify-between gap-3">
                 {statusEl}
                 <div className="flex items-center gap-2 shrink-0">
+                    {doc.downloaded ? (
+                        <button
+                            onClick={() => handlePull({ refresh: true })}
+                            disabled={pulling || reviewing}
+                            className="px-2.5 py-1 text-xs font-medium rounded text-yellow-700 dark:text-yellow-300 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            title={reviewing
+                                ? 'Wait for the review to finish — it is reading the cached drawing'
+                                : 'Download this drawing from Procore again, replacing the cached copy'}
+                        >
+                            {pulling ? 'Pulling…' : 'Re-pull'}
+                        </button>
+                    ) : null}
                     {doc.downloaded && onView ? (
                         <button
                             onClick={() => onView(doc)}
