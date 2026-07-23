@@ -1112,8 +1112,10 @@ gating formalizes existing behavior rather than imposing new behavior.
 > we can elevate."* Matches what he told Lexi — *"probably not a ton of data,
 > it'll just be who's assigned."*
 
-**State:** Nothing built. Installer assignment exists on releases;
-`ProjectManager` exists.
+**State:** **v1 shipped (admin Subs page + paid flag).** Installer assignment
+exists on releases; `/subs` lists active assigned releases grouped by installer
+with a yes/no `installer_invoice_paid` toggle (distinct from Job Log `invoiced`
+customer billing). OCIP not built yet. `ProjectManager` exists.
 
 **What Lexi asked for**, twice and unprompted: *"You'd go up here and click subs.
 You'd get a list of all your subcontractors. And what they're doing. And all the
@@ -1121,13 +1123,13 @@ jobs that they're currently assigned to."* — *"That's what I need."* With
 paid/not-paid per line. She'd take a paid yes/no flag on the release *"as a
 start, at a minimum,"* but the tab is the real ask.
 
-**Column-by-column data reality — this is why v1 is easy:**
+**Column-by-column data reality:**
 
 | Column | Source | v1? |
 |---|---|---|
-| Sub → releases → projects | **Exists** — installer field on releases | ✅ |
-| Paid / not-paid | **No source in the Brain.** QuickBooks, or manual entry | ✖ later |
-| OCIP flag | **New column on `Projects`** + someone to set it | ✅ cheap |
+| Sub → releases → projects | **Exists** — installer field on releases | ✅ shipped |
+| Paid / not-paid | **`releases.installer_invoice_paid`** (manual yes/no on `/subs`) | ✅ shipped |
+| OCIP flag | **New column on `Projects`** + someone to set it | ✖ later |
 
 **The OCIP piece is where the value is, and it's one column plus a rule:** flag
 which projects carry controlled insurance, surface which subs are assigned to
@@ -1151,14 +1153,13 @@ don't."* Daniel's read: the tool has to exist first — *"once you have your
 system, then you can go out there and get on their ass."*
 
 **Plan:**
-1. Subs tab: subcontractor → releases → projects, from existing assignment data.
+1. ~~Subs tab: subcontractor → releases → projects, from existing assignment data.~~ **Done** (`/subs`, admin-only).
 2. OCIP flag on `Projects`; surface unenrolled subs on flagged projects.
-3. **Ship rough v1 to Lexi *and* Bill together** — Bill needs the same picture
-   to push PMs on assignment discipline.
+3. ~~**Ship rough v1 to Lexi *and* Bill together**~~ — still collect feedback.
 4. Lexi emails back useful / not useful.
-5. Paid status and QuickBooks later.
+5. ~~Paid status~~ done (manual flag); QuickBooks later.
 
-**Effort:** S–M for v1.
+**Effort:** S–M for v1 (paid slice done); OCIP remains.
 
 ---
 

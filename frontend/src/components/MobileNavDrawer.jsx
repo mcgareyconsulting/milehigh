@@ -26,6 +26,7 @@ const NAV_ITEMS = [
 
 // Rentals nav removed 2026-07-12 (company change) — route + backend intact.
 const ADMIN_ITEMS = [
+    { label: 'Subs', path: '/subs' },
     { label: 'Meetings', path: '/meetings' },
     { label: 'Bug Tracker', path: '/board' },
     { label: 'Submittal Matching', path: '/admin/submittal-matching' },

@@ -191,7 +191,7 @@ of standard details to snip from (Bill lukewarm — MHMW already has symbols).
 | Fab-hours overload check: daily, weekly, or by stage? | open | Tee-time v1 |
 | How do we handle origination overlap for in-flight projects? | open | New project ingestion |
 | What's the admin vs non-admin line on the projects page? | open | Projects page GA |
-| Does the paid flag live on the release or only in the subs view? | Daniel | Subs view v1 |
+| Does the paid flag live on the release or only in the subs view? | Daniel | **Resolved:** on the release (`installer_invoice_paid`); `/subs` is the admin UI |
 | Does Lexi want to be on Katie's invoicing report? | Lexi | No |
 
 ---

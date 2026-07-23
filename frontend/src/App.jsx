@@ -36,6 +36,7 @@ import InvoicingReport from './pages/InvoicingReport';
 import RentalReports from './pages/RentalReports';
 import Metrics from './pages/Metrics';
 import InstallSchedule from './pages/InstallSchedule';
+import Subs from './pages/Subs';
 import { checkAuth } from './utils/auth';
 import './App.css';
 
@@ -89,6 +90,7 @@ function AppContent() {
               <Route path="install-schedule" element={<InstallSchedule />} />
               <Route path="invoicing-report" element={<InvoicingReport />} />
               <Route path="rental-reports" element={<RentalReports />} />
+              <Route path="subs" element={<Subs />} />
               <Route path="admin/fc-collection" element={<FcCollection />} />
               <Route path="admin/submittal-matching" element={<SubmittalMatching />} />
               <Route path="admin/metrics" element={<Metrics />} />
