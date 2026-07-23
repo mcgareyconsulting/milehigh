@@ -492,6 +492,11 @@ class Releases(db.Model):
     # card description ("**Number of Guys:** N"); treated as 2 when absent.
     # comp_eta = start_install + ceil(install_hrs / (num_guys * 8)) business days.
     num_guys = db.Column(db.Float, nullable=True)
+    # Whether the subcontractor installer's invoice for this release has been paid.
+    # Distinct from `invoiced` (MHMW customer billing). Toggled on the admin Subs page.
+    installer_invoice_paid = db.Column(
+        db.Boolean, nullable=False, default=False, server_default='0'
+    )
     comp_eta = db.Column(db.Date)  # Changed from String to Date
     job_comp = db.Column(db.String(8))
     invoiced = db.Column(db.String(8))
@@ -550,6 +555,7 @@ class Releases(db.Model):
             "ship_date": self.ship_date,
             "installer": self.installer,
             "num_guys": self.num_guys,
+            "installer_invoice_paid": bool(self.installer_invoice_paid),
             "comp_eta": self.comp_eta,
             "job_comp": self.job_comp,
             "invoiced": self.invoiced,

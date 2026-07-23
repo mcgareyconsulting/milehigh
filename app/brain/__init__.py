@@ -44,3 +44,4 @@ from app.brain.projects import routes as projects_routes  # noqa: F401  (registe
 from app.brain.submittal_matching import routes as submittal_matching_routes  # noqa: F401  (registers /submittal-matching endpoints)
 from app.brain.metrics import routes as metrics_routes  # noqa: F401  (registers /metrics endpoints)
 from app.brain.install_schedule import routes as install_schedule_routes  # noqa: F401  (registers /install-schedule endpoints)
+from app.brain.subs import routes as subs_routes  # noqa: F401  (registers /subs endpoints)

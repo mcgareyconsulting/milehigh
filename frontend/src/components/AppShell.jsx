@@ -151,6 +151,7 @@ function AppShellInner({ isAuthenticated }) {
             {navBtn('/install-schedule', 'Install Schedule')}
             {canSeeReport && navBtn('/invoicing-report', 'Invoicing')}
             {/* Rentals nav removed 2026-07-12 (company change) — /rental-reports route + backend stay for direct URL / re-enable */}
+            {isAdmin && navBtn('/subs', 'Subs')}
             {isAdmin && navBtn('/meetings', 'Meetings')}
             {isAdmin && navIconBtn('/board', 'Bug Tracker', (
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
