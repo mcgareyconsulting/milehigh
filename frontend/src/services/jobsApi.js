@@ -263,7 +263,7 @@ class JobsApi {
         }
     }
 
-    // Banana Boy code-compliance review of a drawing version (admin-only).
+    // Carmen Miranda code-compliance review of a drawing version (admin-only).
     async getBBReview(releaseId, versionId) {
         try {
             const response = await axios.get(
@@ -271,7 +271,7 @@ class JobsApi {
             );
             return response.data.review || null;
         } catch (error) {
-            throw this._handleError(error, 'Failed to load BB review');
+            throw this._handleError(error, 'Failed to load Carmen review');
         }
     }
 
@@ -282,7 +282,7 @@ class JobsApi {
             );
             return response.data;   // the pending (or already-running) review row
         } catch (error) {
-            throw this._handleError(error, 'Failed to start BB review');
+            throw this._handleError(error, 'Failed to start Carmen review');
         }
     }
 
@@ -295,11 +295,11 @@ class JobsApi {
             );
             return response.data.report || null;
         } catch (error) {
-            throw this._handleError(error, 'Failed to load BB review report');
+            throw this._handleError(error, 'Failed to load Carmen review report');
         }
     }
 
-    // Upsert a PM's accept/deny (+ notes) for one BB finding. Body:
+    // Upsert a PM's accept/deny (+ notes) for one Carmen finding. Body:
     // { finding_index, decision:'accepted'|'rejected', rule_id?, notes?, finding? }.
     async saveCarmenReviewFeedback(releaseId, reviewId, payload) {
         try {
@@ -309,7 +309,7 @@ class JobsApi {
             );
             return response.data.feedback;
         } catch (error) {
-            throw this._handleError(error, 'Failed to save BB feedback');
+            throw this._handleError(error, 'Failed to save Carmen feedback');
         }
     }
 

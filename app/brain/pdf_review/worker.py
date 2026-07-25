@@ -1,4 +1,4 @@
-"""Background execution for Banana Boy PDF reviews.
+"""Background execution for Carmen Miranda PDF reviews.
 
 The Claude call takes minutes, so the review runs off-request on a small thread pool.
 Mirrors app/brain/meetings/learn.py: a module-level pool, a `start_review(app, id)`
@@ -21,13 +21,13 @@ _REVIEW_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="bb-pdf-revi
 
 
 def start_review(app, review_id: int) -> None:
-    """Queue a background BB review job for a pending CarmenDrawingReview row."""
+    """Queue a background Carmen review job for a pending CarmenDrawingReview row."""
     _REVIEW_POOL.submit(_run_review_job, app, review_id)
 
 
 def start_submittal_review(app, review_id: int, *, procore_submittal_id: str,
                            attachment_id, job_release: str, model=None) -> None:
-    """Queue a background BB review for a submittal-keyed (Procore drawing) review row.
+    """Queue a background Carmen review for a submittal-keyed (Procore drawing) review row.
 
     The drawing bytes must already be in the per-attachment pull cache (the endpoint
     pulls-if-needed before enqueuing). Mirrors start_review but for the submittal path,

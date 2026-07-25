@@ -1,6 +1,6 @@
-"""System prompt for the BB read-only tool agent.
+"""System prompt for the Carmen read-only tool agent.
 
-BB answers questions about MHMW's own data by calling read-only tools (search releases,
+Carmen answers questions about MHMW's own data by calling read-only tools (search releases,
 submittals, to-dos, release history, and the full lifecycle bundle). It never mutates data.
 The routing rules below are adapted from the original banana_boy assistant.
 """

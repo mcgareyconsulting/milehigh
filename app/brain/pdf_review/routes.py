@@ -1,10 +1,10 @@
-"""REST endpoints for Banana Boy PDF review (admin-only).
+"""REST endpoints for Carmen Miranda PDF review (admin-only).
 
 Registered on brain_bp under /brain:
   POST /releases/<release_id>/drawing/versions/<vid>/carmen-review  — enqueue a review (202)
   GET  /releases/<release_id>/drawing/versions/<vid>/carmen-review  — latest review status + findings
 
-Admin-only, matching the "admin-only Banana Boy" decision. The POST returns immediately
+Admin-only, matching the "admin-only Carmen Miranda" decision. The POST returns immediately
 (202) with a `pending` row; the review runs on a background thread (worker.py). The
 frontend panel polls the GET until status is `complete` or `error`.
 """
@@ -116,7 +116,7 @@ def _job_release(release):
 
 
 def _release_if_authorized(release_id):
-    """(release, None) if the current user may see this release's BB report/feedback,
+    """(release, None) if the current user may see this release's Carmen report/feedback,
     else (None, (json, status)). Visible to an admin OR the release's resolved PM."""
     release = db.session.get(Releases, release_id)
     if not release:
@@ -130,7 +130,7 @@ def _release_if_authorized(release_id):
 @brain_bp.route('/releases/<int:release_id>/carmen-review/report', methods=['GET'])
 @login_required
 def get_bb_review_report(release_id):
-    """PM-facing report: the latest complete BB review for the release, ranked by urgency.
+    """PM-facing report: the latest complete Carmen review for the release, ranked by urgency.
 
     Read-only and visible to an admin OR the release's resolved PM (Releases.pm initials →
     User). Unlike the per-version endpoints this is release-scoped, so a PM sees one report
@@ -168,7 +168,7 @@ _VALID_DECISIONS = {'accepted', 'rejected'}
 )
 @login_required
 def save_bb_review_feedback(release_id, review_id):
-    """Upsert a PM's accept/deny (+ optional notes) for one finding of a BB review.
+    """Upsert a PM's accept/deny (+ optional notes) for one finding of a Carmen review.
 
     Body: {finding_index:int, decision:'accepted'|'rejected', rule_id?:str, notes?:str,
            finding?:object}. One row per (review, finding_index); re-posting updates it.
@@ -220,7 +220,7 @@ def _truthy(v):
 @brain_bp.route('/procore-submittals/<submittal_id>/carmen-review', methods=['POST'])
 @admin_required
 def bb_review_procore_submittal(submittal_id):
-    """Pull a submittal's drawing PDF from Procore and run a BB review on it (Track B v1).
+    """Pull a submittal's drawing PDF from Procore and run a Carmen review on it (Track B v1).
 
     Test/manual endpoint for the "continuous compliance via Procore ingestion" work — keyed
     to the submittal (no release link required). `submittal_id` is the **Procore** submittal
@@ -306,7 +306,7 @@ def bb_review_procore_submittal(submittal_id):
                     source=(ref or {}).get('source'))
 
     # Optionally persist the pulled drawing as a release's drawing version, so it shows in
-    # the release's attachments and becomes reviewable by the existing per-version BB flow.
+    # the release's attachments and becomes reviewable by the existing per-version Carmen flow.
     # v1 only for now (release has no drawing yet) — the common "pull the FC into the JL" case.
     attached = None
     attach_release_id = request.args.get('attach_to_release', type=int)
@@ -376,7 +376,7 @@ def bb_review_procore_submittal_status(submittal_id):
 
 
 # ---------------------------------------------------------------------------
-# BB review workspace — per-submittal-document endpoints (Track B).
+# Carmen review workspace — per-submittal-document endpoints (Track B).
 #
 # These key a review to a Procore submittal drawing (submittal_id + prostore
 # attachment_id) with no job-log release involved. One submittal can carry several
@@ -410,7 +410,7 @@ def _submittal_procore_url(submittal):
 
 
 def _submittal_job_release(submittal):
-    """The job-release label used for BB reports: '<project_number>-<rel>'."""
+    """The job-release label used for Carmen reports: '<project_number>-<rel>'."""
     return (f"{submittal.project_number or ''}-{submittal.rel or ''}".strip('-')
             or (submittal.title or 'unknown'))
 
@@ -443,10 +443,10 @@ def _find_ref(project_id, procore_submittal_id, attachment_id):
 @brain_bp.route('/procore-submittals/<submittal_id>/documents', methods=['GET'])
 @admin_required
 def list_submittal_documents(submittal_id):
-    """The BB review workspace for one submittal: its header + every reviewable drawing.
+    """The Carmen review workspace for one submittal: its header + every reviewable drawing.
 
     Merges three sources: the Procore drawing refs (list), the server-side pull cache
-    (downloaded/size per attachment), and the latest persisted BB review per attachment
+    (downloaded/size per attachment), and the latest persisted Carmen review per attachment
     (status + tally). One grouped review query — no per-document DB round trips.
     """
     submittal, err = _load_submittal_or_404(submittal_id)
@@ -551,7 +551,7 @@ def pull_submittal_document(submittal_id, attachment_id):
 )
 @admin_required
 def bb_review_submittal_document(submittal_id, attachment_id):
-    """Kick off a BB review on one submittal drawing and return a pending row (202).
+    """Kick off a Carmen review on one submittal drawing and return a pending row (202).
 
     review_only=true reviews the already-cached drawing (409 if nothing cached); otherwise
     the drawing is pulled-if-not-cached first (cheap; seconds). model=sonnet|opus selects the
@@ -627,7 +627,7 @@ def bb_review_submittal_document(submittal_id, attachment_id):
 )
 @admin_required
 def get_bb_review_submittal_document(submittal_id, attachment_id):
-    """Latest persisted BB review for one submittal drawing, with PM feedback."""
+    """Latest persisted Carmen review for one submittal drawing, with PM feedback."""
     submittal, err = _load_submittal_or_404(submittal_id)
     if err:
         return err

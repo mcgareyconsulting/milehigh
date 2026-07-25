@@ -1,4 +1,4 @@
-"""The BB read-only tool-agent loop.
+"""The Carmen read-only tool-agent loop.
 
 Manual Anthropic tool-use loop over the curated read-only tools in `tools.py` (ported from
 the original banana_boy assistant). Raw `requests` (repo idiom), Sonnet 5, adaptive thinking

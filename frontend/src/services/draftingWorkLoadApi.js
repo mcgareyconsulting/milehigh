@@ -280,7 +280,7 @@ class DraftingWorkLoadApi {
     }
 
     /**
-     * Pull a submittal's drawing PDF from Procore and (optionally) run a BB compliance
+     * Pull a submittal's drawing PDF from Procore and (optionally) run a Carmen compliance
      * review on it. Track B v1 — keyed to the Procore submittal id.
      * @param {string} submittalId - Procore submittal id
      * @param {{ pullOnly?: boolean }} [opts] - pullOnly returns the pulled-file metadata
@@ -302,7 +302,7 @@ class DraftingWorkLoadApi {
             );
             return response.data;
         } catch (error) {
-            throw this._handleError(error, 'BB review failed');
+            throw this._handleError(error, 'Carmen review failed');
         }
     }
 
@@ -318,14 +318,14 @@ class DraftingWorkLoadApi {
             );
             return response.data;
         } catch (error) {
-            throw this._handleError(error, 'Failed to fetch BB review status');
+            throw this._handleError(error, 'Failed to fetch Carmen review status');
         }
     }
 
     /**
-     * BB review workspace — per-document API (Track B v2).
+     * Carmen review workspace — per-document API (Track B v2).
      * List the drawing documents attached to a Procore submittal, along with each
-     * document's download state and any completed BB review summary.
+     * document's download state and any completed Carmen review summary.
      * @param {string} submittalId - Procore submittal id
      * @returns {Promise<{submittal: object, documents: Array}>}
      */
@@ -360,7 +360,7 @@ class DraftingWorkLoadApi {
     }
 
     /**
-     * Kick off (or re-run) a BB compliance review on a single already-downloaded document.
+     * Kick off (or re-run) a Carmen compliance review on a single already-downloaded document.
      * Returns immediately (202) with a pending row; the review runs on a background thread
      * server-side (the Claude call takes minutes) and the caller polls
      * fetchProcoreDocumentReview until status is 'complete' or 'error'.
@@ -381,12 +381,12 @@ class DraftingWorkLoadApi {
             );
             return response.data;
         } catch (error) {
-            throw this._handleError(error, 'BB review failed');
+            throw this._handleError(error, 'Carmen review failed');
         }
     }
 
     /**
-     * Fetch the stored BB review (findings + feedback) for a single document.
+     * Fetch the stored Carmen review (findings + feedback) for a single document.
      * @param {string} submittalId - Procore submittal id
      * @param {string|number} attachmentId - the document's attachment id
      * @returns {Promise<{review: null | object}>}
@@ -403,7 +403,7 @@ class DraftingWorkLoadApi {
     }
 
     /**
-     * Record accept/reject feedback on a single finding within a document's BB review.
+     * Record accept/reject feedback on a single finding within a document's Carmen review.
      * @param {string} submittalId - Procore submittal id
      * @param {string|number} attachmentId - the document's attachment id
      * @param {string|number} reviewId - the review id

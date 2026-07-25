@@ -1,6 +1,6 @@
 """Supplier material-order tracking.
 
-Parses supplier order emails forwarded to bb@mhmw.com (Drexel Supply is the
+Parses supplier order emails forwarded to carmen_ai@mhmw.com (Drexel Supply is the
 first source) into MaterialOrder line items tagged to a job-release, surfaced on
 the release detail modal as outstanding material. Mirrors the "Dencol orders"
 path: it tags the release, it does NOT create a Trello card.

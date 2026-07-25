@@ -1,4 +1,4 @@
-"""BB (Banana Boy) chat — a read-only Q&A assistant over the app database.
+"""Carmen Miranda chat — a read-only Q&A assistant over the app database.
 
 Phase 1: users with the ``is_carmen_chat`` flag ask natural-language questions; the
 agent answers by running read-only SQL against the live database. It never mutates

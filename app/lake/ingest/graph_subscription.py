@@ -1,4 +1,4 @@
-"""Microsoft Graph change-notification (webhook) lifecycle for BB mail.
+"""Microsoft Graph change-notification (webhook) lifecycle for Carmen mail.
 
 The PUSH fast path that complements the poll in m365_mail.py. Instead of waiting
 for the next poll, Graph POSTs our notification endpoint the instant mail lands

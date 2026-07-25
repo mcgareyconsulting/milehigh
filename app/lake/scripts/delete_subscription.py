@@ -2,7 +2,7 @@
 
 Every ngrok restart orphans the previous subscription (Graph keeps POSTing at a
 dead tunnel), so this is the "start fresh" tool. It lists what Graph currently
-holds for this app, then deletes either one id, our stored BB-mail one, or all.
+holds for this app, then deletes either one id, our stored Carmen-mail one, or all.
 
 Usage:
     # Show every subscription this app owns (no deletion)
@@ -11,7 +11,7 @@ Usage:
     # Delete one specific subscription
     python -m app.lake.scripts.delete_subscription --subscription-id <id>
 
-    # Delete our stored BB-mail subscription (default)
+    # Delete our stored Carmen-mail subscription (default)
     python -m app.lake.scripts.delete_subscription
 
     # Delete ALL subscriptions this app owns (clears orphaned ngrok ones)
@@ -44,7 +44,7 @@ def _print_remote(subs):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Delete BB-mail Graph subscription(s).")
+    parser = argparse.ArgumentParser(description="Delete Carmen-mail Graph subscription(s).")
     parser.add_argument("--subscription-id", help="Delete this specific subscription id.")
     parser.add_argument("--all", action="store_true", help="Delete ALL subscriptions this app owns.")
     parser.add_argument("--list", action="store_true", help="List subscriptions and exit (no deletion).")
@@ -66,7 +66,7 @@ def main():
         else:
             row = GraphSubscription.query.filter_by(source=SOURCE).first()
             if row is None or not row.subscription_id:
-                print("\nNo stored BB-mail subscription to delete. "
+                print("\nNo stored Carmen-mail subscription to delete. "
                       "Use --subscription-id or --all to target Graph directly.")
                 return
             targets = [row.subscription_id]

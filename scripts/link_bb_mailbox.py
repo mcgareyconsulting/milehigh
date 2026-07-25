@@ -1,5 +1,5 @@
 """
-One-time device-code link for the Banana Boy mailbox (bb@mhmw.com).
+One-time device-code link for the Carmen Miranda mailbox (carmen_ai@mhmw.com).
 
 Run interactively once. Signs the mailbox in via Microsoft's device-code flow
 (no admin consent, no redirect URI, no client secret) and stores the refresh
@@ -7,7 +7,7 @@ token in MicrosoftDelegatedToken so the poller and on-demand pulls can mint
 access tokens going forward.
 
 You will be shown a code and a URL; open the URL in any browser, enter the code,
-and sign in AS bb@mhmw.com (this is also where bb self-consents to the
+and sign in AS carmen_ai@mhmw.com (this is also where Carmen self-consents to the
 Mail.ReadWrite / Mail.Send scopes). Re-run this to re-link if the refresh token
 ever dies (password rotation, MFA policy change, long inactivity).
 

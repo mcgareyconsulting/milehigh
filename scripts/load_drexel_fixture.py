@@ -43,11 +43,11 @@ def main(eml_path):
             record = RawSourceRecord(
                 source="m365_mail",
                 record_type="email",
-                source_account="bb@mhmw.com",
+                source_account="carmen_ai@mhmw.com",
                 external_id=external_id,
                 content_hash=content_hash,
                 payload=payload,
-                external_pointer={"mailbox": "bb@mhmw.com", "fixture": eml_path},
+                external_pointer={"mailbox": "carmen_ai@mhmw.com", "fixture": eml_path},
             )
             db.session.add(record)
             db.session.commit()

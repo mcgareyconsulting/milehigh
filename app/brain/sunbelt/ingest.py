@@ -1,7 +1,7 @@
 """The single ingestion seam for Sunbelt rental reports.
 
 `ingest_snapshot` persists a parsed report as one snapshot plus reconciled rental
-rows. The admin CSV upload calls it today; a future bb@mhmw.com email adapter
+rows. The admin CSV upload calls it today; a future carmen_ai@mhmw.com email adapter
 (the M365 Graph pipeline) will call the very same function with source='email'.
 """
 

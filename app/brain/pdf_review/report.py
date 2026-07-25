@@ -1,4 +1,4 @@
-"""Assemble a Banana Boy review into a PM-facing report.
+"""Assemble a Carmen Miranda review into a PM-facing report.
 
 `service.review()` returns a flat list of findings; this module is the single source
 of truth for turning that list into something a Project Manager acts on: it maps each

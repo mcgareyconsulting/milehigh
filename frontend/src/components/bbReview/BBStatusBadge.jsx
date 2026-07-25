@@ -1,8 +1,8 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Ambient BB-review status indicator — a small 🍌 glyph with a colored corner dot
- *   showing where a submittal stands against BB's code-review rules. Read-only, unobtrusive;
+ * purpose: Ambient Carmen-review status indicator — a small 🍌 glyph with a colored corner dot
+ *   showing where a submittal stands against Carmen's code-review rules. Read-only, unobtrusive;
  *   meant to be glanced at while scanning Drafting Work Load rows/cards.
  * exports:
  *   BBStatusBadge: Props — status (bb_status string | null), className (optional wrapper classes).

@@ -1,6 +1,6 @@
-"""Bake a small 'BB-N/X' page anchor into downloaded Procore drawing PDFs.
+"""Bake a small 'CM-N/X' page anchor into downloaded Procore drawing PDFs.
 
-Each page of a pulled drawing set gets a plain-black 'BB-N/X' stamp in its visual
+Each page of a pulled drawing set gets a plain-black 'CM-N/X' stamp in its visual
 upper-left corner, where N is the 1-based page position and X is the total page count.
 The review model reads this stamp to return a machine-anchor `page` per finding so the
 viewer can jump straight to the right sheet. Stamping is best-effort: any failure falls
@@ -63,8 +63,8 @@ def _overlay(page_width: float, page_height: float, origin, rotation: int, text:
     return PdfReader(buf).pages[0]
 
 
-def stamp_pdf_pages(pdf_bytes: bytes, *, prefix: str = "BB") -> bytes:
-    """Return pdf_bytes with 'BB-N/X' baked into the visual upper-left of every page."""
+def stamp_pdf_pages(pdf_bytes: bytes, *, prefix: str = "CM") -> bytes:
+    """Return pdf_bytes with 'CM-N/X' baked into the visual upper-left of every page."""
     try:
         reader = PdfReader(io.BytesIO(pdf_bytes))
         total = len(reader.pages)

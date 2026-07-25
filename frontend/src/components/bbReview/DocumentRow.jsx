@@ -1,5 +1,5 @@
 /**
- * One document row inside the BB review workspace (SubmittalDetailsModal).
+ * One document row inside the Carmen review workspace (SubmittalDetailsModal).
  *
  * Renders a single drawing attached to a Procore submittal and drives its whole
  * lifecycle from one contextual primary action:

@@ -1,4 +1,4 @@
-"""Persistence + orchestration for BB chat.
+"""Persistence + orchestration for Carmen chat.
 
 Each turn: load the signed-in user (for the current-user block + user-scoped tools), run the
 read-only tool agent over the thread's text history, and persist the turn with its spend
