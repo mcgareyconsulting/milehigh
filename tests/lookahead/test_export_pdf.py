@@ -60,16 +60,19 @@ def _schedule_with_bars():
     )
 
 
-def test_render_schedule_pdf_is_valid_multi_page():
+def test_render_schedule_pdf_is_valid_gantt_only():
     schedule = _schedule_with_bars()
     pdf_bytes = render_schedule_pdf(schedule)
     assert pdf_bytes[:4] == b"%PDF"
     assert len(pdf_bytes) > 500
     reader = PdfReader(BytesIO(pdf_bytes))
-    # Gantt + appendix (at least 2 pages)
-    assert len(reader.pages) >= 2
+    # Small job: single Gantt page (no date appendix)
+    assert len(reader.pages) >= 1
     text = "".join((p.extract_text() or "") for p in reader.pages)
     assert "Novel Flatiron" in text or "Look-Ahead" in text or "500" in text
+    # Footer key present; appendix headers gone
+    assert "Install" in text or "Fab" in text
+    assert "Date appendix" not in text
 
 
 def test_dense_schedule_paginates_gantt_without_crashing():
@@ -124,7 +127,7 @@ def test_dense_schedule_paginates_gantt_without_crashing():
     )
     pdf_bytes = render_schedule_pdf(schedule)
     reader = PdfReader(BytesIO(pdf_bytes))
-    # Dense gantt should span multiple pages before the appendix
+    # Dense gantt should span multiple pages
     assert len(reader.pages) >= 3
     text = "".join((p.extract_text() or "") for p in reader.pages)
     assert "170-400" in text
