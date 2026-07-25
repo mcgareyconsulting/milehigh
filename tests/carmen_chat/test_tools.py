@@ -108,7 +108,11 @@ def test_get_project_pipeline_and_lookahead_tools(app):
         assert len(pipe["releases"]) == 1
         assert len(pipe["drafting"]) == 1
 
-        schedule = tools.execute_tool("build_project_lookahead", {"job": 500, "weeks": 3})
+        schedule = tools.execute_tool(
+            "build_project_lookahead",
+            {"job": 500, "weeks": 3},
+            context={"user_id": 1},
+        )
         assert schedule["found"] is True
         assert schedule["audience"] == "gc"
         assert schedule["window"]["weeks"] == 3
@@ -116,12 +120,36 @@ def test_get_project_pipeline_and_lookahead_tools(app):
         assert schedule["summary"]["drafting_count"] == 1
         kinds = {r["kind"] for r in schedule["rows"]}
         assert "release" in kinds and "drafting" in kinds
+        # PDF is on by default so the chat card can appear even if the model
+        # only called build_project_lookahead (not render_*).
+        assert schedule.get("pdf_included") is True
+        assert schedule.get("download_path", "").startswith("/brain/lookahead/artifacts/")
 
 
 def test_project_lookahead_tool_missing_job(app):
     with app.app_context():
         out = tools.execute_tool("build_project_lookahead", {"job": 99999})
         assert out["found"] is False
+
+
+def test_build_project_lookahead_can_skip_pdf(app, tmp_path):
+    with app.app_context():
+        app.config["LOOKAHEAD_PDF_STORAGE_ROOT"] = str(tmp_path)
+        make_release(
+            500, "1", stage="Released", job_name="Novel Flatiron",
+            description="X", fab_hrs=10.0, install_hrs=8.0, fab_order=3.0,
+            start_install=date(2026, 8, 12), start_install_formulaTF=False,
+            is_active=True, is_archived=False,
+            start_install_asap=False, start_install_no_color=False,
+        )
+        out = tools.execute_tool(
+            "build_project_lookahead",
+            {"job": 500, "weeks": 3, "include_pdf": False},
+            context={"user_id": 1},
+        )
+        assert out["found"] is True
+        assert out.get("pdf_included") is False
+        assert "download_path" not in out
 
 
 def test_render_project_lookahead_pdf_tool(app, tmp_path):

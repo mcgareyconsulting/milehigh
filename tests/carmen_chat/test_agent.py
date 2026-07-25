@@ -75,6 +75,7 @@ def test_render_lookahead_pdf_tool_surfaces_artifact(app):
     with app.app_context():
         tool_out = {
             "found": True,
+            "pdf_included": True,
             "artifact_id": "abc123",
             "download_path": "/brain/lookahead/artifacts/abc123.pdf",
             "title": "MHMW Look-Ahead — Novel Flatiron (500)",
@@ -114,3 +115,44 @@ def test_render_lookahead_pdf_tool_surfaces_artifact(app):
     assert art["kind"] == "lookahead_pdf"
     assert art["download_path"] == "/brain/lookahead/artifacts/abc123.pdf"
     assert art["job"] == 500
+
+
+def test_build_project_lookahead_tool_also_surfaces_artifact(app):
+    """Model often picks build_project_lookahead — that path must still attach the PDF card."""
+    with app.app_context():
+        tool_out = {
+            "found": True,
+            "pdf_included": True,
+            "artifact_id": "zzz",
+            "download_path": "/brain/lookahead/artifacts/zzz.pdf",
+            "title": "MHMW Look-Ahead — Job 170 (170)",
+            "job": 170,
+            "project_name": "Job 170",
+            "summary": {"release_count": 5},
+        }
+
+        def fake_execute(name, args, context=None):
+            assert name == "build_project_lookahead"
+            return tool_out
+
+        body_tool = {
+            "model": "claude-sonnet-5", "stop_reason": "tool_use",
+            "usage": {"input_tokens": 10, "output_tokens": 5},
+            "content": [{
+                "type": "tool_use", "id": "t1",
+                "name": "build_project_lookahead",
+                "input": {"job": 170, "weeks": 3},
+            }],
+        }
+        body_final = {
+            "model": "claude-sonnet-5", "stop_reason": "end_turn",
+            "usage": {"input_tokens": 20, "output_tokens": 15},
+            "content": [{"type": "text", "text": "Look-ahead for 170 is ready."}],
+        }
+        with patch.object(agent.cfg, "ANTHROPIC_API_KEY", "k"), \
+                patch.object(agent.tools, "execute_tool", side_effect=fake_execute), \
+                patch.object(agent, "_post", side_effect=[(body_tool, "r1"), (body_final, "r2")]):
+            result = agent.run_chat([], "look-ahead for 170", user_id=1)
+
+    assert len(result["artifacts"]) == 1
+    assert result["artifacts"][0]["download_path"].endswith("zzz.pdf")

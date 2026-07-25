@@ -55,9 +55,11 @@ def _final_text(content: list) -> str:
 
 def _artifact_from_tool(name: str, out: dict) -> dict | None:
     """Pull a UI-facing artifact envelope from a tool result (look-ahead PDF, etc.)."""
-    if name != tools.TOOL_RENDER_LOOKAHEAD_PDF:
+    if name not in (tools.TOOL_RENDER_LOOKAHEAD_PDF, tools.TOOL_PROJECT_LOOKAHEAD):
         return None
     if not isinstance(out, dict) or not out.get("found") or out.get("error"):
+        return None
+    if out.get("pdf_included") is False:
         return None
     path = out.get("download_path")
     if not path:

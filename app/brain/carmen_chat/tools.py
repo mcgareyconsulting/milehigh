@@ -200,15 +200,15 @@ TOOL_DEFINITIONS = [
     {
         "name": TOOL_PROJECT_LOOKAHEAD,
         "description": (
-            "Build a GC-facing multi-phase production look-ahead for one job: drafting, "
-            "fabrication, paint, shipping, and installation bars for ALL active releases and "
-            "open drafting packages. Uses committed (green/hard) install and ship dates when "
-            "set; otherwise projected install and estimated ship (install − 1 business day). "
-            "Paint is a provisional 3-business-day estimated window. Call for '3-week look-ahead', "
-            "'Gantt', 'production schedule', 'what's coming up next N weeks' for a project when "
-            "they want a chat summary. Default weeks=3. Resolve project names to a job number "
-            "first. For a printable PDF use render_project_lookahead_pdf instead (or after). "
-            "Never invent dates not in the tool result."
+            "Build a GC-facing multi-phase production look-ahead for one job AND generate the "
+            "print-ready PDF by default. Covers drafting, fabrication, paint, shipping, and "
+            "installation for ALL active releases and open drafting packages. Call for any "
+            "'look-ahead', 'Gantt', '3-week schedule', 'production schedule', or 'what's coming "
+            "up' request. Default weeks=3. Always produces a PDF artifact (download_path) unless "
+            "include_pdf=false — only set include_pdf=false when the user explicitly says no PDF / "
+            "chat-only / summary-only. Resolve project names to a job number first. Never invent "
+            "dates not in the tool result. Prefer this tool (or render_project_lookahead_pdf) over "
+            "get_project_pipeline for schedule questions."
         ),
         "input_schema": {
             "type": "object",
@@ -219,6 +219,11 @@ TOOL_DEFINITIONS = [
                     "description": "Look-ahead window in weeks (default 3, max 12).",
                     "default": 3,
                 },
+                "include_pdf": {
+                    "type": "boolean",
+                    "description": "Generate PDF artifact (default true). Set false only if user opts out of PDF.",
+                    "default": True,
+                },
             },
             "required": ["job"],
         },
@@ -226,11 +231,9 @@ TOOL_DEFINITIONS = [
     {
         "name": TOOL_RENDER_LOOKAHEAD_PDF,
         "description": (
-            "Build the GC-facing look-ahead for a job and render a print-ready landscape PDF "
-            "(Gantt chart + date appendix). Use when the user asks to print, share, PDF, or "
-            "export the look-ahead / Gantt. Returns artifact_id, download_path "
-            "(e.g. /brain/lookahead/artifacts/<id>.pdf), title, and summary. Tell the user "
-            "the download path so they can open it in the app (auth required). Default weeks=3."
+            "Same as build_project_lookahead with include_pdf=true: build the GC look-ahead and "
+            "render a print-ready landscape Gantt PDF. Returns artifact_id, download_path, title, "
+            "and summary. Use for look-ahead / Gantt / PDF requests. Default weeks=3."
         ),
         "input_schema": {
             "type": "object",
@@ -530,15 +533,50 @@ def get_project_pipeline(job: int) -> dict[str, Any]:
     return _get_project_pipeline(job)
 
 
-def build_project_lookahead(job: int, weeks: int = 3) -> dict[str, Any]:
-    """GC-facing multi-phase look-ahead schedule model for one job."""
-    return _build_project_lookahead(job, weeks=weeks)
+def _compact_schedule_for_agent(schedule: dict[str, Any]) -> dict[str, Any]:
+    """Shrink row payload so the model can summarize without huge tool results."""
+    compact_rows = []
+    for row in schedule.get("rows") or []:
+        compact_rows.append({
+            "kind": row.get("kind"),
+            "code": row.get("code"),
+            "title": row.get("title"),
+            "stage_label": row.get("stage_label"),
+            "date_kind": row.get("date_kind"),
+            "flags": row.get("flags") or [],
+            "phases": [
+                {
+                    "phase": p.get("phase"),
+                    "label": p.get("label"),
+                    "start": p.get("start"),
+                    "end": p.get("end"),
+                    "date_source": p.get("date_source"),
+                }
+                for p in (row.get("phases") or [])
+            ],
+        })
+    return {
+        "found": True,
+        "job": schedule.get("job"),
+        "project_name": schedule.get("project_name"),
+        "audience": schedule.get("audience"),
+        "window": schedule.get("window"),
+        "generated_on": schedule.get("generated_on"),
+        "summary": schedule.get("summary"),
+        "assumptions": schedule.get("assumptions"),
+        "flags": schedule.get("flags") or [],
+        "rows": compact_rows,
+    }
 
 
-def render_project_lookahead_pdf(
-    job: int, weeks: int = 3, *, context: dict | None = None
+def build_project_lookahead(
+    job: int,
+    weeks: int = 3,
+    include_pdf: bool = True,
+    *,
+    context: dict | None = None,
 ) -> dict[str, Any]:
-    """Build schedule, render PDF, persist artifact; return download metadata."""
+    """GC-facing look-ahead; PDF artifact attached by default."""
     schedule = _build_project_lookahead(job, weeks=weeks)
     if not schedule.get("found"):
         return {
@@ -546,6 +584,13 @@ def render_project_lookahead_pdf(
             "job": schedule.get("job"),
             "error": schedule.get("error") or "no active work for this job",
         }
+
+    out = _compact_schedule_for_agent(schedule)
+    # Default True; only explicit false (or the string "false") opts out.
+    if include_pdf is False or include_pdf in ("false", "False", 0, "0"):
+        out["pdf_included"] = False
+        return out
+
     try:
         pdf_bytes = render_schedule_pdf(schedule)
         user_id = (context or {}).get("user_id")
@@ -558,21 +603,23 @@ def render_project_lookahead_pdf(
             error_type=type(exc).__name__,
             exc_info=True,
         )
-        return {"found": True, "error": f"PDF render failed: {exc}", "job": job}
+        out["pdf_included"] = False
+        out["pdf_error"] = f"PDF render failed: {exc}"
+        return out
 
-    return {
-        "found": True,
-        "artifact_id": meta["artifact_id"],
-        "download_path": meta["download_path"],
-        "title": meta["title"],
-        "job": schedule.get("job"),
-        "project_name": schedule.get("project_name"),
-        "window": schedule.get("window"),
-        "summary": schedule.get("summary"),
-        "page_size": meta.get("page_size"),
-        "assumptions": schedule.get("assumptions"),
-        "flags": schedule.get("flags") or [],
-    }
+    out["pdf_included"] = True
+    out["artifact_id"] = meta["artifact_id"]
+    out["download_path"] = meta["download_path"]
+    out["title"] = meta["title"]
+    out["page_size"] = meta.get("page_size")
+    return out
+
+
+def render_project_lookahead_pdf(
+    job: int, weeks: int = 3, *, context: dict | None = None
+) -> dict[str, Any]:
+    """Alias: always build look-ahead with PDF."""
+    return build_project_lookahead(job, weeks=weeks, include_pdf=True, context=context)
 
 
 USER_SCOPED_TOOLS = {TOOL_NOTIFICATIONS}
@@ -599,7 +646,7 @@ def execute_tool(name: str, arguments: dict, context: dict | None = None) -> dic
     try:
         if name == TOOL_NOTIFICATIONS:
             return fn(context or {}, **(arguments or {}))
-        if name == TOOL_RENDER_LOOKAHEAD_PDF:
+        if name in (TOOL_RENDER_LOOKAHEAD_PDF, TOOL_PROJECT_LOOKAHEAD):
             return fn(**(arguments or {}), context=context or {})
         return fn(**(arguments or {}))
     except TypeError as exc:
