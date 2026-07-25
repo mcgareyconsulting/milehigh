@@ -2,7 +2,7 @@
 @milehigh-header
 schema_version: 1
 purpose: Render a GC-facing multi-phase look-ahead schedule to a print-ready landscape PDF
-  (Gantt page + date table appendix). Pure: schedule dict in, PDF bytes out. No DB, no Flask.
+  (Gantt only). Compact phase key lives in the footer; no date-table appendix.
 exports:
   render_schedule_pdf(schedule) -> bytes
 imports_from: [io, datetime, reportlab]
@@ -10,6 +10,8 @@ imported_by: [app.brain.lookahead.artifacts, tests]
 invariants:
   - Deterministic for a fixed schedule payload.
   - Does not invent dates; draws only bars present on the schedule model.
+  - ROW_H must leave room for code + title + stage without adjacent-row overlap.
+  - Gantt-only output — no multi-page date appendix.
 """
 from __future__ import annotations
 
@@ -28,7 +30,6 @@ from app.brain.lookahead.schedule_builder import (
     PHASE_INSTALLATION,
     PHASE_PAINT,
     PHASE_SHIPPING,
-    PHASE_LABELS,
     SOURCE_ESTIMATED,
     SOURCE_HARD,
     SOURCE_MISSING,
@@ -38,11 +39,14 @@ from app.brain.lookahead.schedule_builder import (
 # Landscape letter — prints cleanly and emails well; tabloid can land later if denser jobs need it.
 PAGE = landscape(letter)  # 792 x 612
 MARGIN = 0.5 * inch
-LABEL_W = 2.35 * inch
-ROW_H = 16
-HEADER_H = 54
-LEGEND_H = 28
+LABEL_W = 2.55 * inch
+# Three-line labels (code / title / stage) need ~28pt of vertical text; 32pt row keeps a gap.
+ROW_H = 32
+BAR_H = 10
+HEADER_H = 42  # title + one subtitle line (no topline legend)
 DAY_MIN_W = 8  # px-ish points floor per day column
+# Footer holds the compact phase key + page number.
+FOOTER_RESERVE = 34
 
 PHASE_COLORS = {
     PHASE_DRAFTING: colors.Color(0.45, 0.35, 0.70),
@@ -99,6 +103,16 @@ def _days_between(a: date, b: date) -> int:
     return (b - a).days
 
 
+def _document_title(schedule: dict[str, Any]) -> str:
+    """Human PDF title for the viewer tab / metadata (not just on-page header text)."""
+    job = schedule.get("job")
+    name = schedule.get("project_name") or (f"Job {job}" if job is not None else "Project")
+    title = f"MHMW Production Look-Ahead — {name}"
+    if job is not None:
+        title += f" (Job {job})"
+    return title
+
+
 def render_schedule_pdf(schedule: dict[str, Any]) -> bytes:
     """Return PDF bytes for a ``build_lookahead_schedule`` envelope."""
     buf = io.BytesIO()
@@ -112,101 +126,82 @@ def render_schedule_pdf(schedule: dict[str, Any]) -> bytes:
     generated = schedule.get("generated_on") or date.today().isoformat()
     rows = list(schedule.get("rows") or [])
 
-    title = f"MHMW Production Look-Ahead — {name}"
-    if job is not None:
-        title += f"  (Job {job})"
+    title = _document_title(schedule)
+    # Short subtitle only — phase key lives in the footer, not a second legend row.
+    chart_span_start, chart_span_end = _chart_range(schedule)
     subtitle = (
-        f"{weeks}-week window {window.get('start', '?')} → {window.get('end', '?')}  ·  "
-        f"Generated {generated}  ·  GC-facing  ·  Paint bars are provisional estimates"
+        f"Chart {chart_span_start.isoformat()} → {chart_span_end.isoformat()}  ·  "
+        f"{weeks}-wk look-ahead window {window.get('start', '?')} → {window.get('end', '?')}  ·  "
+        f"Generated {generated}"
     )
 
-    range_start, range_end = _chart_range(schedule)
+    # Document metadata — without this, viewers show "Untitled" in the tab.
+    c.setTitle(title)
+    c.setAuthor("MHMW")
+    c.setSubject(f"GC-facing production look-ahead for {name}")
+    c.setCreator("MHMW Carmen look-ahead")
+
+    range_start, range_end = chart_span_start, chart_span_end
     total_days = max(1, _days_between(range_start, range_end))
 
-    # --- Page 1: Gantt ---
+    # --- Gantt pages only ---
     _draw_header(c, page_w, page_h, title, subtitle)
-    chart_top = page_h - MARGIN - HEADER_H - LEGEND_H
+    chart_top = page_h - MARGIN - HEADER_H
     chart_left = MARGIN + LABEL_W
     chart_right = page_w - MARGIN
     chart_w = chart_right - chart_left
     day_w = max(DAY_MIN_W, chart_w / total_days)
 
-    _draw_legend(c, MARGIN, chart_top + 6, page_w - 2 * MARGIN)
     _draw_day_axis(c, chart_left, chart_top, day_w, range_start, total_days)
 
-    y = chart_top - 14
-    max_rows_page = int((y - MARGIN - 20) // ROW_H)
-    drawn = 0
+    # y is the TOP of the current row band (labels and bars sit within [y - ROW_H, y]).
+    y = chart_top - 12
     page_num = 1
+    floor_y = MARGIN + FOOTER_RESERVE
+
+    def _new_gantt_page():
+        nonlocal y, page_num, chart_top
+        _draw_footer(c, page_w, page_num, schedule)
+        c.showPage()
+        page_num += 1
+        _draw_header(c, page_w, page_h, title, subtitle)
+        chart_top = page_h - MARGIN - HEADER_H
+        _draw_day_axis(c, chart_left, chart_top, day_w, range_start, total_days)
+        y = chart_top - 12
 
     for row in rows:
-        if drawn > 0 and drawn % max_rows_page == 0:
-            _draw_footer(c, page_w, page_num, schedule)
-            c.showPage()
-            page_num += 1
-            _draw_header(c, page_w, page_h, title, subtitle)
-            chart_top = page_h - MARGIN - HEADER_H - LEGEND_H
-            _draw_legend(c, MARGIN, chart_top + 6, page_w - 2 * MARGIN)
-            _draw_day_axis(c, chart_left, chart_top, day_w, range_start, total_days)
-            y = chart_top - 14
-            drawn = 0
+        # Paginate when the next full row would collide with the footer.
+        if y - ROW_H < floor_y:
+            _new_gantt_page()
 
-        _draw_row_label(c, MARGIN, y, LABEL_W - 6, row)
+        _draw_row_label(c, MARGIN, y, LABEL_W - 8, row)
         _draw_row_grid(c, chart_left, y, chart_w, day_w, total_days)
         for phase in row.get("phases") or []:
             _draw_phase_bar(
                 c, chart_left, y, day_w, range_start, total_days, phase
             )
         y -= ROW_H
-        drawn += 1
 
     if not rows:
         c.setFont("Helvetica-Oblique", 10)
         c.setFillColor(colors.grey)
-        c.drawString(chart_left, y - 10, "No active releases or open drafting packages for this job.")
+        c.drawString(chart_left, y - 14, "No active releases or open drafting packages for this job.")
 
     _draw_footer(c, page_w, page_num, schedule)
-
-    # --- Appendix: full date table ---
-    c.showPage()
-    page_num += 1
-    _draw_table_page(c, page_w, page_h, title, schedule, page_num)
-
     c.save()
     return buf.getvalue()
 
 
 def _draw_header(c, page_w, page_h, title, subtitle):
     c.setFillColor(colors.Color(0.12, 0.16, 0.22))
-    c.setFont("Helvetica-Bold", 13)
-    c.drawString(MARGIN, page_h - MARGIN - 14, title)
-    c.setFont("Helvetica", 8)
-    c.setFillColor(colors.Color(0.30, 0.32, 0.36))
-    c.drawString(MARGIN, page_h - MARGIN - 28, subtitle)
-    c.setStrokeColor(colors.Color(0.75, 0.78, 0.82))
-    c.setLineWidth(0.6)
-    c.line(MARGIN, page_h - MARGIN - 36, page_w - MARGIN, page_h - MARGIN - 36)
-
-
-def _draw_legend(c, x, y, width):
-    c.setFont("Helvetica", 7)
-    items = [
-        (PHASE_DRAFTING, "Drafting"),
-        (PHASE_FABRICATION, "Fabrication"),
-        (PHASE_PAINT, "Paint (est.)"),
-        (PHASE_SHIPPING, "Shipping"),
-        (PHASE_INSTALLATION, "Installation"),
-    ]
-    cx = x
-    for phase, label in items:
-        c.setFillColor(PHASE_COLORS[phase])
-        c.rect(cx, y, 9, 9, fill=1, stroke=0)
-        c.setFillColor(colors.Color(0.2, 0.2, 0.2))
-        c.drawString(cx + 12, y + 1, label)
-        cx += 78
-    # Source keys
-    c.setFillColor(colors.Color(0.2, 0.2, 0.2))
-    c.drawString(cx + 8, y + 1, "Edge: green=committed · blue=projected · amber=estimated")
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(MARGIN, page_h - MARGIN - 12, title)
+    c.setFont("Helvetica", 7.5)
+    c.setFillColor(colors.Color(0.35, 0.37, 0.40))
+    c.drawString(MARGIN, page_h - MARGIN - 26, subtitle)
+    c.setStrokeColor(colors.Color(0.78, 0.80, 0.84))
+    c.setLineWidth(0.5)
+    c.line(MARGIN, page_h - MARGIN - 32, page_w - MARGIN, page_h - MARGIN - 32)
 
 
 def _draw_day_axis(c, left, top, day_w, range_start, total_days):
@@ -229,32 +224,46 @@ def _draw_day_axis(c, left, top, day_w, range_start, total_days):
 
 
 def _draw_row_label(c, x, y, width, row):
-    code = (row.get("code") or "")[:18]
-    title = (row.get("title") or "")[:42]
-    stage = (row.get("stage_label") or "")[:22]
+    """Draw labels inside the row band [y - ROW_H, y]. `y` is the top of the band."""
+    code = (row.get("code") or "")[:20]
+    title = (row.get("title") or "")[:48]
+    stage = (row.get("stage_label") or "")[:28]
+
+    # Baselines measured down from the band top so lines never spill into the next row.
+    code_baseline = y - 11
+    title_baseline = y - 20
+    stage_baseline = y - 28
+
     c.setFillColor(colors.Color(0.15, 0.15, 0.18))
     c.setFont("Helvetica-Bold", 7)
-    c.drawString(x, y + 6, code)
+    c.drawString(x, code_baseline, code)
+
     c.setFont("Helvetica", 6.5)
-    c.setFillColor(colors.Color(0.25, 0.25, 0.28))
-    # Truncate title to width
+    c.setFillColor(colors.Color(0.28, 0.28, 0.32))
     while c.stringWidth(title, "Helvetica", 6.5) > width and len(title) > 4:
-        title = title[:-2]
-    c.drawString(x, y - 2, title)
-    c.setFillColor(colors.Color(0.40, 0.42, 0.46))
-    c.setFont("Helvetica", 5.5)
-    c.drawString(x, y - 9, stage)
+        title = title[:-2] + "…" if len(title) > 5 else title[:-1]
+    # Avoid double ellipsis if we already shortened awkwardly
+    if title.endswith("……"):
+        title = title[:-1]
+    c.drawString(x, title_baseline, title)
+
+    if stage:
+        c.setFillColor(colors.Color(0.42, 0.44, 0.48))
+        c.setFont("Helvetica", 5.5)
+        while c.stringWidth(stage, "Helvetica", 5.5) > width and len(stage) > 4:
+            stage = stage[:-1]
+        c.drawString(x, stage_baseline, stage)
 
 
 def _draw_row_grid(c, left, y, chart_w, day_w, total_days):
-    c.setStrokeColor(colors.Color(0.92, 0.93, 0.94))
-    c.setLineWidth(0.3)
-    c.line(left, y - 4, left + chart_w, y - 4)
-    # Weekend shading
-    # (skipped for speed; axis marks Mondays)
+    """Hairline under the row band."""
+    c.setStrokeColor(colors.Color(0.90, 0.91, 0.93))
+    c.setLineWidth(0.35)
+    c.line(left, y - ROW_H, left + chart_w, y - ROW_H)
 
 
 def _draw_phase_bar(c, left, y, day_w, range_start, total_days, phase):
+    """`y` is the top of the row band; bar is vertically centered in the band."""
     start = _parse_date(phase.get("start"))
     end = _parse_date(phase.get("end")) or start
     if start is None:
@@ -281,8 +290,8 @@ def _draw_phase_bar(c, left, y, day_w, range_start, total_days, phase):
     src = phase.get("date_source") or SOURCE_ESTIMATED
     stroke = SOURCE_EDGE.get(src, colors.black)
 
-    bar_y = y - 1
-    bar_h = 8
+    bar_h = BAR_H
+    bar_y = y - (ROW_H + bar_h) / 2.0  # center in band
     c.setFillColor(fill)
     c.setStrokeColor(stroke)
     c.setLineWidth(0.8 if src == SOURCE_HARD else 0.5)
@@ -300,102 +309,41 @@ def _draw_phase_bar(c, left, y, day_w, range_start, total_days, phase):
 
 
 def _draw_footer(c, page_w, page_num, schedule):
-    c.setFont("Helvetica", 7)
-    c.setFillColor(colors.Color(0.45, 0.45, 0.48))
-    assumptions = (schedule.get("assumptions") or {}).get("paint_note") or ""
-    c.drawString(MARGIN, MARGIN - 4, assumptions[:110])
-    c.drawRightString(page_w - MARGIN, MARGIN - 4, f"Page {page_num}")
+    """Compact phase key + source note + page number (replaces the old topline legend)."""
+    y_swatch = MARGIN + 10
+    y_note = MARGIN - 2
 
+    # Hairline above footer
+    c.setStrokeColor(colors.Color(0.82, 0.84, 0.87))
+    c.setLineWidth(0.4)
+    c.line(MARGIN, MARGIN + 22, page_w - MARGIN, MARGIN + 22)
 
-def _draw_table_page(c, page_w, page_h, title, schedule, page_num):
-    _draw_header(
-        c, page_w, page_h, title,
-        "Date appendix — full phase dates (not clipped to chart window)",
+    items = [
+        (PHASE_DRAFTING, "Drafting"),
+        (PHASE_FABRICATION, "Fab"),
+        (PHASE_PAINT, "Paint*"),
+        (PHASE_SHIPPING, "Ship"),
+        (PHASE_INSTALLATION, "Install"),
+    ]
+    cx = MARGIN
+    c.setFont("Helvetica", 6.5)
+    for phase, label in items:
+        c.setFillColor(PHASE_COLORS[phase])
+        c.roundRect(cx, y_swatch, 8, 8, 1.2, fill=1, stroke=0)
+        c.setFillColor(colors.Color(0.28, 0.28, 0.32))
+        c.drawString(cx + 11, y_swatch + 1, label)
+        cx += 52
+
+    # Date-source edge key (short)
+    c.setFillColor(colors.Color(0.40, 0.42, 0.46))
+    c.setFont("Helvetica", 6)
+    c.drawString(
+        cx + 6,
+        y_swatch + 1,
+        "Border: green=committed · navy=projected · amber=estimated (hatched)",
     )
-    y = page_h - MARGIN - HEADER_H
-    c.setFont("Helvetica-Bold", 7)
-    c.setFillColor(colors.Color(0.15, 0.15, 0.18))
-    headers = ["Code", "Title", "Phase", "Start", "End", "Source", "Status"]
-    cols = [70, 180, 70, 60, 60, 70, 100]
-    x = MARGIN
-    for h, w in zip(headers, cols):
-        c.drawString(x, y, h)
-        x += w
-    y -= 10
-    c.setStrokeColor(colors.Color(0.75, 0.78, 0.82))
-    c.line(MARGIN, y + 6, page_w - MARGIN, y + 6)
 
-    c.setFont("Helvetica", 7)
-    for row in schedule.get("rows") or []:
-        code = row.get("code") or ""
-        title_s = (row.get("title") or "")[:40]
-        stage = row.get("stage_label") or ""
-        phases = row.get("phases") or []
-        if not phases:
-            if y < MARGIN + 30:
-                _draw_footer(c, page_w, page_num, schedule)
-                c.showPage()
-                page_num += 1
-                _draw_header(
-                    c, page_w, page_h, title,
-                    "Date appendix (continued)",
-                )
-                y = page_h - MARGIN - HEADER_H
-                c.setFont("Helvetica", 7)
-            _table_line(c, y, cols, [code, title_s, "—", "—", "—", "—", stage])
-            y -= 11
-            continue
-        for phase in phases:
-            if y < MARGIN + 30:
-                _draw_footer(c, page_w, page_num, schedule)
-                c.showPage()
-                page_num += 1
-                _draw_header(
-                    c, page_w, page_h, title,
-                    "Date appendix (continued)",
-                )
-                y = page_h - MARGIN - HEADER_H
-                c.setFont("Helvetica", 7)
-            label = PHASE_LABELS.get(phase.get("phase"), phase.get("phase") or "")
-            _table_line(c, y, cols, [
-                code,
-                title_s,
-                label,
-                phase.get("start") or "—",
-                phase.get("end") or "—",
-                phase.get("date_source") or "—",
-                stage,
-            ])
-            y -= 11
-            code = ""  # only first phase shows code/title
-            title_s = ""
-            stage = ""
-
-    # Flags
-    flags = schedule.get("flags") or []
-    if flags:
-        y -= 14
-        c.setFont("Helvetica-Bold", 8)
-        c.setFillColor(colors.Color(0.2, 0.2, 0.2))
-        c.drawString(MARGIN, y, "Data notes")
-        y -= 12
-        c.setFont("Helvetica", 7)
-        for f in flags[:40]:
-            if y < MARGIN + 20:
-                break
-            msg = f.get("message") or f.get("code") or ""
-            c.drawString(MARGIN, y, f"• {msg}"[:140])
-            y -= 10
-
-    _draw_footer(c, page_w, page_num, schedule)
-
-
-def _table_line(c, y, cols, values):
-    c.setFillColor(colors.Color(0.18, 0.18, 0.20))
-    x = MARGIN
-    for val, w in zip(values, cols):
-        text = str(val) if val is not None else ""
-        while c.stringWidth(text, "Helvetica", 7) > w - 4 and len(text) > 3:
-            text = text[:-2]
-        c.drawString(x, y, text)
-        x += w
+    c.setFillColor(colors.Color(0.48, 0.48, 0.52))
+    c.setFont("Helvetica", 5.5)
+    c.drawString(MARGIN, y_note, "*Paint duration is provisional (3 business days).")
+    c.drawRightString(page_w - MARGIN, y_note, f"Page {page_num}")

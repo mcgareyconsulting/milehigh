@@ -60,16 +60,82 @@ def _schedule_with_bars():
     )
 
 
-def test_render_schedule_pdf_is_valid_multi_page():
+def test_render_schedule_pdf_is_valid_gantt_only():
     schedule = _schedule_with_bars()
     pdf_bytes = render_schedule_pdf(schedule)
     assert pdf_bytes[:4] == b"%PDF"
     assert len(pdf_bytes) > 500
     reader = PdfReader(BytesIO(pdf_bytes))
-    # Gantt + appendix (at least 2 pages)
-    assert len(reader.pages) >= 2
+    # Small job: single Gantt page (no date appendix)
+    assert len(reader.pages) >= 1
     text = "".join((p.extract_text() or "") for p in reader.pages)
     assert "Novel Flatiron" in text or "Look-Ahead" in text or "500" in text
+    # Footer key present; appendix headers gone
+    assert "Install" in text or "Fab" in text
+    assert "Date appendix" not in text
+    # Browser tab uses PDF /Title metadata — must not be empty/"Untitled"
+    meta_title = (reader.metadata.title if reader.metadata else None) or ""
+    assert "Look-Ahead" in meta_title or "Novel Flatiron" in meta_title
+    assert "Untitled" not in meta_title
+
+
+def test_dense_schedule_paginates_gantt_without_crashing():
+    """Many rows used to overlap at ROW_H=16; taller rows must paginate cleanly."""
+    from app.brain.lookahead.export_pdf import ROW_H
+
+    assert ROW_H >= 28, "row height must fit code + title + stage without overlap"
+
+    releases = []
+    for i in range(40):
+        releases.append({
+            "kind": "release",
+            "code": f"170-{400 + i}",
+            "release": str(400 + i),
+            "job": 170,
+            "description": f"Building rail package number {i} with a long title",
+            "stage": "Released",
+            "stage_group": "FABRICATION",
+            "is_complete": False,
+            "fab_hrs": 20.0,
+            "install_hrs": 8.0,
+            "num_guys": 2.0,
+            "fab_order": float(i + 1),
+            "unqueued": False,
+            "released": "2026-04-01",
+            "start_install": f"2026-04-{(i % 20) + 1:02d}" if i % 20 + 1 <= 28 else "2026-05-05",
+            "start_install_formulaTF": False,
+            "start_install_asap": False,
+            "start_install_no_color": False,
+            "date_kind": "hard",
+            "ship_date": None,
+            "comp_eta": None,
+        })
+    # Fix invalid days in start_install for simplicity
+    for i, r in enumerate(releases):
+        day = (i % 25) + 1
+        r["start_install"] = f"2026-05-{day:02d}"
+        r["comp_eta"] = f"2026-05-{min(day + 2, 28):02d}"
+
+    schedule = build_lookahead_schedule(
+        {
+            "found": True,
+            "job": 170,
+            "project_name": "Dense Job",
+            "releases": releases,
+            "drafting": [],
+            "gc_approvals": [],
+            "flags": [],
+        },
+        weeks=3,
+        today=TODAY,
+    )
+    pdf_bytes = render_schedule_pdf(schedule)
+    reader = PdfReader(BytesIO(pdf_bytes))
+    # Dense gantt should span multiple pages
+    assert len(reader.pages) >= 3
+    text = "".join((p.extract_text() or "") for p in reader.pages)
+    assert "170-400" in text
+    assert "170-439" in text
 
 
 def test_render_empty_schedule_still_pdf():

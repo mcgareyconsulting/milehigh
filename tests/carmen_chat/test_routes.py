@@ -12,6 +12,24 @@ _CANNED = {
         "cache_read_tokens": 0, "cache_write_tokens": 0, "cost_usd": 0.0012,
         "duration_ms": 1400, "tool_calls": 1, "request_ids": ["req_abc"],
     },
+    "artifacts": [],
+}
+
+_CANNED_WITH_PDF = {
+    "configured": True,
+    "answer": "PDF ready for Novel Flatiron.",
+    "metrics": {
+        "model": "claude-sonnet-5", "input_tokens": 100, "output_tokens": 20,
+        "cache_read_tokens": 0, "cache_write_tokens": 0, "cost_usd": 0.0005,
+        "duration_ms": 800, "tool_calls": 1, "request_ids": ["req_pdf"],
+    },
+    "artifacts": [{
+        "kind": "lookahead_pdf",
+        "artifact_id": "tok1",
+        "download_path": "/brain/lookahead/artifacts/tok1.pdf",
+        "title": "MHMW Look-Ahead — Novel Flatiron (500)",
+        "job": 500,
+    }],
 }
 
 
@@ -65,6 +83,16 @@ def test_list_conversations(app, bb_client, bb_user):
     resp = bb_client.get("/brain/carmen-chat/conversations")
     assert resp.status_code == 200
     assert len(resp.get_json()["conversations"]) == 1
+
+
+def test_send_returns_lookahead_artifacts(bb_client):
+    with patch("app.brain.carmen_chat.agent.run_chat", return_value=_CANNED_WITH_PDF):
+        resp = bb_client.post("/brain/carmen-chat", json={"message": "PDF for 500"})
+    assert resp.status_code == 200
+    arts = resp.get_json()["assistant_message"]["artifacts"]
+    assert len(arts) == 1
+    assert arts[0]["download_path"] == "/brain/lookahead/artifacts/tok1.pdf"
+    assert arts[0]["kind"] == "lookahead_pdf"
 
 
 # --- Admin toggle -------------------------------------------------------------------

@@ -8,10 +8,12 @@
  *   getConversation: One thread with its full message history.
  *   listAccessUsers: (admin) users + their is_carmen_chat flag.
  *   setUserAccess: (admin) grant/revoke a user's Carmen-chat access.
+ *   fetchLookaheadPdfBlob: session-authenticated GET of a look-ahead PDF artifact path.
  * imports_from: [axios, ../utils/api]
- * imported_by: [components/BBChatWidget.jsx]
+ * imported_by: [components/BBChatWidget.jsx, components/carmen/LookaheadPdfCard.jsx]
  * invariants:
  *   - withCredentials sends the session cookie; access is enforced server-side by is_carmen_chat.
+ *   - Look-ahead PDF paths are always under /brain/lookahead/artifacts/ (never open as bare href).
  */
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
@@ -25,6 +27,25 @@ export async function sendMessage(message, conversationId) {
         conversation_id: conversationId || undefined,
     });
     return data; // { conversation_id, user_message, assistant_message }
+}
+
+/**
+ * Fetch a look-ahead PDF as a Blob with session credentials.
+ * @param {string} downloadPath e.g. /brain/lookahead/artifacts/<id>.pdf
+ */
+export async function fetchLookaheadPdfBlob(downloadPath) {
+    if (!downloadPath || typeof downloadPath !== 'string') {
+        throw new Error('Missing download path');
+    }
+    // Only allow look-ahead artifact paths — never open arbitrary server paths from chat.
+    if (!downloadPath.startsWith('/brain/lookahead/artifacts/') || downloadPath.includes('..')) {
+        throw new Error('Invalid look-ahead PDF path');
+    }
+    const { data } = await axios.get(`${API_BASE_URL}${downloadPath}`, {
+        responseType: 'blob',
+        withCredentials: true,
+    });
+    return data;
 }
 
 export async function listConversations() {
