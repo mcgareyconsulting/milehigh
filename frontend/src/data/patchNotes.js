@@ -17,6 +17,20 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.306',
+    date: 'July 23, 2026',
+    summary:
+      'Optional Chrome desktop alerts for mentions and to-dos while Brain stays open in a tab.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Desktop notifications (opt-in)',
+        detail:
+          'Open the notification bell and click Enable to allow Chrome desktop alerts. Mentions, to-dos, and other bell notifications will pop on your desktop when Brain is open but in the background — even if you\'re in another window. Turn them off anytime from the same menu. Alerts pause if you close the Brain tab.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.305',
     date: 'July 21, 2026',
     summary:
