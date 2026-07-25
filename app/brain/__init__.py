@@ -45,3 +45,4 @@ from app.brain.submittal_matching import routes as submittal_matching_routes  # 
 from app.brain.metrics import routes as metrics_routes  # noqa: F401  (registers /metrics endpoints)
 from app.brain.install_schedule import routes as install_schedule_routes  # noqa: F401  (registers /install-schedule endpoints)
 from app.brain.subs import routes as subs_routes  # noqa: F401  (registers /subs endpoints)
+from app.brain.lookahead import routes as lookahead_routes  # noqa: F401  (registers /lookahead PDF endpoints)

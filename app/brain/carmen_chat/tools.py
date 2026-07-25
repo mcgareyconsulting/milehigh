@@ -7,6 +7,7 @@ read-only), plus:
   - search_todos            → meeting-derived to-dos (ChecklistItem) by owner/job
   - get_project_pipeline    → active releases + open drafting for one job
   - build_project_lookahead → GC-facing multi-phase 3-week production schedule model
+  - render_project_lookahead_pdf → print-ready PDF artifact + download path
 
 Each tool has a JSON-Schema definition in `TOOL_DEFINITIONS` and an executor in
 `TOOL_EXECUTORS`. User-scoped tools read `context["user_id"]` — never a model-supplied id.
@@ -17,6 +18,8 @@ from typing import Any
 
 from sqlalchemy.orm import joinedload
 
+from app.brain.lookahead.artifacts import save_lookahead_pdf
+from app.brain.lookahead.export_pdf import render_schedule_pdf
 from app.brain.lookahead.pipeline import get_project_pipeline as _get_project_pipeline
 from app.brain.lookahead.schedule_builder import build_project_lookahead as _build_project_lookahead
 from app.history import _extract_new_value_from_payload
@@ -45,6 +48,7 @@ TOOL_SEARCH_TODOS = "search_todos"
 TOOL_NOTIFICATIONS = "get_my_notifications"
 TOOL_PROJECT_PIPELINE = "get_project_pipeline"
 TOOL_PROJECT_LOOKAHEAD = "build_project_lookahead"
+TOOL_RENDER_LOOKAHEAD_PDF = "render_project_lookahead_pdf"
 
 MAX_RESULTS = 25
 
@@ -201,10 +205,32 @@ TOOL_DEFINITIONS = [
             "open drafting packages. Uses committed (green/hard) install and ship dates when "
             "set; otherwise projected install and estimated ship (install − 1 business day). "
             "Paint is a provisional 3-business-day estimated window. Call for '3-week look-ahead', "
-            "'Gantt', 'production schedule', 'what's coming up next N weeks' for a project. "
-            "Default weeks=3. Resolve project names to a job number first. Does NOT generate a "
-            "PDF yet — return the schedule model so you can summarize phases, date sources, and "
-            "flags for the user. Never invent dates not in the tool result."
+            "'Gantt', 'production schedule', 'what's coming up next N weeks' for a project when "
+            "they want a chat summary. Default weeks=3. Resolve project names to a job number "
+            "first. For a printable PDF use render_project_lookahead_pdf instead (or after). "
+            "Never invent dates not in the tool result."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "job": {"type": "integer", "description": "Job number, e.g. 500."},
+                "weeks": {
+                    "type": "integer",
+                    "description": "Look-ahead window in weeks (default 3, max 12).",
+                    "default": 3,
+                },
+            },
+            "required": ["job"],
+        },
+    },
+    {
+        "name": TOOL_RENDER_LOOKAHEAD_PDF,
+        "description": (
+            "Build the GC-facing look-ahead for a job and render a print-ready landscape PDF "
+            "(Gantt chart + date appendix). Use when the user asks to print, share, PDF, or "
+            "export the look-ahead / Gantt. Returns artifact_id, download_path "
+            "(e.g. /brain/lookahead/artifacts/<id>.pdf), title, and summary. Tell the user "
+            "the download path so they can open it in the app (auth required). Default weeks=3."
         ),
         "input_schema": {
             "type": "object",
@@ -509,6 +535,46 @@ def build_project_lookahead(job: int, weeks: int = 3) -> dict[str, Any]:
     return _build_project_lookahead(job, weeks=weeks)
 
 
+def render_project_lookahead_pdf(
+    job: int, weeks: int = 3, *, context: dict | None = None
+) -> dict[str, Any]:
+    """Build schedule, render PDF, persist artifact; return download metadata."""
+    schedule = _build_project_lookahead(job, weeks=weeks)
+    if not schedule.get("found"):
+        return {
+            "found": False,
+            "job": schedule.get("job"),
+            "error": schedule.get("error") or "no active work for this job",
+        }
+    try:
+        pdf_bytes = render_schedule_pdf(schedule)
+        user_id = (context or {}).get("user_id")
+        meta = save_lookahead_pdf(pdf_bytes, schedule=schedule, user_id=user_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "carmen_lookahead_pdf_failed",
+            job=job,
+            error=str(exc),
+            error_type=type(exc).__name__,
+            exc_info=True,
+        )
+        return {"found": True, "error": f"PDF render failed: {exc}", "job": job}
+
+    return {
+        "found": True,
+        "artifact_id": meta["artifact_id"],
+        "download_path": meta["download_path"],
+        "title": meta["title"],
+        "job": schedule.get("job"),
+        "project_name": schedule.get("project_name"),
+        "window": schedule.get("window"),
+        "summary": schedule.get("summary"),
+        "page_size": meta.get("page_size"),
+        "assumptions": schedule.get("assumptions"),
+        "flags": schedule.get("flags") or [],
+    }
+
+
 USER_SCOPED_TOOLS = {TOOL_NOTIFICATIONS}
 
 TOOL_EXECUTORS = {
@@ -521,6 +587,7 @@ TOOL_EXECUTORS = {
     TOOL_NOTIFICATIONS: get_my_notifications,
     TOOL_PROJECT_PIPELINE: get_project_pipeline,
     TOOL_PROJECT_LOOKAHEAD: build_project_lookahead,
+    TOOL_RENDER_LOOKAHEAD_PDF: render_project_lookahead_pdf,
 }
 
 
@@ -530,8 +597,10 @@ def execute_tool(name: str, arguments: dict, context: dict | None = None) -> dic
     if fn is None:
         return {"error": f"unknown tool: {name}"}
     try:
-        if name in USER_SCOPED_TOOLS:
+        if name == TOOL_NOTIFICATIONS:
             return fn(context or {}, **(arguments or {}))
+        if name == TOOL_RENDER_LOOKAHEAD_PDF:
+            return fn(**(arguments or {}), context=context or {})
         return fn(**(arguments or {}))
     except TypeError as exc:
         return {"error": f"bad arguments for {name}: {exc}"}

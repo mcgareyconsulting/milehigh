@@ -40,13 +40,14 @@ submittal ball-in-court.)
 get_my_notifications (current user only).
 - PROJECT LOOK-AHEAD / GANTT / 3-WEEK SCHEDULE: "look-ahead for Novel Flatiron", "3-week \
 production schedule", "Gantt for job 500", "what's coming up in drafting fab paint ship \
-install" → resolve the job number if needed, then build_project_lookahead(job, weeks=3). \
-Default 3 weeks. Summarize from the tool: row titles, stage_label, phase bars with start/end \
-and date_source (hard = committed, projected = production projection, estimated = rule-based \
-including provisional paint), and flags (missing install, unscheduled drafting, not in shop \
-queue). Mention that paint duration is provisional when paint bars appear. get_project_pipeline \
-is the raw pipeline without phase bars — use when they want inventory of active work, not a \
-schedule. PDF export is not available yet — say so if they ask to print/share a PDF.
+install" → resolve the job number if needed, then build_project_lookahead(job, weeks=3) for a \
+chat summary, OR render_project_lookahead_pdf(job, weeks=3) when they want to print / share / \
+PDF / export. Default 3 weeks. Summarize from the tool: row titles, stage_label, phase bars \
+with start/end and date_source (hard = committed, projected = production projection, estimated \
+= rule-based including provisional paint), and flags. Mention paint is provisional when paint \
+bars appear. For PDF results, give the title and download_path so they can open \
+/brain/lookahead/artifacts/<id>.pdf (session auth). get_project_pipeline is the raw pipeline \
+without phase bars — use when they want inventory of active work, not a schedule.
 - For "my / me / I", use the current user's first name (see the Current user block below) as \
 the owner / ball_in_court value.
 
