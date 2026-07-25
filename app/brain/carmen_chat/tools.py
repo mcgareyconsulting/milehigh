@@ -1,10 +1,12 @@
-"""Read-only tools BB can invoke via Anthropic tool-use.
+"""Read-only tools Carmen Miranda can invoke via Anthropic tool-use.
 
 Ported from the original app/banana_boy/tools.py (feature/banana-boy-v2), trimmed to the
 READ-ONLY suite (the Gmail draft/send write tools are intentionally excluded — V1 is
-read-only), plus two additions for this branch:
-  - get_release_lifecycle  → the deterministic lifecycle bundle (app/brain/carmen_chat/assembler)
-  - search_todos           → meeting-derived to-dos (ChecklistItem) by owner/job
+read-only), plus:
+  - get_release_lifecycle   → deterministic lifecycle bundle (app/brain/carmen_chat/assembler)
+  - search_todos            → meeting-derived to-dos (ChecklistItem) by owner/job
+  - get_project_pipeline    → active releases + open drafting for one job
+  - build_project_lookahead → GC-facing multi-phase 3-week production schedule model
 
 Each tool has a JSON-Schema definition in `TOOL_DEFINITIONS` and an executor in
 `TOOL_EXECUTORS`. User-scoped tools read `context["user_id"]` — never a model-supplied id.
@@ -15,6 +17,8 @@ from typing import Any
 
 from sqlalchemy.orm import joinedload
 
+from app.brain.lookahead.pipeline import get_project_pipeline as _get_project_pipeline
+from app.brain.lookahead.schedule_builder import build_project_lookahead as _build_project_lookahead
 from app.history import _extract_new_value_from_payload
 from app.logging_config import get_logger
 from app.models import (
@@ -39,6 +43,8 @@ TOOL_RELEASE_LIFECYCLE = "get_release_lifecycle"
 TOOL_SEARCH_SUBMITTALS = "search_submittals"
 TOOL_SEARCH_TODOS = "search_todos"
 TOOL_NOTIFICATIONS = "get_my_notifications"
+TOOL_PROJECT_PIPELINE = "get_project_pipeline"
+TOOL_PROJECT_LOOKAHEAD = "build_project_lookahead"
 
 MAX_RESULTS = 25
 
@@ -166,6 +172,51 @@ TOOL_DEFINITIONS = [
                 "limit": {"type": "integer", "description": "Max results (default 20, cap 50).", "default": 20},
             },
             "required": [],
+        },
+    },
+    {
+        "name": TOOL_PROJECT_PIPELINE,
+        "description": (
+            "Load the full active production pipeline for one job number: every active release "
+            "(stage, install/ship dates, date_kind hard|projected|asap|missing), open Drafting "
+            "Release Reviews still on the board, and open GC-approval submittals. Use when the "
+            "user asks what's active on a job, what is still in drafting vs fab, or as a "
+            "pre-check before build_project_lookahead. Prefer build_project_lookahead when they "
+            "want a multi-week schedule / Gantt / look-ahead. Resolve project names to a job "
+            "number first via search_jobs_by_project_name."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "job": {"type": "integer", "description": "Job number, e.g. 500."},
+            },
+            "required": ["job"],
+        },
+    },
+    {
+        "name": TOOL_PROJECT_LOOKAHEAD,
+        "description": (
+            "Build a GC-facing multi-phase production look-ahead for one job: drafting, "
+            "fabrication, paint, shipping, and installation bars for ALL active releases and "
+            "open drafting packages. Uses committed (green/hard) install and ship dates when "
+            "set; otherwise projected install and estimated ship (install − 1 business day). "
+            "Paint is a provisional 3-business-day estimated window. Call for '3-week look-ahead', "
+            "'Gantt', 'production schedule', 'what's coming up next N weeks' for a project. "
+            "Default weeks=3. Resolve project names to a job number first. Does NOT generate a "
+            "PDF yet — return the schedule model so you can summarize phases, date sources, and "
+            "flags for the user. Never invent dates not in the tool result."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "job": {"type": "integer", "description": "Job number, e.g. 500."},
+                "weeks": {
+                    "type": "integer",
+                    "description": "Look-ahead window in weeks (default 3, max 12).",
+                    "default": 3,
+                },
+            },
+            "required": ["job"],
         },
     },
 ]
@@ -448,6 +499,16 @@ def get_my_notifications(context: dict, unread_only: bool = True, limit: int = 2
             "result_count": len(results), "results": results}
 
 
+def get_project_pipeline(job: int) -> dict[str, Any]:
+    """Active releases + open drafting/GC-approval submittals for one job."""
+    return _get_project_pipeline(job)
+
+
+def build_project_lookahead(job: int, weeks: int = 3) -> dict[str, Any]:
+    """GC-facing multi-phase look-ahead schedule model for one job."""
+    return _build_project_lookahead(job, weeks=weeks)
+
+
 USER_SCOPED_TOOLS = {TOOL_NOTIFICATIONS}
 
 TOOL_EXECUTORS = {
@@ -458,6 +519,8 @@ TOOL_EXECUTORS = {
     TOOL_SEARCH_SUBMITTALS: search_submittals,
     TOOL_SEARCH_TODOS: search_todos,
     TOOL_NOTIFICATIONS: get_my_notifications,
+    TOOL_PROJECT_PIPELINE: get_project_pipeline,
+    TOOL_PROJECT_LOOKAHEAD: build_project_lookahead,
 }
 
 
@@ -473,6 +536,6 @@ def execute_tool(name: str, arguments: dict, context: dict | None = None) -> dic
     except TypeError as exc:
         return {"error": f"bad arguments for {name}: {exc}"}
     except Exception as exc:  # noqa: BLE001
-        logger.error("bb_chat_tool_failed", tool=name, error=str(exc), exc_info=True)
+        logger.error("carmen_chat_tool_failed", tool=name, error=str(exc), exc_info=True)
         db.session.rollback()  # reset a possibly-aborted transaction
         return {"error": f"tool {name} failed: {exc}"}
