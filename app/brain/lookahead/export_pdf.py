@@ -10,6 +10,7 @@ imported_by: [app.brain.lookahead.artifacts, tests]
 invariants:
   - Deterministic for a fixed schedule payload.
   - Does not invent dates; draws only bars present on the schedule model.
+  - ROW_H must leave room for code + title + stage without adjacent-row overlap.
 """
 from __future__ import annotations
 
@@ -38,11 +39,14 @@ from app.brain.lookahead.schedule_builder import (
 # Landscape letter — prints cleanly and emails well; tabloid can land later if denser jobs need it.
 PAGE = landscape(letter)  # 792 x 612
 MARGIN = 0.5 * inch
-LABEL_W = 2.35 * inch
-ROW_H = 16
+LABEL_W = 2.55 * inch
+# Three-line labels (code / title / stage) need ~28pt of vertical text; 32pt row keeps a gap.
+ROW_H = 32
+BAR_H = 10
 HEADER_H = 54
 LEGEND_H = 28
 DAY_MIN_W = 8  # px-ish points floor per day column
+FOOTER_RESERVE = 22  # keep rows above the footer strip
 
 PHASE_COLORS = {
     PHASE_DRAFTING: colors.Color(0.45, 0.35, 0.70),
@@ -134,36 +138,39 @@ def render_schedule_pdf(schedule: dict[str, Any]) -> bytes:
     _draw_legend(c, MARGIN, chart_top + 6, page_w - 2 * MARGIN)
     _draw_day_axis(c, chart_left, chart_top, day_w, range_start, total_days)
 
-    y = chart_top - 14
-    max_rows_page = int((y - MARGIN - 20) // ROW_H)
-    drawn = 0
+    # y is the TOP of the current row band (labels and bars sit within [y - ROW_H, y]).
+    y = chart_top - 12
     page_num = 1
+    floor_y = MARGIN + FOOTER_RESERVE
+
+    def _new_gantt_page():
+        nonlocal y, page_num, chart_top
+        _draw_footer(c, page_w, page_num, schedule)
+        c.showPage()
+        page_num += 1
+        _draw_header(c, page_w, page_h, title, subtitle)
+        chart_top = page_h - MARGIN - HEADER_H - LEGEND_H
+        _draw_legend(c, MARGIN, chart_top + 6, page_w - 2 * MARGIN)
+        _draw_day_axis(c, chart_left, chart_top, day_w, range_start, total_days)
+        y = chart_top - 12
 
     for row in rows:
-        if drawn > 0 and drawn % max_rows_page == 0:
-            _draw_footer(c, page_w, page_num, schedule)
-            c.showPage()
-            page_num += 1
-            _draw_header(c, page_w, page_h, title, subtitle)
-            chart_top = page_h - MARGIN - HEADER_H - LEGEND_H
-            _draw_legend(c, MARGIN, chart_top + 6, page_w - 2 * MARGIN)
-            _draw_day_axis(c, chart_left, chart_top, day_w, range_start, total_days)
-            y = chart_top - 14
-            drawn = 0
+        # Paginate when the next full row would collide with the footer.
+        if y - ROW_H < floor_y:
+            _new_gantt_page()
 
-        _draw_row_label(c, MARGIN, y, LABEL_W - 6, row)
+        _draw_row_label(c, MARGIN, y, LABEL_W - 8, row)
         _draw_row_grid(c, chart_left, y, chart_w, day_w, total_days)
         for phase in row.get("phases") or []:
             _draw_phase_bar(
                 c, chart_left, y, day_w, range_start, total_days, phase
             )
         y -= ROW_H
-        drawn += 1
 
     if not rows:
         c.setFont("Helvetica-Oblique", 10)
         c.setFillColor(colors.grey)
-        c.drawString(chart_left, y - 10, "No active releases or open drafting packages for this job.")
+        c.drawString(chart_left, y - 14, "No active releases or open drafting packages for this job.")
 
     _draw_footer(c, page_w, page_num, schedule)
 
@@ -229,32 +236,46 @@ def _draw_day_axis(c, left, top, day_w, range_start, total_days):
 
 
 def _draw_row_label(c, x, y, width, row):
-    code = (row.get("code") or "")[:18]
-    title = (row.get("title") or "")[:42]
-    stage = (row.get("stage_label") or "")[:22]
+    """Draw labels inside the row band [y - ROW_H, y]. `y` is the top of the band."""
+    code = (row.get("code") or "")[:20]
+    title = (row.get("title") or "")[:48]
+    stage = (row.get("stage_label") or "")[:28]
+
+    # Baselines measured down from the band top so lines never spill into the next row.
+    code_baseline = y - 11
+    title_baseline = y - 20
+    stage_baseline = y - 28
+
     c.setFillColor(colors.Color(0.15, 0.15, 0.18))
     c.setFont("Helvetica-Bold", 7)
-    c.drawString(x, y + 6, code)
+    c.drawString(x, code_baseline, code)
+
     c.setFont("Helvetica", 6.5)
-    c.setFillColor(colors.Color(0.25, 0.25, 0.28))
-    # Truncate title to width
+    c.setFillColor(colors.Color(0.28, 0.28, 0.32))
     while c.stringWidth(title, "Helvetica", 6.5) > width and len(title) > 4:
-        title = title[:-2]
-    c.drawString(x, y - 2, title)
-    c.setFillColor(colors.Color(0.40, 0.42, 0.46))
-    c.setFont("Helvetica", 5.5)
-    c.drawString(x, y - 9, stage)
+        title = title[:-2] + "…" if len(title) > 5 else title[:-1]
+    # Avoid double ellipsis if we already shortened awkwardly
+    if title.endswith("……"):
+        title = title[:-1]
+    c.drawString(x, title_baseline, title)
+
+    if stage:
+        c.setFillColor(colors.Color(0.42, 0.44, 0.48))
+        c.setFont("Helvetica", 5.5)
+        while c.stringWidth(stage, "Helvetica", 5.5) > width and len(stage) > 4:
+            stage = stage[:-1]
+        c.drawString(x, stage_baseline, stage)
 
 
 def _draw_row_grid(c, left, y, chart_w, day_w, total_days):
-    c.setStrokeColor(colors.Color(0.92, 0.93, 0.94))
-    c.setLineWidth(0.3)
-    c.line(left, y - 4, left + chart_w, y - 4)
-    # Weekend shading
-    # (skipped for speed; axis marks Mondays)
+    """Hairline under the row band."""
+    c.setStrokeColor(colors.Color(0.90, 0.91, 0.93))
+    c.setLineWidth(0.35)
+    c.line(left, y - ROW_H, left + chart_w, y - ROW_H)
 
 
 def _draw_phase_bar(c, left, y, day_w, range_start, total_days, phase):
+    """`y` is the top of the row band; bar is vertically centered in the band."""
     start = _parse_date(phase.get("start"))
     end = _parse_date(phase.get("end")) or start
     if start is None:
@@ -281,8 +302,8 @@ def _draw_phase_bar(c, left, y, day_w, range_start, total_days, phase):
     src = phase.get("date_source") or SOURCE_ESTIMATED
     stroke = SOURCE_EDGE.get(src, colors.black)
 
-    bar_y = y - 1
-    bar_h = 8
+    bar_h = BAR_H
+    bar_y = y - (ROW_H + bar_h) / 2.0  # center in band
     c.setFillColor(fill)
     c.setStrokeColor(stroke)
     c.setLineWidth(0.8 if src == SOURCE_HARD else 0.5)
