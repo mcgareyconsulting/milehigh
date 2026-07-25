@@ -67,7 +67,7 @@ def send_meeting_bot():
         return jsonify({'error': 'meeting_url is required'}), 400
     try:
         bot_id = recall.dispatch_bot(
-            meeting_url, bot_name=(data.get('bot_name') or 'BB'),
+            meeting_url, bot_name=(data.get('bot_name') or 'Carmen Miranda'),
         )
     except RecallError as e:
         logger.warning('send_meeting_bot_failed', error=str(e))

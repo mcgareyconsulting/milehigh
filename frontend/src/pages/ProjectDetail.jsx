@@ -1,7 +1,7 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Project detail (DEMO). Landing = the BB01-generated Project Brief, then a
+ * purpose: Project detail (DEMO). Landing = the Carmen Miranda-generated Project Brief, then a
  *   computed health dashboard, then tabbed child sections (Overview, Releases,
  *   Submittals, Schedule, Financials, Contacts & Docs, Activity). Demonstrates the
  *   "Project Brief is the default landing page" idea from the data-model spec.
@@ -106,7 +106,7 @@ function ProjectBrief({ brief }) {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-white">
             <span className="text-lg">🍌</span>
-            <span className="font-semibold">BB01 Project Brief</span>
+            <span className="font-semibold">Carmen Miranda Project Brief</span>
           </div>
           <div className="flex items-center gap-2">
             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${RISK_TONE[brief.risk_level] || RISK_TONE.Low}`}>
@@ -296,7 +296,7 @@ function TabPanel({ tab, project }) {
           <MetaRow label="Payment Terms" value={project.contract.payment_terms} />
           <MetaRow label="Billing" value={project.contract.billing_schedule} />
           <MetaRow
-            label="BB01 Review"
+            label="Carmen Miranda Review"
             value={project.contract.review_complete
               ? <span className="text-green-600 dark:text-green-400">Complete</span>
               : <span className="text-amber-600 dark:text-amber-400">Pending</span>}
@@ -694,7 +694,7 @@ export default function ProjectDetail() {
         {/* Where the data comes from */}
         <DataSourceBanner status={status} jobNumber={project.job_number} health={liveMeta} />
 
-        {/* Project Brief (demo scaffold only; a live-only job has no BB01 brief yet) */}
+        {/* Project Brief (demo scaffold only; a live-only job has no Carmen Miranda brief yet) */}
         {project.brief && <ProjectBrief brief={project.brief} />}
 
         {/* Health dashboard — composite score (the rating) + its tile breakdown */}

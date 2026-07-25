@@ -42,7 +42,7 @@ function AppShellInner({ isAuthenticated }) {
         setIsAdmin(user?.is_admin || false);
         setCanSeeReport(userCanAccessInvoicing(user));
         // Admins always have BB-chat access; others need the per-user flag.
-        setCanUseBBChat(!!user && (user.is_admin || user.is_bb_chat));
+        setCanUseBBChat(!!user && (user.is_admin || user.is_carmen_chat));
       });
     }
   }, [isAuthenticated]);

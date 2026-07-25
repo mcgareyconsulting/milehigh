@@ -1,6 +1,6 @@
 """PM training-loop feedback on BB findings.
 
-Covers POST /brain/releases/<id>/bb-review/<review_id>/feedback:
+Covers POST /brain/releases/<id>/carmen-review/<review_id>/feedback:
   - admin can accept/deny with notes; the row lands with the finding snapshot + context
   - re-posting the same finding upserts (no duplicate row)
   - the report GET carries prior feedback keyed by finding_index
@@ -8,7 +8,7 @@ Covers POST /brain/releases/<id>/bb-review/<review_id>/feedback:
 """
 from unittest.mock import patch
 
-from app.models import db, BBDrawingReview, BBReviewFeedback, ReleaseDrawingVersion
+from app.models import db, CarmenDrawingReview, CarmenReviewFeedback, ReleaseDrawingVersion
 from tests.conftest import make_release
 
 
@@ -30,7 +30,7 @@ def _seed_review(app, *, pm="DR", findings=None, job=590, rel="674"):
         )
         db.session.add(version)
         db.session.flush()
-        review = BBDrawingReview(
+        review = CarmenDrawingReview(
             drawing_version_id=version.id, release_id=release.id, status="complete",
             findings=findings if findings is not None else COMPLETE_FINDINGS, model="test",
         )
@@ -40,11 +40,11 @@ def _seed_review(app, *, pm="DR", findings=None, job=590, rel="674"):
 
 
 def _fb_url(release_id, review_id):
-    return f"/brain/releases/{release_id}/bb-review/{review_id}/feedback"
+    return f"/brain/releases/{release_id}/carmen-review/{review_id}/feedback"
 
 
 def _report_url(release_id):
-    return f"/brain/releases/{release_id}/bb-review/report"
+    return f"/brain/releases/{release_id}/carmen-review/report"
 
 
 def test_admin_saves_feedback_with_context(app, admin_client):
@@ -55,7 +55,7 @@ def test_admin_saves_feedback_with_context(app, admin_client):
     })
     assert resp.status_code == 200
     with app.app_context():
-        rows = BBReviewFeedback.query.all()
+        rows = CarmenReviewFeedback.query.all()
         assert len(rows) == 1
         fb = rows[0]
         assert fb.decision == "accepted"
@@ -74,7 +74,7 @@ def test_resubmit_upserts(app, admin_client):
     admin_client.post(_fb_url(release_id, review_id),
                       json={"finding_index": 0, "decision": "rejected", "notes": "changed my mind"})
     with app.app_context():
-        rows = BBReviewFeedback.query.filter_by(review_id=review_id, finding_index=0).all()
+        rows = CarmenReviewFeedback.query.filter_by(review_id=review_id, finding_index=0).all()
         assert len(rows) == 1
         assert rows[0].decision == "rejected"
         assert rows[0].notes == "changed my mind"
@@ -92,7 +92,7 @@ def test_version_panel_get_carries_feedback(app, admin_client):
     release_id, version_id, review_id = _seed_review(app)
     admin_client.post(_fb_url(release_id, review_id),
                       json={"finding_index": 0, "decision": "accepted", "notes": "confirmed 8\""})
-    url = f"/brain/releases/{release_id}/drawing/versions/{version_id}/bb-review"
+    url = f"/brain/releases/{release_id}/drawing/versions/{version_id}/carmen-review"
     review = admin_client.get(url).get_json()["review"]
     assert review["feedback"]["0"] == {"decision": "accepted", "notes": "confirmed 8\""}
 

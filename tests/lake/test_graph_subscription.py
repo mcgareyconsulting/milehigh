@@ -17,7 +17,7 @@ def _msg(mid="AAA", subject="RFI 042", received="2026-06-06T18:30:00Z", body="He
         "id": mid,
         "subject": subject,
         "from": {"emailAddress": {"name": "GC", "address": "gc@build.com"}},
-        "toRecipients": [{"emailAddress": {"name": "BB", "address": "bb@mhmw.com"}}],
+        "toRecipients": [{"emailAddress": {"name": "BB", "address": "carmen_ai@mhmw.com"}}],
         "ccRecipients": [],
         "receivedDateTime": received,
         "sentDateTime": received,
@@ -33,7 +33,7 @@ def _msg(mid="AAA", subject="RFI 042", received="2026-06-06T18:30:00Z", body="He
 def _configure(app):
     app.config["GRAPH_NOTIFICATION_URL"] = "https://abc123.ngrok-free.app"
     app.config["GRAPH_SUBSCRIPTION_CLIENT_STATE"] = "s3cr3t"
-    app.config["BB_MAILBOX"] = "bb@mhmw.com"
+    app.config["CARMEN_MAILBOX"] = "carmen_ai@mhmw.com"
 
 
 # --------------------------------------------------------------------------- #
@@ -130,15 +130,15 @@ def test_ensure_creates_when_absent(app):
         result = gs.ensure()
     assert result["action"] == "created"
     gp.assert_called_once()
-    row = GraphSubscription.get("m365_mail", "/users/bb@mhmw.com/mailFolders/Inbox/messages")
+    row = GraphSubscription.get("m365_mail", "/users/carmen_ai@mhmw.com/mailFolders/Inbox/messages")
     assert row.subscription_id == "sub-new"
 
 
 def test_ensure_renews_when_expiring(app):
     _configure(app)
-    resource = "/users/bb@mhmw.com/mailFolders/Inbox/messages"
+    resource = "/users/carmen_ai@mhmw.com/mailFolders/Inbox/messages"
     row = GraphSubscription(
-        source="m365_mail", resource=resource, mailbox="bb@mhmw.com",
+        source="m365_mail", resource=resource, mailbox="carmen_ai@mhmw.com",
         subscription_id="sub-old", client_state="s3cr3t",
         expires_at=datetime.utcnow() + timedelta(minutes=60),  # inside RENEW_THRESHOLD
     )
@@ -157,9 +157,9 @@ def test_ensure_renews_when_expiring(app):
 
 def test_ensure_skips_when_healthy(app):
     _configure(app)
-    resource = "/users/bb@mhmw.com/mailFolders/Inbox/messages"
+    resource = "/users/carmen_ai@mhmw.com/mailFolders/Inbox/messages"
     row = GraphSubscription(
-        source="m365_mail", resource=resource, mailbox="bb@mhmw.com",
+        source="m365_mail", resource=resource, mailbox="carmen_ai@mhmw.com",
         subscription_id="sub-ok", client_state="s3cr3t",
         expires_at=datetime.utcnow() + timedelta(days=2),  # well outside threshold
     )
@@ -178,9 +178,9 @@ def test_ensure_skips_when_healthy(app):
 def test_ensure_recreates_when_stale_row_unknown_to_graph(app):
     """Stored row exists but Graph no longer knows the id (lapsed) → recreate."""
     _configure(app)
-    resource = "/users/bb@mhmw.com/mailFolders/Inbox/messages"
+    resource = "/users/carmen_ai@mhmw.com/mailFolders/Inbox/messages"
     row = GraphSubscription(
-        source="m365_mail", resource=resource, mailbox="bb@mhmw.com",
+        source="m365_mail", resource=resource, mailbox="carmen_ai@mhmw.com",
         subscription_id="sub-gone", client_state="s3cr3t",
         expires_at=datetime.utcnow() + timedelta(days=2),
     )

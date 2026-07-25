@@ -8,7 +8,7 @@ the session. Never crashes the worker — any failure is recorded on the row as 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
-from app.models import db, BBDrawingReview, ReleaseDrawingVersion, Releases, Notification
+from app.models import db, CarmenDrawingReview, ReleaseDrawingVersion, Releases, Notification
 from app.logging_config import get_logger
 from app.brain.job_log.features.pdf_markup.storage import read_pdf
 from app.brain.pdf_review import service
@@ -21,7 +21,7 @@ _REVIEW_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="bb-pdf-revi
 
 
 def start_review(app, review_id: int) -> None:
-    """Queue a background BB review job for a pending BBDrawingReview row."""
+    """Queue a background BB review job for a pending CarmenDrawingReview row."""
     _REVIEW_POOL.submit(_run_review_job, app, review_id)
 
 
@@ -41,7 +41,7 @@ def _run_submittal_review_job(app, review_id, procore_submittal_id, attachment_i
                               job_release, model) -> None:
     with app.app_context():
         try:
-            review = db.session.get(BBDrawingReview, review_id)
+            review = db.session.get(CarmenDrawingReview, review_id)
             if not review:
                 logger.error("bb_review_row_missing", review_id=review_id)
                 return
@@ -100,7 +100,7 @@ def _job_release(release: Releases) -> str:
 def _run_review_job(app, review_id: int) -> None:
     with app.app_context():
         try:
-            review = db.session.get(BBDrawingReview, review_id)
+            review = db.session.get(CarmenDrawingReview, review_id)
             if not review:
                 logger.error("bb_review_row_missing", review_id=review_id)
                 return
@@ -155,7 +155,7 @@ def _run_review_job(app, review_id: int) -> None:
             db.session.remove()
 
 
-def _notify_pm(review: BBDrawingReview, release: Releases, findings) -> None:
+def _notify_pm(review: CarmenDrawingReview, release: Releases, findings) -> None:
     """Drop a bell notification for the job's PM once a review completes.
 
     Best-effort: a missing/unmapped PM or a notification failure must never fail the
@@ -176,7 +176,7 @@ def _notify_pm(review: BBDrawingReview, release: Releases, findings) -> None:
             user_id=pm_id,
             type="bb_review",
             message=notification_message(report),
-            bb_drawing_review_id=review.id,
+            carmen_drawing_review_id=review.id,
         ))
         db.session.commit()
         logger.info("bb_review_pm_notified", review_id=review.id, pm_user_id=pm_id,
@@ -186,7 +186,7 @@ def _notify_pm(review: BBDrawingReview, release: Releases, findings) -> None:
         db.session.rollback()
 
 
-def _fail(review: BBDrawingReview, message: str) -> None:
+def _fail(review: CarmenDrawingReview, message: str) -> None:
     review.status = "error"
     review.error = message
     review.completed_at = datetime.utcnow()
@@ -197,7 +197,7 @@ def _fail(review: BBDrawingReview, message: str) -> None:
 def _safe_fail(review_id: int, message: str) -> None:
     """Mark a review errored after an unexpected exception (fresh session)."""
     try:
-        review = db.session.get(BBDrawingReview, review_id)
+        review = db.session.get(CarmenDrawingReview, review_id)
         if review and review.status == "pending":
             review.status = "error"
             review.error = message[:2000]

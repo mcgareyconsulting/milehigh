@@ -1,7 +1,7 @@
 """System-usage metrics endpoints (admin-only), registered on ``brain_bp``.
 
 The JSON contract is the primary deliverable — the admin dashboard and any agent
-(BB01, scheduled digest) read the same responses. All routes accept
+(Carmen Miranda, scheduled digest) read the same responses. All routes accept
 ``?period=day|week|month`` (default ``week``) plus optional ``?start=&end=`` ISO
 overrides. Every response shares a ``{period, start, end, generated_at, ...}``
 envelope.

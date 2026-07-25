@@ -1,7 +1,7 @@
 """The read-only tools: ball-in-court submittal search, to-dos by owner, lifecycle."""
 from datetime import date
 
-from app.brain.bb_chat import tools
+from app.brain.carmen_chat import tools
 from app.models import ChecklistItem, Meeting, Submittals, db
 
 from tests.conftest import make_release, make_user

@@ -47,7 +47,7 @@ def _headline(tally: dict) -> str:
     violations = tally["critical"]
     to_confirm = tally["high"] + tally["moderate"] + tally["low"]
     if not violations and not to_confirm:
-        return "No code issues found — the set is clear against BB's rules."
+        return "No code issues found — the set is clear against Carmen's rules."
     parts = []
     if violations:
         parts.append(_plural(violations, "code violation"))
@@ -99,4 +99,4 @@ def build_report(findings, job_release: str) -> dict:
 
 def notification_message(report: dict) -> str:
     """The one-liner dropped into the PM's notification bell."""
-    return f"BB reviewed {report['job_release']}: {report['headline']}"
+    return f"Carmen reviewed {report['job_release']}: {report['headline']}"

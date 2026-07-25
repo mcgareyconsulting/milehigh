@@ -11,7 +11,7 @@ import pytest
 
 from app.models import (
     db, AiUsage,
-    BBChatConversation, BBChatMessage, BBDrawingReview, BBReviewFeedback,
+    CarmenChatConversation, CarmenChatMessage, CarmenDrawingReview, CarmenReviewFeedback,
     ReleasePhoto, BoardActivity, ReleaseEvents,
     Meeting, ChecklistItem, Notification, TrelloOutbox,
     SyncOperation, SyncStatus, WebhookReceipt,
@@ -114,15 +114,15 @@ def test_record_uses_supplied_cost(app):
 
 def test_backfill_from_sources_and_dedup(app):
     u = make_user("carol")
-    conv = BBChatConversation(user_id=u.id)
+    conv = CarmenChatConversation(user_id=u.id)
     db.session.add(conv)
     db.session.flush()
-    db.session.add(BBChatMessage(
+    db.session.add(CarmenChatMessage(
         conversation_id=conv.id, role="assistant", content="hi",
         model="claude-sonnet-5", input_tokens=100, output_tokens=200, cost_usd=0.5,
         created_at=NOW(),
     ))
-    db.session.add(BBDrawingReview(
+    db.session.add(CarmenDrawingReview(
         drawing_version_id=1, release_id=1, status="complete",
         model="claude-opus-4-8", input_tokens=1_000_000, output_tokens=1_000_000,
         requested_by_user_id=u.id, created_at=NOW(),
@@ -228,7 +228,7 @@ def test_engagement_active_users_and_logins(app):
 def test_quality_accept_rates(app):
     # 3 accepted + 1 rejected finding -> 0.75
     for i, dec in enumerate(["accepted", "accepted", "accepted", "rejected"]):
-        db.session.add(BBReviewFeedback(
+        db.session.add(CarmenReviewFeedback(
             review_id=1, release_id=1, finding_index=i, decision=dec, created_at=NOW()))
     m = Meeting(title="m")
     db.session.add(m)
@@ -274,10 +274,10 @@ def test_throughput_created_completed_and_dwell(app):
 
 def test_ai_reliability_status_and_latency(app):
     # One complete review (120s latency), one errored.
-    db.session.add(BBDrawingReview(
+    db.session.add(CarmenDrawingReview(
         drawing_version_id=1, release_id=1, status="complete", model="claude-opus-4-8",
         created_at=NOW() - timedelta(seconds=120), completed_at=NOW()))
-    db.session.add(BBDrawingReview(
+    db.session.add(CarmenDrawingReview(
         drawing_version_id=1, release_id=1, status="error", created_at=NOW()))
     db.session.commit()
 

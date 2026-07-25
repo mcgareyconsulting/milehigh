@@ -2,8 +2,8 @@
 One-off backfill: populate the unified `ai_usage` ledger from the per-feature usage
 columns that predate it.
 
-Reads historical spend from bb_chat_messages, meetings (extract_*), meeting_learnings,
-and bb_drawing_reviews and writes one AiUsage row each. Deduped by
+Reads historical spend from carmen_chat_messages, meetings (extract_*), meeting_learnings,
+and carmen_drawing_reviews and writes one AiUsage row each. Deduped by
 (feature, entity_type, entity_id) so it is SAFE TO RE-RUN and safe to run alongside
 live writes — a call site that already wrote its ledger row is skipped here.
 
@@ -35,7 +35,7 @@ from sqlalchemy.orm import Session
 
 # Importing the models configures their mappers on db.metadata; it does NOT boot the app.
 from app.models import (
-    AiUsage, BBChatMessage, BBChatConversation, Meeting, MeetingLearning, BBDrawingReview,
+    AiUsage, CarmenChatMessage, CarmenChatConversation, Meeting, MeetingLearning, CarmenDrawingReview,
 )
 from app.services.ai_usage import compute_cost
 
@@ -108,9 +108,9 @@ def _collect(session):
 
     # bb_chat — assistant turns carry the full ledger already.
     q = (
-        session.query(BBChatMessage, BBChatConversation.user_id)
-        .join(BBChatConversation, BBChatMessage.conversation_id == BBChatConversation.id)
-        .filter(BBChatMessage.role == "assistant")
+        session.query(CarmenChatMessage, CarmenChatConversation.user_id)
+        .join(CarmenChatConversation, CarmenChatMessage.conversation_id == CarmenChatConversation.id)
+        .filter(CarmenChatMessage.role == "assistant")
     )
     for m, uid in q.all():
         out.append(dict(
@@ -149,7 +149,7 @@ def _collect(session):
         ))
 
     # BB PDF review — stores tokens but no cost; compute it from the shared pricing.
-    for rv in session.query(BBDrawingReview).filter(BBDrawingReview.model.isnot(None)).all():
+    for rv in session.query(CarmenDrawingReview).filter(CarmenDrawingReview.model.isnot(None)).all():
         out.append(dict(
             feature="pdf_review", entity_type="drawing_review", entity_id=str(rv.id),
             user_id=rv.requested_by_user_id, model=rv.model,

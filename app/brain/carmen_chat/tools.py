@@ -3,7 +3,7 @@
 Ported from the original app/banana_boy/tools.py (feature/banana-boy-v2), trimmed to the
 READ-ONLY suite (the Gmail draft/send write tools are intentionally excluded — V1 is
 read-only), plus two additions for this branch:
-  - get_release_lifecycle  → the deterministic lifecycle bundle (app/brain/bb_chat/assembler)
+  - get_release_lifecycle  → the deterministic lifecycle bundle (app/brain/carmen_chat/assembler)
   - search_todos           → meeting-derived to-dos (ChecklistItem) by owner/job
 
 Each tool has a JSON-Schema definition in `TOOL_DEFINITIONS` and an executor in

@@ -50,7 +50,7 @@ def _get(path):
     return resp.json()
 
 
-def dispatch_bot(meeting_url, *, bot_name="BB", join_at=None):
+def dispatch_bot(meeting_url, *, bot_name="Carmen Miranda", join_at=None):
     """Send a bot to `meeting_url` with async transcription enabled. Returns bot_id.
 
     `join_at` (a naive-UTC datetime) schedules the bot to join at that time instead
@@ -62,7 +62,7 @@ def dispatch_bot(meeting_url, *, bot_name="BB", join_at=None):
         raise RecallError("meeting_url is required")
     body = {
         "meeting_url": str(meeting_url).strip(),
-        "bot_name": (bot_name or "BB")[:100],
+        "bot_name": (bot_name or "Carmen Miranda")[:100],
         # `transcript.provider` takes exactly one provider. recallai_streaming is
         # Recall's first-party transcription (most reliable on Teams). We don't wire
         # realtime_endpoints — the finished transcript still lands on the recording

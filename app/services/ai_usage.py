@@ -18,7 +18,7 @@ Phase-1 aggregator used), including cache-read/write multipliers.
 """
 from app.logging_config import get_logger
 from app.models import db, AiUsage
-from app.brain.bb_chat.pricing import (
+from app.brain.carmen_chat.pricing import (
     _price, _CACHE_READ_MULTIPLIER, _CACHE_WRITE_MULTIPLIER,
 )
 

@@ -4,7 +4,7 @@
  * purpose: Static demo data for the Projects tab prototype. Shapes a Project as the
  *   top-level container (identity, team, contract, schedule, financials, production,
  *   child releases/submittals, contacts, vendors, documents, activity, computed health,
- *   and a BB01-generated Project Brief) so the client can see the target UX before any
+ *   and a Carmen Miranda-generated Project Brief) so the client can see the target UX before any
  *   real ingestion is wired. NOTHING here is live — replace section-by-section as the
  *   pipeline matures. Mirrors docs/projects-data-model-v2 (refined model).
  * exports:
@@ -267,13 +267,13 @@ const projects = [
         'Deck steel order needs release by Jul 25',
       ],
       risks: [
-        'Contract review not yet complete — retainage and CO markup terms unconfirmed by BB01.',
+        'Contract review not yet complete — retainage and CO markup terms unconfirmed by Carmen Miranda.',
         'Deck steel not yet ordered; Drexel lead time puts Aug 4 install at risk if the FC set slips past Jul 18.',
       ],
       approvals: ['Balcony rail shop drawings (Rel 503) in review with Saunders'],
       forecast: 'Forecast completion Nov 20. Forecast invoice value $1.02M pending the $52.8k canopy CO.',
       next_actions: [
-        'Finish BB01 contract review to lock markup/retainage terms',
+        'Finish Carmen Miranda contract review to lock markup/retainage terms',
         'Release FC set by Jul 18 to protect the material order',
         'Push Saunders to approve balcony rail drawings',
       ],
@@ -608,13 +608,13 @@ const projects = [
         'FC set required by Oct 15',
       ],
       risks: [
-        'Contract review incomplete — design-assist scope boundaries and CO terms not yet confirmed by BB01.',
+        'Contract review incomplete — design-assist scope boundaries and CO terms not yet confirmed by Carmen Miranda.',
         'Monumental stair requires early structural coordination with Martin/Martin to hold the Jan 2027 install.',
       ],
       approvals: ['Guardrail concept (Rel 721) in review with Hensel Phelps'],
       forecast: 'Forecast completion Jun 2027. Forecast invoice value $4.80M pending the $118k Level 3 CO.',
       next_actions: [
-        'Finish BB01 contract review on the design-assist agreement',
+        'Finish Carmen Miranda contract review on the design-assist agreement',
         'Lock structural coordination meeting for the monumental stair',
         'Return guardrail concept revisions to Hensel Phelps',
       ],

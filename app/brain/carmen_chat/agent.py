@@ -35,9 +35,9 @@ def _post(messages: list, system: list, key: str):
         ANTHROPIC_URL,
         headers=_headers(key),
         json={
-            "model": cfg.BB_CHAT_MODEL,
-            "max_tokens": cfg.BB_CHAT_MAX_TOKENS,
-            "output_config": {"effort": cfg.BB_CHAT_EFFORT},
+            "model": cfg.CARMEN_CHAT_MODEL,
+            "max_tokens": cfg.CARMEN_CHAT_MAX_TOKENS,
+            "output_config": {"effort": cfg.CARMEN_CHAT_EFFORT},
             "system": system,
             "tools": tools.TOOL_DEFINITIONS,
             "messages": messages,
@@ -59,7 +59,7 @@ def run_chat(history: list, user_text: str, user=None, user_id=None) -> dict:
     if not key:
         return {
             "configured": False,
-            "answer": "BB chat isn't configured yet (no Anthropic API key set on the server).",
+            "answer": "Carmen isn't configured yet (no Anthropic API key set on the server).",
             "metrics": {"model": "stub", "input_tokens": 0, "output_tokens": 0,
                         "cache_read_tokens": 0, "cache_write_tokens": 0, "cost_usd": 0.0,
                         "duration_ms": 0, "tool_calls": 0, "request_ids": []},
@@ -75,11 +75,11 @@ def run_chat(history: list, user_text: str, user=None, user_id=None) -> dict:
     answer = ""
 
     try:
-        for _ in range(cfg.BB_CHAT_MAX_STEPS):
+        for _ in range(cfg.CARMEN_CHAT_MAX_STEPS):
             body, request_id = _post(messages, system, key)
             if request_id:
                 request_ids.append(request_id)
-            pricing.accumulate(totals, pricing.usage_from_body(body, cfg.BB_CHAT_MODEL))
+            pricing.accumulate(totals, pricing.usage_from_body(body, cfg.CARMEN_CHAT_MODEL))
 
             content = body.get("content", [])
             messages.append({"role": "assistant", "content": content})
@@ -109,7 +109,7 @@ def run_chat(history: list, user_text: str, user=None, user_id=None) -> dict:
 
     duration_ms = int((time.monotonic() - started) * 1000)
     metrics = {
-        "model": totals.get("model", cfg.BB_CHAT_MODEL),
+        "model": totals.get("model", cfg.CARMEN_CHAT_MODEL),
         "input_tokens": totals.get("input_tokens", 0),
         "output_tokens": totals.get("output_tokens", 0),
         "cache_read_tokens": totals.get("cache_read_tokens", 0),

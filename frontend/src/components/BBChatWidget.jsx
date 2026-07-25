@@ -9,7 +9,7 @@
  * imports_from: [react, ../services/bbChatApi]
  * imported_by: [components/AppShell.jsx]
  * invariants:
- *   - Renders nothing unless `enabled` (the caller passes user.is_bb_chat).
+ *   - Renders nothing unless `enabled` (the caller passes user.is_carmen_chat).
  *   - Read-only: the UI never asks the server to mutate data.
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -78,18 +78,18 @@ function AccessPanel({ onClose }) {
         listAccessUsers().then(setUsers).catch(() => setError('Failed to load users'));
     }, []);
     const toggle = async (u) => {
-        const next = !u.is_bb_chat;
-        setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, is_bb_chat: next } : x)));
+        const next = !u.is_carmen_chat;
+        setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, is_carmen_chat: next } : x)));
         try {
             await setUserAccess(u.id, next);
         } catch {
-            setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, is_bb_chat: !next } : x)));
+            setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, is_carmen_chat: !next } : x)));
         }
     };
     return (
         <div className="absolute inset-0 z-10 flex flex-col bg-white dark:bg-slate-800 rounded-2xl">
             <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-600">
-                <span className="text-sm font-semibold text-gray-800 dark:text-slate-100">BB Chat access</span>
+                <span className="text-sm font-semibold text-gray-800 dark:text-slate-100">Carmen Chat access</span>
                 <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 text-lg leading-none">←</button>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto p-2">
@@ -105,9 +105,9 @@ function AccessPanel({ onClose }) {
                             onClick={() => toggle(u)}
                             disabled={u.is_admin}
                             title={u.is_admin ? 'Admins always have access' : ''}
-                            className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors ${(u.is_bb_chat || u.is_admin) ? 'bg-accent-500' : 'bg-gray-200 dark:bg-slate-600'} ${u.is_admin ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors ${(u.is_carmen_chat || u.is_admin) ? 'bg-accent-500' : 'bg-gray-200 dark:bg-slate-600'} ${u.is_admin ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
-                            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${(u.is_bb_chat || u.is_admin) ? 'translate-x-5' : 'translate-x-0'}`} />
+                            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${(u.is_carmen_chat || u.is_admin) ? 'translate-x-5' : 'translate-x-0'}`} />
                         </button>
                     </div>
                 ))}
@@ -164,27 +164,29 @@ export default function BBChatWidget({ enabled, isAdmin }) {
             <button
                 type="button"
                 onClick={() => setOpen((o) => !o)}
-                className="fixed bottom-4 right-4 z-50 w-14 h-14 rounded-full bg-accent-500 hover:bg-accent-600 text-white shadow-lg flex items-center justify-center text-xl font-bold focus:outline-none focus:ring-2 focus:ring-accent-400"
+                className="fixed bottom-4 right-4 z-50 w-11 h-11 rounded-full bg-accent-500 hover:bg-accent-600 text-white flex items-center justify-center shadow-sm hover:shadow-md ring-1 ring-black/5 opacity-70 hover:opacity-100 focus:opacity-100 transition-all duration-200 motion-safe:hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
                 style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
-                aria-label={open ? 'Close BB chat' : 'Open BB chat'}
-                title="Ask BB — read-only data assistant"
+                aria-label={open ? 'Close Carmen chat' : 'Open Carmen chat'}
+                title="Ask Carmen — read-only data assistant"
             >
-                {open ? '✕' : 'BB'}
+                <span className={open ? 'text-base leading-none' : 'text-xs font-bold tracking-wider leading-none'}>
+                    {open ? '✕' : 'CM'}
+                </span>
             </button>
 
             {/* Panel — bounded to the viewport so it never runs off the top; height fits
-                between the bubble (bottom-24) and a top gap via max-h calc. */}
+                between the bubble (44px tall at bottom-4) and a top gap via max-h calc. */}
             {open && (
                 <div
                     className="fixed z-50 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-600 flex flex-col overflow-hidden"
                     style={{
                         right: '1rem',
-                        bottom: 'calc(6rem + env(safe-area-inset-bottom))',
+                        bottom: 'calc(4.75rem + env(safe-area-inset-bottom))',
                         // Geometry is inline so it can't be defeated by utility cascade/containing-block quirks:
                         // a 26rem card that shrinks to fit narrow (mobile) viewports with a margin each side.
                         width: 'min(26rem, calc(100vw - 2rem))',
                         height: '32rem',
-                        maxHeight: 'calc(100dvh - 7rem)',
+                        maxHeight: 'calc(100dvh - 5.75rem)',
                     }}
                 >
                     {showAccess ? (
@@ -194,7 +196,7 @@ export default function BBChatWidget({ enabled, isAdmin }) {
                             {/* Header */}
                             <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-600 bg-gradient-to-r from-accent-500 to-accent-600 text-white">
                                 <div className="flex items-center gap-2">
-                                    <span className="font-bold">BB</span>
+                                    <span className="font-bold">Carmen</span>
                                     <span className="text-xs opacity-80">read-only data assistant</span>
                                 </div>
                                 <div className="flex items-center gap-1">
@@ -227,7 +229,7 @@ export default function BBChatWidget({ enabled, isAdmin }) {
                                 {busy && (
                                     <div className="flex justify-start">
                                         <div className="bg-gray-100 dark:bg-slate-700 rounded-2xl rounded-bl-sm px-3 py-2 text-sm text-gray-400">
-                                            <span className="inline-block animate-pulse">BB is thinking…</span>
+                                            <span className="inline-block animate-pulse">Carmen is thinking…</span>
                                         </div>
                                     </div>
                                 )}

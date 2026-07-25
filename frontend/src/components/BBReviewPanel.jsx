@@ -86,7 +86,7 @@ export function BBReviewPanel({ releaseId, versionId, enabled }) {
                 className="text-xs font-medium text-yellow-700 hover:text-yellow-800 flex items-center gap-1"
             >
                 <span>{open ? '▾' : '▸'}</span>
-                <span>🍌 BB review</span>
+                <span>🍌 Carmen review</span>
                 {review?.status === 'complete' && (
                     <span className={flags ? 'text-red-600 font-semibold' : 'text-green-600'}>
                         {flags ? `${flags} flag${flags > 1 ? 's' : ''}` : 'clear'}
@@ -101,13 +101,13 @@ export function BBReviewPanel({ releaseId, versionId, enabled }) {
 
                     {review === null && (
                         <p className="text-xs text-gray-500">
-                            Submit this set to Banana Boy for a code-compliance check.
+                            Submit this set to Carmen for a code-compliance check.
                         </p>
                     )}
 
                     {isPending && (
                         <p className="text-xs text-gray-500 italic">
-                            BB is reviewing the full set — this takes a couple of minutes.
+                            Carmen is reviewing the full set — this takes a couple of minutes.
                         </p>
                     )}
 
@@ -116,7 +116,7 @@ export function BBReviewPanel({ releaseId, versionId, enabled }) {
                     )}
 
                     {review?.status === 'complete' && findings.length === 0 && (
-                        <p className="text-xs text-green-700">No issues found against BB's known failure modes.</p>
+                        <p className="text-xs text-green-700">No issues found against Carmen's known failure modes.</p>
                     )}
 
                     {review?.status === 'complete' && findings.map((f, i) => (

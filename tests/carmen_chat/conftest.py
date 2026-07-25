@@ -1,8 +1,8 @@
 """Fixtures for BB chat tests.
 
-Uses real User rows (so the conversation FK and the is_bb_chat gate behave like prod) and
+Uses real User rows (so the conversation FK and the is_carmen_chat gate behave like prod) and
 patches get_current_user at both sites the routes touch — app.auth.utils (the decorator) and
-app.brain.bb_chat.routes (the route body), mirroring tests/brain/conftest.py.
+app.brain.carmen_chat.routes (the route body), mirroring tests/brain/conftest.py.
 """
 from contextlib import ExitStack
 from unittest.mock import patch
@@ -14,14 +14,14 @@ from tests.conftest import make_user
 
 _PATCH_TARGETS = (
     "app.auth.utils.get_current_user",
-    "app.brain.bb_chat.routes.get_current_user",
+    "app.brain.carmen_chat.routes.get_current_user",
 )
 
 
-def _mk(username, *, is_admin=False, is_bb_chat=False):
+def _mk(username, *, is_admin=False, is_carmen_chat=False):
     from app.models import db
     u = make_user(username, is_admin=is_admin)
-    u.is_bb_chat = is_bb_chat
+    u.is_carmen_chat = is_carmen_chat
     db.session.commit()
     return u
 
@@ -29,13 +29,13 @@ def _mk(username, *, is_admin=False, is_bb_chat=False):
 @pytest.fixture
 def bb_user(app):
     """A non-admin user granted BB-chat access. (The `app` fixture keeps an app context active.)"""
-    return _mk("pilot@mhmw.com", is_bb_chat=True)
+    return _mk("pilot@mhmw.com", is_carmen_chat=True)
 
 
 @pytest.fixture
 def no_access_user(app):
     """A non-admin user WITHOUT BB-chat access."""
-    return _mk("nobody@mhmw.com", is_bb_chat=False)
+    return _mk("nobody@mhmw.com", is_carmen_chat=False)
 
 
 @pytest.fixture
