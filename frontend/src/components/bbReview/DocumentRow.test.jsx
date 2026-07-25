@@ -84,3 +84,127 @@ describe('DocumentRow re-pull', () => {
         expect(draftingWorkLoadApi.pullProcoreDocument).not.toHaveBeenCalled();
     });
 });
+
+describe('DocumentRow finding feedback notes', () => {
+    const REVIEWED = {
+        ...DOC,
+        review: {
+            review_id: 11,
+            status: 'complete',
+            model: 'sonnet',
+            completed_at: new Date().toISOString(),
+            tally: { high: 1, cleared: 0 },
+            hold_recommended: false,
+        },
+    };
+
+    const FINDING = {
+        rule_id: 'R-01',
+        issue: 'Missing weld callout',
+        verdict: 'violation',
+        severity: 'high',
+        page: 2,
+    };
+
+    const openFindings = async (feedback = {}) => {
+        draftingWorkLoadApi.fetchProcoreDocumentReview.mockResolvedValue({
+            review: {
+                review_id: 11,
+                status: 'complete',
+                findings: [FINDING],
+                feedback,
+            },
+        });
+        renderRow(REVIEWED);
+        await userEvent.click(screen.getByRole('button', { name: /Findings/i }));
+        // Placeholder changes once a decision is selected; match either state.
+        return screen.findByRole('textbox');
+    };
+
+    it('shows a full notes area and commits decision + notes together on Save', async () => {
+        draftingWorkLoadApi.saveProcoreDocumentReviewFeedback.mockResolvedValue({
+            feedback: { finding_index: 0, decision: 'rejected', notes: 'false positive' },
+        });
+
+        const notes = await openFindings();
+        expect(notes.tagName).toBe('TEXTAREA');
+        expect(screen.getByRole('button', { name: /Accept/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Reject/i })).toBeInTheDocument();
+
+        // Accept/Reject alone must not hit the network — that was the clunky double-save.
+        await userEvent.click(screen.getByRole('button', { name: /Reject/i }));
+        expect(draftingWorkLoadApi.saveProcoreDocumentReviewFeedback).not.toHaveBeenCalled();
+
+        await userEvent.type(notes, 'false positive');
+        await userEvent.click(screen.getByRole('button', { name: /Save feedback/i }));
+
+        await waitFor(() =>
+            expect(draftingWorkLoadApi.saveProcoreDocumentReviewFeedback).toHaveBeenCalledTimes(1)
+        );
+        expect(draftingWorkLoadApi.saveProcoreDocumentReviewFeedback).toHaveBeenCalledWith(
+            '99',
+            42,
+            11,
+            expect.objectContaining({
+                finding_index: 0,
+                decision: 'rejected',
+                notes: 'false positive',
+                rule_id: 'R-01',
+            })
+        );
+        expect(await screen.findByText('Saved')).toBeInTheDocument();
+    });
+
+    it('seeds prior notes and only saves after an explicit Save', async () => {
+        draftingWorkLoadApi.saveProcoreDocumentReviewFeedback.mockResolvedValue({
+            feedback: { finding_index: 0, decision: 'accepted', notes: 'looks good, confirmed' },
+        });
+
+        const notes = await openFindings({ 0: { decision: 'accepted', notes: 'looks good' } });
+        expect(notes).toHaveValue('looks good');
+        expect(screen.getByText('Saved')).toBeInTheDocument();
+
+        await userEvent.clear(notes);
+        await userEvent.type(notes, 'looks good, confirmed');
+        expect(screen.getByText('Unsaved')).toBeInTheDocument();
+        expect(draftingWorkLoadApi.saveProcoreDocumentReviewFeedback).not.toHaveBeenCalled();
+
+        await userEvent.click(screen.getByRole('button', { name: /Save feedback/i }));
+
+        await waitFor(() =>
+            expect(draftingWorkLoadApi.saveProcoreDocumentReviewFeedback).toHaveBeenCalledWith(
+                '99',
+                42,
+                11,
+                expect.objectContaining({
+                    finding_index: 0,
+                    decision: 'accepted',
+                    notes: 'looks good, confirmed',
+                })
+            )
+        );
+    });
+
+    it('can save a decision with an empty note in one shot', async () => {
+        draftingWorkLoadApi.saveProcoreDocumentReviewFeedback.mockResolvedValue({
+            feedback: { finding_index: 0, decision: 'accepted', notes: null },
+        });
+
+        await openFindings();
+        await userEvent.click(screen.getByRole('button', { name: /Accept/i }));
+        await userEvent.click(screen.getByRole('button', { name: /Save feedback/i }));
+
+        await waitFor(() =>
+            expect(draftingWorkLoadApi.saveProcoreDocumentReviewFeedback).toHaveBeenCalledWith(
+                '99',
+                42,
+                11,
+                expect.objectContaining({
+                    finding_index: 0,
+                    decision: 'accepted',
+                    notes: '',
+                })
+            )
+        );
+    });
+});

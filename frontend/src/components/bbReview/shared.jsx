@@ -3,11 +3,11 @@
  * sheet-cited values. Used by both the admin per-version panel (BBReviewPanel) and the
  * PM report (BBReviewReport). Urgency helpers live alongside in ./urgency.js.
  *
- * FeedbackControls (the accept/deny/notes training loop) also lives here so both surfaces
- * render it identically. Feedback is keyed by the finding's index in the review's stored
- * `findings` array, so a decision made on either surface refers to the same finding.
+ * FindingFeedbackForm (accept/deny + notes) is the one training-loop control. Decision and
+ * notes stay local until Save — one request commits both, so accept-then-type isn't two
+ * saves. FeedbackControls wraps it for the release surface (jobsApi).
  */
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 
 import { jobsApi } from '../../services/jobsApi';
 
@@ -55,31 +55,50 @@ export function Finding({ f }) {
 }
 
 /**
- * FeedbackControls — the yes/no/notes training loop for one finding. Accept/deny writes
- * immediately; notes save on blur (or the Save button). Seeded from any stored feedback so
- * a returning reviewer sees their prior decision. No-ops without releaseId/reviewId.
+ * FindingFeedbackForm — presentational accept/deny + notes training loop.
+ *
+ * Accept/Reject only select a decision (and focus the notes field). Nothing hits the
+ * network until Save, which posts decision + notes together. Cmd/Ctrl+Enter also saves.
+ * Seeded from any stored feedback so a returning reviewer sees their prior entry.
+ *
+ * @param {{ decision?: string|null, notes?: string }} [initial]
+ * @param {(decision: string, notes: string) => Promise<void>} onSave
+ * @param {string} [denyLabel]
+ * @param {string} [className]
  */
-export function FeedbackControls({ releaseId, reviewId, findingIndex, finding, initial }) {
+export function FindingFeedbackForm({
+    initial,
+    onSave,
+    denyLabel = 'Reject',
+    className = '',
+}) {
     const [decision, setDecision] = useState(initial?.decision || null);
     const [notes, setNotes] = useState(initial?.notes || '');
-    const [savedNotes, setSavedNotes] = useState(initial?.notes || '');
+    const [saved, setSaved] = useState({
+        decision: initial?.decision || null,
+        notes: initial?.notes || '',
+    });
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
+    const notesRef = useRef(null);
 
-    if (!releaseId || !reviewId) return null;
+    const dirty = decision !== saved.decision || notes !== (saved.notes || '');
+    const canSave = Boolean(decision) && dirty && !busy;
 
-    const save = async (nextDecision, nextNotes) => {
+    const choose = (value) => {
+        setDecision(value);
+        setError(null);
+        // After picking yes/no, put the cursor in notes so typing is the next natural step.
+        requestAnimationFrame(() => notesRef.current?.focus());
+    };
+
+    const save = async () => {
+        if (!decision || busy) return;
         setBusy(true);
         setError(null);
         try {
-            await jobsApi.saveCarmenReviewFeedback(releaseId, reviewId, {
-                finding_index: findingIndex,
-                rule_id: finding?.rule_id || null,
-                decision: nextDecision,
-                notes: nextNotes,
-                finding,
-            });
-            setSavedNotes(nextNotes);
+            await onSave(decision, notes);
+            setSaved({ decision, notes });
         } catch (err) {
             setError(err?.message || 'Failed to save');
         } finally {
@@ -87,47 +106,109 @@ export function FeedbackControls({ releaseId, reviewId, findingIndex, finding, i
         }
     };
 
-    const choose = (value) => { setDecision(value); save(value, notes); };
-    const notesDirty = notes !== savedNotes;
+    const btnBase =
+        'text-xs font-semibold px-2.5 py-1 rounded border transition-colors disabled:opacity-50';
 
     return (
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <button
-                type="button"
-                onClick={() => choose('accepted')}
-                disabled={busy}
-                className={`text-[11px] font-semibold px-2 py-0.5 rounded border transition-colors disabled:opacity-50 ${
-                    decision === 'accepted'
-                        ? 'bg-green-600 text-white border-green-600'
-                        : 'bg-white text-green-700 border-green-300 hover:bg-green-50'
-                }`}
-            >
-                ✓ Accept
-            </button>
-            <button
-                type="button"
-                onClick={() => choose('rejected')}
-                disabled={busy}
-                className={`text-[11px] font-semibold px-2 py-0.5 rounded border transition-colors disabled:opacity-50 ${
-                    decision === 'rejected'
-                        ? 'bg-red-600 text-white border-red-600'
-                        : 'bg-white text-red-700 border-red-300 hover:bg-red-50'
-                }`}
-            >
-                ✕ Deny
-            </button>
-            <input
-                type="text"
+        <div className={`mt-2 space-y-2 ${className}`.trim()}>
+            <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                    type="button"
+                    onClick={() => choose('accepted')}
+                    disabled={busy}
+                    className={`${btnBase} ${
+                        decision === 'accepted'
+                            ? 'bg-green-600 text-white border-green-600'
+                            : 'bg-white dark:bg-slate-700 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700 hover:bg-green-50 dark:hover:bg-green-900/30'
+                    }`}
+                >
+                    ✓ Accept
+                </button>
+                <button
+                    type="button"
+                    onClick={() => choose('rejected')}
+                    disabled={busy}
+                    className={`${btnBase} ${
+                        decision === 'rejected'
+                            ? 'bg-red-600 text-white border-red-600'
+                            : 'bg-white dark:bg-slate-700 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/30'
+                    }`}
+                >
+                    ✕ {denyLabel}
+                </button>
+                {busy && (
+                    <span className="text-[11px] text-gray-400 dark:text-slate-500">Saving…</span>
+                )}
+                {!busy && dirty && decision && (
+                    <span className="text-[11px] text-amber-600 dark:text-amber-400">Unsaved</span>
+                )}
+                {!busy && !dirty && saved.decision && (
+                    <span className="text-[11px] text-green-600 dark:text-green-400">Saved</span>
+                )}
+                {error && (
+                    <span className="text-[11px] text-red-600 dark:text-red-400">{error}</span>
+                )}
+            </div>
+
+            <textarea
+                ref={notesRef}
+                rows={3}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                onBlur={() => { if (decision && notesDirty) save(decision, notes); }}
-                placeholder="Add a note (optional)…"
-                className="flex-1 min-w-[8rem] text-[11px] px-2 py-0.5 rounded border border-gray-200 bg-white text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-accent-400"
+                onKeyDown={(e) => {
+                    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canSave) {
+                        e.preventDefault();
+                        save();
+                    }
+                }}
+                placeholder={
+                    decision
+                        ? 'Add a note about this finding (optional)…'
+                        : 'Accept or reject first, then add an optional note…'
+                }
+                className="w-full min-h-[4.5rem] text-sm px-3 py-2 rounded-md border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-800 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-accent-400/40 focus:border-accent-400 resize-y"
             />
-            {busy && <span className="text-[10px] text-gray-400">saving…</span>}
-            {!busy && decision && !notesDirty && <span className="text-[10px] text-green-600">saved</span>}
-            {error && <span className="text-[10px] text-red-600">{error}</span>}
+
+            <div className="flex items-center gap-2 flex-wrap">
+                <button
+                    type="button"
+                    onClick={save}
+                    disabled={!canSave}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-md bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 hover:bg-slate-700 dark:hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                    {busy ? 'Saving…' : 'Save feedback'}
+                </button>
+                <span className="text-[11px] text-gray-400 dark:text-slate-500">
+                    {decision
+                        ? '⌘/Ctrl+Enter to save'
+                        : 'Pick Accept or Reject, then Save'}
+                </span>
+            </div>
         </div>
+    );
+}
+
+/**
+ * FeedbackControls — release-surface wrapper: persists via jobsApi.
+ * No-ops without releaseId/reviewId.
+ */
+export function FeedbackControls({ releaseId, reviewId, findingIndex, finding, initial }) {
+    if (!releaseId || !reviewId) return null;
+
+    return (
+        <FindingFeedbackForm
+            initial={initial}
+            denyLabel="Deny"
+            onSave={async (decision, notes) => {
+                await jobsApi.saveCarmenReviewFeedback(releaseId, reviewId, {
+                    finding_index: findingIndex,
+                    rule_id: finding?.rule_id || null,
+                    decision,
+                    notes,
+                    finding,
+                });
+            }}
+        />
     );
 }
 
