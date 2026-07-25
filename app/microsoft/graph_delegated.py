@@ -1,6 +1,6 @@
-"""Microsoft Graph delegated client (device-code flow) for the BB mailbox.
+"""Microsoft Graph delegated client (device-code flow) for the Carmen mailbox.
 
-No admin consent required: bb@mhmw.com self-consents once via the device-code
+No admin consent required: carmen_ai@mhmw.com self-consents once via the device-code
 flow (scripts/link_bb_mailbox.py) — user consent, not admin consent, and no
 redirect URI. The resulting refresh token is stored in MicrosoftDelegatedToken;
 the poller/connector exchange it for access tokens on demand. Used when org
@@ -23,7 +23,7 @@ from app.models import MicrosoftDelegatedToken, db
 
 logger = get_logger(__name__)
 
-# Delegated scopes bb@mhmw.com consents to. offline_access is required to get a
+# Delegated scopes carmen_ai@mhmw.com consents to. offline_access is required to get a
 # refresh token; Mail.ReadWrite/Mail.Send cover read + draft + send.
 DELEGATED_SCOPES = "offline_access Mail.ReadWrite Mail.Send"
 TOKEN_REFRESH_BUFFER_SECONDS = 120
@@ -33,7 +33,7 @@ _token_lock = threading.Lock()
 
 
 class MicrosoftDelegatedAuthError(RuntimeError):
-    """Raised when the BB mailbox is not linked or its refresh token is dead."""
+    """Raised when the Carmen mailbox is not linked or its refresh token is dead."""
 
 
 def _authority_base():
@@ -105,7 +105,7 @@ def poll_for_token(device_code, interval, expires_in):
 
 
 def link_mailbox(printer=print):
-    """Interactive one-time device-code link for the BB mailbox. Returns the row."""
+    """Interactive one-time device-code link for the Carmen mailbox. Returns the row."""
     flow = request_device_code()
     printer("\n" + flow.get(
         "message",
@@ -152,7 +152,7 @@ def _is_expiring(row):
 
 
 def get_delegated_token(force_refresh=False):
-    """Return a valid delegated access token for the BB mailbox, refreshing as needed.
+    """Return a valid delegated access token for the Carmen mailbox, refreshing as needed.
 
     Raises MicrosoftDelegatedAuthError if the mailbox has never been linked or
     the refresh token is no longer valid (re-run scripts/link_bb_mailbox.py).
@@ -169,5 +169,5 @@ def get_delegated_token(force_refresh=False):
 
 
 def graph_get(path, params=None, timeout=DEFAULT_TIMEOUT):
-    """graph_get bound to the BB delegated identity (drop-in for the connector)."""
+    """graph_get bound to the Carmen delegated identity (drop-in for the connector)."""
     return _graph_get(path, params=params, timeout=timeout, token_getter=get_delegated_token)

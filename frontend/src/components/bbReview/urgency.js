@@ -1,5 +1,5 @@
 /**
- * BB-review urgency helpers (no JSX). Mirror of app/brain/pdf_review/report.py —
+ * Carmen-review urgency helpers (no JSX). Mirror of app/brain/pdf_review/report.py —
  * keep the two in sync. Shared by the admin panel (BBReviewPanel) and the PM report
  * (BBReviewReport) so urgency is computed one way everywhere.
  */

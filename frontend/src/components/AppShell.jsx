@@ -41,7 +41,7 @@ function AppShellInner({ isAuthenticated }) {
       checkAuth().then(user => {
         setIsAdmin(user?.is_admin || false);
         setCanSeeReport(userCanAccessInvoicing(user));
-        // Admins always have BB-chat access; others need the per-user flag.
+        // Admins always have Carmen-chat access; others need the per-user flag.
         setCanUseBBChat(!!user && (user.is_admin || user.is_carmen_chat));
       });
     }

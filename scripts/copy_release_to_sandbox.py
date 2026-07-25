@@ -1,7 +1,7 @@
 """Copy ONE release (by job + release) from production into sandbox.
 
 A scoped version of copy_releases_to_sandbox.py for seeding a single job into sandbox
-for testing (e.g. 590-674 for the BB PDF-review work). Reuses that script's connection
+for testing (e.g. 590-674 for the Carmen PDF-review work). Reuses that script's connection
 strings and column list so credentials live in one place. Upserts by the (job, release)
 unique constraint — safe to re-run. Trello-owned columns are intentionally NOT copied.
 
@@ -13,7 +13,7 @@ Usage:
 
 Note: PDF drawings are stored on each server's local disk (not the DB), and prod has
 no drawing versions for 590-674, so this copies only the release row. To exercise the
-BB review in sandbox, upload the FC PDF through the sandbox app afterward.
+Carmen review in sandbox, upload the FC PDF through the sandbox app afterward.
 """
 import argparse
 import sys

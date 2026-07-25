@@ -1,4 +1,4 @@
-"""Token → USD pricing for the BB chat, so each turn carries a real cost.
+"""Token → USD pricing for the Carmen chat, so each turn carries a real cost.
 
 Kept local to bb_chat (rather than importing the meetings pricing table) because
 this feature prices Sonnet 5 including cache-read/write tokens, which the meetings

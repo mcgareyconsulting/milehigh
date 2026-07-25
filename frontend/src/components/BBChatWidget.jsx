@@ -1,8 +1,8 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Floating, flag-gated read-only chat assistant ("BB"). Renders a bubble on every
- *          page for users with BB-chat access; answers DB questions and shows per-answer
+ * purpose: Floating, flag-gated read-only chat assistant ("Carmen"). Renders a bubble on every
+ *          page for users with Carmen-chat access; answers DB questions and shows per-answer
  *          cost/time/token metrics. Admins get an access-management panel.
  * exports:
  *   BBChatWidget: default. Props: { enabled: bool, isAdmin: bool }. Renders null when !enabled.
@@ -30,7 +30,7 @@ function inline(text) {
 }
 
 // Minimal, dependency-free markdown for the chat bubble: headings, bullets, and paragraphs.
-// Keeps BB's answers clean without pulling in a markdown library.
+// Keeps Carmen's answers clean without pulling in a markdown library.
 function Markdown({ text }) {
     const lines = (text || '').split('\n');
     const blocks = [];

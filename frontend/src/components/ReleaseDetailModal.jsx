@@ -70,11 +70,11 @@ export function ReleaseDetailModal({ isOpen, onClose, release, accentColor }) {
     const [enrichment, setEnrichment] = useState({ todos: [], meetings: [] });
     const [photos, setPhotos] = useState([]);
     const [drawings, setDrawings] = useState([]);
-    const [bbReport, setBbReport] = useState(null);   // PM-facing BB review report, or null
+    const [bbReport, setBbReport] = useState(null);   // PM-facing Carmen review report, or null
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    const [isAdmin, setIsAdmin] = useState(false);   // gates the BB re-run button
+    const [isAdmin, setIsAdmin] = useState(false);   // gates the Carmen re-run button
     const [rerunning, setRerunning] = useState(false);
     const rerunPollRef = useRef(null);
 
@@ -117,7 +117,7 @@ export function ReleaseDetailModal({ isOpen, onClose, release, accentColor }) {
     useEffect(() => clearRerunPoll, []);
     useEffect(() => { if (!isOpen) { clearRerunPoll(); setRerunning(false); } }, [isOpen]);
 
-    // Admin re-run of the BB review (for tuning verbosity/rules). Kicks off a fresh review
+    // Admin re-run of the Carmen review (for tuning verbosity/rules). Kicks off a fresh review
     // on the report's drawing version, polls until it finishes, then swaps in the new report.
     const rerunBBReview = async () => {
         const versionId = bbReport?.drawing_version_id;
@@ -384,7 +384,7 @@ export function ReleaseDetailModal({ isOpen, onClose, release, accentColor }) {
                         )}
                     </section>
 
-                    {/* Banana Boy code-compliance review (PM-facing; only when a report exists) */}
+                    {/* Carmen Miranda code-compliance review (PM-facing; only when a report exists) */}
                     {bbReport && (
                         <section>
                             <h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-2">

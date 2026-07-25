@@ -1,10 +1,10 @@
 /**
- * BBReviewPanel — Banana Boy code-compliance review for one PDF drawing version.
+ * BBReviewPanel — Carmen Miranda code-compliance review for one PDF drawing version.
  *
  * Admin-only (gate via the `enabled` prop; the backend also enforces @admin_required).
  * Self-contained: loads the latest review on mount, lets an admin kick off a new one,
  * polls while it's `pending`, and renders the findings (severity chip, verdict,
- * computation, and the sheet citations BB used).
+ * computation, and the sheet citations Carmen used).
  */
 import React, { useEffect, useRef, useState } from 'react';
 
@@ -142,7 +142,7 @@ export function BBReviewPanel({ releaseId, versionId, enabled }) {
                             disabled={!canRun}
                             className="px-3 py-1.5 text-xs bg-yellow-500 text-white rounded-md font-semibold disabled:opacity-50"
                         >
-                            {review ? 'Re-run BB review' : 'Submit to BB for review'}
+                            {review ? 'Re-run Carmen review' : 'Submit to Carmen for review'}
                         </button>
                         {review?.status === 'complete' && review.model && (
                             <span className="text-[11px] text-gray-400">

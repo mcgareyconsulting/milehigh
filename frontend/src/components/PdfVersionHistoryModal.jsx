@@ -66,7 +66,7 @@ export function PdfVersionHistoryModal({
     const [commentDrafts, setCommentDrafts] = useState({});            // versionId -> string
     const [commentBusy, setCommentBusy] = useState({});               // versionId -> bool
     const [mentionableUsers, setMentionableUsers] = useState([]);
-    // BB review is admin-only (backend also enforces @admin_required); gate the panel UX.
+    // Carmen review is admin-only (backend also enforces @admin_required); gate the panel UX.
     const [isAdmin, setIsAdmin] = useState(false);
     const fileInputRef = useRef(null);
     const cameraInputRef = useRef(null);
@@ -122,7 +122,7 @@ export function PdfVersionHistoryModal({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
-    // Admin gate for the BB review panel — resolved once when the modal opens.
+    // Admin gate for the Carmen review panel — resolved once when the modal opens.
     useEffect(() => {
         if (!isOpen) return;
         checkAuth().then((u) => setIsAdmin(!!u?.is_admin)).catch(() => setIsAdmin(false));
@@ -498,7 +498,7 @@ export function PdfVersionHistoryModal({
                                             )}
                                         </div>
 
-                                        {/* Banana Boy code-compliance review (admin-only) */}
+                                        {/* Carmen Miranda code-compliance review (admin-only) */}
                                         <BBReviewPanel
                                             releaseId={releaseId}
                                             versionId={v.id}

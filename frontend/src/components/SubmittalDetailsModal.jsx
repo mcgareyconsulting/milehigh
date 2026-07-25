@@ -1,7 +1,7 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Per-document BB review workspace for a Procore submittal — lists drawing documents,
+ * purpose: Per-document Carmen review workspace for a Procore submittal — lists drawing documents,
  *   drives pull → review → findings/feedback per document, and keeps the Rel-assignment and
  *   Events history controls (demoted into a collapsible Details strip).
  * exports:
@@ -10,7 +10,7 @@
  * imported_by: [components/SubmittalCardGrid.jsx, components/TableRow.jsx, components/SubmittalRowList.jsx]
  * invariants:
  *   - Exported name and props ({ isOpen, onClose, submittal, canEditRel, onRelAssigned }) are stable so call sites need no edits.
- *   - The BB/documents section is gated on canEditRel && a present submittal id.
+ *   - The Carmen/documents section is gated on canEditRel && a present submittal id.
  * updated_by_agent: 2026-07-10T00:00:00Z
  */
 import React, { useState, useEffect } from 'react';

@@ -1,5 +1,5 @@
 /**
- * The shared BB-review finding card: verdict + severity + issue + worked math + the
+ * The shared Carmen-review finding card: verdict + severity + issue + worked math + the
  * sheet-cited values. Used by both the admin per-version panel (BBReviewPanel) and the
  * PM report (BBReviewReport). Urgency helpers live alongside in ./urgency.js.
  *

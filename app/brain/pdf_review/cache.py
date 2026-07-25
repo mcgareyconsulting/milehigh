@@ -1,7 +1,7 @@
 """Server-side cache of pulled Procore submittal drawings.
 
 Once a submittal's drawing has been pulled from Procore, its bytes are cached here so a
-BB review (or a re-review on a different model) can run without re-pulling. Keyed by the
+Carmen review (or a re-review on a different model) can run without re-pulling. Keyed by the
 (Procore submittal id, prostore attachment id) pair — a submittal can carry more than one
 reviewable drawing, so each attachment gets its own file under the submittal's folder:
     procore_submittals/<submittal_id>/<attachment_id>.pdf

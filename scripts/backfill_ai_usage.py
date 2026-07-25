@@ -148,7 +148,7 @@ def _collect(session):
             request_id=None, created_at=lr.created_at,
         ))
 
-    # BB PDF review — stores tokens but no cost; compute it from the shared pricing.
+    # Carmen PDF review — stores tokens but no cost; compute it from the shared pricing.
     for rv in session.query(CarmenDrawingReview).filter(CarmenDrawingReview.model.isnot(None)).all():
         out.append(dict(
             feature="pdf_review", entity_type="drawing_review", entity_id=str(rv.id),

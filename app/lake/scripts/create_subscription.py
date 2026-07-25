@@ -1,4 +1,4 @@
-"""Create a Graph change-notification subscription for the BB mailbox.
+"""Create a Graph change-notification subscription for the Carmen mailbox.
 
 This is the "procore-style POST" bootstrap: it fires POST /subscriptions pointing
 Graph at GRAPH_NOTIFICATION_URL + /lake/graph/notifications. Graph validates that
@@ -29,7 +29,7 @@ from app.lake.ingest import graph_subscription
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Create a BB-mail Graph subscription.")
+    parser = argparse.ArgumentParser(description="Create a Carmen-mail Graph subscription.")
     parser.add_argument("--mailbox", help="Mailbox to watch (default: CARMEN_MAILBOX).")
     args = parser.parse_args()
 
