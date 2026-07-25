@@ -68,3 +68,49 @@ def test_user_scoped_tool_gets_user_id(app):
 
     assert captured["name"] == "get_my_notifications"
     assert captured["ctx"] == {"user_id": 42}
+
+
+def test_render_lookahead_pdf_tool_surfaces_artifact(app):
+    """When the agent runs render_project_lookahead_pdf, the turn returns a UI artifact."""
+    with app.app_context():
+        tool_out = {
+            "found": True,
+            "artifact_id": "abc123",
+            "download_path": "/brain/lookahead/artifacts/abc123.pdf",
+            "title": "MHMW Look-Ahead — Novel Flatiron (500)",
+            "job": 500,
+            "project_name": "Novel Flatiron",
+            "window": {"start": "2026-07-25", "end": "2026-08-15", "weeks": 3},
+            "summary": {"release_count": 2},
+            "page_size": "letter-landscape",
+        }
+
+        def fake_execute(name, args, context=None):
+            assert name == "render_project_lookahead_pdf"
+            return tool_out
+
+        body_tool = {
+            "model": "claude-sonnet-5", "stop_reason": "tool_use",
+            "usage": {"input_tokens": 10, "output_tokens": 5},
+            "content": [{
+                "type": "tool_use", "id": "t1",
+                "name": "render_project_lookahead_pdf",
+                "input": {"job": 500, "weeks": 3},
+            }],
+        }
+        body_final = {
+            "model": "claude-sonnet-5", "stop_reason": "end_turn",
+            "usage": {"input_tokens": 20, "output_tokens": 15},
+            "content": [{"type": "text", "text": "Here's the look-ahead PDF for Novel Flatiron."}],
+        }
+        with patch.object(agent.cfg, "ANTHROPIC_API_KEY", "k"), \
+                patch.object(agent.tools, "execute_tool", side_effect=fake_execute), \
+                patch.object(agent, "_post", side_effect=[(body_tool, "r1"), (body_final, "r2")]):
+            result = agent.run_chat([], "PDF look-ahead for 500", user_id=1)
+
+    assert result["answer"].startswith("Here's the look-ahead")
+    assert len(result["artifacts"]) == 1
+    art = result["artifacts"][0]
+    assert art["kind"] == "lookahead_pdf"
+    assert art["download_path"] == "/brain/lookahead/artifacts/abc123.pdf"
+    assert art["job"] == 500

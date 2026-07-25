@@ -93,8 +93,15 @@ def send_message(user_id: int, conversation_id, user_text: str) -> dict:
         entity_id=assistant_msg.id,
     )
 
+    assistant = assistant_msg.to_dict()
+    # Structured artifacts (e.g. look-ahead PDF) for the chat UI card — not persisted on
+    # the message row; the client also recovers download_path from message text if needed.
+    artifacts = result.get("artifacts") or []
+    if artifacts:
+        assistant["artifacts"] = artifacts
+
     return {
         "conversation_id": convo.id,
         "user_message": user_msg.to_dict(),
-        "assistant_message": assistant_msg.to_dict(),
+        "assistant_message": assistant,
     }

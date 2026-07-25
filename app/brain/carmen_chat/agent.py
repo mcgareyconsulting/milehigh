@@ -53,6 +53,28 @@ def _final_text(content: list) -> str:
     return "".join(b.get("text", "") for b in content if b.get("type") == "text").strip()
 
 
+def _artifact_from_tool(name: str, out: dict) -> dict | None:
+    """Pull a UI-facing artifact envelope from a tool result (look-ahead PDF, etc.)."""
+    if name != tools.TOOL_RENDER_LOOKAHEAD_PDF:
+        return None
+    if not isinstance(out, dict) or not out.get("found") or out.get("error"):
+        return None
+    path = out.get("download_path")
+    if not path:
+        return None
+    return {
+        "kind": "lookahead_pdf",
+        "artifact_id": out.get("artifact_id"),
+        "download_path": path,
+        "title": out.get("title"),
+        "job": out.get("job"),
+        "project_name": out.get("project_name"),
+        "window": out.get("window"),
+        "summary": out.get("summary"),
+        "page_size": out.get("page_size"),
+    }
+
+
 def run_chat(history: list, user_text: str, user=None, user_id=None) -> dict:
     """Answer `user_text` via the tool loop. `history` is prior {role, content} text turns."""
     key = cfg.ANTHROPIC_API_KEY
@@ -63,6 +85,7 @@ def run_chat(history: list, user_text: str, user=None, user_id=None) -> dict:
             "metrics": {"model": "stub", "input_tokens": 0, "output_tokens": 0,
                         "cache_read_tokens": 0, "cache_write_tokens": 0, "cost_usd": 0.0,
                         "duration_ms": 0, "tool_calls": 0, "request_ids": []},
+            "artifacts": [],
         }
 
     system = _system_blocks(user)
@@ -71,6 +94,7 @@ def run_chat(history: list, user_text: str, user=None, user_id=None) -> dict:
     messages.append({"role": "user", "content": user_text})
 
     totals, request_ids, tool_calls = {}, [], 0
+    artifacts: list[dict] = []
     started = time.monotonic()
     answer = ""
 
@@ -88,8 +112,12 @@ def run_chat(history: list, user_text: str, user=None, user_id=None) -> dict:
             if body.get("stop_reason") == "tool_use" or tool_uses:
                 results = []
                 for b in tool_uses:
-                    logger.info("bb_chat_tool_call", tool=b.get("name"), input=b.get("input"), user_id=user_id)
-                    out = tools.execute_tool(b.get("name"), b.get("input") or {}, context=tool_context)
+                    tool_name = b.get("name")
+                    logger.info("carmen_chat_tool_call", tool=tool_name, input=b.get("input"), user_id=user_id)
+                    out = tools.execute_tool(tool_name, b.get("input") or {}, context=tool_context)
+                    art = _artifact_from_tool(tool_name, out if isinstance(out, dict) else {})
+                    if art:
+                        artifacts.append(art)
                     results.append({"type": "tool_result", "tool_use_id": b.get("id"),
                                     "content": json.dumps(out, default=str)})
                 tool_calls += len(results)
@@ -103,7 +131,7 @@ def run_chat(history: list, user_text: str, user=None, user_id=None) -> dict:
         else:
             answer = "I couldn't finish that within the tool-call limit. Try narrowing the question."
     except requests.RequestException as exc:
-        logger.error("bb_chat_anthropic_error", error=str(exc),
+        logger.error("carmen_chat_anthropic_error", error=str(exc),
                      error_type=type(exc).__name__, user_id=user_id, exc_info=True)
         raise
 
@@ -119,9 +147,15 @@ def run_chat(history: list, user_text: str, user=None, user_id=None) -> dict:
         "tool_calls": tool_calls,
         "request_ids": request_ids,
     }
-    logger.info("bb_chat_turn", user_id=user_id, model=metrics["model"],
+    logger.info("carmen_chat_turn", user_id=user_id, model=metrics["model"],
                 request_id=request_ids[-1] if request_ids else None,
                 input_tokens=metrics["input_tokens"], output_tokens=metrics["output_tokens"],
                 cache_read_tokens=metrics["cache_read_tokens"], cache_write_tokens=metrics["cache_write_tokens"],
-                cost_usd=metrics["cost_usd"], duration_ms=duration_ms, tool_calls=tool_calls)
-    return {"configured": True, "answer": answer or "(no answer)", "metrics": metrics}
+                cost_usd=metrics["cost_usd"], duration_ms=duration_ms, tool_calls=tool_calls,
+                artifact_count=len(artifacts))
+    return {
+        "configured": True,
+        "answer": answer or "(no answer)",
+        "metrics": metrics,
+        "artifacts": artifacts,
+    }

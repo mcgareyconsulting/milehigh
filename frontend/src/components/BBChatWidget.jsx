@@ -3,10 +3,11 @@
  * schema_version: 1
  * purpose: Floating, flag-gated read-only chat assistant ("Carmen"). Renders a bubble on every
  *          page for users with Carmen-chat access; answers DB questions and shows per-answer
- *          cost/time/token metrics. Admins get an access-management panel.
+ *          cost/time/token metrics. Admins get an access-management panel. Look-ahead PDF
+ *          tool results surface as LookaheadPdfCard (open/download with session auth).
  * exports:
  *   BBChatWidget: default. Props: { enabled: bool, isAdmin: bool }. Renders null when !enabled.
- * imports_from: [react, ../services/bbChatApi]
+ * imports_from: [react, ../services/bbChatApi, ./carmen/LookaheadPdfCard]
  * imported_by: [components/AppShell.jsx]
  * invariants:
  *   - Renders nothing unless `enabled` (the caller passes user.is_carmen_chat).
@@ -15,6 +16,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { sendMessage, listAccessUsers, setUserAccess } from '../services/bbChatApi';
+import LookaheadPdfCard, { extractLookaheadArtifacts } from './carmen/LookaheadPdfCard';
 
 const fmtCost = (c) => (c == null ? '—' : c < 0.01 ? `$${c.toFixed(4)}` : `$${c.toFixed(3)}`);
 const fmtMs = (ms) => (ms == null ? '—' : ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`);
@@ -139,7 +141,13 @@ export default function BBChatWidget({ enabled, isAdmin }) {
             const res = await sendMessage(text, conversationId);
             setConversationId(res.conversation_id);
             const a = res.assistant_message;
-            setMessages((prev) => [...prev, { role: 'assistant', content: a.content, metrics: a.metrics }]);
+            const artifacts = extractLookaheadArtifacts(a.content, a.artifacts);
+            setMessages((prev) => [...prev, {
+                role: 'assistant',
+                content: a.content,
+                metrics: a.metrics,
+                artifacts,
+            }]);
         } catch {
             setMessages((prev) => [...prev, { role: 'assistant', content: '⚠️ Something went wrong. Please try again.', metrics: null }]);
         } finally {
@@ -211,9 +219,9 @@ export default function BBChatWidget({ enabled, isAdmin }) {
                             <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
                                 {messages.length === 0 && (
                                     <div className="text-center text-sm text-gray-400 dark:text-slate-500 mt-8 px-4">
-                                        <p className="mb-2 text-2xl">🍌</p>
-                                        <p>Name a release or submittal and I'll summarize its whole lifecycle — status, event history, open submittals, and to-dos.</p>
-                                        <p className="mt-2 text-xs">e.g. "summarize 290-153" or "what's the hold-up on submittal SUB-1234?"</p>
+                                        <p className="mb-2 text-2xl">📋</p>
+                                        <p>Name a release, submittal, or project — lifecycle summaries, look-aheads, and print-ready PDFs.</p>
+                                        <p className="mt-2 text-xs">e.g. &quot;summarize 290-153&quot; or &quot;3-week look-ahead PDF for Novel Flatiron&quot;</p>
                                     </div>
                                 )}
                                 {messages.map((m, i) => (
@@ -222,6 +230,9 @@ export default function BBChatWidget({ enabled, isAdmin }) {
                                             ? 'bg-accent-500 text-white rounded-br-sm whitespace-pre-wrap'
                                             : 'bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-slate-100 rounded-bl-sm'}`}>
                                             {m.role === 'assistant' ? <Markdown text={m.content} /> : m.content}
+                                            {m.role === 'assistant' && (m.artifacts || []).map((art, j) => (
+                                                <LookaheadPdfCard key={art.artifact_id || art.download_path || j} artifact={art} />
+                                            ))}
                                             {m.role === 'assistant' && <Metrics m={m.metrics} />}
                                         </div>
                                     </div>
