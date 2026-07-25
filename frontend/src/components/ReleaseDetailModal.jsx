@@ -388,7 +388,7 @@ export function ReleaseDetailModal({ isOpen, onClose, release, accentColor }) {
                     {bbReport && (
                         <section>
                             <h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-2">
-                                🍌 BB Review
+                                🍌 Carmen Review
                             </h3>
                             <BBReviewReport
                                 report={bbReport}

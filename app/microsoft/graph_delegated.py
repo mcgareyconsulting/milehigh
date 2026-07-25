@@ -41,7 +41,7 @@ def _authority_base():
 
 
 def _account_email():
-    return (cfg.BB_MAILBOX or "").lower()
+    return (cfg.CARMEN_MAILBOX or "").lower()
 
 
 def _persist_token(token, account_email):

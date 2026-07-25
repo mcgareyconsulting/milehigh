@@ -180,7 +180,7 @@ def _land(message, mailbox):
 
 
 def _mailbox():
-    return current_app.config.get("BB_MAILBOX", "bb@mhmw.com")
+    return current_app.config.get("CARMEN_MAILBOX", "carmen_ai@mhmw.com")
 
 
 def _group_member_mailboxes(group_id):
@@ -203,13 +203,13 @@ def resolve_mailboxes():
     """The set of mailboxes to ingest.
 
     Priority: the admin-governed security group (members discovered via Graph) →
-    an explicit BB_MAILBOXES comma list → the single BB_MAILBOX. Adding a mailbox
+    an explicit CARMEN_MAILBOXES comma list → the single CARMEN_MAILBOX. Adding a mailbox
     to the group is picked up automatically on the next poll, no code/config change.
     """
-    group_id = current_app.config.get("BB_INGEST_GROUP_ID")
+    group_id = current_app.config.get("CARMEN_INGEST_GROUP_ID")
     if group_id:
         return _group_member_mailboxes(group_id)
-    raw = current_app.config.get("BB_MAILBOXES")
+    raw = current_app.config.get("CARMEN_MAILBOXES")
     if raw:
         return [m.strip().lower() for m in raw.split(",") if m.strip()]
     return [_mailbox()]

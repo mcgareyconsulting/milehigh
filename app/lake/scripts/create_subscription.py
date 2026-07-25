@@ -9,11 +9,11 @@ Prereqs (env / .env):
     AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET   (app-only Graph)
     GRAPH_NOTIFICATION_URL           e.g. https://abc123.ngrok-free.app
     GRAPH_SUBSCRIPTION_CLIENT_STATE  any secret string you choose
-    BB_MAILBOX                       defaults to bb@mhmw.com
+    CARMEN_MAILBOX                       defaults to carmen_ai@mhmw.com
 
 Usage:
     python -m app.lake.scripts.create_subscription
-    python -m app.lake.scripts.create_subscription --mailbox bb@mhmw.com
+    python -m app.lake.scripts.create_subscription --mailbox carmen_ai@mhmw.com
 """
 import argparse
 import os
@@ -30,7 +30,7 @@ from app.lake.ingest import graph_subscription
 
 def main():
     parser = argparse.ArgumentParser(description="Create a BB-mail Graph subscription.")
-    parser.add_argument("--mailbox", help="Mailbox to watch (default: BB_MAILBOX).")
+    parser.add_argument("--mailbox", help="Mailbox to watch (default: CARMEN_MAILBOX).")
     args = parser.parse_args()
 
     app = create_app()

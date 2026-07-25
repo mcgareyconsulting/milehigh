@@ -6,18 +6,18 @@
  *   sendMessage: POST a question; returns { conversation_id, user_message, assistant_message }.
  *   listConversations: List my chat threads (metadata).
  *   getConversation: One thread with its full message history.
- *   listAccessUsers: (admin) users + their is_bb_chat flag.
+ *   listAccessUsers: (admin) users + their is_carmen_chat flag.
  *   setUserAccess: (admin) grant/revoke a user's BB-chat access.
  * imports_from: [axios, ../utils/api]
  * imported_by: [components/BBChatWidget.jsx]
  * invariants:
- *   - withCredentials sends the session cookie; access is enforced server-side by is_bb_chat.
+ *   - withCredentials sends the session cookie; access is enforced server-side by is_carmen_chat.
  */
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 
 axios.defaults.withCredentials = true;
-const BASE = `${API_BASE_URL}/brain/bb-chat`;
+const BASE = `${API_BASE_URL}/brain/carmen-chat`;
 
 export async function sendMessage(message, conversationId) {
     const { data } = await axios.post(BASE, {
@@ -39,12 +39,12 @@ export async function getConversation(id) {
 
 export async function listAccessUsers() {
     const { data } = await axios.get(`${BASE}/admin/users`);
-    return data.users; // [{ id, username, name, is_admin, is_bb_chat }]
+    return data.users; // [{ id, username, name, is_admin, is_carmen_chat }]
 }
 
 export async function setUserAccess(userId, isBbChat) {
     const { data } = await axios.post(`${BASE}/admin/users/${userId}/access`, {
-        is_bb_chat: isBbChat,
+        is_carmen_chat: isBbChat,
     });
-    return data; // { id, is_bb_chat }
+    return data; // { id, is_carmen_chat }
 }

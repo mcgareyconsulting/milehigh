@@ -72,7 +72,7 @@ export function FeedbackControls({ releaseId, reviewId, findingIndex, finding, i
         setBusy(true);
         setError(null);
         try {
-            await jobsApi.saveBBReviewFeedback(releaseId, reviewId, {
+            await jobsApi.saveCarmenReviewFeedback(releaseId, reviewId, {
                 finding_index: findingIndex,
                 rule_id: finding?.rule_id || null,
                 decision: nextDecision,

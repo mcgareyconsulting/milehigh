@@ -20,22 +20,22 @@ const STATUS_META = {
     violation: {
         dot: 'bg-red-500',
         pulse: false,
-        title: 'BB found a code violation — hold recommended',
+        title: 'Carmen found a code violation — hold recommended',
     },
     needs_verify: {
         dot: 'bg-amber-500',
         pulse: false,
-        title: 'BB flagged items to verify in the field',
+        title: 'Carmen flagged items to verify in the field',
     },
     clear: {
         dot: 'bg-green-500',
         pulse: false,
-        title: "Reviewed clear against BB's rules",
+        title: "Reviewed clear against Carmen's rules",
     },
     reviewing: {
         dot: 'bg-amber-500',
         pulse: true,
-        title: 'BB is reviewing…',
+        title: 'Carmen is reviewing…',
     },
     pulled: {
         dot: 'bg-slate-400',

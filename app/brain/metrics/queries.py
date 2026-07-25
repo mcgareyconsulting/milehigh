@@ -17,7 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.models import (
     db, User, AiUsage,
-    BBDrawingReview, BBReviewFeedback,
+    CarmenDrawingReview, CarmenReviewFeedback,
     ReleasePhoto, BoardItemPhoto, ReleaseDrawingVersion,
     BoardActivity, DrawingVersionComment, Notification,
     ReleaseEvents, SubmittalEvents, Meeting, MeetingLearning, ChecklistItem,
@@ -193,9 +193,9 @@ def content(start, end):
         "drawing_comments": _fetch_pairs(
             DrawingVersionComment.created_at, DrawingVersionComment.author_id, start, end),
         "bb_reviews": _fetch_pairs(
-            BBDrawingReview.created_at, BBDrawingReview.requested_by_user_id, start, end),
+            CarmenDrawingReview.created_at, CarmenDrawingReview.requested_by_user_id, start, end),
         "review_feedback": _fetch_pairs(
-            BBReviewFeedback.created_at, BBReviewFeedback.user_id, start, end),
+            CarmenReviewFeedback.created_at, CarmenReviewFeedback.user_id, start, end),
         # Recipient-only: Notification has no actor FK, so by_user here is who was
         # mentioned, not who mentioned. Surfaced as volume; documented in the API.
         "mentions": _fetch_pairs(
@@ -434,7 +434,7 @@ def engagement(start, end):
         (ReleaseDrawingVersion.uploaded_by_user_id, ReleaseDrawingVersion.uploaded_at),
         (BoardActivity.author_id, BoardActivity.created_at),
         (DrawingVersionComment.author_id, DrawingVersionComment.created_at),
-        (BBReviewFeedback.user_id, BBReviewFeedback.created_at),
+        (CarmenReviewFeedback.user_id, CarmenReviewFeedback.created_at),
         (AiUsage.user_id, AiUsage.created_at),
     ):
         active |= _distinct_user_ids(ucol, tcol, start, end)
@@ -479,16 +479,16 @@ def _avg(values, ndigits=1):
 def ai_reliability(start, end):
     """AI failure rates and latency — the health the spend ledger deliberately omits."""
     review_status = _count_by(
-        db.session.query(BBDrawingReview.status, func.count(BBDrawingReview.id))
-        .filter(BBDrawingReview.created_at >= start, BBDrawingReview.created_at < end)
-        .group_by(BBDrawingReview.status))
+        db.session.query(CarmenDrawingReview.status, func.count(CarmenDrawingReview.id))
+        .filter(CarmenDrawingReview.created_at >= start, CarmenDrawingReview.created_at < end)
+        .group_by(CarmenDrawingReview.status))
     r_complete, r_error = int(review_status.get("complete", 0)), int(review_status.get("error", 0))
     r_denom = r_complete + r_error
     review_lat = [
         (c - s).total_seconds()
-        for s, c in db.session.query(BBDrawingReview.created_at, BBDrawingReview.completed_at)
-        .filter(BBDrawingReview.created_at >= start, BBDrawingReview.created_at < end,
-                BBDrawingReview.completed_at.isnot(None)).all()
+        for s, c in db.session.query(CarmenDrawingReview.created_at, CarmenDrawingReview.completed_at)
+        .filter(CarmenDrawingReview.created_at >= start, CarmenDrawingReview.created_at < end,
+                CarmenDrawingReview.completed_at.isnot(None)).all()
         if c and s and c >= s
     ]
 
@@ -545,9 +545,9 @@ def _chat_durations(start, end):
 def quality(start, end):
     """Human accept/reject signal on AI output — the best proxy for usefulness."""
     fb = _count_by(
-        db.session.query(BBReviewFeedback.decision, func.count(BBReviewFeedback.id))
-        .filter(BBReviewFeedback.created_at >= start, BBReviewFeedback.created_at < end)
-        .group_by(BBReviewFeedback.decision))
+        db.session.query(CarmenReviewFeedback.decision, func.count(CarmenReviewFeedback.id))
+        .filter(CarmenReviewFeedback.created_at >= start, CarmenReviewFeedback.created_at < end)
+        .group_by(CarmenReviewFeedback.decision))
     fb_acc, fb_rej = int(fb.get("accepted", 0)), int(fb.get("rejected", 0))
     fb_denom = fb_acc + fb_rej
 
@@ -706,9 +706,9 @@ def digest_text(period_label, s):
     return (
         f"This {period_label}: {eng['active_users']} active users · "
         f"{ai['calls']} AI calls · ${ai['cost_usd']:.2f} "
-        f"(BB accept {_pct(qual['bb_accept_rate'])}, {ai['failures']} AI failures) · "
+        f"(Carmen accept {_pct(qual['bb_accept_rate'])}, {ai['failures']} AI failures) · "
         f"{con['photos']} photos · {con['drawings']} drawings · "
-        f"{con['reviews']} BB reviews · {act['human_actions']} human actions · "
+        f"{con['reviews']} Carmen reviews · {act['human_actions']} human actions · "
         f"{tp['releases_created']} releases created / {tp['releases_completed']} completed · "
         f"{sysm['errors']} errors."
     )

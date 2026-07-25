@@ -2,14 +2,14 @@
 
 Covers the /procore-submittals/<id>/documents surface: the merged document listing, the
 enqueue-and-background review (202 + pending row) plus the worker job that persists a
-submittal-keyed BBDrawingReview (release/version null), the review_only cache gate, and
+submittal-keyed CarmenDrawingReview (release/version null), the review_only cache gate, and
 submittal-keyed feedback. Procore + the Claude call are mocked.
 """
 from unittest.mock import patch
 
 import pytest
 
-from app.models import db, Submittals, BBDrawingReview, BBReviewFeedback
+from app.models import db, Submittals, CarmenDrawingReview, CarmenReviewFeedback
 
 
 VIOLATION_FINDINGS = [
@@ -50,7 +50,7 @@ def test_documents_lists_refs_with_cache_and_review(app, admin_client, tmp_path)
     sid = _seed_submittal(app)
     # A complete review already exists for the first attachment (5001).
     with app.app_context():
-        db.session.add(BBDrawingReview(
+        db.session.add(CarmenDrawingReview(
             submittal_id=sid, attachment_id=5001, status="complete",
             findings=VIOLATION_FINDINGS, model="test",
         ))
@@ -86,7 +86,7 @@ def test_bb_review_enqueues_pending_row_and_backgrounds(app, admin_client, tmp_p
          patch("app.brain.pdf_review.routes.start_submittal_review") as mock_start, \
          patch("app.brain.pdf_review.service.review") as mock_review:
         resp = admin_client.post(
-            f"/brain/procore-submittals/{sid}/documents/5001/bb-review?model=sonnet")
+            f"/brain/procore-submittals/{sid}/documents/5001/carmen-review?model=sonnet")
     assert resp.status_code == 202
     body = resp.get_json()
     assert body["ok"] is True
@@ -96,7 +96,7 @@ def test_bb_review_enqueues_pending_row_and_backgrounds(app, admin_client, tmp_p
     mock_start.assert_called_once()
 
     with app.app_context():
-        rows = BBDrawingReview.query.filter_by(submittal_id=sid, attachment_id=5001).all()
+        rows = CarmenDrawingReview.query.filter_by(submittal_id=sid, attachment_id=5001).all()
         assert len(rows) == 1
         assert rows[0].status == "pending"
         assert rows[0].id == body["review_id"]
@@ -110,7 +110,7 @@ def test_bb_review_returns_existing_pending_row(app, admin_client, tmp_path):
     app.config["PDF_STORAGE_ROOT"] = str(tmp_path)
     sid = _seed_submittal(app)
     with app.app_context():
-        pending = BBDrawingReview(submittal_id=sid, attachment_id=5001, status="pending")
+        pending = CarmenDrawingReview(submittal_id=sid, attachment_id=5001, status="pending")
         db.session.add(pending)
         db.session.commit()
         pending_id = pending.id
@@ -118,13 +118,13 @@ def test_bb_review_returns_existing_pending_row(app, admin_client, tmp_path):
 
     with patch("app.brain.pdf_review.routes.start_submittal_review") as mock_start:
         resp = admin_client.post(
-            f"/brain/procore-submittals/{sid}/documents/5001/bb-review?review_only=true")
+            f"/brain/procore-submittals/{sid}/documents/5001/carmen-review?review_only=true")
     assert resp.status_code == 202
     assert resp.get_json()["review_id"] == pending_id
     mock_start.assert_not_called()
 
     with app.app_context():
-        assert BBDrawingReview.query.filter_by(submittal_id=sid, attachment_id=5001).count() == 1
+        assert CarmenDrawingReview.query.filter_by(submittal_id=sid, attachment_id=5001).count() == 1
 
 
 def test_worker_completes_submittal_review(app, admin_client, tmp_path):
@@ -136,7 +136,7 @@ def test_worker_completes_submittal_review(app, admin_client, tmp_path):
     app.config["PDF_STORAGE_ROOT"] = str(tmp_path)
     sid = _seed_submittal(app)
     with app.app_context():
-        review = BBDrawingReview(submittal_id=sid, attachment_id=5001, status="pending")
+        review = CarmenDrawingReview(submittal_id=sid, attachment_id=5001, status="pending")
         db.session.add(review)
         db.session.commit()
         review_id = review.id
@@ -150,7 +150,7 @@ def test_worker_completes_submittal_review(app, admin_client, tmp_path):
     mock_review.assert_called_once()
 
     with app.app_context():
-        r = db.session.get(BBDrawingReview, review_id)
+        r = db.session.get(CarmenDrawingReview, review_id)
         assert r.status == "complete"
         assert r.release_id is None
         assert r.drawing_version_id is None
@@ -166,7 +166,7 @@ def test_worker_records_error_when_review_fails(app, tmp_path):
     app.config["PDF_STORAGE_ROOT"] = str(tmp_path)
     sid = _seed_submittal(app)
     with app.app_context():
-        review = BBDrawingReview(submittal_id=sid, attachment_id=5001, status="pending")
+        review = CarmenDrawingReview(submittal_id=sid, attachment_id=5001, status="pending")
         db.session.add(review)
         db.session.commit()
         review_id = review.id
@@ -176,7 +176,7 @@ def test_worker_records_error_when_review_fails(app, tmp_path):
         _run_submittal_review_job(app, review_id, sid, 5001, "590-674", None)
 
     with app.app_context():
-        r = db.session.get(BBDrawingReview, review_id)
+        r = db.session.get(CarmenDrawingReview, review_id)
         assert r is not None and r.status == "error"
 
 
@@ -184,7 +184,7 @@ def test_review_only_409_when_not_cached(app, admin_client, tmp_path):
     app.config["PDF_STORAGE_ROOT"] = str(tmp_path)
     sid = _seed_submittal(app)
     resp = admin_client.post(
-        f"/brain/procore-submittals/{sid}/documents/5001/bb-review?review_only=true")
+        f"/brain/procore-submittals/{sid}/documents/5001/carmen-review?review_only=true")
     assert resp.status_code == 409
 
 
@@ -192,7 +192,7 @@ def test_get_review_and_feedback_roundtrip(app, admin_client, tmp_path):
     app.config["PDF_STORAGE_ROOT"] = str(tmp_path)
     sid = _seed_submittal(app)
     with app.app_context():
-        review = BBDrawingReview(
+        review = CarmenDrawingReview(
             submittal_id=sid, attachment_id=5001, status="complete",
             findings=VIOLATION_FINDINGS, model="test",
         )
@@ -201,7 +201,7 @@ def test_get_review_and_feedback_roundtrip(app, admin_client, tmp_path):
         review_id = review.id
 
     # Save feedback on finding 0 (submittal-keyed; release/version stay null).
-    fb_url = (f"/brain/procore-submittals/{sid}/documents/5001/bb-review/"
+    fb_url = (f"/brain/procore-submittals/{sid}/documents/5001/carmen-review/"
               f"{review_id}/feedback")
     resp = admin_client.post(fb_url, json={
         "finding_index": 0, "decision": "accepted", "notes": "BB right, rise is 8\"",
@@ -210,14 +210,14 @@ def test_get_review_and_feedback_roundtrip(app, admin_client, tmp_path):
     assert resp.status_code == 200
 
     with app.app_context():
-        rows = BBReviewFeedback.query.filter_by(review_id=review_id).all()
+        rows = CarmenReviewFeedback.query.filter_by(review_id=review_id).all()
         assert len(rows) == 1
         assert rows[0].submittal_id == sid
         assert rows[0].attachment_id == 5001
         assert rows[0].release_id is None
 
     # GET the review carries the tally + feedback keyed by finding_index.
-    resp = admin_client.get(f"/brain/procore-submittals/{sid}/documents/5001/bb-review")
+    resp = admin_client.get(f"/brain/procore-submittals/{sid}/documents/5001/carmen-review")
     assert resp.status_code == 200
     review_payload = resp.get_json()["review"]
     assert review_payload["review_id"] == review_id

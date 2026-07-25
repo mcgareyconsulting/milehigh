@@ -13,7 +13,7 @@ from app.microsoft.graph_delegated import MicrosoftDelegatedAuthError, get_deleg
 from app.models import MicrosoftDelegatedToken, db
 
 
-def _seed(email="bb@mhmw.com", expires_in_min=60, refresh="r0", access="a0"):
+def _seed(email="carmen_ai@mhmw.com", expires_in_min=60, refresh="r0", access="a0"):
     row = MicrosoftDelegatedToken(
         account_email=email,
         access_token=access,
@@ -57,7 +57,7 @@ def test_refreshes_when_expiring_and_rotates_refresh_token(app):
     post.assert_called_once()
     assert post.call_args.kwargs["data"]["grant_type"] == "refresh_token"
 
-    row = MicrosoftDelegatedToken.get_for_account("bb@mhmw.com")
+    row = MicrosoftDelegatedToken.get_for_account("carmen_ai@mhmw.com")
     assert row.access_token == "a1"
     assert row.refresh_token == "r1"  # rotated
 

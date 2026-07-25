@@ -1,29 +1,29 @@
 """BB (Banana Boy) read-only chat routes. Registered on brain_bp.
 
-Access is gated by the per-user `is_bb_chat` flag (admins always have access), so the
+Access is gated by the per-user `is_carmen_chat` flag (admins always have access), so the
 phase-1 rollout can be widened from the admin UI without a redeploy. The chat is strictly
 read-only — it answers questions by running SELECT queries and never mutates data.
 
 Endpoints:
-  POST   /brain/bb-chat                          send a message -> assistant answer + metrics
-  GET    /brain/bb-chat/conversations            list my conversations
-  GET    /brain/bb-chat/conversations/<id>       one conversation with its messages
-  GET    /brain/bb-chat/admin/users              (admin) users + their is_bb_chat flag
-  POST   /brain/bb-chat/admin/users/<id>/access  (admin) grant/revoke bb-chat access
+  POST   /brain/carmen-chat                          send a message -> assistant answer + metrics
+  GET    /brain/carmen-chat/conversations            list my conversations
+  GET    /brain/carmen-chat/conversations/<id>       one conversation with its messages
+  GET    /brain/carmen-chat/admin/users              (admin) users + their is_carmen_chat flag
+  POST   /brain/carmen-chat/admin/users/<id>/access  (admin) grant/revoke bb-chat access
 """
 from flask import request, jsonify
 
 from app.brain import brain_bp
-from app.auth.utils import admin_required, bb_chat_required, get_current_user
+from app.auth.utils import admin_required, carmen_chat_required, get_current_user
 from app.models import db, User
-from app.brain.bb_chat import service
+from app.brain.carmen_chat import service
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 
-@brain_bp.route('/bb-chat', methods=['POST'])
-@bb_chat_required
+@brain_bp.route('/carmen-chat', methods=['POST'])
+@carmen_chat_required
 def bb_chat_send():
     """Send a message. Body: {message, conversation_id?}. Returns the turn + metrics."""
     user = get_current_user()
@@ -42,19 +42,19 @@ def bb_chat_send():
     except Exception as exc:
         logger.error('bb_chat_send_failed', user_id=user.id, error=str(exc),
                      error_type=type(exc).__name__, exc_info=True)
-        return jsonify({'error': 'BB chat is temporarily unavailable.'}), 502
+        return jsonify({'error': 'Carmen is temporarily unavailable.'}), 502
 
 
-@brain_bp.route('/bb-chat/conversations', methods=['GET'])
-@bb_chat_required
-def bb_chat_conversations():
+@brain_bp.route('/carmen-chat/conversations', methods=['GET'])
+@carmen_chat_required
+def carmen_chat_conversations():
     """List the current user's conversations (metadata only)."""
     user = get_current_user()
     return jsonify({'conversations': service.list_conversations(user.id)}), 200
 
 
-@brain_bp.route('/bb-chat/conversations/<int:conversation_id>', methods=['GET'])
-@bb_chat_required
+@brain_bp.route('/carmen-chat/conversations/<int:conversation_id>', methods=['GET'])
+@carmen_chat_required
 def bb_chat_conversation(conversation_id):
     """One conversation with its full message history (owner only)."""
     user = get_current_user()
@@ -66,7 +66,7 @@ def bb_chat_conversation(conversation_id):
 
 # --- Admin: grant / revoke access (the "flip the flag" UI) ---------------------------
 
-@brain_bp.route('/bb-chat/admin/users', methods=['GET'])
+@brain_bp.route('/carmen-chat/admin/users', methods=['GET'])
 @admin_required
 def bb_chat_admin_users():
     """All users with their BB-chat access flag, for the admin toggle panel."""
@@ -77,25 +77,25 @@ def bb_chat_admin_users():
             'username': u.username,
             'name': ((u.first_name or '') + ' ' + (u.last_name or '')).strip() or u.username,
             'is_admin': bool(u.is_admin),
-            'is_bb_chat': bool(getattr(u, 'is_bb_chat', False)),
+            'is_carmen_chat': bool(getattr(u, 'is_carmen_chat', False)),
         }
         for u in users
     ]}), 200
 
 
-@brain_bp.route('/bb-chat/admin/users/<int:user_id>/access', methods=['POST'])
+@brain_bp.route('/carmen-chat/admin/users/<int:user_id>/access', methods=['POST'])
 @admin_required
 def bb_chat_admin_set_access(user_id):
-    """Grant or revoke BB-chat access for a user. Body: {is_bb_chat: bool}."""
+    """Grant or revoke BB-chat access for a user. Body: {is_carmen_chat: bool}."""
     target = db.session.get(User, user_id)
     if not target:
         return jsonify({'error': 'user not found'}), 404
     data = request.get_json(silent=True) or {}
-    enabled = bool(data.get('is_bb_chat'))
-    target.is_bb_chat = enabled
+    enabled = bool(data.get('is_carmen_chat'))
+    target.is_carmen_chat = enabled
     db.session.commit()
     actor = get_current_user()
     logger.info('bb_chat_access_changed', user_id=target.id,
                 username=target.username, enabled=enabled,
                 actor_id=actor.id if actor else None)
-    return jsonify({'id': target.id, 'is_bb_chat': enabled}), 200
+    return jsonify({'id': target.id, 'is_carmen_chat': enabled}), 200

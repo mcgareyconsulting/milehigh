@@ -32,7 +32,7 @@ def main():
 
     app = create_app()
     with app.app_context():
-        print(f"Linking mailbox: {cfg.BB_MAILBOX}")
+        print(f"Linking mailbox: {cfg.CARMEN_MAILBOX}")
         try:
             link_mailbox()
         except Exception as exc:  # noqa: BLE001 - surface any failure to the operator

@@ -9,7 +9,7 @@ so the endpoint at GRAPH_NOTIFICATION_URL must be live when this runs.
 
 Usage:
     python -m app.lake.scripts.ensure_subscription
-    python -m app.lake.scripts.ensure_subscription --mailbox bb@mhmw.com
+    python -m app.lake.scripts.ensure_subscription --mailbox carmen_ai@mhmw.com
 """
 import argparse
 import os
@@ -26,7 +26,7 @@ from app.lake.ingest import graph_subscription
 
 def main():
     parser = argparse.ArgumentParser(description="Ensure/renew the BB-mail Graph subscription.")
-    parser.add_argument("--mailbox", help="Mailbox to watch (default: BB_MAILBOX).")
+    parser.add_argument("--mailbox", help="Mailbox to watch (default: CARMEN_MAILBOX).")
     args = parser.parse_args()
 
     app = create_app()

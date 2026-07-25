@@ -522,7 +522,7 @@ function SendBotModal({ url, name, agenda, busy, error, onUrl, onName, onAgenda,
                         className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 text-lg leading-none">✕</button>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-slate-400">
-                    Paste a Teams or Google Meet link. BB joins the call, records, and transcribes — no Azure admin or calendar access needed.
+                    Paste a Teams or Google Meet link. Carmen joins the call, records, and transcribes — no Azure admin or calendar access needed.
                 </p>
                 <input
                     type="text" inputMode="url" autoComplete="off" spellCheck={false} autoFocus
