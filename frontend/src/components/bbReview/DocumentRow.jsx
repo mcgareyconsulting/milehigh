@@ -13,12 +13,13 @@
  *
  * Findings expand IN PLACE (accordion). Download state and the completed-review summary
  * are lifted to the parent via onUpdate so they survive a collapse; the findings list and
- * accept/reject feedback are row-local UI. Severity colors come from ./urgency.js — the
- * app's one finding-severity vocabulary — never invented here.
+ * accept/reject + notes feedback are row-local UI. Severity colors come from ./urgency.js —
+ * the app's one finding-severity vocabulary — never invented here.
  */
 import React, { useEffect, useRef, useState } from 'react';
 
 import { draftingWorkLoadApi } from '../../services/draftingWorkLoadApi';
+import { FindingFeedbackForm } from './shared';
 import { URGENCY_STYLES, urgencyOf } from './urgency';
 
 // The review runs on a background thread server-side (the Claude call takes minutes),
@@ -103,9 +104,6 @@ function TallyChips({ tally, hold }) {
 function FindingRow({ finding, index, submittalId, attachmentId, reviewId, initial, onCite }) {
     const bucket = urgencyOf(finding);
     const style = URGENCY_STYLES[bucket] || URGENCY_STYLES.low;
-    const [decision, setDecision] = useState(initial?.decision || null);
-    const [busy, setBusy] = useState(false);
-    const [err, setErr] = useState(null);
 
     const canCite = finding?.page != null && typeof onCite === 'function';
     const citeProps = canCite
@@ -116,29 +114,8 @@ function FindingRow({ finding, index, submittalId, attachmentId, reviewId, initi
         }
         : {};
 
-    const choose = async (value) => {
-        if (busy) return;
-        setBusy(true);
-        setErr(null);
-        const prev = decision;
-        setDecision(value);
-        try {
-            await draftingWorkLoadApi.saveProcoreDocumentReviewFeedback(submittalId, attachmentId, reviewId, {
-                finding_index: index,
-                decision: value,
-                rule_id: finding?.rule_id || null,
-                finding,
-            });
-        } catch (e) {
-            setDecision(prev);
-            setErr(e?.message || 'Failed to save');
-        } finally {
-            setBusy(false);
-        }
-    };
-
     return (
-        <div className={`rounded-md border border-gray-200 dark:border-slate-600 border-l-4 ${style.stripe} bg-white dark:bg-slate-800 p-2 text-sm`}>
+        <div className={`rounded-md border border-gray-200 dark:border-slate-600 border-l-4 ${style.stripe} bg-white dark:bg-slate-800 p-2.5 text-sm`}>
             <div {...citeProps}>
                 <div className="flex items-center gap-2 flex-wrap">
                     <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${style.chip}`}>{style.label}</span>
@@ -160,34 +137,24 @@ function FindingRow({ finding, index, submittalId, attachmentId, reviewId, initi
                 </p>
             )}
             {reviewId != null && (
-                <div className="mt-1.5 flex items-center gap-1.5">
-                    <button
-                        type="button"
-                        onClick={() => choose('accepted')}
-                        disabled={busy}
-                        className={`text-[11px] font-semibold px-2 py-0.5 rounded border transition-colors disabled:opacity-50 ${
-                            decision === 'accepted'
-                                ? 'bg-green-600 text-white border-green-600'
-                                : 'bg-white dark:bg-slate-700 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700 hover:bg-green-50 dark:hover:bg-green-900/30'
-                        }`}
-                    >
-                        ✓ Accept
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => choose('rejected')}
-                        disabled={busy}
-                        className={`text-[11px] font-semibold px-2 py-0.5 rounded border transition-colors disabled:opacity-50 ${
-                            decision === 'rejected'
-                                ? 'bg-red-600 text-white border-red-600'
-                                : 'bg-white dark:bg-slate-700 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/30'
-                        }`}
-                    >
-                        ✕ Reject
-                    </button>
-                    {busy && <span className="text-[10px] text-gray-400 dark:text-slate-500">saving…</span>}
-                    {err && <span className="text-[10px] text-red-600 dark:text-red-400">{err}</span>}
-                </div>
+                <FindingFeedbackForm
+                    initial={initial}
+                    denyLabel="Reject"
+                    onSave={async (decision, notes) => {
+                        await draftingWorkLoadApi.saveProcoreDocumentReviewFeedback(
+                            submittalId,
+                            attachmentId,
+                            reviewId,
+                            {
+                                finding_index: index,
+                                decision,
+                                rule_id: finding?.rule_id || null,
+                                notes,
+                                finding,
+                            }
+                        );
+                    }}
+                />
             )}
         </div>
     );
