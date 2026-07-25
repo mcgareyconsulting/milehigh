@@ -28,6 +28,23 @@ load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 # Define frontend build directory
 FRONTEND_BUILD_DIR = Path(__file__).parent.parent / "frontend" / "dist"
 
+
+def _carmen_env(suffix, default=None):
+    """Read CARMEN_<suffix>, falling back to the legacy BB_<suffix> name.
+
+    TRANSITION SHIM for the BB → Carmen Miranda rename. Every .env has been moved
+    to CARMEN_*, but platform-set vars (Render dashboards) live outside the repo —
+    if one was missed, the fallback keeps that environment working instead of
+    silently reverting to a default (which for the ingest flags would quietly stop
+    ingestion, and for the mailbox would poll the wrong inbox).
+
+    Safe to delete once every environment is confirmed on CARMEN_* names.
+    """
+    value = os.environ.get(f"CARMEN_{suffix}")
+    if value is None:
+        value = os.environ.get(f"BB_{suffix}")
+    return default if value is None else value
+
 class Config:
     """Base configuration class with common settings."""
     # Flask session configuration
@@ -64,24 +81,24 @@ class Config:
     AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
     AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")
 
-    # Banana Boy mailbox ingestion (bb@mhmw.com → data lake bronze).
+    # Carmen mailbox ingestion (carmen_ai@mhmw.com → data lake bronze).
     # App-only Graph read scoped to this single mailbox via an Azure
     # ApplicationAccessPolicy — the workaround for not opening Graph org-wide.
     # INGEST_ENABLED is off by default so tests/dev never poll; flip it on in
     # prod once the access policy is verified.
-    BB_MAILBOX = os.environ.get("BB_MAILBOX", "bb@mhmw.com")
-    BB_MAIL_POLL_MINUTES = int(os.environ.get("BB_MAIL_POLL_MINUTES", "15"))
-    BB_MAIL_INGEST_ENABLED = os.environ.get("BB_MAIL_INGEST_ENABLED", "0") == "1"
-    # Central, admin-governed mailbox set. When BB_INGEST_GROUP_ID (an Entra
+    CARMEN_MAILBOX = _carmen_env("MAILBOX", "carmen_ai@mhmw.com")
+    CARMEN_MAIL_POLL_MINUTES = int(_carmen_env("MAIL_POLL_MINUTES", "15"))
+    CARMEN_MAIL_INGEST_ENABLED = _carmen_env("MAIL_INGEST_ENABLED", "0") == "1"
+    # Central, admin-governed mailbox set. When CARMEN_INGEST_GROUP_ID (an Entra
     # security group object id) is set, the poller discovers that group's
     # members via Graph and ingests each — so onboarding a mailbox is just
     # "admin adds it to the group" (same group used by the ApplicationAccessPolicy
     # that scopes the app's Mail.* access). Falls back to the explicit
-    # BB_MAILBOXES comma list, then to the single BB_MAILBOX.
-    BB_INGEST_GROUP_ID = os.environ.get("BB_INGEST_GROUP_ID")
-    BB_MAILBOXES = os.environ.get("BB_MAILBOXES")
+    # CARMEN_MAILBOXES comma list, then to the single CARMEN_MAILBOX.
+    CARMEN_INGEST_GROUP_ID = _carmen_env("INGEST_GROUP_ID")
+    CARMEN_MAILBOXES = _carmen_env("MAILBOXES")
 
-    # Graph change-notification (webhook) push for the BB mailbox. The fast path
+    # Graph change-notification (webhook) push for the Carmen mailbox. The fast path
     # that complements the poll: Graph POSTs GRAPH_NOTIFICATION_URL the instant
     # mail lands, and we fetch+land that one message. The poll stays as the
     # durable floor (a lapsed/dropped subscription is swept up on the next pass).
@@ -95,7 +112,7 @@ class Config:
     #     notification; the handler rejects any POST whose clientState doesn't match.
     #   GRAPH_SUBSCRIPTION_RENEW_MINUTES — how often the renewal job runs. Mailbox
     #     message subscriptions expire in ~70h; we renew well inside that window.
-    BB_MAIL_WEBHOOK_ENABLED = os.environ.get("BB_MAIL_WEBHOOK_ENABLED", "0") == "1"
+    CARMEN_MAIL_WEBHOOK_ENABLED = _carmen_env("MAIL_WEBHOOK_ENABLED", "0") == "1"
     GRAPH_NOTIFICATION_URL = os.environ.get("GRAPH_NOTIFICATION_URL")
     GRAPH_SUBSCRIPTION_CLIENT_STATE = os.environ.get("GRAPH_SUBSCRIPTION_CLIENT_STATE")
     GRAPH_SUBSCRIPTION_RENEW_MINUTES = int(
@@ -160,18 +177,18 @@ class Config:
     # Falls back to a deterministic stub extractor when unset (tests / no key).
     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
-    # BB (Banana Boy) chat — read-only Q&A assistant over the app database.
+    # Carmen chat — read-only Q&A assistant over the app database.
     # Phase 1 runs on Sonnet 5 with adaptive thinking; effort "medium" balances
     # chat latency against cost. max_tokens stays under the 16k non-streaming
     # timeout guard. All read-only; no data is ever mutated by the chat.
-    BB_CHAT_MODEL = os.environ.get("BB_CHAT_MODEL", "claude-sonnet-5")
-    BB_CHAT_MAX_TOKENS = int(os.environ.get("BB_CHAT_MAX_TOKENS", "8192"))
-    BB_CHAT_EFFORT = os.environ.get("BB_CHAT_EFFORT", "medium")
+    CARMEN_CHAT_MODEL = _carmen_env("CHAT_MODEL", "claude-sonnet-5")
+    CARMEN_CHAT_MAX_TOKENS = int(_carmen_env("CHAT_MAX_TOKENS", "8192"))
+    CARMEN_CHAT_EFFORT = _carmen_env("CHAT_EFFORT", "medium")
     # Hard caps for the read-only SQL tool so a bad query can't melt the DB.
-    BB_CHAT_SQL_TIMEOUT_MS = int(os.environ.get("BB_CHAT_SQL_TIMEOUT_MS", "8000"))
-    BB_CHAT_SQL_ROW_LIMIT = int(os.environ.get("BB_CHAT_SQL_ROW_LIMIT", "500"))
+    CARMEN_CHAT_SQL_TIMEOUT_MS = int(_carmen_env("CHAT_SQL_TIMEOUT_MS", "8000"))
+    CARMEN_CHAT_SQL_ROW_LIMIT = int(_carmen_env("CHAT_SQL_ROW_LIMIT", "500"))
     # Max agent tool-loop iterations before we force a final answer.
-    BB_CHAT_MAX_STEPS = int(os.environ.get("BB_CHAT_MAX_STEPS", "12"))
+    CARMEN_CHAT_MAX_STEPS = int(_carmen_env("CHAT_MAX_STEPS", "12"))
 
     # Recall.ai — dispatches a notetaker bot to a meeting URL (Teams/Zoom/Meet) and
     # produces an async transcript we PULL down post-meeting (no webhook/data-lake
@@ -185,14 +202,14 @@ class Config:
     )
 
     # Calendar → Recall scheduling (app-only Graph). Invite RECALL_CALENDAR_MAILBOX
-    # (e.g. bb@mhmw.com) to a Teams meeting and a poller schedules a Recall bot to
+    # (e.g. carmen_ai@mhmw.com) to a Teams meeting and a poller schedules a Recall bot to
     # join at the event's start time — the calendar IS the scheduling UI. Reads the
     # mailbox's calendar as the application via the same AZURE_* app registration,
     # scoped by an ApplicationAccessPolicy (needs Calendars.Read application
     # permission). Off by default so dev/tests never poll Graph; flip the flag on
     # once the access policy is live.
     RECALL_CALENDAR_ENABLED = os.environ.get("RECALL_CALENDAR_ENABLED", "0") == "1"
-    RECALL_CALENDAR_MAILBOX = os.environ.get("RECALL_CALENDAR_MAILBOX", "bb@mhmw.com")
+    RECALL_CALENDAR_MAILBOX = os.environ.get("RECALL_CALENDAR_MAILBOX", "carmen_ai@mhmw.com")
     RECALL_CALENDAR_POLL_MINUTES = int(os.environ.get("RECALL_CALENDAR_POLL_MINUTES", "5"))
     # How far ahead to schedule bots. Events starting within this window get a bot
     # dispatched with join_at = start. Recall only *guarantees* an on-time join when

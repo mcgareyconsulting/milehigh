@@ -56,7 +56,7 @@ def test_headline_and_notification_message():
     r = build_report(FINDINGS_590_674, "590-674")
     assert r["headline"] == "1 code violation + 3 to confirm — review before fabrication."
     assert notification_message(r) == (
-        "BB reviewed 590-674: 1 code violation + 3 to confirm — review before fabrication."
+        "Carmen reviewed 590-674: 1 code violation + 3 to confirm — review before fabrication."
     )
 
 

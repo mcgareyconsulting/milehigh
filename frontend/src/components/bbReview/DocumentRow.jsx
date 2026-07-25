@@ -371,7 +371,7 @@ export default function DocumentRow({ submittalId, doc, model, onUpdate, onView,
                 <button
                     onClick={handleReview}
                     className="px-2.5 py-1 text-xs font-medium rounded text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
-                    title="Re-run the BB review with the selected model"
+                    title="Re-run the Carmen review with the selected model"
                 >
                     Re-run
                 </button>
@@ -473,7 +473,7 @@ export default function DocumentRow({ submittalId, doc, model, onUpdate, onView,
                     {findingsLoading ? (
                         <p className="text-xs text-gray-500 dark:text-slate-400">Loading findings…</p>
                     ) : findings && findings.length === 0 ? (
-                        <p className="text-sm text-green-600 dark:text-green-400">No findings — clear against BB's rules.</p>
+                        <p className="text-sm text-green-600 dark:text-green-400">No findings — clear against Carmen's rules.</p>
                     ) : findings ? (
                         findings.map((f, i) => (
                             <FindingRow

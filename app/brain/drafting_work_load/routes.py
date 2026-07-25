@@ -29,7 +29,7 @@ from app.brain.drafting_work_load.service import (
     LocationService,
 )
 from app.logging_config import get_logger
-from app.models import Submittals, ProcoreOutbox, Notification, PendingStartInstall, BBDrawingReview, db, is_gc_approval_type
+from app.models import Submittals, ProcoreOutbox, Notification, PendingStartInstall, CarmenDrawingReview, db, is_gc_approval_type
 from app.brain.pdf_review.report import build_report
 from app.auth.utils import login_required, admin_required, drafter_or_admin_required, get_current_user
 from app.brain.mentions import parse_mentions, resolve_mentioned_users
@@ -94,8 +94,8 @@ def _bb_status_by_submittal(submittals):
     ids = [str(s.submittal_id) for s in submittals if s.submittal_id]
     if not ids:
         return {}
-    reviews = (BBDrawingReview.query
-               .filter(BBDrawingReview.submittal_id.in_(ids))
+    reviews = (CarmenDrawingReview.query
+               .filter(CarmenDrawingReview.submittal_id.in_(ids))
                .all())
     grouped = {}
     for r in reviews:

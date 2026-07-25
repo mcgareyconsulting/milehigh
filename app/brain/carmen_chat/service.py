@@ -5,7 +5,7 @@ read-only tool agent over the thread's text history, and persist the turn with i
 metrics. Only plain text is persisted; the agent re-queries via tools as needed each turn.
 """
 from app.logging_config import get_logger
-from app.models import BBChatConversation, BBChatMessage, User, db
+from app.models import CarmenChatConversation, CarmenChatMessage, User, db
 
 from . import agent
 
@@ -13,19 +13,19 @@ logger = get_logger(__name__)
 
 
 def list_conversations(user_id: int):
-    convos = (BBChatConversation.query.filter_by(user_id=user_id)
-              .order_by(BBChatConversation.updated_at.desc()).all())
+    convos = (CarmenChatConversation.query.filter_by(user_id=user_id)
+              .order_by(CarmenChatConversation.updated_at.desc()).all())
     return [c.to_dict() for c in convos]
 
 
 def get_conversation(user_id: int, conversation_id: int):
-    convo = db.session.get(BBChatConversation, conversation_id)
+    convo = db.session.get(CarmenChatConversation, conversation_id)
     if not convo or convo.user_id != user_id:
         return None
     return convo
 
 
-def _history_pairs(convo: BBChatConversation):
+def _history_pairs(convo: CarmenChatConversation):
     return [{"role": m.role, "content": m.content} for m in convo.messages]
 
 
@@ -46,20 +46,20 @@ def send_message(user_id: int, conversation_id, user_text: str) -> dict:
         if convo is None:
             raise PermissionError("conversation not found")
     if convo is None:
-        convo = BBChatConversation(user_id=user_id, title=_title_from(user_text))
+        convo = CarmenChatConversation(user_id=user_id, title=_title_from(user_text))
         db.session.add(convo)
         db.session.flush()
 
     history = _history_pairs(convo)
     user = db.session.get(User, user_id)
 
-    user_msg = BBChatMessage(conversation_id=convo.id, role="user", content=user_text)
+    user_msg = CarmenChatMessage(conversation_id=convo.id, role="user", content=user_text)
     db.session.add(user_msg)
 
     result = agent.run_chat(history, user_text, user=user, user_id=user_id)
     m = result["metrics"]
 
-    assistant_msg = BBChatMessage(
+    assistant_msg = CarmenChatMessage(
         conversation_id=convo.id,
         role="assistant",
         content=result["answer"],

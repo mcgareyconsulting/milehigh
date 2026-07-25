@@ -16,7 +16,7 @@ Three pieces live here:
 Graph caps mailbox message subscriptions at ~70h, so a subscription is not
 create-once — the renewal job PATCHes its expiry well inside that window, and
 re-creates it if it has lapsed. If push ever silently stops, the poll floor
-(BB_MAIL_POLL_MINUTES) sweeps up whatever was missed.
+(CARMEN_MAIL_POLL_MINUTES) sweeps up whatever was missed.
 """
 from datetime import datetime, timedelta
 

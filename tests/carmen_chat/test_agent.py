@@ -1,7 +1,7 @@
 """The tool-agent loop: tool execution, metrics accumulation, no-key stub — all offline."""
 from unittest.mock import patch
 
-from app.brain.bb_chat import agent
+from app.brain.carmen_chat import agent
 
 
 def test_no_api_key_returns_stub(app):

@@ -267,7 +267,7 @@ class JobsApi {
     async getBBReview(releaseId, versionId) {
         try {
             const response = await axios.get(
-                `${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions/${versionId}/bb-review`
+                `${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions/${versionId}/carmen-review`
             );
             return response.data.review || null;
         } catch (error) {
@@ -278,7 +278,7 @@ class JobsApi {
     async requestBBReview(releaseId, versionId) {
         try {
             const response = await axios.post(
-                `${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions/${versionId}/bb-review`
+                `${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions/${versionId}/carmen-review`
             );
             return response.data;   // the pending (or already-running) review row
         } catch (error) {
@@ -291,7 +291,7 @@ class JobsApi {
     async getBBReviewReport(releaseId) {
         try {
             const response = await axios.get(
-                `${API_BASE_URL}/brain/releases/${releaseId}/bb-review/report`
+                `${API_BASE_URL}/brain/releases/${releaseId}/carmen-review/report`
             );
             return response.data.report || null;
         } catch (error) {
@@ -301,10 +301,10 @@ class JobsApi {
 
     // Upsert a PM's accept/deny (+ notes) for one BB finding. Body:
     // { finding_index, decision:'accepted'|'rejected', rule_id?, notes?, finding? }.
-    async saveBBReviewFeedback(releaseId, reviewId, payload) {
+    async saveCarmenReviewFeedback(releaseId, reviewId, payload) {
         try {
             const response = await axios.post(
-                `${API_BASE_URL}/brain/releases/${releaseId}/bb-review/${reviewId}/feedback`,
+                `${API_BASE_URL}/brain/releases/${releaseId}/carmen-review/${reviewId}/feedback`,
                 payload
             );
             return response.data.feedback;

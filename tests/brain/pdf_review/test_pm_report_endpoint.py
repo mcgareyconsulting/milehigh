@@ -1,7 +1,7 @@
 """Report endpoint gate + PM notification wiring for BB review.
 
 Covers:
-  - GET /brain/releases/<id>/bb-review/report visibility: admin, the release's PM, and
+  - GET /brain/releases/<id>/carmen-review/report visibility: admin, the release's PM, and
     an unrelated non-admin.
   - worker._notify_pm creates exactly one bb_review Notification for the resolved PM, and
     stays quiet when the PM is unresolved or the review is fully cleared.
@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.models import db, BBDrawingReview, ReleaseDrawingVersion, Notification
+from app.models import db, CarmenDrawingReview, ReleaseDrawingVersion, Notification
 from tests.conftest import make_release
 
 
@@ -33,7 +33,7 @@ def _seed_review(app, *, pm="DR", status="complete", findings=None):
         )
         db.session.add(version)
         db.session.flush()
-        review = BBDrawingReview(
+        review = CarmenDrawingReview(
             drawing_version_id=version.id, release_id=release.id, status=status,
             findings=findings if findings is not None else COMPLETE_FINDINGS,
             model="test",
@@ -44,7 +44,7 @@ def _seed_review(app, *, pm="DR", status="complete", findings=None):
 
 
 def _url(release_id):
-    return f"/brain/releases/{release_id}/bb-review/report"
+    return f"/brain/releases/{release_id}/carmen-review/report"
 
 
 def test_admin_sees_report(app, admin_client):
@@ -93,14 +93,14 @@ def test_notify_pm_creates_notification(app):
     from app.models import Releases
     release_id, _, review_id = _seed_review(app)
     with app.app_context():
-        review = db.session.get(BBDrawingReview, review_id)
+        review = db.session.get(CarmenDrawingReview, review_id)
         release = db.session.get(Releases, release_id)
         with patch("app.brain.pdf_review.worker.release_owner_user", return_value=7):
             worker._notify_pm(review, release, review.findings)
         notes = Notification.query.filter_by(type="bb_review").all()
         assert len(notes) == 1
         assert notes[0].user_id == 7
-        assert notes[0].bb_drawing_review_id == review_id
+        assert notes[0].carmen_drawing_review_id == review_id
         assert "590-674" in notes[0].message
 
 
@@ -109,7 +109,7 @@ def test_notify_pm_quiet_when_pm_unresolved(app):
     from app.models import Releases
     release_id, _, review_id = _seed_review(app)
     with app.app_context():
-        review = db.session.get(BBDrawingReview, review_id)
+        review = db.session.get(CarmenDrawingReview, review_id)
         release = db.session.get(Releases, release_id)
         with patch("app.brain.pdf_review.worker.release_owner_user", return_value=None):
             worker._notify_pm(review, release, review.findings)
@@ -122,7 +122,7 @@ def test_notify_pm_quiet_when_all_cleared(app):
     release_id, _, review_id = _seed_review(
         app, findings=[{"verdict": "ok", "severity": "low", "rule_id": "x"}])
     with app.app_context():
-        review = db.session.get(BBDrawingReview, review_id)
+        review = db.session.get(CarmenDrawingReview, review_id)
         release = db.session.get(Releases, release_id)
         with patch("app.brain.pdf_review.worker.release_owner_user", return_value=7):
             worker._notify_pm(review, release, review.findings)

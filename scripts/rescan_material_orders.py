@@ -57,7 +57,7 @@ def main(match, external_id, apply):
         if not candidates:
             print("No already-scanned email records match — nothing to re-scan.")
             print("(If you expected the AZZ email here, it likely never landed in "
-                  "bb@mhmw.com — forward it there and the new code scans it fresh.)")
+                  "carmen_ai@mhmw.com — forward it there and the new code scans it fresh.)")
             return 0
 
         print(f"{len(candidates)} matching record(s):")

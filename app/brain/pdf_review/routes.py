@@ -1,8 +1,8 @@
 """REST endpoints for Banana Boy PDF review (admin-only).
 
 Registered on brain_bp under /brain:
-  POST /releases/<release_id>/drawing/versions/<vid>/bb-review  — enqueue a review (202)
-  GET  /releases/<release_id>/drawing/versions/<vid>/bb-review  — latest review status + findings
+  POST /releases/<release_id>/drawing/versions/<vid>/carmen-review  — enqueue a review (202)
+  GET  /releases/<release_id>/drawing/versions/<vid>/carmen-review  — latest review status + findings
 
 Admin-only, matching the "admin-only Banana Boy" decision. The POST returns immediately
 (202) with a `pending` row; the review runs on a background thread (worker.py). The
@@ -17,7 +17,7 @@ from app.auth.utils import admin_required, login_required, get_current_user
 from flask import request
 
 from app.models import (
-    ReleaseDrawingVersion, BBDrawingReview, BBReviewFeedback, Releases, Submittals,
+    ReleaseDrawingVersion, CarmenDrawingReview, CarmenReviewFeedback, Releases, Submittals,
     is_gc_approval_type, db,
 )
 from app.logging_config import get_logger
@@ -43,7 +43,7 @@ def _load_version(release_id, version_id):
 
 
 @brain_bp.route(
-    '/releases/<int:release_id>/drawing/versions/<int:version_id>/bb-review',
+    '/releases/<int:release_id>/drawing/versions/<int:version_id>/carmen-review',
     methods=['POST'],
 )
 @admin_required
@@ -54,16 +54,16 @@ def request_bb_review(release_id, version_id):
 
     # Don't stack duplicate work: if a review is already running for this version,
     # return it instead of kicking off a second Claude call.
-    pending = (BBDrawingReview.query
-               .filter(BBDrawingReview.drawing_version_id == version_id,
-                       BBDrawingReview.status == 'pending')
-               .order_by(BBDrawingReview.created_at.desc())
+    pending = (CarmenDrawingReview.query
+               .filter(CarmenDrawingReview.drawing_version_id == version_id,
+                       CarmenDrawingReview.status == 'pending')
+               .order_by(CarmenDrawingReview.created_at.desc())
                .first())
     if pending:
         return jsonify(pending.to_dict()), 202
 
     user = get_current_user()
-    review = BBDrawingReview(
+    review = CarmenDrawingReview(
         drawing_version_id=version_id,
         release_id=release_id,
         status='pending',
@@ -79,7 +79,7 @@ def request_bb_review(release_id, version_id):
 
 
 @brain_bp.route(
-    '/releases/<int:release_id>/drawing/versions/<int:version_id>/bb-review',
+    '/releases/<int:release_id>/drawing/versions/<int:version_id>/carmen-review',
     methods=['GET'],
 )
 @admin_required
@@ -88,9 +88,9 @@ def get_bb_review(release_id, version_id):
     if not version:
         return jsonify({'error': 'Version not found'}), 404
 
-    review = (BBDrawingReview.query
-              .filter(BBDrawingReview.drawing_version_id == version_id)
-              .order_by(BBDrawingReview.created_at.desc())
+    review = (CarmenDrawingReview.query
+              .filter(CarmenDrawingReview.drawing_version_id == version_id)
+              .order_by(CarmenDrawingReview.created_at.desc())
               .first())
     if not review:
         return jsonify({'review': None}), 200
@@ -105,7 +105,7 @@ def _feedback_map(review_id):
     """{finding_index: {decision, notes}} for a review's stored PM feedback."""
     return {
         fb.finding_index: {'decision': fb.decision, 'notes': fb.notes or ''}
-        for fb in BBReviewFeedback.query.filter_by(review_id=review_id)
+        for fb in CarmenReviewFeedback.query.filter_by(review_id=review_id)
     }
 
 
@@ -127,7 +127,7 @@ def _release_if_authorized(release_id):
     return release, None
 
 
-@brain_bp.route('/releases/<int:release_id>/bb-review/report', methods=['GET'])
+@brain_bp.route('/releases/<int:release_id>/carmen-review/report', methods=['GET'])
 @login_required
 def get_bb_review_report(release_id):
     """PM-facing report: the latest complete BB review for the release, ranked by urgency.
@@ -141,10 +141,10 @@ def get_bb_review_report(release_id):
     if err:
         return err
 
-    review = (BBDrawingReview.query
-              .filter(BBDrawingReview.release_id == release_id,
-                      BBDrawingReview.status == 'complete')
-              .order_by(BBDrawingReview.created_at.desc())
+    review = (CarmenDrawingReview.query
+              .filter(CarmenDrawingReview.release_id == release_id,
+                      CarmenDrawingReview.status == 'complete')
+              .order_by(CarmenDrawingReview.created_at.desc())
               .first())
     if not review:
         return jsonify({'report': None}), 200
@@ -164,7 +164,7 @@ _VALID_DECISIONS = {'accepted', 'rejected'}
 
 
 @brain_bp.route(
-    '/releases/<int:release_id>/bb-review/<int:review_id>/feedback', methods=['POST'],
+    '/releases/<int:release_id>/carmen-review/<int:review_id>/feedback', methods=['POST'],
 )
 @login_required
 def save_bb_review_feedback(release_id, review_id):
@@ -179,7 +179,7 @@ def save_bb_review_feedback(release_id, review_id):
     if err:
         return err
 
-    review = db.session.get(BBDrawingReview, review_id)
+    review = db.session.get(CarmenDrawingReview, review_id)
     if not review or review.release_id != release_id:
         return jsonify({'error': 'Review not found'}), 404
 
@@ -192,11 +192,11 @@ def save_bb_review_feedback(release_id, review_id):
         return jsonify({'error': 'finding_index (int) is required'}), 400
 
     user = get_current_user()
-    fb = (BBReviewFeedback.query
+    fb = (CarmenReviewFeedback.query
           .filter_by(review_id=review_id, finding_index=finding_index)
           .first())
     if fb is None:
-        fb = BBReviewFeedback(review_id=review_id, finding_index=finding_index)
+        fb = CarmenReviewFeedback(review_id=review_id, finding_index=finding_index)
         db.session.add(fb)
 
     fb.release_id = release_id
@@ -217,7 +217,7 @@ def _truthy(v):
     return str(v).lower() in ("1", "true", "yes", "on")
 
 
-@brain_bp.route('/procore-submittals/<submittal_id>/bb-review', methods=['POST'])
+@brain_bp.route('/procore-submittals/<submittal_id>/carmen-review', methods=['POST'])
 @admin_required
 def bb_review_procore_submittal(submittal_id):
     """Pull a submittal's drawing PDF from Procore and run a BB review on it (Track B v1).
@@ -358,7 +358,7 @@ def bb_review_procore_submittal(submittal_id):
     }), 200
 
 
-@brain_bp.route('/procore-submittals/<submittal_id>/bb-review', methods=['GET'])
+@brain_bp.route('/procore-submittals/<submittal_id>/carmen-review', methods=['GET'])
 @admin_required
 def bb_review_procore_submittal_status(submittal_id):
     """Whether a drawing for this submittal has already been pulled and cached, so the UI
@@ -458,9 +458,9 @@ def list_submittal_documents(submittal_id):
     refs = find_submittal_drawing_refs(project_id, procore_submittal_id)
 
     # Latest review per attachment_id for this submittal, in one query.
-    reviews = (BBDrawingReview.query
-               .filter(BBDrawingReview.submittal_id == str(procore_submittal_id))
-               .order_by(BBDrawingReview.created_at.desc())
+    reviews = (CarmenDrawingReview.query
+               .filter(CarmenDrawingReview.submittal_id == str(procore_submittal_id))
+               .order_by(CarmenDrawingReview.created_at.desc())
                .all())
     latest_by_attachment = {}
     for r in reviews:
@@ -546,7 +546,7 @@ def pull_submittal_document(submittal_id, attachment_id):
 
 
 @brain_bp.route(
-    '/procore-submittals/<submittal_id>/documents/<attachment_id>/bb-review',
+    '/procore-submittals/<submittal_id>/documents/<attachment_id>/carmen-review',
     methods=['POST'],
 )
 @admin_required
@@ -558,7 +558,7 @@ def bb_review_submittal_document(submittal_id, attachment_id):
     reviewing model. The Claude call takes minutes, so it runs on a background thread
     (worker.py) — blocking the request inline tripped the gunicorn worker timeout in prod,
     killing the worker mid-DB-op and cascading SSL errors. The row moves pending -> complete
-    | error; the frontend polls the GET endpoint. Persists a submittal-keyed BBDrawingReview.
+    | error; the frontend polls the GET endpoint. Persists a submittal-keyed CarmenDrawingReview.
     """
     submittal, err = _load_submittal_or_404(submittal_id)
     if err:
@@ -592,16 +592,16 @@ def bb_review_submittal_document(submittal_id, attachment_id):
 
     # Don't stack duplicate work (mirrors request_bb_review): if a review is already
     # running for this drawing, return it instead of kicking off a second Claude call.
-    pending = (BBDrawingReview.query
-               .filter(BBDrawingReview.submittal_id == str(procore_submittal_id),
-                       BBDrawingReview.attachment_id == attachment_id_int,
-                       BBDrawingReview.status == 'pending')
-               .order_by(BBDrawingReview.created_at.desc())
+    pending = (CarmenDrawingReview.query
+               .filter(CarmenDrawingReview.submittal_id == str(procore_submittal_id),
+                       CarmenDrawingReview.attachment_id == attachment_id_int,
+                       CarmenDrawingReview.status == 'pending')
+               .order_by(CarmenDrawingReview.created_at.desc())
                .first())
     if pending:
         return jsonify({'ok': True, 'review_id': pending.id, 'status': 'pending'}), 202
 
-    review = BBDrawingReview(
+    review = CarmenDrawingReview(
         submittal_id=str(procore_submittal_id), attachment_id=attachment_id_int,
         drawing_version_id=None, release_id=None, status='pending',
         requested_by_user_id=user.id if user else None,
@@ -622,7 +622,7 @@ def bb_review_submittal_document(submittal_id, attachment_id):
 
 
 @brain_bp.route(
-    '/procore-submittals/<submittal_id>/documents/<attachment_id>/bb-review',
+    '/procore-submittals/<submittal_id>/documents/<attachment_id>/carmen-review',
     methods=['GET'],
 )
 @admin_required
@@ -633,10 +633,10 @@ def get_bb_review_submittal_document(submittal_id, attachment_id):
         return err
     attachment_id_int = _coerce_attachment_id(attachment_id)
 
-    review = (BBDrawingReview.query
-              .filter(BBDrawingReview.submittal_id == str(submittal.submittal_id),
-                      BBDrawingReview.attachment_id == attachment_id_int)
-              .order_by(BBDrawingReview.created_at.desc())
+    review = (CarmenDrawingReview.query
+              .filter(CarmenDrawingReview.submittal_id == str(submittal.submittal_id),
+                      CarmenDrawingReview.attachment_id == attachment_id_int)
+              .order_by(CarmenDrawingReview.created_at.desc())
               .first())
     if not review:
         return jsonify({'review': None}), 200
@@ -657,7 +657,7 @@ def get_bb_review_submittal_document(submittal_id, attachment_id):
 
 
 @brain_bp.route(
-    '/procore-submittals/<submittal_id>/documents/<attachment_id>/bb-review/'
+    '/procore-submittals/<submittal_id>/documents/<attachment_id>/carmen-review/'
     '<int:review_id>/feedback',
     methods=['POST'],
 )
@@ -672,7 +672,7 @@ def save_submittal_document_feedback(submittal_id, attachment_id, review_id):
     if err:
         return err
 
-    review = db.session.get(BBDrawingReview, review_id)
+    review = db.session.get(CarmenDrawingReview, review_id)
     if not review or review.submittal_id != str(submittal.submittal_id):
         return jsonify({'error': 'Review not found'}), 404
 
@@ -686,11 +686,11 @@ def save_submittal_document_feedback(submittal_id, attachment_id, review_id):
 
     attachment_id_int = _coerce_attachment_id(attachment_id)
     user = get_current_user()
-    fb = (BBReviewFeedback.query
+    fb = (CarmenReviewFeedback.query
           .filter_by(review_id=review_id, finding_index=finding_index)
           .first())
     if fb is None:
-        fb = BBReviewFeedback(review_id=review_id, finding_index=finding_index)
+        fb = CarmenReviewFeedback(review_id=review_id, finding_index=finding_index)
         db.session.add(fb)
 
     fb.submittal_id = str(submittal.submittal_id)

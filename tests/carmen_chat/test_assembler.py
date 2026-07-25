@@ -1,7 +1,7 @@
 """The assembler builds a deterministic lifecycle bundle from real rows + events + to-dos."""
 from datetime import datetime
 
-from app.brain.bb_chat import assembler
+from app.brain.carmen_chat import assembler
 from app.models import (
     ChecklistItem,
     MaterialOrder,

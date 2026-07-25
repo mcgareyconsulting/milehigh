@@ -293,7 +293,7 @@ class DraftingWorkLoadApi {
             if (reviewOnly) params.review_only = true;
             if (model) params.model = model;
             const response = await axios.post(
-                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/bb-review`,
+                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/carmen-review`,
                 null,
                 {
                     params,
@@ -314,7 +314,7 @@ class DraftingWorkLoadApi {
     async getProcoreBBReviewStatus(submittalId) {
         try {
             const response = await axios.get(
-                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/bb-review`
+                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/carmen-review`
             );
             return response.data;
         } catch (error) {
@@ -375,7 +375,7 @@ class DraftingWorkLoadApi {
             if (model) params.model = model;
             if (reviewOnly) params.review_only = true;
             const response = await axios.post(
-                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/documents/${encodeURIComponent(attachmentId)}/bb-review`,
+                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/documents/${encodeURIComponent(attachmentId)}/carmen-review`,
                 null,
                 { params }
             );
@@ -394,7 +394,7 @@ class DraftingWorkLoadApi {
     async fetchProcoreDocumentReview(submittalId, attachmentId) {
         try {
             const response = await axios.get(
-                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/documents/${encodeURIComponent(attachmentId)}/bb-review`
+                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/documents/${encodeURIComponent(attachmentId)}/carmen-review`
             );
             return response.data;
         } catch (error) {
@@ -412,7 +412,7 @@ class DraftingWorkLoadApi {
     async saveProcoreDocumentReviewFeedback(submittalId, attachmentId, reviewId, payload) {
         try {
             const response = await axios.post(
-                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/documents/${encodeURIComponent(attachmentId)}/bb-review/${encodeURIComponent(reviewId)}/feedback`,
+                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/documents/${encodeURIComponent(attachmentId)}/carmen-review/${encodeURIComponent(reviewId)}/feedback`,
                 payload
             );
             return response.data;

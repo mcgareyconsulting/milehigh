@@ -16,7 +16,7 @@ lake_bp = Blueprint("lake", __name__)
 
 
 def _ingest_enabled():
-    return bool(current_app.config.get("BB_MAIL_INGEST_ENABLED"))
+    return bool(current_app.config.get("CARMEN_MAIL_INGEST_ENABLED"))
 
 
 @lake_bp.route("/ingest/mail/pull", methods=["POST"])
@@ -28,7 +28,7 @@ def ingest_mail_pull():
     Without a query, pulls the most recent inbox messages.
     """
     if not _ingest_enabled():
-        return jsonify({"error": "Mail ingest disabled (set BB_MAIL_INGEST_ENABLED=1)"}), 503
+        return jsonify({"error": "Mail ingest disabled (set CARMEN_MAIL_INGEST_ENABLED=1)"}), 503
 
     body = request.get_json(silent=True) or {}
     kwargs = {}

@@ -175,7 +175,7 @@ function Metrics() {
     const contentOrder = [
         ['release_photos', 'Release photos'], ['board_photos', 'Board photos'],
         ['drawing_versions', 'Drawings'], ['board_comments', 'Board comments'],
-        ['drawing_comments', 'Drawing comments'], ['bb_reviews', 'BB reviews'],
+        ['drawing_comments', 'Drawing comments'], ['bb_reviews', 'Carmen reviews'],
         ['review_feedback', 'Review feedback'], ['mentions', 'Mentions'],
     ];
     const contentBars = content
@@ -223,7 +223,7 @@ function Metrics() {
                         <Stat label="AI cost" value={usd(s.ai.cost_usd)} tone="orange" />
                         <Stat label="AI success" value={pct(s.ai.success_rate)}
                             tone={s.ai.failures ? 'amber' : 'green'} sub={`${num(s.ai.failures)} failures`} />
-                        <Stat label="BB accept rate" value={pct(s.quality.bb_accept_rate)} />
+                        <Stat label="Carmen accept rate" value={pct(s.quality.bb_accept_rate)} />
                         <Stat label="To-do accept" value={pct(s.quality.todo_accept_rate)} />
                         <Stat label="Releases in / out"
                             value={`${num(s.throughput.releases_created)} / ${num(s.throughput.releases_completed)}`} />
@@ -321,7 +321,7 @@ function Metrics() {
                     {/* Quality — is the AI trusted */}
                     <SectionTitle note="human accept/reject on AI output">Quality</SectionTitle>
                     <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-                        <Stat label="BB accept rate" value={pct(quality?.bb_review_findings?.accept_rate)} tone="green" />
+                        <Stat label="Carmen accept rate" value={pct(quality?.bb_review_findings?.accept_rate)} tone="green" />
                         <Stat label="Findings acc / rej"
                             value={`${num(quality?.bb_review_findings?.accepted)} / ${num(quality?.bb_review_findings?.rejected)}`} />
                         <Stat label="To-dos generated" value={num(quality?.meeting_todos?.generated)} />

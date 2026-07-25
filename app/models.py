@@ -61,7 +61,7 @@ class User(db.Model):
     # Phase-1 access flag for the read-only BB (Banana Boy) chat assistant. Toggled
     # per-user from the admin UI so we can roll the feature out incrementally without
     # a redeploy. server_default keeps the ADD COLUMN metadata-only on Postgres.
-    is_bb_chat = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    is_carmen_chat = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     procore_id = db.Column(db.String(255), unique=True, nullable=True)
     trello_id = db.Column(db.String(255), unique=True, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -855,7 +855,7 @@ class Notification(db.Model):
     submittal_id = db.Column(db.String(255), db.ForeignKey('submittals.submittal_id', ondelete='CASCADE'), nullable=True, index=True)
     checklist_item_id = db.Column(db.Integer, db.ForeignKey('checklist_items.id', ondelete='CASCADE'), nullable=True, index=True)
     drawing_version_comment_id = db.Column(db.Integer, db.ForeignKey('drawing_version_comments.id', ondelete='CASCADE'), nullable=True, index=True)
-    bb_drawing_review_id = db.Column(db.Integer, db.ForeignKey('bb_drawing_reviews.id', ondelete='CASCADE'), nullable=True, index=True)
+    carmen_drawing_review_id = db.Column(db.Integer, db.ForeignKey('carmen_drawing_reviews.id', ondelete='CASCADE'), nullable=True, index=True)
     is_read = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -865,13 +865,13 @@ class Notification(db.Model):
     submittal = db.relationship('Submittals', lazy='select')
     checklist_item = db.relationship('ChecklistItem', lazy='select')
     drawing_version_comment = db.relationship('DrawingVersionComment', lazy='select')
-    bb_drawing_review = db.relationship('BBDrawingReview', lazy='select')
+    carmen_drawing_review = db.relationship('CarmenDrawingReview', lazy='select')
 
     def to_dict(self):
         comment = self.drawing_version_comment
         version = comment.drawing_version if comment else None
         release = comment.release if comment else None
-        review = self.bb_drawing_review
+        review = self.carmen_drawing_review
         return {
             'id': self.id,
             'user_id': self.user_id,
@@ -882,7 +882,7 @@ class Notification(db.Model):
             'submittal_id': self.submittal_id,
             'checklist_item_id': self.checklist_item_id,
             'drawing_version_comment_id': self.drawing_version_comment_id,
-            'bb_drawing_review_id': self.bb_drawing_review_id,
+            'carmen_drawing_review_id': self.carmen_drawing_review_id,
             'is_read': self.is_read,
             'created_at': _dt(self.created_at),
             'board_item_title': self.board_item.title if self.board_item else None,
@@ -1893,7 +1893,7 @@ class SunbeltRental(db.Model):
         }
 
 
-class BBDrawingReview(db.Model):
+class CarmenDrawingReview(db.Model):
     """A Banana Boy code-compliance review of one PDF drawing version.
 
     Kicked off from the PDF-mentions surface (admin-only). The review runs on a
@@ -1901,7 +1901,7 @@ class BBDrawingReview(db.Model):
     takes minutes; the row moves `pending` -> `complete` | `error` and stores the
     strict-JSON findings plus token usage for cost tracking.
     """
-    __tablename__ = 'bb_drawing_reviews'
+    __tablename__ = 'carmen_drawing_reviews'
 
     id = db.Column(db.Integer, primary_key=True)
     # drawing_version_id/release_id are the release-keyed path (a review of a
@@ -1931,7 +1931,7 @@ class BBDrawingReview(db.Model):
 
     drawing_version = db.relationship(
         'ReleaseDrawingVersion',
-        backref=db.backref('bb_reviews', lazy='dynamic', cascade='all, delete-orphan'),
+        backref=db.backref('carmen_reviews', lazy='dynamic', cascade='all, delete-orphan'),
     )
     requested_by = db.relationship('User', foreign_keys=[requested_by_user_id])
 
@@ -1954,7 +1954,7 @@ class BBDrawingReview(db.Model):
         }
 
 
-class BBReviewFeedback(db.Model):
+class CarmenReviewFeedback(db.Model):
     """A PM's accept/deny (+ optional notes) on ONE finding of a Banana Boy review.
 
     The training loop: as a PM works a BB report they mark each suggestion accepted or
@@ -1968,21 +1968,21 @@ class BBReviewFeedback(db.Model):
     review because the report sort is deterministic. `finding_snapshot` freezes the whole
     finding dict so the feedback stays meaningful even if the rule text later changes.
     """
-    __tablename__ = 'bb_review_feedback'
+    __tablename__ = 'carmen_review_feedback'
     __table_args__ = (
-        db.UniqueConstraint('review_id', 'finding_index', name='_bb_review_feedback_finding_uc'),
+        db.UniqueConstraint('review_id', 'finding_index', name='_carmen_review_feedback_finding_uc'),
     )
 
     id = db.Column(db.Integer, primary_key=True)
     review_id = db.Column(
         db.Integer,
-        db.ForeignKey('bb_drawing_reviews.id', ondelete='CASCADE'),
+        db.ForeignKey('carmen_drawing_reviews.id', ondelete='CASCADE'),
         nullable=False, index=True,
     )
     # Release-keyed context (nullable so submittal-keyed feedback can leave them null).
     release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=True, index=True)
     drawing_version_id = db.Column(db.Integer, nullable=True)
-    # Submittal-keyed context: mirrors BBDrawingReview's submittal_id/attachment_id so
+    # Submittal-keyed context: mirrors CarmenDrawingReview's submittal_id/attachment_id so
     # feedback on a submittal-keyed review carries the same anchor for the training loop.
     submittal_id = db.Column(db.String(64), nullable=True, index=True)
     attachment_id = db.Column(db.BigInteger, nullable=True, index=True)
@@ -1997,7 +1997,7 @@ class BBReviewFeedback(db.Model):
         db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow,
     )
 
-    review = db.relationship('BBDrawingReview', lazy='select')
+    review = db.relationship('CarmenDrawingReview', lazy='select')
     user = db.relationship('User', foreign_keys=[user_id])
 
     def to_dict(self):
@@ -2018,14 +2018,14 @@ class BBReviewFeedback(db.Model):
         }
 
 
-class BBChatConversation(db.Model):
+class CarmenChatConversation(db.Model):
     """A single BB (Banana Boy) chat thread owned by one user.
 
     Phase-1 chat is read-only — no message ever mutates app data. We persist the
     thread so we have a durable audit trail and an in-app spend ledger keyed to
     the Anthropic request-ids on each assistant turn.
     """
-    __tablename__ = "bb_chat_conversations"
+    __tablename__ = "carmen_chat_conversations"
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     title = db.Column(db.String(255), nullable=True)
@@ -2040,8 +2040,8 @@ class BBChatConversation(db.Model):
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     messages = db.relationship(
-        "BBChatMessage", backref="conversation", lazy="dynamic",
-        cascade="all, delete-orphan", order_by="BBChatMessage.id",
+        "CarmenChatMessage", backref="conversation", lazy="dynamic",
+        cascade="all, delete-orphan", order_by="CarmenChatMessage.id",
     )
 
     def to_dict(self, with_messages=False):
@@ -2063,7 +2063,7 @@ class BBChatConversation(db.Model):
         return d
 
 
-class BBChatMessage(db.Model):
+class CarmenChatMessage(db.Model):
     """One turn in a BB chat thread.
 
     Assistant turns carry the spend telemetry (model, per-turn token counts,
@@ -2071,10 +2071,10 @@ class BBChatMessage(db.Model):
     ledger row can be reconciled against the Anthropic dashboard. User turns leave
     those columns null.
     """
-    __tablename__ = "bb_chat_messages"
+    __tablename__ = "carmen_chat_messages"
     id = db.Column(db.Integer, primary_key=True)
     conversation_id = db.Column(
-        db.Integer, db.ForeignKey("bb_chat_conversations.id"), nullable=False, index=True
+        db.Integer, db.ForeignKey("carmen_chat_conversations.id"), nullable=False, index=True
     )
     role = db.Column(db.String(16), nullable=False)  # 'user' | 'assistant'
     content = db.Column(db.Text, nullable=False, default="")

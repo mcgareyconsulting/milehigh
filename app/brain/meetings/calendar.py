@@ -198,7 +198,7 @@ def poll(dry_run=False):
     Returns a summary dict {mailbox, events, scheduled, rescheduled, cancelled, skipped}.
     """
     cfg = current_app.config
-    mailbox = cfg.get("RECALL_CALENDAR_MAILBOX", "bb@mhmw.com")
+    mailbox = cfg.get("RECALL_CALENDAR_MAILBOX", "carmen_ai@mhmw.com")
     lookahead = timedelta(minutes=cfg.get("RECALL_CALENDAR_LOOKAHEAD_MINUTES", 60))
     lead = timedelta(seconds=cfg.get("RECALL_CALENDAR_JOIN_LEAD_SECONDS", 60))
 

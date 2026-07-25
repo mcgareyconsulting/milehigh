@@ -111,7 +111,7 @@ export function BBReviewReport({ report, releaseId, canRerun = false, rerunning 
 
             <div className="flex items-center gap-2 flex-wrap">
                 {report.model && (
-                    <p className="text-[11px] text-gray-400">🍌 Banana Boy · {report.model}</p>
+                    <p className="text-[11px] text-gray-400">🍌 Carmen Miranda · {report.model}</p>
                 )}
                 {canRerun && onRerun && (
                     <button
@@ -120,7 +120,7 @@ export function BBReviewReport({ report, releaseId, canRerun = false, rerunning 
                         disabled={rerunning}
                         className="ml-auto text-[11px] px-2.5 py-1 rounded bg-yellow-500 text-white font-semibold disabled:opacity-50"
                     >
-                        {rerunning ? 'Re-running…' : '↻ Re-run BB review'}
+                        {rerunning ? 'Re-running…' : '↻ Re-run Carmen review'}
                     </button>
                 )}
             </div>
