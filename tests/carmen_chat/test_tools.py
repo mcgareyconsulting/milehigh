@@ -84,3 +84,67 @@ def test_execute_tool_dispatch_and_unknown(app):
         ok = tools.execute_tool("search_submittals", {"ball_in_court": "Colton"})
         assert ok["result_count"] == 1
         assert "error" in tools.execute_tool("does_not_exist", {})
+
+
+def test_get_project_pipeline_and_lookahead_tools(app):
+    with app.app_context():
+        make_release(
+            500, "615", stage="Weld Complete", job_name="Novel Flatiron",
+            description="SE Canopy", fab_hrs=40.0, install_hrs=8.0, fab_order=4.0,
+            start_install=date(2026, 8, 12), start_install_formulaTF=False,
+            ship_date=date(2026, 8, 11), comp_eta=date(2026, 8, 13),
+            is_active=True, is_archived=False,
+            start_install_asap=False, start_install_no_color=False,
+        )
+        _submittal(
+            "drr-500", "500", project_name="Novel Flatiron", title="Open DRR",
+            status="Open", type="Drafting Release Review",
+            rel=400, due_date=date(2026, 8, 5),
+        )
+
+        pipe = tools.execute_tool("get_project_pipeline", {"job": 500})
+        assert pipe["found"] is True
+        assert pipe["job"] == 500
+        assert len(pipe["releases"]) == 1
+        assert len(pipe["drafting"]) == 1
+
+        schedule = tools.execute_tool("build_project_lookahead", {"job": 500, "weeks": 3})
+        assert schedule["found"] is True
+        assert schedule["audience"] == "gc"
+        assert schedule["window"]["weeks"] == 3
+        assert schedule["summary"]["release_count"] == 1
+        assert schedule["summary"]["drafting_count"] == 1
+        kinds = {r["kind"] for r in schedule["rows"]}
+        assert "release" in kinds and "drafting" in kinds
+
+
+def test_project_lookahead_tool_missing_job(app):
+    with app.app_context():
+        out = tools.execute_tool("build_project_lookahead", {"job": 99999})
+        assert out["found"] is False
+
+
+def test_render_project_lookahead_pdf_tool(app, tmp_path):
+    with app.app_context():
+        app.config["LOOKAHEAD_PDF_STORAGE_ROOT"] = str(tmp_path)
+        make_release(
+            500, "615", stage="Weld Complete", job_name="Novel Flatiron",
+            description="SE Canopy", fab_hrs=40.0, install_hrs=8.0, fab_order=4.0,
+            start_install=date(2026, 8, 12), start_install_formulaTF=False,
+            ship_date=date(2026, 8, 11), comp_eta=date(2026, 8, 13),
+            is_active=True, is_archived=False,
+            start_install_asap=False, start_install_no_color=False,
+        )
+        out = tools.execute_tool(
+            "render_project_lookahead_pdf",
+            {"job": 500, "weeks": 3},
+            context={"user_id": 1},
+        )
+        assert out["found"] is True
+        assert out["artifact_id"]
+        assert out["download_path"].startswith("/brain/lookahead/artifacts/")
+        assert out["page_size"] == "letter-landscape"
+        # File actually on disk
+        from app.brain.lookahead.artifacts import read_lookahead_pdf
+        pdf = read_lookahead_pdf(out["artifact_id"])
+        assert pdf[:4] == b"%PDF"
