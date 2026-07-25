@@ -1,6 +1,6 @@
 """Drift detection: where the meeting's spoken reality diverges from the Brain.
 
-READ-ONLY. This is the short-term step of the BB live-meeting roadmap (short = detect
+READ-ONLY. This is the short-term step of the Carmen live-meeting roadmap (short = detect
 drifts, medium = HITL review/apply, long = live in-meeting write-back). It never writes to
 the job log / DWL — it only compares what was SAID against the current system-of-record
 field values and records each mismatch as a BrainDrift the reviewer can see.

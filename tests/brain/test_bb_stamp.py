@@ -1,4 +1,4 @@
-"""Tests for the BB-N/X page stamp baked into pulled Procore drawing PDFs."""
+"""Tests for the CM-N/X page stamp baked into pulled Procore drawing PDFs."""
 import io
 import math
 
@@ -54,7 +54,7 @@ def _stamp_matrix(pdf_bytes: bytes):
     found = {}
 
     def visit(text, cm, tm, font, size):
-        if "BB-" in text and not found:
+        if "CM-" in text and not found:
             a, b, c, d, e, f = tm
             A, B, C, D, E, F = cm
             found['m'] = (a * A + b * C, a * B + b * D,
@@ -81,8 +81,8 @@ def test_stamp_bakes_bb_anchor_on_every_page():
     reader = PdfReader(io.BytesIO(stamped))
     assert len(reader.pages) == 2
 
-    assert "BB-1/2" in reader.pages[0].extract_text()
-    assert "BB-2/2" in reader.pages[1].extract_text()
+    assert "CM-1/2" in reader.pages[0].extract_text()
+    assert "CM-2/2" in reader.pages[1].extract_text()
 
 
 def test_malformed_bytes_returns_input_unchanged():

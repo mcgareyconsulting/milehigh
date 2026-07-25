@@ -1,13 +1,13 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: HTTP calls for the read-only BB (Banana Boy) chat assistant + its admin access toggle.
+ * purpose: HTTP calls for the read-only Carmen Miranda chat assistant + its admin access toggle.
  * exports:
  *   sendMessage: POST a question; returns { conversation_id, user_message, assistant_message }.
  *   listConversations: List my chat threads (metadata).
  *   getConversation: One thread with its full message history.
  *   listAccessUsers: (admin) users + their is_carmen_chat flag.
- *   setUserAccess: (admin) grant/revoke a user's BB-chat access.
+ *   setUserAccess: (admin) grant/revoke a user's Carmen-chat access.
  * imports_from: [axios, ../utils/api]
  * imported_by: [components/BBChatWidget.jsx]
  * invariants:

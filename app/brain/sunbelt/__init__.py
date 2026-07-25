@@ -5,5 +5,5 @@ Parses the weekly Sunbelt CSV, reconciles each rental line to one of our jobs
 serves an admin report with date/cost discrepancy flags.
 
 All ingestion flows through `ingest.ingest_snapshot` — the admin CSV upload calls
-it today; a future bb@mhmw.com email adapter plugs into the same seam.
+it today; a future carmen_ai@mhmw.com email adapter plugs into the same seam.
 """

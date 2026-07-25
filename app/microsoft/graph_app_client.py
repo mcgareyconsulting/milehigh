@@ -1,6 +1,6 @@
 """Microsoft Graph app-only (client-credentials) client.
 
-App-only access scoped to a single mailbox/calendar (e.g. bb@mhmw.com) via an
+App-only access scoped to a single mailbox/calendar (e.g. carmen_ai@mhmw.com) via an
 Azure ApplicationAccessPolicy — the deliberate workaround for not opening Graph
 across the whole org. No user logs in; we request an application token with the
 existing AZURE_* app registration and call Graph as the application.
@@ -69,7 +69,7 @@ def graph_get(path, params=None, headers=None, timeout=DEFAULT_TIMEOUT, token_ge
     """GET a Graph resource and return parsed JSON.
 
     Retries transient connection errors and forces a token refresh once on a
-    401. `path` is relative to GRAPH_BASE (e.g. "/users/bb@mhmw.com/messages")
+    401. `path` is relative to GRAPH_BASE (e.g. "/users/carmen_ai@mhmw.com/messages")
     or an absolute Graph URL (e.g. an @odata.nextLink).
 
     `headers` are merged over the defaults (Authorization/Accept) — used to add

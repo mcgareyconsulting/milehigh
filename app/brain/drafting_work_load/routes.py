@@ -74,7 +74,7 @@ def drafting_work_load():
     else:
         submittals = DraftingWorkLoadService.get_dwl_submittals(job_numbers_filter, tab=tab)
 
-    # BB review rollup badge per submittal (one grouped query; no Procore/filesystem calls).
+    # Carmen review rollup badge per submittal (one grouped query; no Procore/filesystem calls).
     bb_status = _bb_status_by_submittal(submittals)
     serialized = []
     for submittal in submittals:
@@ -85,7 +85,7 @@ def drafting_work_load():
 
 
 def _bb_status_by_submittal(submittals):
-    """Roll each submittal's BB reviews up to one badge status, in a single query.
+    """Roll each submittal's Carmen reviews up to one badge status, in a single query.
 
     Priority: 'reviewing' (any pending) > 'violation' (any complete with a critical) >
     'needs_verify' (any complete with actionable high/moderate/low findings) > 'clear'

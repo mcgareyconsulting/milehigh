@@ -1,7 +1,7 @@
 """Calendar → Recall scheduling (app-only Graph).
 
 The calendar IS the scheduling UI: invite the configured mailbox (e.g.
-bb@mhmw.com) to a Teams meeting and a Recall notetaker bot ("BB") joins on its
+carmen_ai@mhmw.com) to a Teams meeting and a Recall notetaker bot ("Carmen Miranda") joins on its
 own at the event's start time. We read the mailbox's calendar *as the
 application* (app-only Graph, scoped by an ApplicationAccessPolicy), so no user
 logs in and nothing is opened org-wide.

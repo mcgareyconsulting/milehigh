@@ -1,4 +1,4 @@
-"""Idempotently ensure the BB-mail Graph subscription is live and non-expiring.
+"""Idempotently ensure the Carmen-mail Graph subscription is live and non-expiring.
 
 Reconciles against Graph: creates the subscription if missing/lapsed, renews it if
 nearing expiry, or skips if healthy. This is the SAME function the renewal
@@ -25,7 +25,7 @@ from app.lake.ingest import graph_subscription
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Ensure/renew the BB-mail Graph subscription.")
+    parser = argparse.ArgumentParser(description="Ensure/renew the Carmen-mail Graph subscription.")
     parser.add_argument("--mailbox", help="Mailbox to watch (default: CARMEN_MAILBOX).")
     args = parser.parse_args()
 

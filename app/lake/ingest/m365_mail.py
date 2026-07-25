@@ -5,11 +5,11 @@ lands them idempotently in RawSourceRecord. The mailbox set is admin-governed:
 it's the membership of an Entra security group (the same group the
 ApplicationAccessPolicy scopes the app to), so onboarding a mailbox is just
 "admin adds it to the group." Falls back to an explicit list or the single
-bb@mhmw.com forwarding mailbox.
+carmen_ai@mhmw.com forwarding mailbox.
 
 `pull()` is the per-mailbox entry point for both triggers:
   - the scheduled poll across the set (since=watermark), via `poll()`;
-  - an on-demand BB request ("read the email I forwarded you"), optionally with
+  - an on-demand Carmen request ("read the email I forwarded you"), optionally with
     a Graph $search query and an explicit mailbox.
 """
 import base64
@@ -216,7 +216,7 @@ def resolve_mailboxes():
 
 
 def pull(since=None, query=None, max_results=DEFAULT_MAX_RESULTS, mailbox=None):
-    """Pull mail from the BB mailbox and land it in the lake (bronze).
+    """Pull mail from the Carmen mailbox and land it in the lake (bronze).
 
     Args:
         since: only fetch messages received after this datetime (poll path).

@@ -1,4 +1,4 @@
-"""BB (Banana Boy) read-only chat routes. Registered on brain_bp.
+"""Carmen Miranda read-only chat routes. Registered on brain_bp.
 
 Access is gated by the per-user `is_carmen_chat` flag (admins always have access), so the
 phase-1 rollout can be widened from the admin UI without a redeploy. The chat is strictly
@@ -69,7 +69,7 @@ def bb_chat_conversation(conversation_id):
 @brain_bp.route('/carmen-chat/admin/users', methods=['GET'])
 @admin_required
 def bb_chat_admin_users():
-    """All users with their BB-chat access flag, for the admin toggle panel."""
+    """All users with their Carmen-chat access flag, for the admin toggle panel."""
     users = User.query.order_by(User.username).all()
     return jsonify({'users': [
         {
@@ -86,7 +86,7 @@ def bb_chat_admin_users():
 @brain_bp.route('/carmen-chat/admin/users/<int:user_id>/access', methods=['POST'])
 @admin_required
 def bb_chat_admin_set_access(user_id):
-    """Grant or revoke BB-chat access for a user. Body: {is_carmen_chat: bool}."""
+    """Grant or revoke Carmen-chat access for a user. Body: {is_carmen_chat: bool}."""
     target = db.session.get(User, user_id)
     if not target:
         return jsonify({'error': 'user not found'}), 404

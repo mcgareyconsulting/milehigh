@@ -1,4 +1,4 @@
-"""Read-only tools BB can invoke via Anthropic tool-use.
+"""Read-only tools Carmen can invoke via Anthropic tool-use.
 
 Ported from the original app/banana_boy/tools.py (feature/banana-boy-v2), trimmed to the
 READ-ONLY suite (the Gmail draft/send write tools are intentionally excluded — V1 is

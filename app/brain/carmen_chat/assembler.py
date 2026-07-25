@@ -102,7 +102,7 @@ def _material_orders(job, release, releases):
     """Material orders for the anchored job (narrowed to a release when given).
 
     Returns (orders_list, rollup_by_release). The rollup mirrors the Job Log
-    Mat. Ord. column ('received' | 'pending' | 'overdue' | None) so BB chat and
+    Mat. Ord. column ('received' | 'pending' | 'overdue' | None) so Carmen chat and
     the table describe an order the same way.
     """
     if job is None:

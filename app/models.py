@@ -58,7 +58,7 @@ class User(db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     is_drafter = db.Column(db.Boolean, default=False, nullable=False)
-    # Phase-1 access flag for the read-only BB (Banana Boy) chat assistant. Toggled
+    # Phase-1 access flag for the read-only Carmen Miranda chat assistant. Toggled
     # per-user from the admin UI so we can roll the feature out incrementally without
     # a redeploy. server_default keeps the ADD COLUMN metadata-only on Postgres.
     is_carmen_chat = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
@@ -1177,7 +1177,7 @@ class RawSourceRecord(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     source = db.Column(db.String(64), nullable=False)         # e.g. 'm365_mail'
     record_type = db.Column(db.String(64), nullable=False)    # e.g. 'email'
-    source_account = db.Column(db.String(255), nullable=True)  # mailbox, e.g. 'bb@mhmw.com'
+    source_account = db.Column(db.String(255), nullable=True)  # mailbox, e.g. 'carmen_ai@mhmw.com'
     external_id = db.Column(db.String(1024), nullable=False)  # Graph message id
     content_hash = db.Column(db.String(64), nullable=False)   # sha256 idempotency key
     occurred_at = db.Column(db.DateTime, nullable=True)       # source event time (receivedDateTime)
@@ -1221,7 +1221,7 @@ class LakeIngestState(db.Model):
     )
     id = db.Column(db.Integer, primary_key=True)
     source = db.Column(db.String(64), nullable=False)
-    account = db.Column(db.String(255), nullable=True)  # mailbox, e.g. 'bb@mhmw.com'
+    account = db.Column(db.String(255), nullable=True)  # mailbox, e.g. 'carmen_ai@mhmw.com'
     last_polled_at = db.Column(db.DateTime, nullable=True)
     last_occurred_at = db.Column(db.DateTime, nullable=True)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -1239,7 +1239,7 @@ class LakeIngestState(db.Model):
 class GraphSubscription(db.Model):
     """A live Microsoft Graph change-notification subscription (the push webhook).
 
-    One row per (source, resource) we watch — for BB mail, the bb@mhmw.com Inbox.
+    One row per (source, resource) we watch — for Carmen mail, the carmen_ai@mhmw.com Inbox.
     Graph subscriptions expire in ~70h, so this row tracks the Graph-assigned
     `subscription_id`, when it `expires_at`, and the `client_state` secret echoed
     back in every notification (verified in the handler). The ensure/renew job
@@ -1254,7 +1254,7 @@ class GraphSubscription(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     source = db.Column(db.String(64), nullable=False)          # e.g. 'm365_mail'
     resource = db.Column(db.String(512), nullable=False)       # Graph resource path watched
-    mailbox = db.Column(db.String(255), nullable=True)         # e.g. 'bb@mhmw.com'
+    mailbox = db.Column(db.String(255), nullable=True)         # e.g. 'carmen_ai@mhmw.com'
     subscription_id = db.Column(db.String(255), nullable=True, index=True)  # Graph-assigned id
     client_state = db.Column(db.String(128), nullable=True)    # secret echoed in notifications
     notification_url = db.Column(db.String(1024), nullable=True)
@@ -1282,7 +1282,7 @@ class MicrosoftDelegatedToken(db.Model):
     """Stored delegated OAuth token for a single mailbox identity (device-code flow).
 
     Used when org policy blocks app-only Graph application permissions: the
-    mailbox (bb@mhmw.com) signs in once via the device-code flow and consents
+    mailbox (carmen_ai@mhmw.com) signs in once via the device-code flow and consents
     for itself (user consent, not admin consent). The refresh token here lets
     the poller mint access tokens going forward without further interaction.
     One row per account_email. Tokens are db.Text (no length cap) since refresh
@@ -1305,7 +1305,7 @@ class MicrosoftDelegatedToken(db.Model):
 class MaterialOrder(db.Model):
     """A part/material ordered from a supplier, tagged to a job-release.
 
-    Parsed from supplier order emails forwarded to bb@mhmw.com (the first source
+    Parsed from supplier order emails forwarded to carmen_ai@mhmw.com (the first source
     is Drexel Supply decking orders). Mirrors the "Dencol orders" interaction
     path — it does NOT create a Trello card; it surfaces on the release's detail
     modal as outstanding material. Linked to Releases by (job, release) *value*,
@@ -1790,7 +1790,7 @@ class ExtractionSignal(db.Model):
 class SunbeltRentalSnapshot(db.Model):
     """One imported Sunbelt 'Equipment on Rent' report — a weekly snapshot.
 
-    All rental lines from a single CSV upload (or, later, a bb@mhmw.com email
+    All rental lines from a single CSV upload (or, later, a carmen_ai@mhmw.com email
     pull) hang off one snapshot so we can diff week-over-week. ``snapshot_date``
     is the report's effective date (defaults to import day; overridable).
     Ingestion goes through app.brain.sunbelt.ingest.ingest_snapshot.
@@ -1894,7 +1894,7 @@ class SunbeltRental(db.Model):
 
 
 class CarmenDrawingReview(db.Model):
-    """A Banana Boy code-compliance review of one PDF drawing version.
+    """A Carmen Miranda code-compliance review of one PDF drawing version.
 
     Kicked off from the PDF-mentions surface (admin-only). The review runs on a
     background thread (app/brain/pdf_review/worker.py) because the Claude call
@@ -1955,10 +1955,10 @@ class CarmenDrawingReview(db.Model):
 
 
 class CarmenReviewFeedback(db.Model):
-    """A PM's accept/deny (+ optional notes) on ONE finding of a Banana Boy review.
+    """A PM's accept/deny (+ optional notes) on ONE finding of a Carmen Miranda review.
 
-    The training loop: as a PM works a BB report they mark each suggestion accepted or
-    rejected and can leave a note ("BB is right, this rise is 8\"" / "false alarm, that
+    The training loop: as a PM works a Carmen report they mark each suggestion accepted or
+    rejected and can leave a note ("Carmen is right, this rise is 8\"" / "false alarm, that
     flight pours into a topping slab"). We just land these to the DB with enough context
     (the finding snapshot + review/release/version + rule_id) to ingest later into the
     rule library. One row per (review, finding); re-submitting a finding upserts it.
@@ -2019,7 +2019,7 @@ class CarmenReviewFeedback(db.Model):
 
 
 class CarmenChatConversation(db.Model):
-    """A single BB (Banana Boy) chat thread owned by one user.
+    """A single Carmen Miranda chat thread owned by one user.
 
     Phase-1 chat is read-only — no message ever mutates app data. We persist the
     thread so we have a durable audit trail and an in-app spend ledger keyed to
@@ -2064,7 +2064,7 @@ class CarmenChatConversation(db.Model):
 
 
 class CarmenChatMessage(db.Model):
-    """One turn in a BB chat thread.
+    """One turn in a Carmen chat thread.
 
     Assistant turns carry the spend telemetry (model, per-turn token counts,
     computed USD cost, wall-clock duration) plus the Anthropic ``request_id`` so a

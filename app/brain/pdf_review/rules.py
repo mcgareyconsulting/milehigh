@@ -1,4 +1,4 @@
-"""Banana Boy PDF-review rule library.
+"""Carmen Miranda PDF-review rule library.
 
 Open-ended stair/rail code-compliance review, backed by a growing list of known
 failure modes ("we've made this mistake before" -> one more rule). The rule
@@ -12,7 +12,7 @@ paragraph of physics/geometry (why it happens, how to check) — never a specifi
 job's numbers. Job-specific values come from the drawing set at review time.
 
 Later this list is expected to migrate to a DB table so rules can be added from
-the "submit markup to BB" UI without a deploy; the prompt shape stays the same.
+the "submit markup to Carmen" UI without a deploy; the prompt shape stays the same.
 """
 
 # Each rule is reusable domain knowledge, not a per-set answer. Order is stable so
@@ -314,9 +314,9 @@ SYSTEM_PROMPT_HEADER = (
     "invent unrelated issues.\n"
     "For every concern: cite the sheet label (e.g. 'F1') and the exact dimension text for "
     "each value used, show the arithmetic concisely, and state a verdict.\n"
-    "Every page carries a small plain-black 'BB-N/X' stamp in its UPPER-LEFT corner, where "
+    "Every page carries a small plain-black 'CM-N/X' stamp in its UPPER-LEFT corner, where "
     "N is that page's 1-based position in this PDF and X is the total page count. For every "
-    "finding, read the BB-N/X stamp on the page whose drawing the finding concerns and return "
+    "finding, read the CM-N/X stamp on the page whose drawing the finding concerns and return "
     "that integer N as the `page` field. `page` is only a machine anchor for jumping the "
     "viewer — it does NOT replace the sheet label; still cite the sheet label (e.g. 'F1') in "
     "`location` and each `values_used[].sheet`. If a finding spans multiple sheets, return the "

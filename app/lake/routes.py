@@ -1,8 +1,8 @@
 """Data lake (Hive Mind) HTTP surface.
 
 Admin-only endpoints for triggering ingestion. The on-demand mail pull is the
-seam Banana Boy will call when a user says "read the email I forwarded you"
-(the BB tool wiring lands in a later increment); for now it is exercisable
+seam Carmen Miranda will call when a user says "read the email I forwarded you"
+(the Carmen tool wiring lands in a later increment); for now it is exercisable
 directly for testing/operations.
 """
 from flask import Blueprint, Response, current_app, jsonify, request
@@ -22,7 +22,7 @@ def _ingest_enabled():
 @lake_bp.route("/ingest/mail/pull", methods=["POST"])
 @admin_required
 def ingest_mail_pull():
-    """Pull fresh mail from the BB mailbox into the lake on demand.
+    """Pull fresh mail from the Carmen mailbox into the lake on demand.
 
     Optional JSON body: {"query": "<graph search>", "max_results": <int>}.
     Without a query, pulls the most recent inbox messages.
@@ -55,7 +55,7 @@ def ingest_mail_pull():
 
 @lake_bp.route("/graph/notifications", methods=["POST"])
 def graph_notifications():
-    """Receive Microsoft Graph change notifications for the BB mailbox (PUSH path).
+    """Receive Microsoft Graph change notifications for the Carmen mailbox (PUSH path).
 
     Unauthenticated from Flask's side — Graph doesn't carry a session; authenticity
     is proven by the per-notification `clientState` secret, verified downstream in

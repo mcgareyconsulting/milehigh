@@ -1,4 +1,4 @@
-"""Banana Boy PDF-review Claude call.
+"""Carmen Miranda PDF-review Claude call.
 
 Hands the full For-Construction drawing set to Claude as a base64 document block
 (Claude reads PDFs natively, so cross-sheet reasoning works — a rise on one sheet,
@@ -104,7 +104,7 @@ def review(pdf_bytes: bytes, job_release: str, model: str = None):
     `model` selects the reviewing model — a friendly alias ('sonnet' for a lighter/faster
     review, 'opus' for the deep one) or a raw model id; None uses the configured default.
     `findings` is a list of dicts (rule_id, issue, verdict, severity, computation,
-    values_used, evidence, location). Empty list means BB reviewed and found nothing.
+    values_used, evidence, location). Empty list means Carmen reviewed and found nothing.
     """
     if not pdf_bytes or len(pdf_bytes) > MAX_PDF_BYTES:
         logger.info("bb_pdf_review_skipped", reason="empty or over size ceiling",
