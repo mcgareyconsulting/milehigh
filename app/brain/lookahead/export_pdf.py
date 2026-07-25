@@ -103,6 +103,16 @@ def _days_between(a: date, b: date) -> int:
     return (b - a).days
 
 
+def _document_title(schedule: dict[str, Any]) -> str:
+    """Human PDF title for the viewer tab / metadata (not just on-page header text)."""
+    job = schedule.get("job")
+    name = schedule.get("project_name") or (f"Job {job}" if job is not None else "Project")
+    title = f"MHMW Production Look-Ahead — {name}"
+    if job is not None:
+        title += f" (Job {job})"
+    return title
+
+
 def render_schedule_pdf(schedule: dict[str, Any]) -> bytes:
     """Return PDF bytes for a ``build_lookahead_schedule`` envelope."""
     buf = io.BytesIO()
@@ -116,9 +126,7 @@ def render_schedule_pdf(schedule: dict[str, Any]) -> bytes:
     generated = schedule.get("generated_on") or date.today().isoformat()
     rows = list(schedule.get("rows") or [])
 
-    title = f"MHMW Production Look-Ahead — {name}"
-    if job is not None:
-        title += f"  (Job {job})"
+    title = _document_title(schedule)
     # Short subtitle only — phase key lives in the footer, not a second legend row.
     chart_span_start, chart_span_end = _chart_range(schedule)
     subtitle = (
@@ -126,6 +134,12 @@ def render_schedule_pdf(schedule: dict[str, Any]) -> bytes:
         f"{weeks}-wk look-ahead window {window.get('start', '?')} → {window.get('end', '?')}  ·  "
         f"Generated {generated}"
     )
+
+    # Document metadata — without this, viewers show "Untitled" in the tab.
+    c.setTitle(title)
+    c.setAuthor("MHMW")
+    c.setSubject(f"GC-facing production look-ahead for {name}")
+    c.setCreator("MHMW Carmen look-ahead")
 
     range_start, range_end = chart_span_start, chart_span_end
     total_days = max(1, _days_between(range_start, range_end))

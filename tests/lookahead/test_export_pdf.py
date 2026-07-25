@@ -73,6 +73,10 @@ def test_render_schedule_pdf_is_valid_gantt_only():
     # Footer key present; appendix headers gone
     assert "Install" in text or "Fab" in text
     assert "Date appendix" not in text
+    # Browser tab uses PDF /Title metadata — must not be empty/"Untitled"
+    meta_title = (reader.metadata.title if reader.metadata else None) or ""
+    assert "Look-Ahead" in meta_title or "Novel Flatiron" in meta_title
+    assert "Untitled" not in meta_title
 
 
 def test_dense_schedule_paginates_gantt_without_crashing():
