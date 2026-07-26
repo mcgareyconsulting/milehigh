@@ -70,8 +70,13 @@ def test_render_schedule_pdf_is_valid_gantt_only():
     assert len(reader.pages) >= 1
     text = "".join((p.extract_text() or "") for p in reader.pages)
     assert "Novel Flatiron" in text or "Look-Ahead" in text or "500" in text
-    # Footer key present; appendix headers gone
-    assert "Install" in text or "Fab" in text
+    # Header phase color legend present; appendix headers gone
+    assert "Phase colors" in text
+    assert "Drafting" in text
+    assert "Fabrication" in text
+    assert "Paint" in text
+    assert "Shipping" in text
+    assert "Installation" in text
     assert "Date appendix" not in text
     # Browser tab uses PDF /Title metadata — must not be empty/"Untitled"
     meta_title = (reader.metadata.title if reader.metadata else None) or ""
@@ -136,6 +141,11 @@ def test_dense_schedule_paginates_gantt_without_crashing():
     text = "".join((p.extract_text() or "") for p in reader.pages)
     assert "170-400" in text
     assert "170-439" in text
+    # Phase legend repeats on every page
+    for page in reader.pages:
+        page_text = page.extract_text() or ""
+        assert "Phase colors" in page_text
+        assert "Installation" in page_text
 
 
 def test_render_empty_schedule_still_pdf():
