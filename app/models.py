@@ -1893,6 +1893,251 @@ class SunbeltRental(db.Model):
         }
 
 
+class TMTicket(db.Model):
+    """A Time & Material field ticket, created natively in the mobile workflow.
+
+    The live path is native digital creation: a foreman opens a ticket on a device,
+    keys the date/location/labor/materials/equipment and (later phases) captures an
+    on-site GC signature, and the ticket moves through the lifecycle
+    draft → submitted → pending_approval → approved → co_generated → co_sent →
+    co_approved → invoiced (plus 'rejected' / 'void'). Nothing is ever deleted — a
+    discarded draft moves to 'void'.
+
+    Line items (labor/materials/equipment) are JSON lists — they normalize into
+    child tables when employee/material master data exists (Phase 3). Costs, rates,
+    markups and O&P (the hidden financial layer) are added in Phase 3.
+
+    `release_id` is a real (nullable) FK to Releases — a ticket may reference no
+    release. `job` holds the job number even when no release is linked, so
+    unmatched tickets stay findable by job.
+
+    Photo/video field evidence lives in `TMTicketAttachment` (a normalized child
+    table, not a JSON column) — mirrors `BoardItemPhoto`/`ReleasePhoto` for
+    audit fields (uploader, size, timestamp) and soft-delete. Fetched separately
+    via GET /tm-tickets/<id>/attachments, not embedded in to_dict().
+    """
+    __tablename__ = "tm_tickets"
+    __table_args__ = (
+        db.Index("ix_tm_tickets_status", "status"),
+        db.Index("ix_tm_tickets_release_id", "release_id"),
+        db.Index("ix_tm_tickets_job", "job"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    # Lifecycle: draft|submitted|pending_approval|approved|co_generated|co_sent|
+    # co_approved|invoiced|rejected|void. Native tickets start as 'draft'.
+    status = db.Column(db.String(16), nullable=False, default="draft",
+                       server_default="draft")
+
+    # Ticket fields
+    release_id = db.Column(db.Integer, db.ForeignKey("releases.id"), nullable=True)
+    job = db.Column(db.Integer, nullable=True)            # job number (kept even if unlinked)
+    date_of_work = db.Column(db.Date, nullable=True)
+    customer = db.Column(db.String(128), nullable=True)
+    work_description = db.Column(db.Text, nullable=True)
+    labor = db.Column(db.JSON, nullable=True)             # [{name, company, classification, hours_reg, hours_ot, hours_dt, notes}]
+    materials = db.Column(db.JSON, nullable=True)         # [{description, quantity, unit, length, notes}]
+    equipment = db.Column(db.JSON, nullable=True)         # [{description, quantity, hours, operator, notes}]
+    signature_present = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    signature_name = db.Column(db.String(128), nullable=True)
+
+    # Native-creation header (auto-populated on the client from project context)
+    location = db.Column(db.String(255), nullable=True)          # area/location of work
+    gc_company = db.Column(db.String(128), nullable=True)
+    gc_contact_name = db.Column(db.String(128), nullable=True)
+    foreman_name = db.Column(db.String(128), nullable=True)
+    created_by = db.Column(db.String(80), nullable=True)         # username of the field creator
+
+    # Trail
+    reviewed_by = db.Column(db.String(80), nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    release = db.relationship("Releases", foreign_keys=[release_id])
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "status": self.status,
+            "release_id": self.release_id,
+            "release": {
+                "id": self.release.id,
+                "job": self.release.job,
+                "release": self.release.release,
+                "job_name": self.release.job_name,
+                "description": self.release.description,
+            } if self.release else None,
+            "job": self.job,
+            "date_of_work": _dt(self.date_of_work),
+            "customer": self.customer,
+            "work_description": self.work_description,
+            "labor": self.labor or [],
+            "materials": self.materials or [],
+            "equipment": self.equipment or [],
+            "signature_present": self.signature_present,
+            "signature_name": self.signature_name,
+            "location": self.location,
+            "gc_company": self.gc_company,
+            "gc_contact_name": self.gc_contact_name,
+            "foreman_name": self.foreman_name,
+            "created_by": self.created_by,
+            "reviewed_by": self.reviewed_by,
+            "reviewed_at": _dt(self.reviewed_at),
+            "created_at": _dt(self.created_at),
+            "updated_at": _dt(self.updated_at),
+        }
+
+
+class TMTicketAttachment(db.Model):
+    """A photo or video attached to a T&M ticket as field evidence of work performed.
+
+    Mirrors `BoardItemPhoto` (storage_key/mime/size/uploader/soft-delete) but is
+    scoped to a `TMTicket` and accepts video as well as images, per the native
+    T&M build doc ("Photos and videos of the work are attached directly from
+    the device"). Only addable/removable while the parent ticket is a draft
+    (see app/brain/tm/photos/command.py); always viewable regardless of status.
+    """
+    __tablename__ = "tm_ticket_attachments"
+
+    id = db.Column(db.Integer, primary_key=True)
+    tm_ticket_id = db.Column(db.Integer, db.ForeignKey("tm_tickets.id", ondelete="CASCADE"),
+                              nullable=False, index=True)
+    storage_key = db.Column(db.String(512), nullable=False)
+    original_filename = db.Column(db.String(256), nullable=True)
+    mime_type = db.Column(db.String(64), nullable=False, default="image/jpeg")
+    file_size_bytes = db.Column(db.BigInteger, nullable=False)
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+
+    ticket = db.relationship("TMTicket", backref=db.backref(
+        "attachments", lazy="dynamic", cascade="all, delete-orphan"))
+    uploaded_by = db.relationship("User", foreign_keys=[uploaded_by_user_id])
+
+    @staticmethod
+    def _display_name(user):
+        if not user:
+            return None
+        first = (user.first_name or "").strip()
+        last = (user.last_name or "").strip()
+        return (f"{first} {last}".strip()) or user.username
+
+    @property
+    def is_video(self):
+        return (self.mime_type or "").startswith("video/")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "tm_ticket_id": self.tm_ticket_id,
+            "original_filename": self.original_filename,
+            "mime_type": self.mime_type,
+            "is_video": self.is_video,
+            "file_size_bytes": self.file_size_bytes,
+            "uploaded_by": {
+                "id": self.uploaded_by_user_id,
+                "name": self._display_name(self.uploaded_by),
+            },
+            "uploaded_at": _dt(self.uploaded_at),
+        }
+
+
+class Subcontractor(db.Model):
+    """An external subcontractor account — a standing identity, invited once by
+    an admin, assigned to zero or more T&M tickets over time via
+    `TMTicketSubcontractor`.
+
+    Deliberately a SEPARATE table from `User`, not a role flag on it: a bug or
+    bulk-update touching `User` can never accidentally grant an external
+    account `is_admin`. Session identity is `session['subcontractor_id']`
+    (never `session['user_id']`) — see app/subcontractor_auth/.
+
+    `password_hash` is nullable (unlike `User`, where a hash always exists) —
+    it stays null from creation until the invite is accepted. `invite_accepted_at`
+    doubles as the "has set a password" flag, replacing `User`'s separate
+    `password_set` boolean with one self-documenting timestamp. The invite
+    token itself is never stored raw — only `invite_token_hash` (sha256 hex) —
+    and both token fields are cleared on acceptance so a replayed raw token
+    can never match again (single-use enforcement).
+    """
+    __tablename__ = "subcontractors"
+
+    id = db.Column(db.Integer, primary_key=True)
+    company_name = db.Column(db.String(128), nullable=False)
+    contact_name = db.Column(db.String(128), nullable=False)
+    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True, server_default='1')
+
+    invited_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    invited_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    invite_token_hash = db.Column(db.String(64), nullable=True)
+    invite_token_expires_at = db.Column(db.DateTime, nullable=True)
+    invite_accepted_at = db.Column(db.DateTime, nullable=True)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    last_login = db.Column(db.DateTime, nullable=True)
+
+    invited_by = db.relationship("User", foreign_keys=[invited_by_user_id])
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "company_name": self.company_name,
+            "contact_name": self.contact_name,
+            "email": self.email,
+            "is_active": self.is_active,
+            "invited_at": _dt(self.invited_at),
+            "invite_accepted": self.invite_accepted_at is not None,
+            "invite_accepted_at": _dt(self.invite_accepted_at),
+            "created_at": _dt(self.created_at),
+            "last_login": _dt(self.last_login),
+        }
+
+
+class TMTicketSubcontractor(db.Model):
+    """Assignment of a T&M ticket to a subcontractor — "PM/lead shares it to the
+    person doing the work" (2026-07-22 ops meeting). Many-to-many by design: a
+    join table rather than a single FK column on `TMTicket`, since a ticket
+    could conceivably be shared to more than one person and the codebase has no
+    precedent for a dual-typed (User-or-Subcontractor) polymorphic owner FK.
+
+    Unassign is a hard delete, not a soft-delete like `TMTicketAttachment` —
+    this row only encodes "can this subcontractor currently see this ticket,"
+    with no evidentiary/audit reason to retain it after revocation.
+    """
+    __tablename__ = "tm_ticket_subcontractors"
+    __table_args__ = (
+        db.UniqueConstraint("tm_ticket_id", "subcontractor_id", name="uq_tm_ticket_subcontractor"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    tm_ticket_id = db.Column(db.Integer, db.ForeignKey("tm_tickets.id", ondelete="CASCADE"),
+                              nullable=False, index=True)
+    subcontractor_id = db.Column(db.Integer, db.ForeignKey("subcontractors.id", ondelete="CASCADE"),
+                                  nullable=False, index=True)
+    assigned_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    assigned_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    ticket = db.relationship("TMTicket", backref=db.backref(
+        "subcontractor_assignments", lazy="dynamic", cascade="all, delete-orphan"))
+    subcontractor = db.relationship("Subcontractor", backref=db.backref(
+        "ticket_assignments", lazy="dynamic", cascade="all, delete-orphan"))
+    assigned_by = db.relationship("User", foreign_keys=[assigned_by_user_id])
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "tm_ticket_id": self.tm_ticket_id,
+            "subcontractor_id": self.subcontractor_id,
+            "subcontractor": self.subcontractor.to_dict() if self.subcontractor else None,
+            "assigned_by_user_id": self.assigned_by_user_id,
+            "assigned_at": _dt(self.assigned_at),
+        }
+
+
 class CarmenDrawingReview(db.Model):
     """A Carmen Miranda code-compliance review of one PDF drawing version.
 

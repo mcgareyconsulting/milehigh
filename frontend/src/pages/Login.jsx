@@ -1,23 +1,39 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Multi-step login page handling email lookup, first-time password setup, and credential-based sign-in.
+ * purpose: Login page for both identity spaces — an Employee/Subcontractor toggle over one
+ *          shared card, rather than two separate pages, so a person who doesn't know which
+ *          URL they need still lands in the right place. Both tabs show email+password
+ *          together immediately (no email-first gate); the only extra step is the rare
+ *          genuine-first-login case, where the employee flow doesn't yet have a password to
+ *          check and instead prompts to set one (a subcontractor's first-login already
+ *          happened via the invite-accept link, so that case never applies there).
  * exports:
- *   Login: Page component with email -> set-password / login flow and auto-redirect for authenticated users
+ *   Login: Page component. Rendered at both /login and /sub/login (App.jsx) — the route just
+ *     picks which tab is preselected; the component and its behavior are identical either way.
  * imports_from: [react, react-router-dom, ../utils/api, ../components/FloatingBananas]
  * imported_by: [App.jsx]
  * invariants:
- *   - Three-step flow: email check, optional password setup (first login), then password login
- *   - Already-authenticated users are immediately redirected to /dashboard on mount
+ *   - mode='employee'|'subcontractor' is local UI state, seeded from the current pathname
+ *     (/sub/... preselects subcontractor) but freely toggle-able afterward without navigating.
+ *   - Already-authenticated employees are immediately redirected to /dashboard on mount.
+ *   - Employee submit calls /api/auth/check-user BEFORE /api/auth/login (never calls login
+ *     directly) because /api/auth/login's check_password_hash blows up on a null hash — an
+ *     account that's never set a password has no hash to verify against. check-user is what
+ *     detects that case and reroutes to set-password instead, all from one submit action.
+ *   - Switching modes resets step/error/fields so stale state from one flow never leaks into
+ *     the other (e.g. an in-progress set-password step doesn't linger after flipping tabs).
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { API_BASE_URL } from '../utils/api';
 import FloatingBananas from '../components/FloatingBananas';
 
 function Login({ onLogin }) {
-    const [step, setStep] = useState('email'); // 'email', 'set-password', 'login'
+    const location = useLocation();
+    const [mode, setMode] = useState(location.pathname.startsWith('/sub') ? 'subcontractor' : 'employee');
+    const [step, setStep] = useState('form'); // 'form', 'set-password' (employee mode only)
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -30,6 +46,16 @@ function Login({ onLogin }) {
         // Check if user is already logged in
         checkAuth();
     }, []);
+
+    const switchMode = (next) => {
+        setMode(next);
+        setStep('form');
+        setError('');
+        setUsername('');
+        setPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+    };
 
     const checkAuth = async () => {
         try {
@@ -46,13 +72,13 @@ function Login({ onLogin }) {
         }
     };
 
-    const handleCheckUser = async (e) => {
+    const handleEmployeeSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/auth/check-user`, {
+            const checkResponse = await fetch(`${API_BASE_URL}/api/auth/check-user`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -60,15 +86,34 @@ function Login({ onLogin }) {
                 credentials: 'include',
                 body: JSON.stringify({ username }),
             });
+            const checkData = await checkResponse.json();
 
-            const data = await response.json();
-
-            if (!data.exists) {
+            if (!checkData.exists) {
                 setError('No account found for that email');
-            } else if (data.needs_password_setup) {
+                return;
+            }
+            if (checkData.needs_password_setup) {
+                // Genuine first login: no password to check yet, so this
+                // account switches to setting one instead of signing in.
                 setStep('set-password');
+                return;
+            }
+
+            const loginResponse = await fetch(`${API_BASE_URL}/api/auth/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({ username, password }),
+            });
+            const loginData = await loginResponse.json();
+
+            if (loginResponse.ok) {
+                if (onLogin) onLogin();
+                navigate('/dashboard');
             } else {
-                setStep('login');
+                setError(loginData.error || 'An error occurred');
             }
         } catch (err) {
             setError('Network error. Please try again.');
@@ -123,27 +168,25 @@ function Login({ onLogin }) {
         }
     };
 
-    const handleLogin = async (e) => {
+    const handleSubLogin = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+            const response = await fetch(`${API_BASE_URL}/api/subcontractor-auth/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 credentials: 'include',
-                body: JSON.stringify({ username, password }),
+                body: JSON.stringify({ email: username, password }),
             });
 
             const data = await response.json();
 
             if (response.ok) {
-                // Success - update auth state and redirect to dashboard
-                if (onLogin) onLogin();
-                navigate('/dashboard');
+                navigate('/sub/tickets');
             } else {
                 setError(data.error || 'An error occurred');
             }
@@ -166,50 +209,83 @@ function Login({ onLogin }) {
                 <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200 dark:border-slate-600 p-8 space-y-6">
                     <div>
                         <h2 className="text-center text-3xl font-extrabold text-gray-900 dark:text-white">
-                            {step === 'email' && 'Sign in to your account'}
-                            {step === 'set-password' && 'Set your password'}
-                            {step === 'login' && 'Sign in to your account'}
+                            {mode === 'employee' && step === 'form' && 'Sign in to your account'}
+                            {mode === 'employee' && step === 'set-password' && 'Set your password'}
+                            {mode === 'subcontractor' && 'Subcontractor sign in'}
                         </h2>
                         <p className="mt-2 text-center text-sm text-gray-600 dark:text-slate-400">
                             MHMW Brain
                         </p>
                     </div>
 
-                    {/* Email step */}
-                    {step === 'email' && (
-                        <form className="space-y-6" onSubmit={handleCheckUser}>
+                    <div className="flex rounded-lg border border-gray-300 dark:border-slate-600 p-1 bg-gray-100 dark:bg-slate-900/40">
+                        <button type="button" onClick={() => switchMode('employee')}
+                            className={`flex-1 py-1.5 text-sm font-semibold rounded-md transition-colors ${mode === 'employee' ? 'bg-accent-500 text-white shadow' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'}`}>
+                            Employee
+                        </button>
+                        <button type="button" onClick={() => switchMode('subcontractor')}
+                            className={`flex-1 py-1.5 text-sm font-semibold rounded-md transition-colors ${mode === 'subcontractor' ? 'bg-accent-500 text-white shadow' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'}`}>
+                            Subcontractor
+                        </button>
+                    </div>
+
+                    {/* Employee sign-in: email + password shown together immediately. One
+                        submit checks the account and either signs in or, for a genuine
+                        first-ever login, switches to the set-password step below. */}
+                    {mode === 'employee' && step === 'form' && (
+                        <form className="space-y-6" onSubmit={handleEmployeeSubmit}>
                             {error && (
                                 <div className="rounded-md bg-red-50 dark:bg-red-900/30 p-4 border border-red-200 dark:border-red-800">
                                     <div className="text-sm text-red-800 dark:text-red-200">{error}</div>
                                 </div>
                             )}
-                            <div>
-                                <label htmlFor="username" className="sr-only">
-                                    Email
-                                </label>
-                                <input
-                                    id="username"
-                                    name="username"
-                                    type="email"
-                                    required
-                                    className="appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-slate-500 placeholder-gray-500 dark:placeholder-slate-400 text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-700 rounded-md focus:outline-none focus:ring-accent-500 focus:border-accent-500 focus:z-10 sm:text-sm"
-                                    placeholder="Email"
-                                    value={username}
-                                    onChange={(e) => setUsername(e.target.value)}
-                                />
+                            <div className="rounded-md shadow-sm -space-y-px">
+                                <div>
+                                    <label htmlFor="username" className="sr-only">
+                                        Email
+                                    </label>
+                                    <input
+                                        id="username"
+                                        name="username"
+                                        type="email"
+                                        required
+                                        autoComplete="username"
+                                        className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-slate-500 placeholder-gray-500 dark:placeholder-slate-400 text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-700 rounded-t-md focus:outline-none focus:ring-accent-500 focus:border-accent-500 focus:z-10 sm:text-sm"
+                                        placeholder="Email"
+                                        value={username}
+                                        onChange={(e) => setUsername(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="password" className="sr-only">
+                                        Password
+                                    </label>
+                                    <input
+                                        id="password"
+                                        name="password"
+                                        type="password"
+                                        required
+                                        autoComplete="current-password"
+                                        className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-slate-500 placeholder-gray-500 dark:placeholder-slate-400 text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-700 rounded-b-md focus:outline-none focus:ring-accent-500 focus:border-accent-500 focus:z-10 sm:text-sm"
+                                        placeholder="Password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                    />
+                                </div>
                             </div>
                             <button
                                 type="submit"
                                 disabled={loading}
                                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-accent-500 hover:bg-accent-600 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-800 focus:ring-accent-500 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {loading ? 'Please wait...' : 'Continue'}
+                                {loading ? 'Please wait...' : 'Sign in'}
                             </button>
                         </form>
                     )}
 
-                    {/* Set password step */}
-                    {step === 'set-password' && (
+                    {/* Set password step — only reached for a genuine first-ever login
+                        (check-user reported needs_password_setup), not part of the normal path. */}
+                    {mode === 'employee' && step === 'set-password' && (
                         <form className="space-y-6" onSubmit={handleSetPassword}>
                             {error && (
                                 <div className="rounded-md bg-red-50 dark:bg-red-900/30 p-4 border border-red-200 dark:border-red-800">
@@ -263,21 +339,23 @@ function Login({ onLogin }) {
                             <button
                                 type="button"
                                 onClick={() => {
-                                    setStep('email');
+                                    setStep('form');
                                     setError('');
                                     setNewPassword('');
                                     setConfirmPassword('');
                                 }}
                                 className="w-full text-sm text-accent-600 dark:text-accent-400 hover:text-accent-700 dark:hover:text-accent-300"
                             >
-                                Back to email
+                                Back
                             </button>
                         </form>
                     )}
 
-                    {/* Login step */}
-                    {step === 'login' && (
-                        <form className="space-y-6" onSubmit={handleLogin}>
+                    {/* Subcontractor sign-in: single step (a subcontractor's first-login
+                        already happened via the invite-accept link, so there's no
+                        email-lookup/set-password branch to reproduce here). */}
+                    {mode === 'subcontractor' && (
+                        <form className="space-y-6" onSubmit={handleSubLogin}>
                             {error && (
                                 <div className="rounded-md bg-red-50 dark:bg-red-900/30 p-4 border border-red-200 dark:border-red-800">
                                     <div className="text-sm text-red-800 dark:text-red-200">{error}</div>
@@ -285,27 +363,31 @@ function Login({ onLogin }) {
                             )}
                             <div className="rounded-md shadow-sm -space-y-px">
                                 <div>
-                                    <label htmlFor="username-login" className="sr-only">
+                                    <label htmlFor="sub-username" className="sr-only">
                                         Email
                                     </label>
                                     <input
-                                        id="username-login"
+                                        id="sub-username"
                                         name="username"
                                         type="email"
-                                        disabled
-                                        className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-slate-500 placeholder-gray-500 dark:placeholder-slate-400 text-gray-900 dark:text-slate-100 bg-gray-100 dark:bg-slate-600 rounded-t-md focus:outline-none focus:ring-accent-500 focus:border-accent-500 focus:z-10 sm:text-sm cursor-not-allowed opacity-60"
+                                        required
+                                        autoComplete="username"
+                                        className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-slate-500 placeholder-gray-500 dark:placeholder-slate-400 text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-700 rounded-t-md focus:outline-none focus:ring-accent-500 focus:border-accent-500 focus:z-10 sm:text-sm"
+                                        placeholder="Email"
                                         value={username}
+                                        onChange={(e) => setUsername(e.target.value)}
                                     />
                                 </div>
                                 <div>
-                                    <label htmlFor="password-login" className="sr-only">
+                                    <label htmlFor="sub-password" className="sr-only">
                                         Password
                                     </label>
                                     <input
-                                        id="password-login"
+                                        id="sub-password"
                                         name="password"
                                         type="password"
                                         required
+                                        autoComplete="current-password"
                                         className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-slate-500 placeholder-gray-500 dark:placeholder-slate-400 text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-700 rounded-b-md focus:outline-none focus:ring-accent-500 focus:border-accent-500 focus:z-10 sm:text-sm"
                                         placeholder="Password"
                                         value={password}
@@ -319,17 +401,6 @@ function Login({ onLogin }) {
                                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-accent-500 hover:bg-accent-600 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-800 focus:ring-accent-500 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {loading ? 'Please wait...' : 'Sign in'}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setStep('email');
-                                    setError('');
-                                    setPassword('');
-                                }}
-                                className="w-full text-sm text-accent-600 dark:text-accent-400 hover:text-accent-700 dark:hover:text-accent-300"
-                            >
-                                Use a different email
                             </button>
                         </form>
                     )}

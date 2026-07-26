@@ -192,27 +192,34 @@ def graph_get_binary(path, params=None, timeout=DEFAULT_TIMEOUT, token_getter=No
     raise last_exc if last_exc else RuntimeError("graph_get_binary exhausted retries")
 
 
-def _graph_write(method, path, json_body=None, timeout=DEFAULT_TIMEOUT, token_getter=None):
+def _graph_write(method, path, json_body=None, params=None, headers=None,
+                  timeout=DEFAULT_TIMEOUT, token_getter=None):
     """Send a mutating Graph request (POST/PATCH/DELETE) and return parsed JSON or None.
 
-    Same transient-retry + 401-refresh behavior as graph_get, for the subscription
-    lifecycle (create/renew/delete). Returns the parsed JSON body when the response
-    carries one (POST create → the subscription, PATCH renew → the updated sub) and
-    None for empty bodies (DELETE → 204 No Content). `path` is relative to GRAPH_BASE
-    or an absolute Graph URL.
+    Same transient-retry + 401-refresh behavior as graph_get. Used both for the
+    subscription lifecycle (create/renew/delete) and for one-shot writes like
+    /me/sendMail. Returns the parsed JSON body when the response carries one
+    (POST create → the subscription, PATCH renew → the updated sub) and None for
+    empty bodies (sendMail's 202, DELETE's 204). `path` is relative to GRAPH_BASE
+    or an absolute Graph URL. Dispatches via `getattr(requests, method.lower())`
+    (not `requests.request`) so tests can patch `requests.post`/`requests.patch`/
+    `requests.delete` directly, same as graph_get patches `requests.get`.
     """
     token_getter = token_getter or get_app_token
     url = path if path.startswith("http") else f"{GRAPH_BASE}{path}"
+    request_fn = getattr(requests, method.lower())
     force_refresh = False
     last_exc = None
     for attempt in range(MAX_RETRIES):
         token = token_getter(force_refresh=force_refresh)
-        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        request_headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
         if json_body is not None:
-            headers["Content-Type"] = "application/json"
+            request_headers["Content-Type"] = "application/json"
+        if headers:
+            request_headers.update(headers)
         try:
-            resp = requests.request(
-                method, url, headers=headers, json=json_body, timeout=timeout
+            resp = request_fn(
+                url, headers=request_headers, params=params, json=json_body, timeout=timeout
             )
         except (requests.ConnectionError, requests.Timeout) as exc:
             last_exc = exc
@@ -248,9 +255,11 @@ def _graph_write(method, path, json_body=None, timeout=DEFAULT_TIMEOUT, token_ge
     raise last_exc if last_exc else RuntimeError("graph_write exhausted retries")
 
 
-def graph_post(path, json_body, timeout=DEFAULT_TIMEOUT, token_getter=None):
-    """POST a Graph resource (e.g. create a change-notification subscription)."""
-    return _graph_write("POST", path, json_body=json_body, timeout=timeout, token_getter=token_getter)
+def graph_post(path, json_body, params=None, headers=None, timeout=DEFAULT_TIMEOUT, token_getter=None):
+    """POST a JSON body to a Graph resource — e.g. /me/sendMail (202/204 empty
+    body) or /subscriptions (create, returns the created subscription)."""
+    return _graph_write("POST", path, json_body=json_body, params=params, headers=headers,
+                         timeout=timeout, token_getter=token_getter)
 
 
 def graph_patch(path, json_body, timeout=DEFAULT_TIMEOUT, token_getter=None):

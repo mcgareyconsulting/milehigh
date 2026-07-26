@@ -51,7 +51,14 @@ class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
-    
+
+    # Base URL for links embedded in outbound email (e.g. a subcontractor
+    # invite-accept link). Nothing built a frontend link into an email before
+    # this feature — no other code path reads this var. No real prod/test
+    # domain is live yet, so this defaults to the local Vite dev server;
+    # override via .env once a real domain exists.
+    APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:5173")
+
     # Trello configuration
     TRELLO_API_KEY = os.environ.get("TRELLO_API_KEY")
     TRELLO_TOKEN = os.environ.get("TRELLO_TOKEN")
@@ -118,6 +125,12 @@ class Config:
     GRAPH_SUBSCRIPTION_RENEW_MINUTES = int(
         os.environ.get("GRAPH_SUBSCRIPTION_RENEW_MINUTES", "720")
     )
+
+    # Carmen Miranda persona mailbox — shares the same ApplicationAccessPolicy
+    # scope as BB_MAILBOX, but is the outbound-send identity for user-facing
+    # mail (e.g. subcontractor invites) so replies never land in bb@mhmw.com's
+    # ingestion inbox and get treated as bronze data by an unrelated poller.
+    CARMEN_MAILBOX = os.environ.get("CARMEN_MAILBOX", "carmen_ai@mhmw.com")
 
     # Per-release marked-up PDF storage. In prod set to an absolute path on the
     # Render persistent disk (e.g. /var/data/pdfs). Local dev falls back to

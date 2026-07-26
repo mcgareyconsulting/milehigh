@@ -42,7 +42,7 @@ const deviceProxy = Object.fromEntries(
 export default defineConfig({
   plugins: [react()],
   server: {
-    // `npm run dev:ipad` adds `--host` to expose this on the LAN for tablet testing.
+    // `npm run dev:ipad` adds `--host` to expose this on the LAN/tailnet for tablet testing.
     proxy: deviceProxy,
   },
   build: {

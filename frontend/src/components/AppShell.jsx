@@ -24,7 +24,7 @@ import BBChatWidget from './BBChatWidget';
 import PatchNotesModal from './PatchNotesModal';
 import { CURRENT_VERSION } from '../data/patchNotes';
 
-function AppShellInner({ isAuthenticated }) {
+function AppShellInner({ isAuthenticated, subcontractor }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { isDark, isOldMan, toggleDark, toggleOldMan } = useTheme();
@@ -113,65 +113,74 @@ function AppShellInner({ isAuthenticated }) {
           {CURRENT_VERSION}
         </button>
 
-        {/* Everything else expands from the right; search is the leftmost item */}
+        {/* Everything else expands from the right; search is the leftmost item.
+            A subcontractor who wandered in here can't use ANY of these staff-only
+            links — showing the full bar next to "this area is for staff only" would
+            be actively contradictory, so it collapses to just the essentials. */}
         <div className="ml-auto flex items-center gap-2">
-          {/* Quick search — leftmost of the right cluster */}
-          <QuickSearch />
+          {!subcontractor && (
+            <>
+              {/* Quick search — leftmost of the right cluster */}
+              <QuickSearch />
 
-          {/* Map + Location shortcuts — visible on 2xl+ only */}
-          <div className="hidden min-[1440px]:flex items-center gap-2">
-            {navBtn('/jobsite-map', 'Map')}
-            <button
-              type="button"
-              onClick={handleLocationToggle}
-              disabled={locationRequesting}
-              className={`inline-flex items-center justify-center p-2 rounded-lg shadow-sm transition-all ${
-                locationEnabled
-                  ? 'bg-green-500 text-white hover:bg-green-600'
-                  : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
-              } ${locationRequesting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
-              aria-label={locationEnabled ? 'Turn off location filter' : 'Filter by your current location'}
-              title={locationEnabled ? 'Turn off location filter' : 'Filter by your current location'}
-            >
-              {locationRequesting ? (
-                <span className="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <span aria-hidden>📍</span>
-              )}
-            </button>
-          </div>
+              {/* Map + Location shortcuts — visible on 2xl+ only */}
+              <div className="hidden min-[1440px]:flex items-center gap-2">
+                {navBtn('/jobsite-map', 'Map')}
+                <button
+                  type="button"
+                  onClick={handleLocationToggle}
+                  disabled={locationRequesting}
+                  className={`inline-flex items-center justify-center p-2 rounded-lg shadow-sm transition-all ${
+                    locationEnabled
+                      ? 'bg-green-500 text-white hover:bg-green-600'
+                      : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+                  } ${locationRequesting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
+                  aria-label={locationEnabled ? 'Turn off location filter' : 'Filter by your current location'}
+                  title={locationEnabled ? 'Turn off location filter' : 'Filter by your current location'}
+                >
+                  {locationRequesting ? (
+                    <span className="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <span aria-hidden>📍</span>
+                  )}
+                </button>
+              </div>
 
-          {/* Inline nav buttons — 2xl+ only */}
-          <div className="hidden min-[1440px]:flex items-center gap-2">
-            {navBtn('/projects', 'Projects')}
-            {navBtn('/job-log', 'Job Log')}
-            {navBtn('/drafting-work-load', 'Drafting WL')}
-            {navBtn('/events', 'Events')}
-            {navBtn('/todos', 'To-Dos')}
-            {navBtn('/install-schedule', 'Install Schedule')}
-            {canSeeReport && navBtn('/invoicing-report', 'Invoicing')}
-            {/* Rentals nav removed 2026-07-12 (company change) — /rental-reports route + backend stay for direct URL / re-enable */}
-            {isAdmin && navBtn('/subs', 'Subs')}
-            {isAdmin && navBtn('/meetings', 'Meetings')}
-            {isAdmin && navIconBtn('/board', 'Bug Tracker', (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                {/* Antennae */}
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 4Q7 1 5 2M15 4Q17 1 19 2" />
-                {/* Body */}
-                <path strokeLinejoin="round" strokeWidth={1.5} d="M12 4c-3.5 0-6 2.3-6 5.8v4.4c0 3.9 2.5 6.8 6 6.8s6-2.9 6-6.8V9.8C18 6.3 15.5 4 12 4Z" />
-                {/* Wing seam */}
-                <path strokeLinecap="round" strokeWidth={1.5} d="M12 4v17" />
-                {/* Legs, drawn with circuit-trace elbows */}
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 9.5H3V7M6 13.5H2M6.5 17.5l-2.2 1.3-.3 2M18 9.5h3V7M18 13.5h4M17.5 17.5l2.2 1.3.3 2" />
-                {/* Circuit nodes inside the body */}
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 11h2.5M9 11v3M9 14h1.8M9.3 14.3 10 17h1.7" />
-                <circle cx="9" cy="11" r="0.9" fill="currentColor" stroke="none" />
-                <circle cx="9" cy="14" r="0.9" fill="currentColor" stroke="none" />
-                <circle cx="10" cy="17" r="0.9" fill="currentColor" stroke="none" />
-              </svg>
-            ))}
-            {isAdmin && navBtn('/admin/submittal-matching', 'Matching')}
-          </div>
+              {/* Inline nav buttons — 2xl+ only */}
+              <div className="hidden min-[1440px]:flex items-center gap-2">
+                {navBtn('/projects', 'Projects')}
+                {navBtn('/job-log', 'Job Log')}
+                {navBtn('/drafting-work-load', 'Drafting WL')}
+                {navBtn('/events', 'Events')}
+                {navBtn('/todos', 'To-Dos')}
+                {navBtn('/install-schedule', 'Install Schedule')}
+                {canSeeReport && navBtn('/invoicing-report', 'Invoicing')}
+                {/* Rentals nav removed 2026-07-12 (company change) — /rental-reports route + backend stay for direct URL / re-enable */}
+                {isAdmin && navBtn('/subs', 'Subs')}
+                {isAdmin && navBtn('/meetings', 'Meetings')}
+                {isAdmin && navIconBtn('/board', 'Bug Tracker', (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    {/* Antennae */}
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 4Q7 1 5 2M15 4Q17 1 19 2" />
+                    {/* Body */}
+                    <path strokeLinejoin="round" strokeWidth={1.5} d="M12 4c-3.5 0-6 2.3-6 5.8v4.4c0 3.9 2.5 6.8 6 6.8s6-2.9 6-6.8V9.8C18 6.3 15.5 4 12 4Z" />
+                    {/* Wing seam */}
+                    <path strokeLinecap="round" strokeWidth={1.5} d="M12 4v17" />
+                    {/* Legs, drawn with circuit-trace elbows */}
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 9.5H3V7M6 13.5H2M6.5 17.5l-2.2 1.3-.3 2M18 9.5h3V7M18 13.5h4M17.5 17.5l2.2 1.3.3 2" />
+                    {/* Circuit nodes inside the body */}
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 11h2.5M9 11v3M9 14h1.8M9.3 14.3 10 17h1.7" />
+                    <circle cx="9" cy="11" r="0.9" fill="currentColor" stroke="none" />
+                    <circle cx="9" cy="14" r="0.9" fill="currentColor" stroke="none" />
+                    <circle cx="10" cy="17" r="0.9" fill="currentColor" stroke="none" />
+                  </svg>
+                ))}
+                {isAdmin && navBtn('/tm-tickets', 'T&M')}
+                {isAdmin && navBtn('/subcontractors', 'Subcontractors')}
+                {isAdmin && navBtn('/admin/submittal-matching', 'Matching')}
+              </div>
+            </>
+          )}
 
           {/* Notification bell (always visible if authenticated) */}
           {isAuthenticated && <NotificationBell />}
@@ -231,6 +240,14 @@ function AppShellInner({ isAuthenticated }) {
             >
               Logout
             </button>
+          ) : subcontractor ? (
+            <button
+              type="button"
+              onClick={() => navigate('/sub/tickets')}
+              className="hidden min-[1440px]:inline-flex px-4 py-2 text-sm font-medium text-white bg-accent-500 hover:bg-accent-600 rounded-lg shadow-md ring-2 ring-accent-400 ring-offset-2 dark:ring-offset-slate-800 focus:outline-none focus:ring-2 focus:ring-accent-500"
+            >
+              My tickets
+            </button>
           ) : (
             <button
               type="button"
@@ -259,13 +276,14 @@ function AppShellInner({ isAuthenticated }) {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         isAuthenticated={isAuthenticated}
+        subcontractor={subcontractor}
         isAdmin={isAdmin}
         canSeeReport={canSeeReport}
         locationEnabled={locationEnabled}
         locationRequesting={locationRequesting}
         onLocationToggle={handleLocationToggle}
         onLogout={handleLogout}
-        onLogin={() => navigate('/login')}
+        onLogin={() => navigate(subcontractor ? '/sub/tickets' : '/login')}
       />
 
       <PatchNotesModal isOpen={showPatchNotes} onClose={() => setShowPatchNotes(false)} isAdmin={isAdmin} />
@@ -281,11 +299,11 @@ function AppShellInner({ isAuthenticated }) {
   );
 }
 
-function AppShell({ isAuthenticated }) {
+function AppShell({ isAuthenticated, subcontractor }) {
   return (
     <LocationProvider>
       <ReleasesProvider enabled={!!isAuthenticated}>
-        <AppShellInner isAuthenticated={isAuthenticated} />
+        <AppShellInner isAuthenticated={isAuthenticated} subcontractor={subcontractor} />
       </ReleasesProvider>
     </LocationProvider>
   );

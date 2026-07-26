@@ -3,7 +3,7 @@
  * schema_version: 1
  * purpose: Slide-in mobile/iPad drawer that exposes the AppShell nav links when the horizontal button row is collapsed.
  * exports:
- *   MobileNavDrawer: Drawer with nav links. Props: open, onClose, isAuthenticated, isAdmin, canSeeReport, locationEnabled, locationRequesting, onLocationToggle, onLogout, onLogin.
+ *   MobileNavDrawer: Drawer with nav links. Props: open, onClose, isAuthenticated, subcontractor, isAdmin, canSeeReport, locationEnabled, locationRequesting, onLocationToggle, onLogout, onLogin.
  * imports_from: [react, react-router-dom]
  * imported_by: [frontend/src/components/AppShell.jsx]
  * invariants:
@@ -29,6 +29,8 @@ const ADMIN_ITEMS = [
     { label: 'Subs', path: '/subs' },
     { label: 'Meetings', path: '/meetings' },
     { label: 'Bug Tracker', path: '/board' },
+    { label: 'T&M', path: '/tm-tickets' },
+    { label: 'Subcontractors', path: '/subcontractors' },
     { label: 'Submittal Matching', path: '/admin/submittal-matching' },
 ];
 
@@ -36,6 +38,7 @@ export default function MobileNavDrawer({
     open,
     onClose,
     isAuthenticated,
+    subcontractor,
     isAdmin,
     canSeeReport,
     locationEnabled,
@@ -103,58 +106,69 @@ export default function MobileNavDrawer({
                 </div>
 
                 <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-                    {/* Location toggle — at top so PMs in field reach it without scrolling */}
-                    <button
-                        type="button"
-                        onClick={() => { onLocationToggle(); }}
-                        disabled={locationRequesting}
-                        className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors min-h-[44px] flex items-center gap-2 ${
-                            locationEnabled
-                                ? 'bg-green-500 text-white hover:bg-green-600'
-                                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
-                        } ${locationRequesting ? 'opacity-70 cursor-wait' : ''}`}
-                    >
-                        {locationRequesting
-                            ? <><span className="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />Requesting…</>
-                            : locationEnabled
-                                ? <>📍 Location on</>
-                                : <>📍 Location</>
-                        }
-                    </button>
+                    {/* A subcontractor who wandered in here can't use ANY of these staff-only
+                        links (see AppShell.jsx's identical desktop-bar suppression) — showing
+                        the full list next to "staff only" messaging would be contradictory. */}
+                    {subcontractor ? (
+                        <p className="px-4 py-3 text-sm text-gray-500 dark:text-slate-400">
+                            This menu is for MHMW staff. Use "My tickets" below to get back to your own tickets.
+                        </p>
+                    ) : (
+                        <>
+                            {/* Location toggle — at top so PMs in field reach it without scrolling */}
+                            <button
+                                type="button"
+                                onClick={() => { onLocationToggle(); }}
+                                disabled={locationRequesting}
+                                className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors min-h-[44px] flex items-center gap-2 ${
+                                    locationEnabled
+                                        ? 'bg-green-500 text-white hover:bg-green-600'
+                                        : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+                                } ${locationRequesting ? 'opacity-70 cursor-wait' : ''}`}
+                            >
+                                {locationRequesting
+                                    ? <><span className="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />Requesting…</>
+                                    : locationEnabled
+                                        ? <>📍 Location on</>
+                                        : <>📍 Location</>
+                                }
+                            </button>
 
-                    <div className="h-px bg-gray-200 dark:bg-slate-600 my-2" />
+                            <div className="h-px bg-gray-200 dark:bg-slate-600 my-2" />
 
-                    {NAV_ITEMS.map(item => (
-                        <button
-                            key={item.path}
-                            type="button"
-                            onClick={() => go(item.path)}
-                            className={itemClass(isActive(item.path))}
-                        >
-                            {item.label}
-                        </button>
-                    ))}
+                            {NAV_ITEMS.map(item => (
+                                <button
+                                    key={item.path}
+                                    type="button"
+                                    onClick={() => go(item.path)}
+                                    className={itemClass(isActive(item.path))}
+                                >
+                                    {item.label}
+                                </button>
+                            ))}
 
-                    {canSeeReport && (
-                        <button
-                            type="button"
-                            onClick={() => go('/invoicing-report')}
-                            className={itemClass(isActive('/invoicing-report'))}
-                        >
-                            Invoicing
-                        </button>
+                            {canSeeReport && (
+                                <button
+                                    type="button"
+                                    onClick={() => go('/invoicing-report')}
+                                    className={itemClass(isActive('/invoicing-report'))}
+                                >
+                                    Invoicing
+                                </button>
+                            )}
+
+                            {isAdmin && ADMIN_ITEMS.map(item => (
+                                <button
+                                    key={item.path}
+                                    type="button"
+                                    onClick={() => go(item.path)}
+                                    className={itemClass(isActive(item.path))}
+                                >
+                                    {item.label}
+                                </button>
+                            ))}
+                        </>
                     )}
-
-                    {isAdmin && ADMIN_ITEMS.map(item => (
-                        <button
-                            key={item.path}
-                            type="button"
-                            onClick={() => go(item.path)}
-                            className={itemClass(isActive(item.path))}
-                        >
-                            {item.label}
-                        </button>
-                    ))}
                 </nav>
 
                 <div className="p-3 border-t border-gray-200 dark:border-slate-600 flex-shrink-0" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
@@ -172,7 +186,7 @@ export default function MobileNavDrawer({
                             onClick={() => { onLogin(); onClose(); }}
                             className="w-full px-4 py-3 text-sm font-medium text-white bg-accent-500 hover:bg-accent-600 rounded-lg shadow-md min-h-[44px]"
                         >
-                            Log in
+                            {subcontractor ? 'My tickets' : 'Log in'}
                         </button>
                     )}
                 </div>

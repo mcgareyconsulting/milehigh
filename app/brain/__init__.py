@@ -40,6 +40,10 @@ from app.brain.carmen_chat import routes as carmen_chat_routes  # noqa: F401  (r
 from app.brain import notification_routes
 from app.brain import todos_routes  # noqa: F401  (registers /todos endpoints)
 from app.brain.material_orders import routes as material_orders_routes  # noqa: F401  (registers /material-orders endpoints)
+from app.brain.tm import routes as tm_routes  # noqa: F401  (registers /tm-tickets endpoints)
+from app.brain.tm.photos import routes as tm_photo_routes  # noqa: F401  (registers /tm-tickets/<id>/attachments endpoints)
+from app.brain.tm.subcontractors import routes as tm_subcontractor_admin_routes  # noqa: F401  (registers /subcontractors + /tm-tickets/<id>/subcontractors endpoints)
+from app.brain.tm.subcontractor_view import routes as tm_subcontractor_view_routes  # noqa: F401  (registers /subcontractor/tm-tickets endpoints)
 from app.brain.projects import routes as projects_routes  # noqa: F401  (registers /projects read endpoints)
 from app.brain.submittal_matching import routes as submittal_matching_routes  # noqa: F401  (registers /submittal-matching endpoints)
 from app.brain.metrics import routes as metrics_routes  # noqa: F401  (registers /metrics endpoints)

@@ -30,18 +30,26 @@ import JobsiteMap from './pages/maps/JobsiteMap';
 import Board from './pages/Board';
 import Meetings from './pages/Meetings';
 import ToDos from './pages/ToDos';
+import TMTickets from './pages/TMTickets';
+import SubcontractorAdmin from './pages/SubcontractorAdmin';
 import FcCollection from './pages/FcCollection';
 import SubmittalMatching from './pages/SubmittalMatching';
 import InvoicingReport from './pages/InvoicingReport';
 import RentalReports from './pages/RentalReports';
+import SubcontractorShell from './components/SubcontractorShell';
+import SubcontractorAcceptInvite from './pages/SubcontractorAcceptInvite';
+import SubcontractorTicketList from './pages/SubcontractorTicketList';
+import SubcontractorTicketDetail from './pages/SubcontractorTicketDetail';
 import Metrics from './pages/Metrics';
 import InstallSchedule from './pages/InstallSchedule';
 import Subs from './pages/Subs';
 import { checkAuth } from './utils/auth';
+import { checkSubcontractorAuth } from './utils/subcontractorAuth';
 import './App.css';
 
 function AppContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
+  const [subcontractor, setSubcontractor] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -51,6 +59,12 @@ function AppContent() {
   const verifyAuth = async () => {
     const user = await checkAuth();
     setIsAuthenticated(!!user);
+    // Only relevant when NOT a staff session — a subcontractor who wanders into
+    // the staff area (e.g. an old bookmark, a mistyped URL) gets a tailored
+    // message pointing them back to /sub/tickets instead of a generic "log in".
+    if (!user) {
+      setSubcontractor(await checkSubcontractorAuth());
+    }
     setLoading(false);
   };
 
@@ -67,7 +81,18 @@ function AppContent() {
       <UpdateAvailableBanner />
       <Routes>
         <Route path="/login" element={<Login onLogin={verifyAuth} />} />
-        <Route path="/" element={<AppShell isAuthenticated={isAuthenticated} />}>
+        {/* Subcontractor routes (other than /sub/login, which renders the SAME Login page
+            with its Subcontractor tab preselected) are a SEPARATE top-level tree, not nested
+            under AppShell: AppShell's auth check is keyed to the internal-staff session
+            (isAuthenticated above, driven by /api/auth/me) and would 401-and-bounce a logged-in
+            subcontractor. SubcontractorShell does its own session check instead. */}
+        <Route path="/sub/login" element={<Login onLogin={verifyAuth} />} />
+        <Route path="/sub/accept-invite/:token" element={<SubcontractorAcceptInvite />} />
+        <Route path="/sub" element={<SubcontractorShell />}>
+          <Route path="tickets" element={<SubcontractorTicketList />} />
+          <Route path="tickets/:id" element={<SubcontractorTicketDetail />} />
+        </Route>
+        <Route path="/" element={<AppShell isAuthenticated={isAuthenticated} subcontractor={subcontractor} />}>
           {isAuthenticated ? (
             <>
               <Route index element={<Navigate to="/job-log" replace />} />
@@ -87,6 +112,8 @@ function AppContent() {
               <Route path="board" element={<Board />} />
               <Route path="meetings" element={<Meetings />} />
               <Route path="todos" element={<ToDos />} />
+              <Route path="tm-tickets" element={<TMTickets />} />
+              <Route path="subcontractors" element={<SubcontractorAdmin />} />
               <Route path="install-schedule" element={<InstallSchedule />} />
               <Route path="invoicing-report" element={<InvoicingReport />} />
               <Route path="rental-reports" element={<RentalReports />} />
@@ -97,7 +124,7 @@ function AppContent() {
               <Route path="*" element={<Navigate to="/job-log" replace />} />
             </>
           ) : (
-            <Route path="*" element={<LoginPrompt />} />
+            <Route path="*" element={<LoginPrompt subcontractor={subcontractor} />} />
           )}
         </Route>
       </Routes>

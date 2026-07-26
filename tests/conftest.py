@@ -138,3 +138,29 @@ def make_release(job, release, stage="Cut Start", stage_group="FABRICATION",
     db.session.add(r)
     db.session.flush()
     return r
+
+
+def make_subcontractor(email, *, company_name="Acme Electrical", contact_name="Sam Sub",
+                        is_active=True, invited_by_user_id=None, accepted=False,
+                        password_hash="x", **extra):
+    """Single source of truth for constructing a Subcontractor row in tests.
+    accepted=True sets invite_accepted_at (and a password_hash) so the row
+    behaves like a subcontractor who's already logged in once; leave False
+    for token/invite-flow tests where acceptance is the thing under test.
+    """
+    from datetime import datetime
+    from app.models import Subcontractor, db
+    sub = Subcontractor(
+        email=email.lower(),
+        company_name=company_name,
+        contact_name=contact_name,
+        is_active=is_active,
+        invited_by_user_id=invited_by_user_id,
+        invited_at=datetime.utcnow(),
+        password_hash=password_hash if accepted else None,
+        invite_accepted_at=datetime.utcnow() if accepted else None,
+        **extra,
+    )
+    db.session.add(sub)
+    db.session.commit()
+    return sub
