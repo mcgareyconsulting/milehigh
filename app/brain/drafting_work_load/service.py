@@ -8,7 +8,7 @@ exports:
   UrgencyService: Executes bump workflows (ordered-to-urgent and unordered-to-ordered) against the database.
   LocationService: Resolves lat/lng to job numbers via PostGIS or Python fallback.
   SubmittalOrderUpdate: Re-exported from engine for backward compatibility.
-imports_from: [datetime, typing, logging, sqlalchemy, app.models, app.brain.drafting_work_load.engine]
+imports_from: [datetime, typing, sqlalchemy, app.logging_config, app.models, app.brain.drafting_work_load.engine]
 imported_by: [app/brain/drafting_work_load/routes.py, app/procore/procore.py]
 invariants:
   - Service methods never commit the session — callers are responsible for db.session.commit().
@@ -20,8 +20,8 @@ Handles database operations and coordinates with engine for business logic.
 """
 from datetime import datetime
 from typing import Optional, List, Tuple
-import logging
 from sqlalchemy import text
+from app.logging_config import get_logger
 from app.models import db, Submittals, Projects, PendingStartInstall
 from app.brain.drafting_work_load.engine import (
     DraftingWorkLoadEngine,
@@ -40,7 +40,7 @@ __all__ = [
     'SubmittalOrderUpdate',
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DraftingWorkLoadService:
@@ -124,7 +124,7 @@ class DraftingWorkLoadService:
         validated_notes = DraftingWorkLoadEngine.validate_notes(notes)
         submittal.notes = validated_notes
         submittal.last_updated = datetime.utcnow()
-        logger.info(f"Updated notes for submittal {submittal.submittal_id}")
+        logger.info("submittal_notes_updated", submittal_id=submittal.submittal_id)
     
     @staticmethod
     def update_drafting_status(submittal, status: Optional[str]) -> Tuple[bool, Optional[str]]:
@@ -141,12 +141,12 @@ class DraftingWorkLoadService:
         is_valid, normalized_status, error = DraftingWorkLoadEngine.validate_drafting_status(status)
         
         if not is_valid:
-            logger.warning(f"Invalid drafting status for submittal {submittal.submittal_id}: {error}")
+            logger.debug("drafting_status_rejected", submittal_id=submittal.submittal_id, error=error)
             return False, error
-        
+
         submittal.submittal_drafting_status = normalized_status
         submittal.last_updated = datetime.utcnow()
-        logger.info(f"Updated drafting status for submittal {submittal.submittal_id} to '{normalized_status}'")
+        logger.info("drafting_status_updated", submittal_id=submittal.submittal_id, drafting_status=normalized_status)
         return True, None
     
     @staticmethod
@@ -190,7 +190,7 @@ class DraftingWorkLoadService:
         if gc_jobsite_schedule_date:
             is_valid, normalized_anchor, error = DraftingWorkLoadEngine.validate_due_date(gc_jobsite_schedule_date)
             if not is_valid or not normalized_anchor:
-                logger.warning(f"Invalid GC jobsite schedule date for submittal {submittal.submittal_id}: {error}")
+                logger.debug("gc_schedule_date_rejected", submittal_id=submittal.submittal_id, error=error)
                 return False, error
 
             from app.trello.utils import calculate_business_days_before
@@ -202,16 +202,18 @@ class DraftingWorkLoadService:
             )
             submittal.last_updated = datetime.utcnow()
             logger.info(
-                f"Backdated due date for submittal {submittal.submittal_id} to "
-                f"{submittal.due_date} ({DraftingWorkLoadService.GC_SCHEDULE_LEAD_BUSINESS_DAYS} "
-                f"business days before GC jobsite schedule date {normalized_anchor})"
+                "due_date_backdated",
+                submittal_id=submittal.submittal_id,
+                due_date=str(submittal.due_date),
+                gc_jobsite_schedule_date=normalized_anchor,
+                lead_business_days=DraftingWorkLoadService.GC_SCHEDULE_LEAD_BUSINESS_DAYS,
             )
             return True, None
 
         is_valid, normalized_date, error = DraftingWorkLoadEngine.validate_due_date(due_date)
 
         if not is_valid:
-            logger.warning(f"Invalid due date for submittal {submittal.submittal_id}: {error}")
+            logger.debug("due_date_rejected", submittal_id=submittal.submittal_id, error=error)
             return False, error
 
         # Convert string to date object if provided
@@ -221,7 +223,7 @@ class DraftingWorkLoadService:
             submittal.due_date = None
 
         submittal.last_updated = datetime.utcnow()
-        logger.info(f"Updated due date for submittal {submittal.submittal_id} to '{normalized_date}'")
+        logger.info("due_date_updated", submittal_id=submittal.submittal_id, due_date=normalized_date)
         return True, None
 
     # When a start install is set, the due date is overwritten to this many business days
@@ -278,7 +280,7 @@ class DraftingWorkLoadService:
         # Reuse the same date validation as due_date (ISO YYYY-MM-DD or blank).
         is_valid, normalized_date, error = DraftingWorkLoadEngine.validate_due_date(start_install)
         if not is_valid:
-            logger.warning(f"Invalid start install for submittal {submittal.submittal_id}: {error}")
+            logger.debug("start_install_rejected", submittal_id=submittal.submittal_id, error=error)
             return False, error
 
         from app.trello.utils import calculate_business_days_before
@@ -306,8 +308,10 @@ class DraftingWorkLoadService:
         DraftingWorkLoadService.sync_pending_start_install(submittal)
 
         logger.info(
-            f"Updated start_install for submittal {submittal.submittal_id} (rel {submittal.rel}) "
-            f"to '{normalized_date}'"
+            "start_install_updated",
+            submittal_id=submittal.submittal_id,
+            rel=submittal.rel,
+            start_install=normalized_date,
         )
         return True, None
 
@@ -500,7 +504,7 @@ class UrgencyService:
         """
         result = UrgencyEngine.check_submitter_pending_in_workflow(approvers)
         if result:
-            logger.info("Submitter found as pending in next workflow group")
+            logger.debug("submitter_pending_in_workflow")
         return result
     
     @staticmethod
@@ -523,19 +527,24 @@ class UrgencyService:
         Returns:
             bool: True if order number was bumped, False otherwise
         """
-        logger.info(f"Starting ladder bump check for submittal {submittal_id}")
-        
+        logger.debug("ladder_bump_check_started", submittal_id=submittal_id)
+
         if record.order_number is None:
-            logger.warning(f"Order number is None for submittal {submittal_id}, cannot bump")
+            logger.debug("ladder_bump_skipped", submittal_id=submittal_id, reason="no_order_number")
             return False
-        
+
         current_order = record.order_number
-        
+
         # Check if order_number is an integer >= 1
         is_integer = isinstance(current_order, (int, float)) and current_order >= 1 and current_order == int(current_order)
-        
+
         if not is_integer:
-            logger.warning(f"Order number {current_order} is not an integer >= 1 for submittal {submittal_id}, cannot bump")
+            logger.debug(
+                "ladder_bump_skipped",
+                submittal_id=submittal_id,
+                reason="order_not_integer",
+                old=current_order,
+            )
             return False
         
         # Find all existing urgent submittals (0 < order < 1) for this ball_in_court
@@ -577,31 +586,34 @@ class UrgencyService:
         
         # Apply urgent updates
         urgent_map = {s.submittal_id: s for s in existing_urgent_submittals}
-        for submittal_id, new_order_val in urgent_updates:
-            if submittal_id in urgent_map:
+        for shifted_id, new_order_val in urgent_updates:
+            if shifted_id in urgent_map:
                 # If it's an urgency slot (0 < order < 1), round to nearest tenth
                 if new_order_val is not None and 0 < new_order_val < 1:
                     new_order_val = round(new_order_val, 1)
-                urgent_map[submittal_id].order_number = new_order_val
-                logger.info(f"Ladder shift DOWN: submittal {submittal_id} -> {new_order_val} (toward 0.1 = most urgent)")
-        
+                old_order_val = urgent_map[shifted_id].order_number
+                urgent_map[shifted_id].order_number = new_order_val
+                logger.debug("urgent_ladder_shifted", submittal_id=shifted_id, old=old_order_val, new=new_order_val)
+
         # Apply regular updates
         regular_map = {s.submittal_id: s for s in existing_regular_submittals}
-        for submittal_id, new_order_val in regular_updates:
-            if submittal_id in regular_map:
-                regular_map[submittal_id].order_number = new_order_val
-                logger.info(f"Regular shift UP: submittal {submittal_id} -> {new_order_val}")
-        
+        for shifted_id, new_order_val in regular_updates:
+            if shifted_id in regular_map:
+                old_order_val = regular_map[shifted_id].order_number
+                regular_map[shifted_id].order_number = new_order_val
+                logger.debug("regular_order_shifted", submittal_id=shifted_id, old=old_order_val, new=new_order_val)
+
         # Assign order number to the new submittal
         record.order_number = new_order_for_bumped
-        
-        if new_order_for_bumped == 1.0:
-            logger.info(f"BUMPED: {int(current_order)} -> 1.0 for submittal {submittal_id} (all slots filled, assigned to regular)")
-            logger.info(f"Shifted {len(regular_updates)} regular orders UP to make room")
-        else:
-            logger.info(f"BUMPED: {int(current_order)} -> {new_order_for_bumped} for submittal {submittal_id} (ladder system - newest at 0.9)")
-            if urgent_updates:
-                logger.info(f"Shifted {len(urgent_updates)} existing urgent submittals DOWN the ladder (toward 0.1 = most urgent)")
+
+        logger.info(
+            "submittal_order_bumped",
+            submittal_id=submittal_id,
+            old=current_order,
+            new=new_order_for_bumped,
+            urgent_shifted=len(urgent_updates),
+            regular_shifted=len(regular_updates),
+        )
 
         return True
 
@@ -619,10 +631,15 @@ class UrgencyService:
         Returns:
             bool: True if successfully bumped, False otherwise
         """
-        logger.info(f"Bumping unordered submittal {submittal_id} to end of ordered list")
+        logger.debug("unordered_bump_started", submittal_id=submittal_id)
 
         if record.order_number is not None:
-            logger.warning(f"Submittal {submittal_id} already has order_number {record.order_number}, not unordered")
+            logger.debug(
+                "unordered_bump_skipped",
+                submittal_id=submittal_id,
+                reason="already_ordered",
+                old=record.order_number,
+            )
             return False
 
         # Find all ordered submittals (>= 1) for this ball_in_court
@@ -640,7 +657,7 @@ class UrgencyService:
 
         new_order = UrgencyEngine.calculate_bump_unordered_updates(regular_data)
         record.order_number = new_order
-        logger.info(f"Bumped unordered submittal {submittal_id} to ordered position {new_order}")
+        logger.info("submittal_bumped_to_ordered", submittal_id=submittal_id, old=None, new=new_order)
         return True
 
 
@@ -680,7 +697,12 @@ class LocationService:
                 if rows is not None:
                     return [r[0] for r in rows]
             except Exception as e:
-                logger.warning("PostGIS location check failed, using Python fallback: %s", e)
+                logger.warning(
+                    "postgis_location_check_failed",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    exc_info=True,
+                )
                 db.session.rollback()
 
         # Fallback: strict point-in-polygon (SQLite or PostGIS unavailable)

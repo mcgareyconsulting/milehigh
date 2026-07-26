@@ -10,7 +10,7 @@ exports:
   calculate_business_days_before: Count backward N business days from a date.
   should_sort_list_by_fab_order: Decide whether a list needs Fab-Order re-sorting.
   sort_list_if_needed: Sort a list by Fab Order if it is a target list, with logging.
-imports_from: [app.config, app.trello.api, app.trello.logging, zoneinfo, re]
+imports_from: [app.config, app.trello.api, app.trello.logging, app.logging_config, zoneinfo, re]
 imported_by: [app/trello/sync.py, app/trello/scanner.py, app/trello/card_creation.py, app/trello/api.py, app/brain/job_log/routes.py, app/services/outbox_service.py]
 invariants:
   - parse_webhook_data never raises; errors return {"event": "error", "handled": False}.
@@ -21,6 +21,10 @@ updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
 import re
 from datetime import datetime, date, timezone, time, timedelta
 from zoneinfo import ZoneInfo
+
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def parse_webhook_data(data):
@@ -129,7 +133,13 @@ def parse_webhook_data(data):
         # If nothing above matched, it's unhandled
         return {"event": "unhandled", "handled": False, "details": data, "action_type": action_type}
     except Exception as e:
-        print(f"Error parsing webhook data: {e}")
+        logger.error(
+            "webhook_parse_failed",
+            source="trello",
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return {"event": "error", "handled": False, "error": str(e)}
 
 
@@ -338,7 +348,12 @@ def sort_list_if_needed(list_id, fab_order_field_id, operation_id, list_type="li
                 cards_sorted=sort_result.get("cards_sorted", 0)
             )
         else:
-            print(f"[TRELLO API] {list_type.capitalize()} list sorted by Fab Order: {list_id} ({sort_result.get('cards_sorted', 0)} cards)")
+            logger.info(
+                "list_sorted_by_fab_order",
+                list_id=list_id,
+                list_type=list_type,
+                count=sort_result.get("cards_sorted", 0),
+            )
         return True
     else:
         if operation_id:
@@ -350,6 +365,11 @@ def sort_list_if_needed(list_id, fab_order_field_id, operation_id, list_type="li
                 error=sort_result.get("error", "Unknown error")
             )
         else:
-            print(f"[TRELLO API] {list_type.capitalize()} list sort failed: {list_id} - {sort_result.get('error', 'Unknown error')}")
+            logger.warning(
+                "list_sort_failed",
+                list_id=list_id,
+                list_type=list_type,
+                error=sort_result.get("error", "Unknown error"),
+            )
         return False
 

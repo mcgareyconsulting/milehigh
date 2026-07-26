@@ -1,25 +1,21 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: PM Board / Timeline content for the shared releases shell. Consumes the toolbar-filtered release set (boardJobs) from ReleasesLayout via Outlet context and renders either the Kanban list (PMBoardList) or the Gantt timeline (GanttChart) based on ?view=. The toolbar/header lives in ReleasesLayout — this is content only.
+ * purpose: Timeline content for the shared releases shell — renders the Gantt timeline (GanttChart). The PM Board Kanban list was removed 2026-07-12 (company change); /pm-board now always shows the timeline, so old ?view=timeline deep links and bare /pm-board both land here. The toolbar/header lives in ReleasesLayout — this is content only.
  * exports:
- *   PMBoardContent: Child route element for /pm-board; ?view=timeline → Gantt, otherwise list.
- * imports_from: [react, react-router-dom, ../components/PMBoardList, ../components/GanttChart]
+ *   PMBoardContent: Child route element for /pm-board (Timeline view).
+ * imports_from: [react, react-router-dom, ../components/GanttChart]
  * imported_by: [../App.jsx]
  * invariants:
- *   - View mode derives from the URL (?view=timeline → Gantt, otherwise list), so the timeline is deep-linkable.
- *   - The list is narrowed by the toolbar filters (Projects / quick-filter subset / Search) via boardJobs; column-header filters do NOT apply here.
  *   - The Timeline (GanttChart) reads the full shared dataset itself and is intentionally unfiltered.
+ *   - Read-only view: edits happen in the Job Log (the timeline's drag interactions were removed with the Board).
  */
 import React from 'react';
-import { useSearchParams, useOutletContext } from 'react-router-dom';
-import PMBoardList from '../components/PMBoardList';
+import { useOutletContext } from 'react-router-dom';
 import GanttChart from '../components/GanttChart';
 
 function PMBoardContent() {
-    const { boardJobs, loading, fetchError, refetch } = useOutletContext();
-    const [searchParams] = useSearchParams();
-    const viewMode = searchParams.get('view') === 'timeline' ? 'timeline' : 'list';
+    const { loading, fetchError } = useOutletContext();
 
     return (
         <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
@@ -43,14 +39,7 @@ function PMBoardContent() {
             )}
 
             {!loading && !fetchError && (
-                viewMode === 'list' ? (
-                    <PMBoardList
-                        jobs={boardJobs}
-                        onUpdate={() => refetch(true)}
-                    />
-                ) : (
-                    <GanttChart filterComplete={true} />
-                )
+                <GanttChart filterComplete={true} />
             )}
         </div>
     );

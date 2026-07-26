@@ -23,6 +23,9 @@ import argparse
 from app import create_app
 from app.models import Releases, db
 from app.api.helpers import DEFAULT_FAB_ORDER, _get_all_variants_for_stages
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def fix_null_fab_orders(dry_run=True):
@@ -43,17 +46,27 @@ def fix_null_fab_orders(dry_run=True):
         Releases.is_archived != True,              # noqa: E712
     ).all()
 
-    print(f"\nFound {len(releases)} releases with NULL fab_order\n")
+    logger.debug("null_fab_orders_found", count=len(releases))
     for r in releases:
-        print(f"  {r.job}-{r.release}  stage={r.stage!r}  fab_order={r.fab_order!r}")
+        logger.debug(
+            "null_fab_order_row",
+            job=r.job,
+            release=r.release,
+            stage=r.stage,
+            fab_order=r.fab_order,
+        )
 
     if not releases:
-        print("Nothing to fix.")
+        logger.debug("null_fab_orders_none")
         return
 
     if dry_run:
-        print(f"\nWould set fab_order={DEFAULT_FAB_ORDER}, stage='Released', stage_group='FABRICATION'")
-        print("DRY RUN -- no changes made. Use --commit to apply.")
+        logger.debug(
+            "null_fab_orders_dry_run",
+            count=len(releases),
+            fab_order=DEFAULT_FAB_ORDER,
+        )
+        logger.debug("null_fab_orders_dry_run_no_changes")
     else:
         for r in releases:
             r.fab_order = DEFAULT_FAB_ORDER
@@ -61,7 +74,11 @@ def fix_null_fab_orders(dry_run=True):
                 r.stage = 'Released'
                 r.stage_group = 'FABRICATION'
         db.session.commit()
-        print(f"\nUpdated {len(releases)} records: fab_order={DEFAULT_FAB_ORDER}, stage defaults applied")
+        logger.info(
+            "null_fab_orders_fixed",
+            count=len(releases),
+            fab_order=DEFAULT_FAB_ORDER,
+        )
 
 
 if __name__ == "__main__":

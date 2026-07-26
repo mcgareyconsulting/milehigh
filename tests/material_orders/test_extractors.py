@@ -10,12 +10,16 @@ from types import SimpleNamespace
 
 from app.brain.material_orders import parser
 from app.brain.material_orders.eml_adapter import eml_to_payload
-from app.brain.material_orders.extractors import classify, dencol_confirm, drexel_inline, llm
+from app.brain.material_orders.extractors import (
+    azz_galvanizing, classify, dencol_confirm, dencol_stock, drexel_inline, llm,
+)
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 DENCOL_CONFIRM = os.path.join(FIXTURES, "dencol_390-351_confirm.eml")
 FALCON_DRAWING = os.path.join(FIXTURES, "falcon_575-402_drawing.eml")
 DREXEL_INLINE = os.path.join(FIXTURES, "drexel_580-659_decking_order.eml")
+AZZ_GALV = os.path.join(FIXTURES, "azz_480-913_ready_to_ship.eml")
+DENCOL_STOCK = os.path.join(FIXTURES, "dencol_stock_pickup.eml")
 
 
 def _record(eml_path, rid=1):
@@ -113,6 +117,90 @@ def test_classify_returns_none_when_nothing_recovers(monkeypatch):
     }
     rec = SimpleNamespace(id=2, source="m365_mail", payload=payload)
     assert classify.extract_order(rec) is None
+
+
+# --- AZZ galvanizing status notification (no parts, one status row) ---
+
+def test_azz_galv_routes_to_galv_extractor():
+    rec = _record(AZZ_GALV)
+    assert azz_galvanizing.matches(rec)
+    # It must NOT be swallowed by the DenCol stock gate.
+    assert not dencol_stock.matches(rec)
+
+
+def test_azz_galv_header_status_and_job():
+    r = classify.extract_order(_record(AZZ_GALV))
+    assert r is not None
+    assert r["supplier"] == "AZZ Galvanizing"
+    assert r["order_kind"] == "galvanizing"
+    assert r["event_type"] == "status"
+    # Customer PO maps to our job-release; AZZ Job # is the supplier's own number.
+    assert r["job"] == 480 and r["release"] == "913"
+    assert r["supplier_order_no"] == "26070025"
+    # "Ready to Ship" is still out at the galvanizer -> planning.
+    assert r["shipping_status"] == "planning"
+
+
+def test_azz_galv_single_line_no_quantity():
+    r = classify.extract_order(_record(AZZ_GALV))
+    assert len(r["lines"]) == 1
+    line = r["lines"][0]
+    assert line["quantity"] is None
+    assert "ANGLE" in line["description"]
+    assert line["finish"] == "Galvanized"
+
+
+def test_azz_galv_anchors_on_customer_po_not_stray_token():
+    # A decoy PO-like token must not hijack the link — only "Customer PO xxx-yyy" counts.
+    payload = {
+        "subject": "AZZDEN: MILE HIGH METAL WORK, 26070025, Ready to Ship",
+        "body": ("order status has changed: Ready to Ship.\n"
+                 "Reference 999-111 (do not use)\n"
+                 "AZZ Job\n26070025\nCustomer PO\n480-913\nDescription\nANGLE\n"
+                 "AZZGalvDEN@azz.com"),
+        "body_content_type": "text",
+    }
+    rec = SimpleNamespace(id=10, source="m365_mail", payload=payload)
+    r = classify.extract_order(rec)
+    assert r["job"] == 480 and r["release"] == "913"
+    assert r["po_number"] == "480-913"
+
+
+def test_azz_galv_shipped_marks_complete():
+    # A later "Shipped" notification (steel left the galvanizer) closes the item.
+    payload = {
+        "subject": "AZZDEN: MILE HIGH METAL WORK, 26070025, Shipped",
+        "body": ("This is a notification that your order status has changed: Shipped.\n"
+                 "AZZ Job\n26070025\nCustomer PO\n480-913\nDescription\nANGLE\n"
+                 "AZZGalvDEN@azz.com"),
+        "body_content_type": "text",
+    }
+    rec = SimpleNamespace(id=9, source="m365_mail", payload=payload)
+    r = classify.extract_order(rec)
+    assert r["order_kind"] == "galvanizing"
+    assert r["shipping_status"] == "complete"
+
+
+# --- DenCol stock restock (no release, no parts, ready for pickup) ---
+
+def test_dencol_stock_routes_to_stock_extractor():
+    rec = _record(DENCOL_STOCK)
+    assert dencol_stock.matches(rec)
+
+
+def test_dencol_stock_has_no_release_and_stock_po():
+    r = classify.extract_order(_record(DENCOL_STOCK))
+    assert r is not None
+    assert r["supplier"] == "Dencol"
+    assert r["order_kind"] == "stock"
+    assert r["event_type"] == "status"
+    assert r["job"] is None and r["release"] is None
+    assert r["po_number"] == "Stock 7/7/26"
+    # "ready for pick up" -> still to bring in -> planning.
+    assert r["shipping_status"] == "planning"
+    # Orderer is the internal shop foreman who placed it, not DenCol.
+    assert r["ordered_by"] == "Luis Solano"
+    assert len(r["lines"]) == 1 and r["lines"][0]["quantity"] is None
 
 
 def test_extract_header_skips_supplier_as_orderer():

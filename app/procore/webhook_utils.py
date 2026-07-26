@@ -25,6 +25,9 @@ from typing import Dict, List, Optional, Tuple
 from app.models import db, Submittals
 from app.procore.client import get_procore_client
 from app.config import Config as cfg
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def get_unique_projects(include_name: bool = False) -> List[Tuple]:
@@ -51,8 +54,14 @@ def get_unique_projects(include_name: bool = False) -> List[Tuple]:
                 try:
                     project_id_int = int(project_id)
                     projects.append((project_id_int, project_number, project_name))
-                except (ValueError, TypeError):
-                    print(f"Warning: Invalid project_id {project_id}")
+                except (ValueError, TypeError) as e:
+                    logger.warning(
+                        "project_id_invalid_skipped",
+                        project_id=project_id,
+                        error=str(e),
+                        error_type=type(e).__name__,
+                        exc_info=True,
+                    )
         return projects
     else:
         results = db.session.query(
@@ -66,8 +75,15 @@ def get_unique_projects(include_name: bool = False) -> List[Tuple]:
                 try:
                     project_id_int = int(project_id)
                     projects.append((project_id_int, project_number))
-                except (ValueError, TypeError):
-                    print(f"Warning: Invalid project_id {project_id} for project_number {project_number}")
+                except (ValueError, TypeError) as e:
+                    logger.warning(
+                        "project_id_invalid_skipped",
+                        project_id=project_id,
+                        project_number=project_number,
+                        error=str(e),
+                        error_type=type(e).__name__,
+                        exc_info=True,
+                    )
         return projects
 
 
@@ -93,7 +109,13 @@ def log_operation(log_file: str, action: str, project_id: int, project_number: O
     with open(log_path, "a") as f:
         f.write(json.dumps(log_entry) + "\n")
     
-    print(f"[{status.upper()}] {action} - Project {project_id} ({project_number}): {json.dumps(data)[:100]}")
+    logger.debug(
+        "webhook_operation_logged",
+        action=action,
+        project_id=project_id,
+        project_number=project_number,
+        status=status,
+    )
 
 
 
@@ -103,7 +125,14 @@ def get_webhook_triggers(procore_client, project_id: int, hook_id: int) -> List[
         triggers = procore_client.get_webhook_triggers(project_id, hook_id)
         return triggers if triggers else []
     except Exception as e:
-        print(f"Error getting triggers for hook {hook_id} in project {project_id}: {e}")
+        logger.error(
+            "webhook_triggers_fetch_failed",
+            hook_id=hook_id,
+            project_id=project_id,
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return []
 
 
@@ -149,6 +178,13 @@ def get_recent_deliveries(procore_client, project_id: int, hook_id: int,
         return recent_deliveries
         
     except Exception as e:
-        print(f"Error getting deliveries for hook {hook_id}: {e}")
+        logger.error(
+            "webhook_deliveries_fetch_failed",
+            hook_id=hook_id,
+            project_id=project_id,
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return []
 

@@ -18,15 +18,17 @@
  *   - Core fields render from the `release` prop with no fetch; enrichment fetches fill in async.
  * updated_by_agent: 2026-06-17 (new: timeline detail modal)
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { jobsApi } from '../services/jobsApi';
+import { subtractBusinessDays } from '../utils/formatters';
 import { API_BASE_URL } from '../utils/api';
 import { checkAuth } from '../utils/auth';
 import { Badge } from './Badge';
 import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
 import { PdfMarkupModal } from './PdfMarkupModal';
+import { BBReviewReport } from './bbReview/report';
 
 // item_type → Badge tint (mirrors the checklist item_type vocabulary).
 const ITEM_TYPE_TINT = {
@@ -64,12 +66,17 @@ function SectionSpinner() {
     );
 }
 
-export function ReleaseDetailModal({ isOpen, onClose, release }) {
+export function ReleaseDetailModal({ isOpen, onClose, release, accentColor }) {
     const [enrichment, setEnrichment] = useState({ todos: [], meetings: [] });
     const [photos, setPhotos] = useState([]);
     const [drawings, setDrawings] = useState([]);
+    const [bbReport, setBbReport] = useState(null);   // PM-facing Carmen review report, or null
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+
+    const [isAdmin, setIsAdmin] = useState(false);   // gates the Carmen re-run button
+    const [rerunning, setRerunning] = useState(false);
+    const rerunPollRef = useRef(null);
 
     // Internal drawing hub (version history → markup), mirroring ReleaseNumberLink.
     const [canMarkup, setCanMarkup] = useState(false);
@@ -94,10 +101,47 @@ export function ReleaseDetailModal({ isOpen, onClose, release }) {
         if (!isOpen) return;
         let cancelled = false;
         checkAuth()
-            .then((u) => { if (!cancelled) setCanMarkup(!!(u?.is_admin || u?.is_drafter)); })
+            .then((u) => {
+                if (cancelled) return;
+                setCanMarkup(!!(u?.is_admin || u?.is_drafter));
+                setIsAdmin(!!u?.is_admin);
+            })
             .catch(() => {});
         return () => { cancelled = true; };
     }, [isOpen]);
+
+    // Stop any in-flight re-run poll when the modal closes/unmounts.
+    const clearRerunPoll = () => {
+        if (rerunPollRef.current) { clearInterval(rerunPollRef.current); rerunPollRef.current = null; }
+    };
+    useEffect(() => clearRerunPoll, []);
+    useEffect(() => { if (!isOpen) { clearRerunPoll(); setRerunning(false); } }, [isOpen]);
+
+    // Admin re-run of the Carmen review (for tuning verbosity/rules). Kicks off a fresh review
+    // on the report's drawing version, polls until it finishes, then swaps in the new report.
+    const rerunBBReview = async () => {
+        const versionId = bbReport?.drawing_version_id;
+        if (!versionId || rerunning) return;
+        setRerunning(true);
+        clearRerunPoll();
+        try {
+            await jobsApi.requestBBReview(releaseId, versionId);
+            rerunPollRef.current = setInterval(async () => {
+                try {
+                    const r = await jobsApi.getBBReview(releaseId, versionId);
+                    if (!r || r.status !== 'pending') {
+                        clearRerunPoll();
+                        const report = await jobsApi.getBBReviewReport(releaseId).catch(() => null);
+                        setBbReport(report || null);
+                        setRerunning(false);
+                    }
+                } catch { /* transient; keep polling */ }
+            }, 5000);
+        } catch {
+            clearRerunPoll();
+            setRerunning(false);
+        }
+    };
 
     // Seed the local has-drawing flag from the release row (the modal can flip it true
     // after an upload via PdfMarkupModal.onSaved).
@@ -114,11 +158,14 @@ export function ReleaseDetailModal({ isOpen, onClose, release }) {
         setEnrichment({ todos: [], meetings: [] });
         setPhotos([]);
         setDrawings([]);
+        setBbReport(null);
         Promise.allSettled([
             jobsApi.getReleaseChecklist(releaseId),
             jobsApi.getReleasePhotos(releaseId),
             jobsApi.getReleaseDrawings(releaseId),
-        ]).then(([checklist, photoList, drawingList]) => {
+            // 403 (not admin/PM for this release) or no review → null; never blocks the modal.
+            jobsApi.getBBReviewReport(releaseId).catch(() => null),
+        ]).then(([checklist, photoList, drawingList, bbReviewReport]) => {
             if (cancelled) return;
             if (checklist.status === 'fulfilled') {
                 setEnrichment({
@@ -128,6 +175,7 @@ export function ReleaseDetailModal({ isOpen, onClose, release }) {
             }
             if (photoList.status === 'fulfilled') setPhotos(photoList.value || []);
             if (drawingList.status === 'fulfilled') setDrawings(drawingList.value || []);
+            if (bbReviewReport.status === 'fulfilled') setBbReport(bbReviewReport.value || null);
             if (checklist.status === 'rejected' && photoList.status === 'rejected' && drawingList.status === 'rejected') {
                 setError('Failed to load release details.');
             }
@@ -146,6 +194,14 @@ export function ReleaseDetailModal({ isOpen, onClose, release }) {
     const stageGroup = release['Stage Group'] || release.stage_group;
     const startInstall = release['Start install'] || release.start_install;
     const compEta = release['comp_eta_effective'] || release['Comp. ETA'] || release.comp_eta;
+    // Ship date mirrors the timeline: the explicit hard Ship Date when set, else estimated
+    // one business day before a hard Start install. The "(est)" label makes the two distinct.
+    const shipDateHard = release['Ship Date'] || release.ship_date;
+    const installIsHard = (release['start_install_formulaTF'] ?? release.start_install_formulaTF) === false;
+    const shipDateEst = !shipDateHard && installIsHard && startInstall
+        ? subtractBusinessDays(String(startInstall).slice(0, 10), 1)
+        : '';
+    const shipDateValue = shipDateHard || shipDateEst;
     const installer = release.installer;
     const pm = release['PM'] || release.pm;
     const by = release['BY'] || release.by;
@@ -172,8 +228,12 @@ export function ReleaseDetailModal({ isOpen, onClose, release }) {
                 className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-3xl w-full mx-4 flex flex-col max-h-[85vh] transform transition-all"
                 onClick={(e) => e.stopPropagation()}
             >
-                {/* Header */}
-                <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-6 py-4 rounded-t-xl shrink-0">
+                {/* Header — tinted to the lane color of the clicked card when provided,
+                    else the default accent gradient. */}
+                <div
+                    className={`px-6 py-4 rounded-t-xl shrink-0 ${accentColor ? '' : 'bg-gradient-to-r from-accent-500 to-accent-600'}`}
+                    style={accentColor ? { backgroundColor: accentColor } : undefined}
+                >
                     <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                             <h2 className="text-xl font-bold text-white truncate">
@@ -203,6 +263,7 @@ export function ReleaseDetailModal({ isOpen, onClose, release }) {
                             </Field>
                             <Field label="Stage Group">{stageGroup}</Field>
                             <Field label="Installer">{installer}</Field>
+                            <Field label={shipDateHard ? 'Ship Date' : 'Ship Date (est)'}>{fmtDate(shipDateValue)}</Field>
                             <Field label="Start Install">{fmtDate(startInstall)}</Field>
                             <Field label="Comp. ETA">{fmtDate(compEta)}</Field>
                             <Field label="Crew">{numGuys != null ? `${numGuys} guys` : '—'}</Field>
@@ -322,6 +383,22 @@ export function ReleaseDetailModal({ isOpen, onClose, release }) {
                             </>
                         )}
                     </section>
+
+                    {/* Carmen Miranda code-compliance review (PM-facing; only when a report exists) */}
+                    {bbReport && (
+                        <section>
+                            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-2">
+                                🍌 Carmen Review
+                            </h3>
+                            <BBReviewReport
+                                report={bbReport}
+                                releaseId={releaseId}
+                                canRerun={isAdmin}
+                                rerunning={rerunning}
+                                onRerun={rerunBBReview}
+                            />
+                        </section>
+                    )}
                 </div>
 
                 {/* Footer links */}

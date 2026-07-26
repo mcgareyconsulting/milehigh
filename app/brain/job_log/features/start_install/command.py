@@ -71,7 +71,7 @@ class UpdateStartInstallCommand:
             job=self.job_id, release=self.release
         ).first()
         if not job_record:
-            logger.warning(f"Job not found: {self.job_id}-{self.release}")
+            logger.debug("job_not_found", job=self.job_id, release=self.release)
             raise ValueError(f"Job {self.job_id}-{self.release} not found")
 
         old_start_install = job_record.start_install
@@ -96,8 +96,10 @@ class UpdateStartInstallCommand:
             payload=event_payload,
         )
         if event is None:
-            logger.info(
-                f"Event already exists for job {self.job_id}-{self.release} start_install update"
+            logger.debug(
+                "start_install_update_deduplicated",
+                job=self.job_id,
+                release=self.release,
             )
             raise ValueError("Event already exists")
 
@@ -125,20 +127,25 @@ class UpdateStartInstallCommand:
                     new_due_date=self.start_install,
                     clear_due_date=(self.start_install is None),
                 )
-                logger.info(
-                    f"Trello card due date updated for job {self.job_id}-{self.release} "
-                    f"(start_install sent as due date)"
+                logger.debug(
+                    "trello_due_date_pushed",
+                    job=self.job_id,
+                    release=self.release,
                 )
             except Exception as trello_error:
                 logger.error(
-                    f"Failed to update Trello card due date for job "
-                    f"{self.job_id}-{self.release}: {trello_error}",
+                    "trello_due_date_push_failed",
+                    job=self.job_id,
+                    release=self.release,
+                    error=str(trello_error),
+                    error_type=type(trello_error).__name__,
                     exc_info=True,
                 )
         else:
-            logger.warning(
-                f"Job {self.job_id}-{self.release} has no trello_card_id, skipping Trello update",
-                extra={'job': self.job_id, 'release': self.release},
+            logger.debug(
+                "trello_push_skipped_no_card",
+                job=self.job_id,
+                release=self.release,
             )
 
         JobEventService.close(event.id)
@@ -149,13 +156,22 @@ class UpdateStartInstallCommand:
             recalculate_all_jobs_scheduling(stage_group='FABRICATION')
         except Exception as cascade_error:
             logger.error(
-                f"Scheduling cascade failed after hard-date update: {cascade_error}",
+                "scheduling_recalc_failed",
+                job=self.job_id,
+                release=self.release,
+                error=str(cascade_error),
+                error_type=type(cascade_error).__name__,
                 exc_info=True,
             )
 
         logger.info(
-            "update_start_install completed successfully",
-            extra={'job': self.job_id, 'release': self.release, 'event_id': event.id},
+            "start_install_updated",
+            release_id=job_record.id,
+            job=self.job_id,
+            release=self.release,
+            event_id=event.id,
+            start_install=self.start_install.isoformat() if self.start_install else None,
+            is_hard_date=self.is_hard_date,
         )
 
         return StartInstallUpdateResult(

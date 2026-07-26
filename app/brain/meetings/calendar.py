@@ -1,7 +1,7 @@
 """Calendar → Recall scheduling (app-only Graph).
 
 The calendar IS the scheduling UI: invite the configured mailbox (e.g.
-bb@mhmw.com) to a Teams meeting and a Recall notetaker bot ("BB") joins on its
+carmen_ai@mhmw.com) to a Teams meeting and a Recall notetaker bot ("Carmen Miranda") joins on its
 own at the event's start time. We read the mailbox's calendar *as the
 application* (app-only Graph, scoped by an ApplicationAccessPolicy), so no user
 logs in and nothing is opened org-wide.
@@ -198,7 +198,7 @@ def poll(dry_run=False):
     Returns a summary dict {mailbox, events, scheduled, rescheduled, cancelled, skipped}.
     """
     cfg = current_app.config
-    mailbox = cfg.get("RECALL_CALENDAR_MAILBOX", "bb@mhmw.com")
+    mailbox = cfg.get("RECALL_CALENDAR_MAILBOX", "carmen_ai@mhmw.com")
     lookahead = timedelta(minutes=cfg.get("RECALL_CALENDAR_LOOKAHEAD_MINUTES", 60))
     lead = timedelta(seconds=cfg.get("RECALL_CALENDAR_JOIN_LEAD_SECONDS", 60))
 

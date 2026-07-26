@@ -60,6 +60,25 @@ export function subtractBusinessDays(ymd, n) {
 }
 
 /**
+ * Return the date that is `n` business days (Mon–Fri) after `ymd`, as a YYYY-MM-DD
+ * string. Inverse of subtractBusinessDays; used to estimate Start Install from a Ship
+ * Date (ship + 1 business day) in the Set Install & Ship Dates modal.
+ */
+export function addBusinessDays(ymd, n) {
+    if (!ymd || typeof ymd !== 'string') return '';
+    const [y, m, d] = ymd.split('-').map(Number);
+    if (!y || !m || !d) return '';
+    const date = new Date(y, m - 1, d); // local, no timezone shift
+    let counted = 0;
+    while (counted < n) {
+        date.setDate(date.getDate() + 1);
+        const dow = date.getDay(); // 0=Sun … 6=Sat
+        if (dow !== 0 && dow !== 6) counted += 1;
+    }
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/**
  * Format a date value for display
  */
 export function formatDate(dateValue) {

@@ -4,7 +4,7 @@
  * purpose: Table/cards content for the Job Log (Table view). Renders the filtered releases provided by the persistent ReleasesLayout via Outlet context — device breakpoint picks the mobile card / tablet card / desktop table layout. Holds only table-render-local state (scroll ref, disabled drag stubs).
  * exports:
  *   JobLogContent: Child route element for /job-log; consumes useOutletContext() from ReleasesLayout.
- * imports_from: [react, react-router-dom, ../components/ColumnHeaderFilter, ../components/JobsTableRow, ../components/StageIconRow, ../components/AsapPropagationTag, ../components/JobLogCardGrid, ../components/JobLogRowList, ../utils/formatters, ../utils/jobLogColumns, ../constants/columnHeaders]
+ * imports_from: [react, react-router-dom, ../components/ColumnHeaderFilter, ../components/JobsTableRow, ../components/StageIconRow, ../components/AsapPropagationTag, ../components/JobLogCardGrid, ../utils/formatters, ../utils/jobLogColumns, ../constants/columnHeaders]
  * imported_by: [../App.jsx]
  * invariants:
  *   - All filter state + filtered rows come from ReleasesLayout via context; this component never calls useJobsFilters.
@@ -17,10 +17,8 @@ import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { PdfVersionHistoryModal } from '../components/PdfVersionHistoryModal';
 import { PdfMarkupModal } from '../components/PdfMarkupModal';
-import { BananaCodeHeader } from '../components/StageIconRow';
 import { AsapDividerLabel, ASAP_DIVIDER_BOX_CLASS } from '../components/AsapPropagationTag';
 import JobLogCardGrid from '../components/JobLogCardGrid';
-import JobLogRowList from '../components/JobLogRowList';
 import { formatDateShort, formatCellValue } from '../utils/formatters';
 import { FILTERABLE_COLUMNS, DATE_COLUMNS } from '../utils/jobLogColumns';
 import { HEADER_OVERRIDES } from '../constants/columnHeaders';
@@ -90,6 +88,11 @@ function JobLogContent() {
         return { tableColumns: cols, tableWidthPercents: widths };
     }, [isDesktop, columnHeaders, columnWidthPercents]);
 
+    // The admin row-actions column (⚙ edit/delete) is desktop-only (14"+ screens) — no
+    // exposure on tablet/mobile. Gates the header cell, the per-row actions, and the
+    // empty/divider colSpan math so the table stays aligned. Admin cell-editing is unaffected.
+    const showAdminActions = isAdmin && isDesktop;
+
     // Drag-and-drop reorder is disabled — keep no-op handlers so JobsTableRow's props stay satisfied.
     const draggedIndex = null;
     const dragOverIndex = null;
@@ -121,8 +124,13 @@ function JobLogContent() {
                 </div>
             )}
 
-            {!loading && !fetchError && effectiveView === 'mobilecard' && (
+            {/* Cards = single-column Kanban-style feed (JobLogCard) everywhere cards show:
+                phones + portrait tablets (enforced) and Cards-toggled landscape/desktop.
+                Replaced the old dense expandable-row list (JobLogRowList), which read as
+                "the table but slightly different" rather than a genuinely distinct view. */}
+            {!loading && !fetchError && (effectiveView === 'mobilecard' || effectiveView === 'cards') && (
                 <JobLogCardGrid
+                    layout="column"
                     jobs={renderRows}
                     secondaryResults={secondarySearchResults}
                     search={search}
@@ -133,35 +141,15 @@ function JobLogContent() {
                     duplicateFabOrders={duplicateFabOrders}
                     hasJobsData={hasJobsData}
                     onUpdate={() => refetch(true)}
+                    isAdmin={isAdmin}
+                    isDrafter={isDrafter}
                 />
             )}
 
-            {!loading && !fetchError && effectiveView === 'cards' && (
-                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                    <JobLogRowList
-                        jobs={renderRows}
-                        secondaryResults={secondarySearchResults}
-                        search={search}
-                        jumpToTarget={jumpToTarget}
-                        columns={columnHeaders}
-                        formatCellValue={formatCellValue}
-                        formatDate={formatDateShort}
-                        onUpdate={() => refetch(true)}
-                        onCascadeRecalculating={handleCascadeRecalculating}
-                        stageToGroup={stageToGroup}
-                        stageGroupColors={stageGroupColors}
-                        stageGroupDupColors={stageGroupDupColors}
-                        isAdmin={isAdmin}
-                        isDrafter={isDrafter}
-                        onDelete={handleDeleteJob}
-                        duplicateFabOrders={duplicateFabOrders}
-                        hasJobsData={hasJobsData}
-                    />
-                </div>
-            )}
-
             {!loading && !fetchError && effectiveView === 'table' && (
-                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
+                // Outer frame uses the same translucent ink as the grid dividers so the
+                // table edge reads as part of the lattice, not a separate lighter band.
+                <div className="bg-white dark:bg-slate-800 border border-black/[0.18] dark:border-white/[0.12] rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
                     <div
                         ref={tableScrollRef}
                         className="job-log-table-scroll overflow-auto flex-1"
@@ -176,16 +164,28 @@ function JobLogContent() {
                                         const isFilterable = FILTERABLE_COLUMNS.has(column);
                                         const colInfo = isFilterable ? uniqueValuesByColumn[column] : null;
                                         const colSelected = columnFilters[column] ?? [];
-                                        const isUrgency = column === 'Urgency';
+                                        // Last visible column (no trailing gear column) gets no vertical divider,
+                                        // just the thin bottom rule shared by every header cell. Both dividers use
+                                        // box-shadow, not a real border, so the vertical one lines up pixel-for-pixel
+                                        // with the body cells' own box-shadow dividers (a real border under
+                                        // border-collapse is centered on the shared boundary and drifts a sub-pixel
+                                        // from a non-collapsed element) — and box-shadow is also immune to Safari's
+                                        // bug where collapsed borders on sticky <th> cells fail to paint.
+                                        const isLastHeaderColumn = tableColumns[tableColumns.length - 1] === column && !showAdminActions;
+                                        // Same translucent ink as the body cells (JobsTableRow — keep in sync):
+                                        // black 18% / white 12%. The bottom rule is the one place the ink doubles
+                                        // (~2× alpha) so the header reads as an anchored band without introducing
+                                        // a second line style.
+                                        const headerDividerShadow = isLastHeaderColumn
+                                            ? 'shadow-[inset_0_-1px_0_0_#0000005c] dark:shadow-[inset_0_-1px_0_0_#ffffff3d]'
+                                            : 'shadow-[inset_-1px_0_0_0_#0000002e,inset_0_-1px_0_0_#0000005c] dark:shadow-[inset_-1px_0_0_0_#ffffff1f,inset_0_-1px_0_0_#ffffff3d]';
                                         return (
                                             <th
                                                 key={column}
-                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-[13px]' : 'py-0.5 text-[11px]'} align-middle text-center font-bold text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-400 dark:border-slate-500`}
+                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-[13px]' : 'py-0.5 text-[11px]'} align-middle text-center font-bold tracking-wide text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-900 ${headerDividerShadow}`}
                                                 style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                             >
-                                                {isUrgency ? (
-                                                    <BananaCodeHeader />
-                                                ) : isFilterable ? (
+                                                {isFilterable ? (
                                                     <ColumnHeaderFilter
                                                         column={column}
                                                         values={colInfo?.values ?? []}
@@ -207,8 +207,8 @@ function JobLogContent() {
                                             </th>
                                         );
                                     })}
-                                    {isAdmin && (
-                                        <th className="px-1 py-0.5 text-center text-xl font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-400 dark:border-slate-500 w-8">
+                                    {showAdminActions && (
+                                        <th className="px-1 py-0.5 text-center text-xl font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider bg-gray-100 dark:bg-slate-900 w-8 shadow-[inset_0_-1px_0_0_#0000005c] dark:shadow-[inset_0_-1px_0_0_#ffffff3d]">
                                             ⚙
                                         </th>
                                     )}
@@ -220,7 +220,7 @@ function JobLogContent() {
                                         <>
                                             <tr>
                                                 <td
-                                                    colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
+                                                    colSpan={tableColumnCount + (showAdminActions ? 1 : 0)}
                                                     className="px-6 py-6 text-center text-amber-800 dark:text-amber-200 font-medium bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800"
                                                 >
                                                     <span className="mr-2">⚠️</span>
@@ -248,6 +248,7 @@ function JobLogContent() {
                                                     stageGroupColors={stageGroupColors}
                                                     stageGroupDupColors={stageGroupDupColors}
                                                     isAdmin={isAdmin}
+                                                    showActions={showAdminActions}
                                                     isDrafter={isDrafter}
                                                     onDelete={handleDeleteJob}
                                                     tableScrollRef={tableScrollRef}
@@ -258,7 +259,7 @@ function JobLogContent() {
                                     ) : (
                                         <tr>
                                             <td
-                                                colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
+                                                colSpan={tableColumnCount + (showAdminActions ? 1 : 0)}
                                                 className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-white dark:bg-slate-800 rounded-md"
                                             >
                                                 {hasJobsData
@@ -273,7 +274,7 @@ function JobLogContent() {
                                         row._asapDivider ? (
                                             <tr key={row.id}>
                                                 <td
-                                                    colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
+                                                    colSpan={tableColumnCount + (showAdminActions ? 1 : 0)}
                                                     className={`${ASAP_DIVIDER_BOX_CLASS} border-y`}
                                                 >
                                                     <AsapDividerLabel count={row._asapCount} />
@@ -300,6 +301,7 @@ function JobLogContent() {
                                             stageGroupColors={stageGroupColors}
                                             stageGroupDupColors={stageGroupDupColors}
                                             isAdmin={isAdmin}
+                                            showActions={showAdminActions}
                                             isDrafter={isDrafter}
                                             onDelete={handleDeleteJob}
                                             tableScrollRef={tableScrollRef}

@@ -6,8 +6,10 @@ to the Claude LLM extractor, which reads the PDF natively. Returns the normalize
 order dict, or None when nothing — not even the LLM — can recover line items.
 """
 from app.brain.material_orders.extractors import (
+    azz_galvanizing,
     dencol_confirm,
     dencol_drawing,
+    dencol_stock,
     drexel_inline,
     llm,
 )
@@ -16,9 +18,11 @@ from app.logging_config import get_logger
 logger = get_logger(__name__)
 
 # Order matters: inline body lines, then the priced confirm table, then the
-# drawing callouts. (The shapes don't overlap, but a stable order keeps routing
-# predictable and lets the cheapest match win.)
-DETERMINISTIC = [drexel_inline, dencol_confirm, dencol_drawing]
+# drawing callouts, then the status notifications (galv / stock). (The shapes don't
+# overlap, but a stable order keeps routing predictable and lets the cheapest match
+# win. The status extractors are last and tightly gated — dencol_stock only fires on
+# a "Stock <date>" PO — so they never shadow a real itemized order.)
+DETERMINISTIC = [drexel_inline, dencol_confirm, dencol_drawing, azz_galvanizing, dencol_stock]
 
 
 def extract_order(record):

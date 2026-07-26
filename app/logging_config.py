@@ -43,7 +43,9 @@ def configure_logging(log_level: str = "INFO", log_file: Optional[str] = None):
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.processors.UnicodeDecoder(),
-            structlog.processors.JSONRenderer()
+            # Hand the event dict off to the stdlib ProcessorFormatter, which
+            # renders it (once) as JSON on every handler.
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
@@ -51,24 +53,36 @@ def configure_logging(log_level: str = "INFO", log_file: Optional[str] = None):
         cache_logger_on_first_use=True,
     )
     
-    # Standard logging configuration
+    # Standard logging configuration.
+    # One shared JSON ProcessorFormatter renders BOTH populations exactly once:
+    # - structlog-origin records arrive as event dicts (via wrap_for_formatter)
+    # - stdlib-origin records (werkzeug, apscheduler, sqlalchemy, ...) are
+    #   normalized by foreign_pre_chain so they carry the same fields.
+    foreign_pre_chain = [
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.stdlib.ExtraAdder(),
+        # ProcessorFormatter (23.1.0) copies record.exc_info into the event
+        # dict but does not render it; format_exc_info turns it into the
+        # "exception" text field (no-op when exc_info is absent).
+        structlog.processors.format_exc_info,
+    ]
     log_config = {
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": {
-            "detailed": {
-                "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            },
             "json": {
                 "()": "structlog.stdlib.ProcessorFormatter",
-                "processor": structlog.processors.JSONRenderer()
+                "processor": structlog.processors.JSONRenderer(),
+                "foreign_pre_chain": foreign_pre_chain,
             }
         },
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
                 "level": log_level,
-                "formatter": "detailed",
+                "formatter": "json",
                 "stream": sys.stdout
             }
         },

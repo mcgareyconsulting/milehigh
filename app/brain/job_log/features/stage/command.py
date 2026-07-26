@@ -108,7 +108,7 @@ class UpdateStageCommand:
             job=self.job_id, release=self.release
         ).first()
         if not job_record:
-            logger.warning(f"Job not found: {self.job_id}-{self.release}")
+            logger.debug("job_not_found", job=self.job_id, release=self.release)
             raise ValueError(f"Job {self.job_id}-{self.release} not found")
 
         old_stage = job_record.stage if job_record.stage else 'Released'
@@ -131,9 +131,11 @@ class UpdateStageCommand:
                 ReleasePhoto.is_deleted.is_(False),
             ).first() is not None
             if not has_photo:
-                logger.info(
-                    f"Stage gate blocked {self.job_id}-{self.release} -> {self.stage}: "
-                    f"no photo tagged '{self.stage}'"
+                logger.debug(
+                    "stage_gate_blocked",
+                    job=self.job_id,
+                    release=self.release,
+                    stage=self.stage,
                 )
                 raise StagePhotoRequiredError(self.stage)
 
@@ -167,17 +169,24 @@ class UpdateStageCommand:
             payload=event_payload,
         )
         if event is None:
-            logger.info(
-                f"Event already exists for job {self.job_id}-{self.release} to stage {self.stage}"
+            logger.debug(
+                "stage_update_deduplicated",
+                job=self.job_id,
+                release=self.release,
+                to_stage=self.stage,
             )
             raise ValueError("Event already exists")
 
         old_stage_group = job_record.stage_group
         new_stage_group = get_stage_group_from_stage(self.stage)
-        logger.info(
-            f"Stage change for job {self.job_id}-{self.release}: "
-            f"old_stage_group={old_stage_group}, new_stage_group={new_stage_group}, "
-            f"old_stage={old_stage}, new_stage={self.stage}"
+        logger.debug(
+            "stage_group_resolved",
+            job=self.job_id,
+            release=self.release,
+            old_stage_group=old_stage_group,
+            new_stage_group=new_stage_group,
+            from_stage=old_stage,
+            to_stage=self.stage,
         )
 
         fab_order_to_set = None
@@ -185,10 +194,14 @@ class UpdateStageCommand:
         tier = get_fixed_tier(self.stage)
         if tier is not None:
             fab_order_to_set = tier
-            logger.info(
-                f"Job {self.job_id}-{self.release} moving to fixed tier {tier} "
-                f"stage '{self.stage}'. Will set fab_order from "
-                f"{old_fab_order_for_update} to {fab_order_to_set}"
+            logger.debug(
+                "fab_order_fixed_tier_planned",
+                job=self.job_id,
+                release=self.release,
+                stage=self.stage,
+                tier=tier,
+                old=old_fab_order_for_update,
+                new=fab_order_to_set,
             )
         elif self.stage == "Welded QC" and old_stage_group != "READY_TO_SHIP":
             # Department handoff: Fab → Paint. Land at the back of the paint
@@ -207,10 +220,13 @@ class UpdateStageCommand:
             ).scalar()
             base = current_max if current_max is not None and current_max >= 2 else 2
             fab_order_to_set = base + 1
-            logger.info(
-                f"Job {self.job_id}-{self.release} crossing Fab→R2S into Welded QC. "
-                f"Will set fab_order from {old_fab_order_for_update} to {fab_order_to_set} "
-                f"(max(WQC+PaintStart)={current_max})"
+            logger.debug(
+                "fab_order_paint_handoff_planned",
+                job=self.job_id,
+                release=self.release,
+                old=old_fab_order_for_update,
+                new=fab_order_to_set,
+                current_max=current_max,
             )
 
         # Apply stage + stage_group
@@ -334,9 +350,10 @@ class UpdateStageCommand:
                 },
             )
             if fab_order_event is None:
-                logger.warning(
-                    f"Event already exists for fab_order clear on job "
-                    f"{self.job_id}-{self.release}"
+                logger.debug(
+                    "fab_order_clear_deduplicated",
+                    job=self.job_id,
+                    release=self.release,
                 )
             else:
                 job_record.fab_order = None
@@ -366,9 +383,10 @@ class UpdateStageCommand:
                 },
             )
             if fab_order_event is None:
-                logger.warning(
-                    f"Event already exists for fab_order update on job "
-                    f"{self.job_id}-{self.release}"
+                logger.debug(
+                    "fab_order_update_deduplicated",
+                    job=self.job_id,
+                    release=self.release,
                 )
             else:
                 job_record.fab_order = fab_order_to_set
@@ -410,48 +428,59 @@ class UpdateStageCommand:
                     event_id=event.id,
                 )
                 outbox_item_created = True
-                logger.info(
-                    f"Outbox item created for Trello list move "
-                    f"(job {self.job_id}-{self.release}, stage={self.stage}, "
-                    f"target_list={target_list})"
+                logger.debug(
+                    "stage_outbox_queued",
+                    job=self.job_id,
+                    release=self.release,
+                    stage=self.stage,
+                    target_list=target_list,
                 )
             except Exception as outbox_error:
                 logger.error(
-                    f"Failed to create outbox for event {event.id}: {outbox_error}",
+                    "stage_outbox_failed",
+                    job=self.job_id,
+                    release=self.release,
+                    event_id=event.id,
+                    error=str(outbox_error),
+                    error_type=type(outbox_error).__name__,
                     exc_info=True,
                 )
         else:
             if is_hold:
-                logger.info(
-                    "Skipping Trello push for Hold transition — card stays on its current list",
-                    extra={'job': self.job_id, 'release': self.release},
+                logger.debug(
+                    "stage_trello_skipped_hold",
+                    job=self.job_id,
+                    release=self.release,
                 )
             elif target_list is None:
-                logger.info(
-                    "Skipping Trello push — stage has no forward-mapped Trello list",
-                    extra={'job': self.job_id, 'release': self.release, 'stage': self.stage},
+                logger.debug(
+                    "stage_trello_skipped_no_mapping",
+                    job=self.job_id,
+                    release=self.release,
+                    stage=self.stage,
                 )
             elif not should_push:
-                logger.info(
-                    "Skipping Trello push — target list matches current list",
-                    extra={
-                        'job': self.job_id, 'release': self.release,
-                        'stage': self.stage,
-                        'current_list': job_record.trello_list_name,
-                        'target_list': target_list,
-                    },
+                logger.debug(
+                    "stage_trello_skipped_same_list",
+                    job=self.job_id,
+                    release=self.release,
+                    stage=self.stage,
+                    current_list=job_record.trello_list_name,
+                    target_list=target_list,
                 )
             elif not new_list_id:
                 logger.warning(
-                    f"Could not resolve Trello list ID for stage '{self.stage}' "
-                    f"(target_list={target_list}), skipping Trello update",
-                    extra={'job': self.job_id, 'release': self.release, 'stage': self.stage},
+                    "stage_trello_list_unresolved",
+                    job=self.job_id,
+                    release=self.release,
+                    stage=self.stage,
+                    target_list=target_list,
                 )
             elif not job_record.trello_card_id:
-                logger.warning(
-                    f"Job {self.job_id}-{self.release} has no trello_card_id, "
-                    f"skipping Trello update",
-                    extra={'job': self.job_id, 'release': self.release},
+                logger.debug(
+                    "trello_push_skipped_no_card",
+                    job=self.job_id,
+                    release=self.release,
                 )
 
         if not outbox_item_created:
@@ -465,14 +494,22 @@ class UpdateStageCommand:
                 recalculate_all_jobs_scheduling(stage_group='FABRICATION')
             except Exception as cascade_err:
                 logger.error(
-                    f"Scheduling cascade failed after stage change for "
-                    f"{self.job_id}-{self.release}: {cascade_err}",
+                    "scheduling_recalc_failed",
+                    job=self.job_id,
+                    release=self.release,
+                    error=str(cascade_err),
+                    error_type=type(cascade_err).__name__,
                     exc_info=True,
                 )
 
         logger.info(
-            "update_stage completed successfully",
-            extra={'job': self.job_id, 'release': self.release, 'event_id': event.id},
+            "stage_updated",
+            release_id=job_record.id,
+            job=self.job_id,
+            release=self.release,
+            event_id=event.id,
+            from_stage=old_stage,
+            to_stage=self.stage,
         )
 
         return StageUpdateResult(

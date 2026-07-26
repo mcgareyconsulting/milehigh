@@ -7,9 +7,13 @@ Claude reads PDFs directly, sidestepping the scrambled-text problem — and asks
 strict-JSON line items. Deterministic header fields (supplier, PO, orderer) are
 trusted over the model; only the line items + supplier order # come from the LLM.
 
-Mirrors app/brain/meetings/extract.py: raw `requests`, ANTHROPIC_API_KEY, model
-claude-opus-4-8, and a graceful return of None on a missing key or ANY failure, so
-the pipeline (and tests) stay hermetic without a key.
+Mirrors app/brain/meetings/extract.py: raw `requests`, ANTHROPIC_API_KEY, and a
+graceful return of None on a missing key or ANY failure, so the pipeline (and
+tests) stay hermetic without a key. The model defaults to claude-sonnet-5 — this
+is a structured-extraction task, so Sonnet gives near-Opus quality at a fraction
+of the cost; override with MATERIAL_ORDER_EXTRACT_MODEL. Thinking is disabled so
+this stays a fast, deterministic extractor: Sonnet 5 runs *adaptive* thinking when
+the field is omitted, which would add billed thinking tokens on every call.
 """
 import base64
 import json
@@ -27,7 +31,7 @@ logger = get_logger(__name__)
 
 NAME = "llm"
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
-EXTRACT_MODEL = os.environ.get("MATERIAL_ORDER_EXTRACT_MODEL", "claude-opus-4-8")
+EXTRACT_MODEL = os.environ.get("MATERIAL_ORDER_EXTRACT_MODEL", "claude-sonnet-5")
 MAX_PDF_BYTES = 20 * 1024 * 1024  # Anthropic document-block ceiling guard
 
 _SYSTEM = (
@@ -86,6 +90,10 @@ def _call_anthropic(record):
         json={
             "model": EXTRACT_MODEL,
             "max_tokens": 4096,
+            # Keep this a pure extractor. Opus omits thinking when the field is
+            # absent, but Sonnet 5 defaults to adaptive thinking — disable it
+            # explicitly so we don't pay for thinking tokens on every call.
+            "thinking": {"type": "disabled"},
             "system": _SYSTEM,
             "messages": [{"role": "user", "content": _content_blocks(record)}],
         },
@@ -95,13 +103,27 @@ def _call_anthropic(record):
     body = resp.json()
     text = "".join(b.get("text", "") for b in body.get("content", []))
     m = re.search(r"\{.*\}", text, re.DOTALL)
-    return json.loads(m.group(0) if m else text)
+    return json.loads(m.group(0) if m else text), body
+
+
+def _usage_from_body(body):
+    """Token usage + model from the Messages API response, for the AI ledger."""
+    u = (body or {}).get("usage") or {}
+    return {
+        "model": (body or {}).get("model") or EXTRACT_MODEL,
+        "input_tokens": int(u.get("input_tokens") or 0),
+        "output_tokens": int(u.get("output_tokens") or 0),
+    }
 
 
 def extract(record):
-    """Return a normalized order dict, or None on no key / any failure / no lines."""
+    """Return a normalized order dict, or None on no key / any failure / no lines.
+
+    On the LLM path the returned dict carries an ``_ai_usage`` key (token counts +
+    model) so the caller can ledger the spend — previously this usage was dropped.
+    """
     try:
-        data = _call_anthropic(record)
+        data, body = _call_anthropic(record)
     except Exception as e:  # noqa: BLE001 — any failure → no LLM result, deterministic path stands
         logger.info("material_order_llm_fallback_skipped", error=str(e))
         return None
@@ -132,9 +154,13 @@ def extract(record):
 
     header = parser.extract_header(record.payload or {})
     event_type = data.get("event_type") if data.get("event_type") in ("placed", "confirmed") else "placed"
-    return base.order(
+    order = base.order(
         header,
         event_type=event_type,
         lines=lines,
         supplier_order_no=data.get("supplier_order_no") or None,
     )
+    if order is not None:
+        # Carry the spend to the caller so it lands in the AI ledger post-persist.
+        order["_ai_usage"] = _usage_from_body(body)
+    return order

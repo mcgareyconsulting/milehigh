@@ -3,12 +3,16 @@
  * schema_version: 1
  * purpose: Responsive card grid for Job Log and Archive — renders JobLogCard tiles, the secondary-search amber banner, and an empty state.
  * exports:
- *   default JobLogCardGrid: Props — jobs, secondaryResults (optional), search, jumpToTarget, stageToGroup, stageGroupColors, stageGroupDupColors, duplicateFabOrders, isHighlightedRow, hasJobsData, iconSize, onUpdate (refetch after a card edit).
+ *   default JobLogCardGrid: Props — jobs, secondaryResults (optional), search, jumpToTarget, stageToGroup, stageGroupColors, stageGroupDupColors, duplicateFabOrders, isHighlightedRow, hasJobsData, onUpdate (refetch after a card edit), layout ('grid' | 'column'), isAdmin, isDrafter (drawing-hub markup access on cards).
  * imports_from: [react, ./JobLogCard, ./JobDetailsModal]
- * imported_by: [frontend/src/pages/JobLog.jsx, frontend/src/pages/Archive.jsx]
+ * imported_by: [frontend/src/pages/JobLogContent.jsx, frontend/src/pages/Archive.jsx]
  * invariants:
  *   - Tap on a card opens JobDetailsModal locally (no parent state required).
- *   - Grid: 1 col on phone, 2 col on iPad, 3 col on 27", 4 col on 3xl (TV / 27"+).
+ *   - layout='grid' (Archive): 1 col on phone, 2 col on iPad, 3 col on 27", 4 col on 3xl.
+ *   - layout='column' (Job Log Cards view): ONE centered column — deliberate Kanban-feed look
+ *     with no left/right position ambiguity (top-to-bottom = the sorted list order), cards
+ *     floating on a muted backdrop. Used on phones + portrait tablets (enforced) and wherever
+ *     the ViewToggle picks Cards.
  */
 import React, { useState } from 'react';
 import JobLogCard from './JobLogCard';
@@ -25,8 +29,10 @@ export default function JobLogCardGrid({
     stageGroupDupColors = null,
     duplicateFabOrders = null,
     hasJobsData = false,
-    iconSize = 20,
     onUpdate = null,
+    layout = 'grid',
+    isAdmin = false,
+    isDrafter = false,
 }) {
     const [selectedJob, setSelectedJob] = useState(null);
 
@@ -36,8 +42,10 @@ export default function JobLogCardGrid({
     const isHighlightedRow = (row) =>
         jumpToTarget && String(row['Job #']) === jumpToTarget.job && String(row['Release #']) === jumpToTarget.release;
 
+    const isColumn = layout === 'column';
+
     return (
-        <div className="flex-1 min-h-0 overflow-auto p-2 sm:p-3 3xl:p-5">
+        <div className={`flex-1 min-h-0 overflow-auto p-2 sm:p-3 3xl:p-5 ${isColumn ? 'rounded-xl bg-gray-100/80 dark:bg-slate-900/50' : ''}`}>
             {showSecondary && (
                 <div className="mb-3 px-4 py-3 rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm font-medium">
                     <span className="mr-2">⚠️</span>
@@ -50,8 +58,10 @@ export default function JobLogCardGrid({
                     {hasJobsData ? 'No records match the selected filters.' : 'No records found.'}
                 </div>
             ) : (
-                <div className="grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 3xl:grid-cols-4">
-                    {(jobs.length === 0 ? secondaryResults : jobs).map((row) => (
+                <div className={isColumn
+                    ? 'flex flex-col gap-2 max-w-3xl mx-auto w-full'
+                    : 'grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 3xl:grid-cols-4'}>
+                    {(jobs.length === 0 ? secondaryResults : jobs).map((row, index) => (
                         row._asapDivider ? (
                             <div
                                 key={row.id}
@@ -70,7 +80,10 @@ export default function JobLogCardGrid({
                             stageGroupDupColors={stageGroupDupColors}
                             duplicateFabOrders={duplicateFabOrders}
                             isHighlighted={isHighlightedRow(row)}
-                            iconSize={iconSize}
+                            isAdmin={isAdmin}
+                            isDrafter={isDrafter}
+                            rowIndex={index}
+                            banded={isColumn}
                         />
                         )
                     ))}

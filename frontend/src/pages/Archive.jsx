@@ -11,12 +11,11 @@
  *   - Filter minimized state persists in localStorage under key 'ar_minimized'
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useArchiveDataFetching } from '../hooks/useArchiveDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import { JobsTableRow } from '../components/JobsTableRow';
-import { BananaCodeHeader } from '../components/StageIconRow';
 import { jobsApi } from '../services/jobsApi';
 import { checkAuth } from '../utils/auth';
 import { HEADER_OVERRIDES } from '../constants/columnHeaders';
@@ -87,7 +86,7 @@ function Archive() {
             const day = String(date.getDate()).padStart(2, '0');
             const year = String(date.getFullYear()).slice(-2);
             return `${month}/${day}/${year}`;
-        } catch (e) {
+        } catch {
             return '—';
         }
     };
@@ -129,7 +128,6 @@ function Archive() {
         'Released',
         'Fab Order',
         'Stage',
-        'Urgency',
         'Start install',
         'Comp. ETA',
         'Job Comp',
@@ -150,16 +148,15 @@ function Archive() {
         'Released': 5,
         'Fab Order': 6,
         'Stage': 9,
-        'Urgency': 8,
         'Start install': 5,
         'Comp. ETA': 5,
         'Job Comp': 5,
         'Invoiced': 5,
-        'Notes': 12,
+        'Notes': 18,
     };
 
     const columnHeaders = useMemo(() => {
-        return columnOrder.filter(col => columns.includes(col) || col === 'Urgency');
+        return columnOrder.filter(col => columns.includes(col));
     }, [columns]);
 
     const tableColumnCount = columnHeaders.length;
@@ -349,18 +346,13 @@ function Archive() {
                                                     const isReleaseNumber = column === 'Release #';
                                                     const displayHeader = HEADER_OVERRIDES[column] ?? column;
                                                     const colWidthPct = columnWidthPercents[column];
-                                                    const isUrgency = column === 'Urgency';
                                                     return (
                                                         <th
                                                             key={column}
                                                             className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 align-middle text-center text-[11px] font-bold text-gray-900 dark:text-slate-100 bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm`}
                                                             style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                         >
-                                                            {isUrgency ? (
-                                                                <BananaCodeHeader />
-                                                            ) : (
-                                                                displayHeader
-                                                            )}
+                                                            {displayHeader}
                                                         </th>
                                                     );
                                                 })}

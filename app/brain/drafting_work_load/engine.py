@@ -8,7 +8,7 @@ exports:
   SubmittalOrderingEngine: Ordering math — cascading updates, step/swap, drag-drop, and resort.
   UrgencyEngine: Urgency ladder bump calculations (0.1-0.9 slots with overflow to regular).
   LocationEngine: Point-in-polygon and buffer constants for geofence matching.
-imports_from: [typing, dataclasses, logging]
+imports_from: [typing, dataclasses, app.logging_config]
 imported_by: [app/brain/drafting_work_load/service.py, app/procore/procore.py]
 invariants:
   - No database or ORM imports — operates only on plain dicts and dataclasses.
@@ -21,9 +21,9 @@ Contains no database dependencies - works with plain data structures.
 """
 from typing import Optional, List, Tuple, Dict
 from dataclasses import dataclass
-import logging
+from app.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -809,7 +809,12 @@ class UrgencyEngine:
                             
                             if new_order < 0.1:
                                 # This shouldn't happen if we're managing slots correctly, but handle edge case
-                                logger.error(f"calculate_bump_updates: new_order {new_order} < 0.1, capping at 0.1")
+                                logger.warning(
+                                    "bump_order_floor_capped",
+                                    submittal_id=submittal_data.get('submittal_id'),
+                                    old=old_order,
+                                    new=0.1,
+                                )
                                 new_order = 0.1
                             else:
                                 # Round to nearest tenth place to ensure exact values (0.1, 0.2, ..., 0.9)

@@ -7,7 +7,7 @@
  *   ASAP_DIVIDER_BOX_CLASS: shared padding/color tokens for the divider wrapper (each view adds its own border/structure classes).
  *   AsapDividerLabel: section-header label text for the divider that separates propagated rows from in-department rows.
  * imports_from: [react]
- * imported_by: [JobsTableRow.jsx, JobLogRow.jsx, JobLogCard.jsx, JobLogRowList.jsx, JobLogCardGrid.jsx, pages/JobLog.jsx]
+ * imported_by: [JobsTableRow.jsx, JobLogCard.jsx, JobLogCardGrid.jsx, pages/JobLogContent.jsx]
  */
 import React from 'react';
 

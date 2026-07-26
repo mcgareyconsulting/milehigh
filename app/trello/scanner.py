@@ -134,10 +134,10 @@ def scan_trello_db_comparison() -> Dict:
             ]
         }
     """
-    logger.info("Starting Trello-DB scanner comparison")
-    
+    logger.debug("trello_db_scan_started")
+
     # Step 1: Get all DB jobs
-    logger.info("Fetching all jobs from database...")
+    logger.debug("db_releases_fetch_started")
     db_jobs = Releases.query.all()
     db_jobs_by_identifier = {}
     db_identifiers = set()
@@ -147,14 +147,19 @@ def scan_trello_db_comparison() -> Dict:
         db_identifiers.add(identifier)
         db_jobs_by_identifier[identifier] = job
     
-    logger.info(f"Found {len(db_jobs)} jobs in database")
+    logger.debug("db_releases_fetched", count=len(db_jobs))
     
     # Step 2: Get all Trello cards
-    logger.info("Fetching all Trello cards from board...")
+    logger.debug("trello_cards_fetch_started")
     try:
         trello_cards = get_all_trello_cards()
     except Exception as e:
-        logger.error(f"Error fetching Trello cards: {e}")
+        logger.error(
+            "trello_cards_fetch_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return {
             "error": f"Failed to fetch Trello cards: {str(e)}",
             "summary": {
@@ -196,7 +201,7 @@ def scan_trello_db_comparison() -> Dict:
             if identifier not in trello_cards_by_identifier:
                 trello_cards_by_identifier[identifier] = card
     
-    logger.info(f"Found {len(trello_cards)} Trello cards, {len(trello_identifiers)} with valid identifiers")
+    logger.debug("trello_cards_fetched", count=len(trello_cards), with_identifiers=len(trello_identifiers))
     
     # Step 4: Build comparison results
     in_both = []
@@ -278,7 +283,7 @@ def scan_trello_db_comparison() -> Dict:
         "list_mismatches": len(list_mismatches)
     }
     
-    logger.info(f"Scan complete: {summary}")
+    logger.info("trello_db_scan_complete", **summary)
     
     return {
         "summary": summary,
@@ -309,18 +314,28 @@ def delete_trello_card(card_id: str) -> Dict:
     }
     
     try:
-        logger.info(f"Deleting Trello card: {card_id}")
+        logger.debug("trello_card_delete_started", card_id=card_id)
         response = requests.delete(url, params=params)
         response.raise_for_status()
-        logger.info(f"Successfully deleted Trello card: {card_id}")
+        logger.info("trello_card_deleted", card_id=card_id)
         return {"success": True, "card_id": card_id}
     except requests.exceptions.HTTPError as http_err:
-        error_msg = f"HTTP error deleting card {card_id}: {http_err}"
-        logger.error(error_msg)
+        logger.error(
+            "trello_card_delete_failed",
+            card_id=card_id,
+            error=str(http_err),
+            error_type=type(http_err).__name__,
+            exc_info=True,
+        )
         return {"success": False, "card_id": card_id, "error": str(http_err)}
     except Exception as err:
-        error_msg = f"Error deleting card {card_id}: {err}"
-        logger.error(error_msg)
+        logger.error(
+            "trello_card_delete_failed",
+            card_id=card_id,
+            error=str(err),
+            error_type=type(err).__name__,
+            exc_info=True,
+        )
         return {"success": False, "card_id": card_id, "error": str(err)}
 
 
@@ -347,7 +362,13 @@ def create_trello_card_for_db_job(job: Releases, list_name: Optional[str] = None
     try:
         # Skip if job already has a Trello card
         if job.trello_card_id:
-            logger.info(f"Job {job.job}-{job.release} already has Trello card {job.trello_card_id}, skipping creation")
+            logger.debug(
+                "trello_card_create_skipped",
+                job=str(job.job),
+                release=job.release,
+                card_id=job.trello_card_id,
+                status="skipped",
+            )
             return {"success": False, "error": "Card already exists", "card_id": job.trello_card_id}
         
         # Determine list name from stage if not provided
@@ -361,7 +382,7 @@ def create_trello_card_for_db_job(job: Releases, list_name: Optional[str] = None
         if not target_list:
             # Fall back to configured new-card list
             list_id = cfg.NEW_TRELLO_CARD_LIST_ID
-            logger.warning(f"List '{list_name}' not found, using default list")
+            logger.warning("trello_list_not_found", list_name=list_name, job=str(job.job), release=job.release)
         else:
             list_id = target_list["id"]
         
@@ -404,9 +425,20 @@ def create_trello_card_for_db_job(job: Releases, list_name: Optional[str] = None
         # Update the job record with Trello card data
         success = update_job_record_with_trello_data(job, card_data)
         if success:
-            logger.info(f"Successfully updated database record with Trello data")
+            logger.info(
+                "release_updated_from_trello",
+                job=str(job.job),
+                release=job.release,
+                card_id=card_id,
+                source="trello",
+            )
         else:
-            logger.error(f"Failed to update database record with Trello data")
+            logger.error(
+                "release_update_from_trello_failed",
+                job=str(job.job),
+                release=job.release,
+                card_id=card_id,
+            )
         
         # Apply post-creation features (Fab Order, FC Drawing, notes, mirror card)
         post_creation_results = apply_card_post_creation_features(
@@ -429,8 +461,14 @@ def create_trello_card_for_db_job(job: Releases, list_name: Optional[str] = None
         }
         
     except Exception as err:
-        error_msg = f"Error creating Trello card for job {job.job}-{job.release}: {err}"
-        logger.error(error_msg, exc_info=True)
+        logger.error(
+            "trello_card_create_failed",
+            job=str(job.job),
+            release=job.release,
+            error=str(err),
+            error_type=type(err).__name__,
+            exc_info=True,
+        )
         return {
             "success": False,
             "job": job.job,
@@ -454,7 +492,7 @@ def sync_trello_with_db(dry_run: bool = False) -> Dict:
     """
     from app.trello.api import get_list_by_name, update_trello_card
     
-    logger.info(f"Starting Trello-DB sync (dry_run={dry_run})")
+    logger.debug("trello_db_sync_started", dry_run=dry_run)
     
     # Get comparison scan
     scan_results = scan_trello_db_comparison()
@@ -475,7 +513,7 @@ def sync_trello_with_db(dry_run: bool = False) -> Dict:
     }
     
     # 1. Delete Trello-only cards
-    logger.info(f"Deleting {len(scan_results['trello_only'])} Trello-only cards...")
+    logger.debug("trello_only_card_deletion_started", count=len(scan_results['trello_only']))
     for card_info in scan_results['trello_only']:
         card_id = card_info['trello_card_id']
         if dry_run:
@@ -492,20 +530,26 @@ def sync_trello_with_db(dry_run: bool = False) -> Dict:
                 results["deleted"]["failed"].append(delete_result)
     
     # 2. Move cards to correct lists based on DB stage
-    logger.info(f"Moving {len(scan_results['list_mismatches'])} cards to correct lists...")
+    logger.debug("card_moves_started", count=len(scan_results['list_mismatches']))
     for mismatch in scan_results['list_mismatches']:
         card_id = mismatch['trello_card_id']
         expected_list = mismatch['expected_list']
         
         if not expected_list:
-            logger.warning(f"Skipping card {card_id} - no expected list for stage '{mismatch['db_stage']}'")
+            logger.warning("card_move_skipped", card_id=card_id, db_stage=mismatch['db_stage'], status="skipped")
             continue
         
         # Get list ID
         list_info = get_list_by_name(expected_list)
         if not list_info:
             error_msg = f"List '{expected_list}' not found"
-            logger.error(error_msg)
+            logger.error(
+                "trello_list_lookup_failed",
+                card_id=card_id,
+                list_name=expected_list,
+                job_release=mismatch['identifier'],
+                error=error_msg,
+            )
             results["moved"]["failed"].append({
                 "card_id": card_id,
                 "identifier": mismatch['identifier'],
@@ -531,7 +575,12 @@ def sync_trello_with_db(dry_run: bool = False) -> Dict:
                     job.trello_list_id = list_info['id']
                     job.trello_list_name = expected_list
                     db.session.commit()
-                    logger.info(f"Updated DB record for {mismatch['identifier']} with new list info")
+                    logger.info(
+                        "release_list_updated",
+                        job_release=mismatch['identifier'],
+                        card_id=card_id,
+                        to_list=expected_list,
+                    )
                 
                 results["moved"]["success"].append({
                     "card_id": card_id,
@@ -539,10 +588,23 @@ def sync_trello_with_db(dry_run: bool = False) -> Dict:
                     "from_list": mismatch['trello_list'],
                     "to_list": expected_list
                 })
-                logger.info(f"Moved card {card_id} from '{mismatch['trello_list']}' to '{expected_list}'")
+                logger.info(
+                    "trello_card_moved",
+                    card_id=card_id,
+                    job_release=mismatch['identifier'],
+                    from_list=mismatch['trello_list'],
+                    to_list=expected_list,
+                )
             except Exception as err:
                 error_msg = str(err)
-                logger.error(f"Error moving card {card_id}: {error_msg}")
+                logger.error(
+                    "trello_card_move_failed",
+                    card_id=card_id,
+                    job_release=mismatch['identifier'],
+                    error=error_msg,
+                    error_type=type(err).__name__,
+                    exc_info=True,
+                )
                 results["moved"]["failed"].append({
                     "card_id": card_id,
                     "identifier": mismatch['identifier'],
@@ -550,12 +612,12 @@ def sync_trello_with_db(dry_run: bool = False) -> Dict:
                 })
     
     # 3. Create cards for DB-only jobs
-    logger.info(f"Creating {len(scan_results['db_only'])} cards for DB-only jobs...")
+    logger.debug("db_only_card_creation_started", count=len(scan_results['db_only']))
     for job_info in scan_results['db_only']:
         # Get the job from database
         job = Releases.query.filter_by(job=job_info['job'], release=job_info['release']).first()
         if not job:
-            logger.warning(f"Job {job_info['identifier']} not found in database, skipping")
+            logger.warning("release_not_found", job_release=job_info['identifier'], status="skipped")
             continue
         
         if dry_run:
@@ -581,9 +643,16 @@ def sync_trello_with_db(dry_run: bool = False) -> Dict:
     results["summary"]["moved_failed"] = len(results["moved"]["failed"])
     results["summary"]["created_failed"] = len(results["created"]["failed"])
     
-    logger.info(f"Sync complete: deleted={results['summary']['deleted_count']}, "
-                f"moved={results['summary']['moved_count']}, "
-                f"created={results['summary']['created_count']}")
+    logger.info(
+        "trello_db_sync_complete",
+        deleted=results['summary']['deleted_count'],
+        moved=results['summary']['moved_count'],
+        created=results['summary']['created_count'],
+        deleted_failed=results['summary']['deleted_failed'],
+        moved_failed=results['summary']['moved_failed'],
+        created_failed=results['summary']['created_failed'],
+        dry_run=dry_run,
+    )
     
     return results
 
@@ -606,7 +675,7 @@ def scan_and_create_cards_for_all_jobs(dry_run: bool = False, limit: Optional[in
     Returns:
         Dictionary with scan and creation results
     """
-    logger.info(f"Starting scan and create cards for all jobs (dry_run={dry_run})")
+    logger.debug("scan_and_create_started", dry_run=dry_run)
     
     try:
         # Query all jobs that don't have Trello cards
@@ -617,7 +686,7 @@ def scan_and_create_cards_for_all_jobs(dry_run: bool = False, limit: Optional[in
         
         jobs_without_cards = query.all()
         
-        logger.info(f"Found {len(jobs_without_cards)} jobs without Trello cards")
+        logger.debug("jobs_without_cards_found", count=len(jobs_without_cards))
         
         if len(jobs_without_cards) == 0:
             return {
@@ -653,7 +722,7 @@ def scan_and_create_cards_for_all_jobs(dry_run: bool = False, limit: Optional[in
                     expected_list = "Released"  # Default fallback
                 
                 if dry_run:
-                    logger.info(f"[DRY RUN] Would create card for {job_id} in list '{expected_list}'")
+                    logger.debug("card_create_dry_run", job_release=job_id, list_name=expected_list)
                     results["created"] += 1
                     results["created_details"].append({
                         "job": job.job,
@@ -663,7 +732,13 @@ def scan_and_create_cards_for_all_jobs(dry_run: bool = False, limit: Optional[in
                         "stage": job.stage
                     })
                 else:
-                    logger.info(f"[{idx}/{len(jobs_without_cards)}] Creating card for {job_id} in list '{expected_list}'")
+                    logger.debug(
+                        "card_create_started",
+                        job_release=job_id,
+                        list_name=expected_list,
+                        index=idx,
+                        total=len(jobs_without_cards),
+                    )
                     
                     # Create card using the standard function (handles all features)
                     create_result = create_trello_card_for_db_job(job, list_name=expected_list)
@@ -679,12 +754,12 @@ def scan_and_create_cards_for_all_jobs(dry_run: bool = False, limit: Optional[in
                             "list_name": create_result.get("list_name"),
                             "stage": job.stage
                         })
-                        logger.info(f"Successfully created card for {job_id}")
+                        logger.debug("trello_card_created", job_release=job_id, card_id=create_result.get("card_id"))
                     else:
                         error = create_result.get("error", "Unknown error")
                         if "already exists" in error.lower():
                             results["skipped"] += 1
-                            logger.info(f"Skipped {job_id}: {error}")
+                            logger.debug("card_create_skipped", job_release=job_id, status="skipped", reason=error)
                         else:
                             results["failed"] += 1
                             results["failed_details"].append({
@@ -694,11 +769,17 @@ def scan_and_create_cards_for_all_jobs(dry_run: bool = False, limit: Optional[in
                                 "error": error,
                                 "stage": job.stage
                             })
-                            logger.error(f"Failed to create card for {job_id}: {error}")
+                            logger.error("card_create_failed", job_release=job_id, error=error)
             
             except Exception as err:
                 error_msg = str(err)
-                logger.error(f"Error processing {job_id}: {error_msg}", exc_info=True)
+                logger.error(
+                    "card_processing_failed",
+                    job_release=job_id,
+                    error=error_msg,
+                    error_type=type(err).__name__,
+                    exc_info=True,
+                )
                 results["failed"] += 1
                 results["failed_details"].append({
                     "job": job.job,
@@ -708,14 +789,25 @@ def scan_and_create_cards_for_all_jobs(dry_run: bool = False, limit: Optional[in
                     "stage": job.stage if hasattr(job, 'stage') else None
                 })
         
-        logger.info(f"Scan and create complete: created={results['created']}, "
-                   f"failed={results['failed']}, skipped={results['skipped']}")
+        logger.info(
+            "scan_and_create_complete",
+            created=results['created'],
+            failed=results['failed'],
+            skipped=results['skipped'],
+            total=results['total_jobs'],
+            dry_run=dry_run,
+        )
         
         return results
         
     except Exception as e:
         error_msg = f"Scan and create failed: {str(e)}"
-        logger.error(error_msg, exc_info=True)
+        logger.error(
+            "scan_and_create_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return {
             "success": False,
             "error": error_msg,
@@ -739,7 +831,7 @@ def clear_trello_board(dry_run: bool = False) -> Dict:
     """
     from app.trello.api import get_all_trello_cards, get_board_info
 
-    logger.info(f"Starting clear_trello_board (dry_run={dry_run})")
+    logger.debug("clear_trello_board_started", dry_run=dry_run)
 
     try:
         board = get_board_info()
@@ -750,10 +842,10 @@ def clear_trello_board(dry_run: bool = False) -> Dict:
                 "dry_run": dry_run,
             }
         board_name = board["name"]
-        logger.info(f"Board to clear: {board_name!r} (ID: {board.get('id')})")
+        logger.debug("board_info_fetched", board_name=board_name, board_id=board.get('id'))
 
         cards = get_all_trello_cards()
-        logger.info(f"Found {len(cards)} cards on board")
+        logger.debug("board_cards_fetched", count=len(cards))
 
         deleted = 0
         failed = []
@@ -783,7 +875,7 @@ def clear_trello_board(dry_run: bool = False) -> Dict:
                 synchronize_session=False,
             )
             db.session.commit()
-            logger.info(f"Cleared Trello data from {jobs_with_cards} DB records")
+            logger.info("releases_trello_data_cleared", count=jobs_with_cards)
 
         return {
             "success": len(failed) == 0,
@@ -796,7 +888,12 @@ def clear_trello_board(dry_run: bool = False) -> Dict:
             "dry_run": dry_run,
         }
     except Exception as e:
-        logger.error(f"clear_trello_board failed: {e}", exc_info=True)
+        logger.error(
+            "clear_trello_board_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return {
             "success": False,
             "error": str(e),
@@ -836,9 +933,12 @@ def sync_releases_to_trello(
     """
     from app.trello.api import get_trello_card_by_id, update_job_record_with_trello_data
 
-    logger.info(
-        f"Starting sync_releases_to_trello (dry_run={dry_run}, create_only={create_only}, "
-        f"update_only={update_only}, clear_board_first={clear_board_first})"
+    logger.debug(
+        "sync_releases_to_trello_started",
+        dry_run=dry_run,
+        create_only=create_only,
+        update_only=update_only,
+        clear_board_first=clear_board_first,
     )
 
     try:
@@ -852,14 +952,16 @@ def sync_releases_to_trello(
                     "clear_result": clear_result,
                 }
             if dry_run:
-                logger.info(
-                    f"Would clear board: {clear_result.get('cards_deleted', 0)} cards, "
-                    f"{clear_result.get('db_would_clear', 0)} DB records"
+                logger.debug(
+                    "board_clear_dry_run",
+                    cards_deleted=clear_result.get('cards_deleted', 0),
+                    db_would_clear=clear_result.get('db_would_clear', 0),
                 )
             else:
                 logger.info(
-                    f"Board cleared: deleted={clear_result.get('cards_deleted', 0)} cards, "
-                    f"db_cleared={clear_result.get('db_cleared', 0)} records"
+                    "board_cleared",
+                    cards_deleted=clear_result.get('cards_deleted', 0),
+                    db_cleared=clear_result.get('db_cleared', 0),
                 )
 
         query = Releases.query.order_by(Releases.job, Releases.release)
@@ -871,7 +973,7 @@ def sync_releases_to_trello(
             query = query.limit(limit)
 
         releases = query.all()
-        logger.info(f"Found {len(releases)} releases to process")
+        logger.debug("releases_fetched", count=len(releases))
 
         results = {
             "success": True,
@@ -915,7 +1017,13 @@ def sync_releases_to_trello(
                             "card_id": create_result.get("card_id"),
                             "list_name": create_result.get("list_name"),
                         })
-                        logger.info(f"[{idx}/{len(releases)}] Created card for {identifier}")
+                        logger.debug(
+                            "trello_card_created",
+                            job_release=identifier,
+                            card_id=create_result.get("card_id"),
+                            index=idx,
+                            total=len(releases),
+                        )
                     else:
                         error = create_result.get("error", "Unknown error")
                         results["failed"] += 1
@@ -925,7 +1033,7 @@ def sync_releases_to_trello(
                             "identifier": identifier,
                             "error": error,
                         })
-                        logger.error(f"Failed to create card for {identifier}: {error}")
+                        logger.error("card_create_failed", job_release=identifier, error=error)
                 else:
                     # UPDATE: refresh DB from Trello
                     if create_only:
@@ -951,7 +1059,7 @@ def sync_releases_to_trello(
                             "card_id": rec.trello_card_id,
                             "error": "Card not found in Trello",
                         })
-                        logger.warning(f"Card {rec.trello_card_id} not found for {identifier}")
+                        logger.warning("trello_card_not_found", card_id=rec.trello_card_id, job_release=identifier)
                         continue
                     # Normalize: Trello API returns idList; ensure we pass it
                     if "idList" not in card_data and "list_id" in card_data:
@@ -966,7 +1074,12 @@ def sync_releases_to_trello(
                             "card_id": rec.trello_card_id,
                         })
                         if idx % 25 == 0:
-                            logger.info(f"[{idx}/{len(releases)}] Refreshed Trello data for {identifier}")
+                            logger.debug(
+                                "trello_refresh_progress",
+                                job_release=identifier,
+                                index=idx,
+                                total=len(releases),
+                            )
                     else:
                         results["failed"] += 1
                         results["failed_details"].append({
@@ -977,7 +1090,13 @@ def sync_releases_to_trello(
                         })
             except Exception as err:
                 error_msg = str(err)
-                logger.error(f"Error processing {identifier}: {error_msg}", exc_info=True)
+                logger.error(
+                    "release_sync_failed",
+                    job_release=identifier,
+                    error=error_msg,
+                    error_type=type(err).__name__,
+                    exc_info=True,
+                )
                 results["failed"] += 1
                 results["failed_details"].append({
                     "job": rec.job,
@@ -987,14 +1106,24 @@ def sync_releases_to_trello(
                 })
 
         logger.info(
-            f"sync_releases_to_trello complete: created={results['created']}, "
-            f"updated={results['updated']}, failed={results['failed']}, skipped={results['skipped']}"
+            "sync_releases_to_trello_complete",
+            created=results['created'],
+            updated=results['updated'],
+            failed=results['failed'],
+            skipped=results['skipped'],
+            total=results['total'],
+            dry_run=dry_run,
         )
         return results
 
     except Exception as e:
         error_msg = f"sync_releases_to_trello failed: {str(e)}"
-        logger.error(error_msg, exc_info=True)
+        logger.error(
+            "sync_releases_to_trello_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return {
             "success": False,
             "error": error_msg,

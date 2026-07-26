@@ -20,7 +20,6 @@ updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
 """
 import hashlib
 import json
-import logging
 import time
 import pandas as pd
 import re
@@ -29,12 +28,13 @@ from typing import Optional, Tuple
 from sqlalchemy.exc import IntegrityError
 
 from app.models import SubmittalEvents, WebhookReceipt, db
+from app.logging_config import get_logger
 
 # How long (seconds) to treat repeated Procore webhook deliveries as burst duplicates.
 # Procore bursts arrive within ~7s. Workflow cycles happen minutes/hours apart.
 WEBHOOK_DEDUP_WINDOW_SECONDS = 15
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Helper function to convert pandas NaT/NaN to None
 def clean_value(value):
@@ -310,13 +310,18 @@ def create_submittal_event(
         db.session.rollback()
         if "payload_hash" in str(e) or "unique" in str(e).lower() or "duplicate" in str(e).lower():
             logger.debug(
-                "SubmittalEvent duplicate (payload_hash already exists) for submittal %s %s, skipping",
-                submittal_id, action,
+                "submittal_event_duplicate_skipped",
+                submittal_id=str(submittal_id),
+                action=action,
             )
             return False
         raise
     logger.info(
-        "Created SubmittalEvent for submittal %s %s (external_user_id=%s, internal_user_id=%s, is_system_echo=%s)",
-        submittal_id, action, external_user_id, internal_user_id, is_system_echo,
+        "submittal_event_created",
+        submittal_id=str(submittal_id),
+        action=action,
+        external_user_id=external_user_id,
+        internal_user_id=internal_user_id,
+        is_system_echo=is_system_echo,
     )
     return True

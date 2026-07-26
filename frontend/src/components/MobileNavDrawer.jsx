@@ -14,19 +14,24 @@ import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const NAV_ITEMS = [
+    { label: 'Projects', path: '/projects' },
     { label: 'Map', path: '/jobsite-map' },
     { label: 'Job Log', path: '/job-log' },
     { label: 'Drafting WL', path: '/drafting-work-load' },
-    { label: 'PM Board', path: '/pm-board' },
+    { label: 'Timeline', path: '/pm-board' },
     { label: 'Events', path: '/events' },
     { label: 'To-Dos', path: '/todos' },
+    { label: 'Install Schedule', path: '/install-schedule' },
 ];
 
+// Rentals nav removed 2026-07-12 (company change) — route + backend intact.
 const ADMIN_ITEMS = [
-    { label: 'Rentals', path: '/rental-reports' },
+    { label: 'Subs', path: '/subs' },
     { label: 'Meetings', path: '/meetings' },
     { label: 'Bug Tracker', path: '/board' },
     { label: 'T&M', path: '/tm-tickets' },
+    { label: 'Subcontractors', path: '/subcontractors' },
+    { label: 'Submittal Matching', path: '/admin/submittal-matching' },
 ];
 
 export default function MobileNavDrawer({

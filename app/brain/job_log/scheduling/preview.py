@@ -4,7 +4,7 @@ schema_version: 1
 purpose: Generate a read-only diff of current vs. computed scheduling dates so admins can review before applying recalculation.
 exports:
   preview_scheduling_changes: Compare DB dates against computed values, return structured diff
-  print_preview: Pretty-print the diff to stdout
+  print_preview: Emit the diff as structured debug log events
   run_preview_script: CLI entry point for running the preview
 imports_from: [app.models, app.brain.job_log.scheduling.calculator, app.logging_config]
 imported_by: [app/brain/job_log/routes.py]
@@ -54,14 +54,18 @@ def preview_scheduling_changes(
     if reference_date is None:
         reference_date = date.today()
     
-    logger.info(f"Previewing scheduling changes (reference_date={reference_date})")
+    logger.debug(
+        "scheduling_preview_started",
+        reference_date=reference_date.isoformat(),
+        show_all=show_all,
+    )
     
     # Fetch all jobs
     all_jobs = Releases.query.order_by(Releases.job.asc(), Releases.release.asc()).all()
     total_jobs = len(all_jobs)
     
     if total_jobs == 0:
-        logger.warning("No jobs found in database")
+        logger.debug("scheduling_preview_no_jobs", count=0)
         return {
             'total_jobs': 0,
             'jobs_with_changes': 0,
@@ -148,85 +152,70 @@ def preview_scheduling_changes(
 
 def print_preview(preview_results: Dict[str, Any], detailed: bool = True):
     """
-    Print a formatted preview of scheduling changes.
-    
+    Emit a structured debug trace of scheduling changes.
+
     Args:
         preview_results: Results from preview_scheduling_changes()
-        detailed: If True, show detailed diff for each job. If False, only show summary.
+        detailed: If True, emit a detailed diff event for each job. If False, only emit the summary.
     """
     summary = preview_results.get('summary', {})
     jobs = preview_results.get('jobs', [])
-    
-    print("\n" + "=" * 80)
-    print("SCHEDULING PREVIEW - Changes Summary")
-    print("=" * 80)
-    
+
     if summary:
-        print(f"\nTotal Jobs: {summary.get('total_jobs', 0)}")
-        print(f"Jobs with Changes: {summary.get('jobs_with_changes', 0)}")
-        print(f"Jobs without Changes: {summary.get('jobs_without_changes', 0)}")
-        print(f"Start Install Changes: {summary.get('start_install_changes', 0)}")
-        print(f"Comp ETA Changes: {summary.get('comp_eta_changes', 0)}")
-        print(f"Reference Date: {summary.get('reference_date', 'N/A')}")
-    
+        logger.debug(
+            "scheduling_preview_summary",
+            total_jobs=summary.get('total_jobs', 0),
+            jobs_with_changes=summary.get('jobs_with_changes', 0),
+            jobs_without_changes=summary.get('jobs_without_changes', 0),
+            start_install_changes=summary.get('start_install_changes', 0),
+            comp_eta_changes=summary.get('comp_eta_changes', 0),
+            reference_date=summary.get('reference_date', 'N/A'),
+        )
+
     if not detailed or not jobs:
-        print("\n" + "=" * 80)
         return
-    
-    print("\n" + "=" * 80)
-    print("DETAILED CHANGES")
-    print("=" * 80)
-    
+
     for job_data in jobs:
-        job_id = f"{job_data['job']}-{job_data['release']}"
-        job_name = job_data.get('job_name', 'N/A')
-        
-        print(f"\nJob: {job_id} - {job_name}")
-        print(f"  Fab Order: {job_data.get('fab_order', 'None')}")
-        print(f"  Stage: {job_data.get('stage', 'Released')}")
-        print(f"  Fab Hrs: {job_data.get('fab_hrs', 'None')}")
-        print(f"  Install Hrs: {job_data.get('install_hrs', 'None')}")
-        print(f"  Remaining Fab Hrs: {job_data.get('remaining_fab_hours', 0.0):.2f}")
-        print(f"  Hours In Front: {job_data.get('hours_in_front', 0.0):.2f}")
-        print(f"  Days In Front: {job_data.get('days_in_front', 0)}")
-        
-        projected_fab = job_data.get('projected_fab_complete_date')
-        if projected_fab:
-            print(f"  Projected Fab Complete: {format_date(projected_fab)}")
-        
         # Start Install diff
         current_start = job_data.get('current_start_install')
         computed_start = job_data.get('computed_start_install')
         start_changed = job_data.get('start_install_changed', False)
-        
-        if start_changed:
-            # Calculate days difference
-            if current_start and computed_start:
-                days_diff = (computed_start - current_start).days
-                diff_str = f" ({days_diff:+d} days)" if days_diff != 0 else ""
-            else:
-                diff_str = ""
-            print(f"  ⚠️  Start Install: {format_date(current_start)} → {format_date(computed_start)}{diff_str}")
-        else:
-            print(f"  ✓  Start Install: {format_date(current_start)} (no change)")
-        
+
+        start_days_diff = None
+        if start_changed and current_start and computed_start:
+            start_days_diff = (computed_start - current_start).days
+
         # Comp ETA diff
         current_comp = job_data.get('current_comp_eta')
         computed_comp = job_data.get('computed_comp_eta')
         comp_changed = job_data.get('comp_eta_changed', False)
-        
-        if comp_changed:
-            # Calculate days difference
-            if current_comp and computed_comp:
-                days_diff = (computed_comp - current_comp).days
-                diff_str = f" ({days_diff:+d} days)" if days_diff != 0 else ""
-            else:
-                diff_str = ""
-            print(f"  ⚠️  Comp ETA: {format_date(current_comp)} → {format_date(computed_comp)}{diff_str}")
-        else:
-            print(f"  ✓  Comp ETA: {format_date(current_comp)} (no change)")
-    
-    print("\n" + "=" * 80)
+
+        comp_days_diff = None
+        if comp_changed and current_comp and computed_comp:
+            comp_days_diff = (computed_comp - current_comp).days
+
+        logger.debug(
+            "scheduling_preview_job_diff",
+            job=job_data['job'],
+            release=job_data['release'],
+            job_name=job_data.get('job_name', 'N/A'),
+            fab_order=job_data.get('fab_order'),
+            stage=job_data.get('stage', 'Released'),
+            fab_hrs=job_data.get('fab_hrs'),
+            install_hrs=job_data.get('install_hrs'),
+            remaining_fab_hours=job_data.get('remaining_fab_hours', 0.0),
+            hours_in_front=job_data.get('hours_in_front', 0.0),
+            days_in_front=job_data.get('days_in_front', 0),
+            projected_fab_complete_date=format_date(job_data.get('projected_fab_complete_date')),
+            current_start_install=format_date(current_start),
+            computed_start_install=format_date(computed_start),
+            start_install_changed=start_changed,
+            start_install_days_diff=start_days_diff,
+            current_comp_eta=format_date(current_comp),
+            computed_comp_eta=format_date(computed_comp),
+            comp_eta_changed=comp_changed,
+            comp_eta_days_diff=comp_days_diff,
+        )
 
 
 def run_preview_script(
@@ -246,8 +235,14 @@ def run_preview_script(
     if reference_date_str:
         try:
             reference_date = datetime.fromisoformat(reference_date_str).date()
-        except (ValueError, TypeError):
-            print(f"Warning: Invalid reference_date '{reference_date_str}', using today")
+        except (ValueError, TypeError) as e:
+            logger.error(
+                "scheduling_preview_invalid_reference_date",
+                reference_date_str=reference_date_str,
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
             reference_date = None
     
     try:
@@ -262,7 +257,11 @@ def run_preview_script(
         return preview_results
         
     except Exception as e:
-        logger.error(f"Error in preview script: {e}", exc_info=True)
-        print(f"\nError: {e}")
+        logger.error(
+            "scheduling_preview_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         raise
 

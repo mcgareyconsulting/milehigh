@@ -3,7 +3,7 @@ One-off cleanup: delete material_orders for a given PO/release (e.g. fake test d
 
 Removes the MaterialOrder rows AND — unless --keep-source — the lake
 RawSourceRecord(s) they were parsed from, once no other order still references them.
-Deleting the source record matters: the BB mailbox poll calls ingest_unprocessed()
+Deleting the source record matters: the Carmen mailbox poll calls ingest_unprocessed()
 every 15 min, which re-parses any lake email that has no material order yet, so a
 source record left behind would RE-CREATE the orders on the next poll.
 
@@ -68,7 +68,7 @@ def cleanup(po=None, release=None, apply=False, keep_source=False) -> int:
             print(f"  raw_source_record id={sid} subject={subj!r}")
     elif keep_source:
         print("(--keep-source) leaving lake records in place — orders may re-ingest on the "
-              "next BB mail poll.")
+              "next Carmen mail poll.")
 
     if not apply:
         print(f"\n(dry-run) Would delete {len(orders)} order(s) and {len(deletable_src)} "

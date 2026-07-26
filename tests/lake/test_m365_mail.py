@@ -17,7 +17,7 @@ def _msg(mid="AAA", subject="RFI 042", received="2026-06-06T18:30:00Z",
         "id": mid,
         "subject": subject,
         "from": {"emailAddress": {"name": "GC", "address": sender}},
-        "toRecipients": [{"emailAddress": {"name": "BB", "address": "BB@mhmw.com"}}],
+        "toRecipients": [{"emailAddress": {"name": "Carmen", "address": "CARMEN_AI@mhmw.com"}}],
         "ccRecipients": [],
         "receivedDateTime": received,
         "sentDateTime": received,
@@ -30,39 +30,56 @@ def _msg(mid="AAA", subject="RFI 042", received="2026-06-06T18:30:00Z",
     }
 
 
+def _graph_side_effect(messages_by_id):
+    """Mock graph_get for list (Inbox/messages) + per-id hydrate calls."""
+
+    def _call(path, params=None, **kwargs):
+        if path.endswith("/mailFolders/Inbox/messages"):
+            # List path must not request body (504 avoidance).
+            assert params is not None
+            assert "body" not in (params.get("$select") or "").split(",")
+            return {"value": list(messages_by_id.values())}
+        if "/messages/" in path and not path.endswith("/attachments"):
+            mid = path.rsplit("/", 1)[-1]
+            return messages_by_id[mid]
+        raise AssertionError(f"unexpected graph_get path: {path}")
+
+    return _call
+
+
 def test_normalize_maps_fields_and_stable_hash(app):
-    payload, ptr, occurred, h1 = m365_mail._normalize(_msg(), "bb@mhmw.com")
+    payload, ptr, occurred, h1 = m365_mail._normalize(_msg(), "carmen_ai@mhmw.com")
 
     assert payload["subject"] == "RFI 042"
     assert payload["from"]["address"] == "gc@build.com"
-    assert payload["to"][0]["address"] == "bb@mhmw.com"  # lowercased
+    assert payload["to"][0]["address"] == "carmen_ai@mhmw.com"  # lowercased
     assert payload["body"] == "Hello world"
     assert payload["conversation_id"] == "conv1"
-    assert ptr == {"mailbox": "bb@mhmw.com", "web_link": "https://outlook.example/x"}
+    assert ptr == {"mailbox": "carmen_ai@mhmw.com", "web_link": "https://outlook.example/x"}
     assert occurred.year == 2026 and occurred.month == 6 and occurred.day == 6 and occurred.hour == 18
 
     # Deterministic for identical content...
-    _, _, _, h2 = m365_mail._normalize(_msg(), "bb@mhmw.com")
+    _, _, _, h2 = m365_mail._normalize(_msg(), "carmen_ai@mhmw.com")
     assert h1 == h2
     # ...and changes when the body changes.
-    _, _, _, h3 = m365_mail._normalize(_msg(body="Different"), "bb@mhmw.com")
+    _, _, _, h3 = m365_mail._normalize(_msg(body="Different"), "carmen_ai@mhmw.com")
     assert h3 != h1
 
 
 def test_pull_lands_and_is_idempotent(app):
-    resp = {"value": [
-        _msg("A", body="one"),
-        _msg("B", subject="RFI 9", body="two", received="2026-06-05T10:00:00Z"),
-    ]}
+    msgs = {
+        "A": _msg("A", body="one"),
+        "B": _msg("B", subject="RFI 9", body="two", received="2026-06-05T10:00:00Z"),
+    }
 
-    with patch.object(m365_mail, "graph_get", return_value=resp):
-        r1 = m365_mail.pull(mailbox="bb@mhmw.com")
+    with patch.object(m365_mail, "graph_get", side_effect=_graph_side_effect(msgs)):
+        r1 = m365_mail.pull(mailbox="carmen_ai@mhmw.com")
     assert r1["created"] == 2
     assert RawSourceRecord.query.count() == 2
 
     # Re-pulling the same window lands nothing new.
-    with patch.object(m365_mail, "graph_get", return_value=resp):
-        r2 = m365_mail.pull(mailbox="bb@mhmw.com")
+    with patch.object(m365_mail, "graph_get", side_effect=_graph_side_effect(msgs)):
+        r2 = m365_mail.pull(mailbox="carmen_ai@mhmw.com")
     assert r2["created"] == 0
     assert r2["unchanged"] == 2
     assert RawSourceRecord.query.count() == 2
@@ -70,15 +87,20 @@ def test_pull_lands_and_is_idempotent(app):
     rec = RawSourceRecord.query.filter_by(external_id="A").one()
     assert rec.source == "m365_mail"
     assert rec.record_type == "email"
-    assert rec.source_account == "bb@mhmw.com"
+    assert rec.source_account == "carmen_ai@mhmw.com"
+    assert rec.payload["body"] == "one"
 
 
 def test_pull_updates_on_body_change(app):
-    with patch.object(m365_mail, "graph_get", return_value={"value": [_msg("A", body="one")]}):
-        m365_mail.pull(mailbox="bb@mhmw.com")
+    with patch.object(
+        m365_mail, "graph_get", side_effect=_graph_side_effect({"A": _msg("A", body="one")})
+    ):
+        m365_mail.pull(mailbox="carmen_ai@mhmw.com")
 
-    with patch.object(m365_mail, "graph_get", return_value={"value": [_msg("A", body="EDITED")]}):
-        r = m365_mail.pull(mailbox="bb@mhmw.com")
+    with patch.object(
+        m365_mail, "graph_get", side_effect=_graph_side_effect({"A": _msg("A", body="EDITED")})
+    ):
+        r = m365_mail.pull(mailbox="carmen_ai@mhmw.com")
 
     assert r["updated"] == 1
     assert RawSourceRecord.query.count() == 1
@@ -86,17 +108,36 @@ def test_pull_updates_on_body_change(app):
     assert rec.payload["body"] == "EDITED"
 
 
+def test_pull_lands_envelope_when_hydrate_fails(app):
+    """A detail GET failure must not drop the message — land the list stub."""
+    stub = _msg("A", body="will-not-arrive")
+    stub.pop("body")  # list response has no body
+
+    def side_effect(path, params=None, **kwargs):
+        if path.endswith("/mailFolders/Inbox/messages"):
+            return {"value": [stub]}
+        raise RuntimeError("504 Gateway Timeout")
+
+    with patch.object(m365_mail, "graph_get", side_effect=side_effect):
+        r = m365_mail.pull(mailbox="carmen_ai@mhmw.com")
+
+    assert r["created"] == 1
+    rec = RawSourceRecord.query.filter_by(external_id="A").one()
+    assert rec.payload["subject"] == "RFI 042"
+    assert rec.payload["body"] is None
+
+
 def test_poll_advances_watermark(app):
-    resp = {"value": [
-        _msg("A", received="2026-06-06T18:30:00Z"),
-        _msg("B", received="2026-06-05T10:00:00Z"),
-    ]}
-    with patch.object(m365_mail, "graph_get", return_value=resp):
+    msgs = {
+        "A": _msg("A", received="2026-06-06T18:30:00Z"),
+        "B": _msg("B", received="2026-06-05T10:00:00Z"),
+    }
+    with patch.object(m365_mail, "graph_get", side_effect=_graph_side_effect(msgs)):
         agg = m365_mail.poll()
 
     assert agg["mailboxes"] == 1 and agg["created"] == 2
 
-    state = LakeIngestState.query.filter_by(source="m365_mail", account="bb@mhmw.com").one()
+    state = LakeIngestState.query.filter_by(source="m365_mail", account="carmen_ai@mhmw.com").one()
     assert state.last_polled_at is not None
     assert state.last_occurred_at is not None
     # Watermark = max receivedDateTime seen.
@@ -104,29 +145,41 @@ def test_poll_advances_watermark(app):
 
 
 def test_poll_uses_watermark_filter_on_second_run(app):
-    with patch.object(m365_mail, "graph_get", return_value={"value": [_msg("A")]}):
+    with patch.object(
+        m365_mail, "graph_get", side_effect=_graph_side_effect({"A": _msg("A")})
+    ):
         m365_mail.poll()
 
-    with patch.object(m365_mail, "graph_get", return_value={"value": []}) as gg:
+    list_calls = []
+
+    def second_run(path, params=None, **kwargs):
+        if path.endswith("/mailFolders/Inbox/messages"):
+            list_calls.append(params)
+            return {"value": []}
+        raise AssertionError(f"unexpected path on empty poll: {path}")
+
+    with patch.object(m365_mail, "graph_get", side_effect=second_run):
         m365_mail.poll()
 
-    params = gg.call_args.kwargs["params"]
+    assert list_calls
+    params = list_calls[0]
     assert "$filter" in params and "receivedDateTime gt" in params["$filter"]
+    assert "body" not in params["$select"].split(",")
 
 
 def test_resolve_mailboxes_from_explicit_list(app):
-    app.config["BB_MAILBOXES"] = "a@mhmw.com, B@mhmw.com"
+    app.config["CARMEN_MAILBOXES"] = "a@mhmw.com, B@mhmw.com"
     assert m365_mail.resolve_mailboxes() == ["a@mhmw.com", "b@mhmw.com"]
 
 
 def test_resolve_mailboxes_defaults_to_single(app):
-    app.config["BB_MAILBOXES"] = None
-    app.config["BB_INGEST_GROUP_ID"] = None
-    assert m365_mail.resolve_mailboxes() == ["bb@mhmw.com"]
+    app.config["CARMEN_MAILBOXES"] = None
+    app.config["CARMEN_INGEST_GROUP_ID"] = None
+    assert m365_mail.resolve_mailboxes() == ["carmen_ai@mhmw.com"]
 
 
 def test_resolve_mailboxes_from_group_discovery(app):
-    app.config["BB_INGEST_GROUP_ID"] = "group-123"
+    app.config["CARMEN_INGEST_GROUP_ID"] = "group-123"
     members = {"value": [
         {"mail": "Jane@mhmw.com", "userPrincipalName": "jane@mhmw.com"},
         {"mail": None, "userPrincipalName": "svc@mhmw.com"},  # falls back to UPN
@@ -137,7 +190,7 @@ def test_resolve_mailboxes_from_group_discovery(app):
 
 
 def test_poll_continues_when_one_mailbox_fails(app):
-    app.config["BB_MAILBOXES"] = "good@mhmw.com, bad@mhmw.com"
+    app.config["CARMEN_MAILBOXES"] = "good@mhmw.com, bad@mhmw.com"
 
     def fake_pull(since=None, query=None, max_results=25, mailbox=None):
         if mailbox == "bad@mhmw.com":

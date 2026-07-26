@@ -46,7 +46,13 @@ class OutboxService:
         db.session.add(outbox_item)
         db.session.flush()
         
-        logger.debug(f"Outbox item created: {outbox_item.id} for event {event_id}")
+        logger.debug(
+            "outbox_item_created",
+            outbox_id=outbox_item.id,
+            event_id=event_id,
+            destination=destination,
+            action=action,
+        )
         return outbox_item
     
     @staticmethod
@@ -79,7 +85,14 @@ class OutboxService:
             # Get the associated event
             event = outbox_item.event
             if not event:
-                logger.error(f"Outbox {outbox_item.id}: no associated event")
+                logger.error(
+                    "outbox_event_missing",
+                    outbox_id=outbox_item.id,
+                    event_id=outbox_item.event_id,
+                    destination=outbox_item.destination,
+                    action=outbox_item.action,
+                    status="error",
+                )
                 outbox_item.status = 'failed'
                 outbox_item.error_message = "No associated event found"
                 db.session.commit()
@@ -88,7 +101,16 @@ class OutboxService:
             # Get the job record to derive card_id and other data
             job_record = Releases.query.filter_by(job=event.job, release=event.release).first()
             if not job_record:
-                logger.error(f"Outbox {outbox_item.id}: Job {event.job}-{event.release} not found")
+                logger.error(
+                    "outbox_release_not_found",
+                    outbox_id=outbox_item.id,
+                    event_id=event.id,
+                    job=event.job,
+                    release=event.release,
+                    destination=outbox_item.destination,
+                    action=outbox_item.action,
+                    status="error",
+                )
                 outbox_item.status = 'failed'
                 outbox_item.error_message = f"Job {event.job}-{event.release} not found"
                 db.session.commit()
@@ -102,7 +124,17 @@ class OutboxService:
                 # Derive stage from event payload
                 stage = event.payload.get('to')
                 if not stage:
-                    logger.error(f"Outbox {outbox_item.id}: Event payload missing 'to' field")
+                    logger.error(
+                        "outbox_payload_invalid",
+                        outbox_id=outbox_item.id,
+                        event_id=event.id,
+                        job=event.job,
+                        release=event.release,
+                        destination=outbox_item.destination,
+                        action=outbox_item.action,
+                        error="Event payload missing 'to' field",
+                        status="error",
+                    )
                     outbox_item.status = 'failed'
                     outbox_item.error_message = "Event payload missing 'to' field"
                     db.session.commit()
@@ -111,7 +143,16 @@ class OutboxService:
                 # Get card_id from job record
                 card_id = job_record.trello_card_id
                 if not card_id:
-                    logger.warning(f"Outbox {outbox_item.id}: Job {event.job}-{event.release} has no trello_card_id")
+                    logger.warning(
+                    "outbox_card_id_missing",
+                    outbox_id=outbox_item.id,
+                    event_id=event.id,
+                    job=event.job,
+                    release=event.release,
+                    destination=outbox_item.destination,
+                    action=outbox_item.action,
+                    status="error",
+                )
                     outbox_item.status = 'failed'
                     outbox_item.error_message = "Job has no trello_card_id"
                     db.session.commit()
@@ -121,7 +162,17 @@ class OutboxService:
                 from app.brain.job_log.routes import get_list_id_by_stage
                 list_id = get_list_id_by_stage(stage)
                 if not list_id:
-                    logger.error(f"Outbox {outbox_item.id}: Could not get list ID for stage '{stage}'")
+                    logger.error(
+                        "outbox_stage_unmapped",
+                        outbox_id=outbox_item.id,
+                        event_id=event.id,
+                        job=event.job,
+                        release=event.release,
+                        stage=stage,
+                        destination=outbox_item.destination,
+                        action=outbox_item.action,
+                        status="error",
+                    )
                     outbox_item.status = 'failed'
                     outbox_item.error_message = f"Could not get list ID for stage: {stage}"
                     db.session.commit()
@@ -143,8 +194,17 @@ class OutboxService:
                     JobEventService.close(event.id)
                     db.session.commit()
                     logger.info(
-                        f"[TRELLO_MOCK] move_card: job {event.job}-{event.release} "
-                        f"→ list '{target_list_name}' (id={list_id}) — skipped API call"
+                        "outbox_move_card_mocked",
+                        outbox_id=outbox_item.id,
+                        event_id=event.id,
+                        job=event.job,
+                        release=event.release,
+                        card_id=card_id,
+                        list_id=list_id,
+                        list_name=target_list_name,
+                        destination=outbox_item.destination,
+                        action=outbox_item.action,
+                        status="ok",
                     )
                     return True
 
@@ -162,7 +222,18 @@ class OutboxService:
                     JobEventService.close(event.id)
                     db.session.commit()
                     
-                    logger.info(f"Outbox {outbox_item.id} completed successfully")
+                    logger.info(
+                        "outbox_item_completed",
+                        outbox_id=outbox_item.id,
+                        event_id=event.id,
+                        job=event.job,
+                        release=event.release,
+                        card_id=card_id,
+                        destination=outbox_item.destination,
+                        action=outbox_item.action,
+                        retry_count=outbox_item.retry_count,
+                        status="ok",
+                    )
                     return True
                     
                 except Exception as api_error:
@@ -176,15 +247,33 @@ class OutboxService:
                         outbox_item.next_retry_at = datetime.utcnow() + timedelta(seconds=delay_seconds)
                         outbox_item.status = 'pending'  # Reset to pending for retry
                         
-                        logger.warning(
-                            f"Outbox {outbox_item.id} failed, will retry ({outbox_item.retry_count}/{outbox_item.max_retries}): {str(api_error)[:100]}"
+                        logger.debug(
+                            "outbox_retry_scheduled",
+                            outbox_id=outbox_item.id,
+                            event_id=outbox_item.event_id,
+                            destination=outbox_item.destination,
+                            action=outbox_item.action,
+                            retry_count=outbox_item.retry_count,
+                            max_retries=outbox_item.max_retries,
+                            error=str(api_error),
+                            error_type=type(api_error).__name__,
+                            exc_info=True,
                         )
                     else:
                         # Max retries exceeded - mark as failed
                         outbox_item.status = 'failed'
                         logger.error(
-                            f"Outbox {outbox_item.id} failed after {outbox_item.max_retries} retries: {str(api_error)[:100]}",
-                            exc_info=True
+                            "outbox_delivery_failed",
+                            outbox_id=outbox_item.id,
+                            event_id=outbox_item.event_id,
+                            destination=outbox_item.destination,
+                            action=outbox_item.action,
+                            retry_count=outbox_item.retry_count,
+                            max_retries=outbox_item.max_retries,
+                            status="error",
+                            error=str(api_error),
+                            error_type=type(api_error).__name__,
+                            exc_info=True,
                         )
                     
                     db.session.commit()
@@ -194,7 +283,16 @@ class OutboxService:
                 # Get card_id from job record
                 card_id = job_record.trello_card_id
                 if not card_id:
-                    logger.warning(f"Outbox {outbox_item.id}: Job {event.job}-{event.release} has no trello_card_id")
+                    logger.warning(
+                    "outbox_card_id_missing",
+                    outbox_id=outbox_item.id,
+                    event_id=event.id,
+                    job=event.job,
+                    release=event.release,
+                    destination=outbox_item.destination,
+                    action=outbox_item.action,
+                    status="error",
+                )
                     outbox_item.status = 'failed'
                     outbox_item.error_message = "Job has no trello_card_id"
                     db.session.commit()
@@ -239,7 +337,18 @@ class OutboxService:
                                 JobEventService.close(event.id)
                                 db.session.commit()
                                 
-                                logger.info(f"Outbox {outbox_item.id} completed successfully (fab_order update)")
+                                logger.info(
+                                    "outbox_item_completed",
+                                    outbox_id=outbox_item.id,
+                                    event_id=event.id,
+                                    job=event.job,
+                                    release=event.release,
+                                    card_id=card_id,
+                                    destination=outbox_item.destination,
+                                    action=outbox_item.action,
+                                    retry_count=outbox_item.retry_count,
+                                    status="ok",
+                                )
                                 return True
                             else:
                                 raise Exception("Failed to update Trello custom field")
@@ -254,7 +363,18 @@ class OutboxService:
                             JobEventService.close(event.id)
                             db.session.commit()
                             
-                            logger.info(f"Outbox {outbox_item.id} completed (fab_order cleared)")
+                            logger.info(
+                                "outbox_item_completed",
+                                outbox_id=outbox_item.id,
+                                event_id=event.id,
+                                job=event.job,
+                                release=event.release,
+                                card_id=card_id,
+                                destination=outbox_item.destination,
+                                action=outbox_item.action,
+                                retry_count=outbox_item.retry_count,
+                                status="skipped",
+                            )
                             return True
                     else:
                         raise Exception("FAB_ORDER_FIELD_ID not configured")
@@ -269,14 +389,32 @@ class OutboxService:
                         outbox_item.next_retry_at = datetime.utcnow() + timedelta(seconds=delay_seconds)
                         outbox_item.status = 'pending'
                         
-                        logger.warning(
-                            f"Outbox {outbox_item.id} failed, will retry ({outbox_item.retry_count}/{outbox_item.max_retries}): {str(api_error)[:100]}"
+                        logger.debug(
+                            "outbox_retry_scheduled",
+                            outbox_id=outbox_item.id,
+                            event_id=outbox_item.event_id,
+                            destination=outbox_item.destination,
+                            action=outbox_item.action,
+                            retry_count=outbox_item.retry_count,
+                            max_retries=outbox_item.max_retries,
+                            error=str(api_error),
+                            error_type=type(api_error).__name__,
+                            exc_info=True,
                         )
                     else:
                         outbox_item.status = 'failed'
                         logger.error(
-                            f"Outbox {outbox_item.id} failed after {outbox_item.max_retries} retries: {str(api_error)[:100]}",
-                            exc_info=True
+                            "outbox_delivery_failed",
+                            outbox_id=outbox_item.id,
+                            event_id=outbox_item.event_id,
+                            destination=outbox_item.destination,
+                            action=outbox_item.action,
+                            retry_count=outbox_item.retry_count,
+                            max_retries=outbox_item.max_retries,
+                            status="error",
+                            error=str(api_error),
+                            error_type=type(api_error).__name__,
+                            exc_info=True,
                         )
                     
                     db.session.commit()
@@ -286,7 +424,16 @@ class OutboxService:
                 # Get card_id from job record
                 card_id = job_record.trello_card_id
                 if not card_id:
-                    logger.warning(f"Outbox {outbox_item.id}: Job {event.job}-{event.release} has no trello_card_id")
+                    logger.warning(
+                    "outbox_card_id_missing",
+                    outbox_id=outbox_item.id,
+                    event_id=event.id,
+                    job=event.job,
+                    release=event.release,
+                    destination=outbox_item.destination,
+                    action=outbox_item.action,
+                    status="error",
+                )
                     outbox_item.status = 'failed'
                     outbox_item.error_message = "Job has no trello_card_id"
                     db.session.commit()
@@ -304,7 +451,18 @@ class OutboxService:
                     JobEventService.close(event.id)
                     db.session.commit()
                     
-                    logger.info(f"Outbox {outbox_item.id} completed (notes empty, skipping Trello)")
+                    logger.info(
+                        "outbox_item_completed",
+                        outbox_id=outbox_item.id,
+                        event_id=event.id,
+                        job=event.job,
+                        release=event.release,
+                        card_id=card_id,
+                        destination=outbox_item.destination,
+                        action=outbox_item.action,
+                        retry_count=outbox_item.retry_count,
+                        status="skipped",
+                    )
                     return True
                 
                 # Derive sender initials from the event's user
@@ -333,7 +491,18 @@ class OutboxService:
                         JobEventService.close(event.id)
                         db.session.commit()
                         
-                        logger.info(f"Outbox {outbox_item.id} completed successfully (notes update)")
+                        logger.info(
+                            "outbox_item_completed",
+                            outbox_id=outbox_item.id,
+                            event_id=event.id,
+                            job=event.job,
+                            release=event.release,
+                            card_id=card_id,
+                            destination=outbox_item.destination,
+                            action=outbox_item.action,
+                            retry_count=outbox_item.retry_count,
+                            status="ok",
+                        )
                         return True
                     else:
                         raise Exception("Failed to add comment to Trello card")
@@ -348,14 +517,32 @@ class OutboxService:
                         outbox_item.next_retry_at = datetime.utcnow() + timedelta(seconds=delay_seconds)
                         outbox_item.status = 'pending'
                         
-                        logger.warning(
-                            f"Outbox {outbox_item.id} failed, will retry ({outbox_item.retry_count}/{outbox_item.max_retries}): {str(api_error)[:100]}"
+                        logger.debug(
+                            "outbox_retry_scheduled",
+                            outbox_id=outbox_item.id,
+                            event_id=outbox_item.event_id,
+                            destination=outbox_item.destination,
+                            action=outbox_item.action,
+                            retry_count=outbox_item.retry_count,
+                            max_retries=outbox_item.max_retries,
+                            error=str(api_error),
+                            error_type=type(api_error).__name__,
+                            exc_info=True,
                         )
                     else:
                         outbox_item.status = 'failed'
                         logger.error(
-                            f"Outbox {outbox_item.id} failed after {outbox_item.max_retries} retries: {str(api_error)[:100]}",
-                            exc_info=True
+                            "outbox_delivery_failed",
+                            outbox_id=outbox_item.id,
+                            event_id=outbox_item.event_id,
+                            destination=outbox_item.destination,
+                            action=outbox_item.action,
+                            retry_count=outbox_item.retry_count,
+                            max_retries=outbox_item.max_retries,
+                            status="error",
+                            error=str(api_error),
+                            error_type=type(api_error).__name__,
+                            exc_info=True,
                         )
                     
                     db.session.commit()
@@ -389,10 +576,18 @@ class OutboxService:
                         JobEventService.close(event.id)
                         db.session.commit()
 
-                        adopted_note = " (adopted existing card)" if trello_result.get('adopted') else ""
                         logger.info(
-                            f"Outbox {outbox_item.id} completed successfully "
-                            f"(create_card for {event.job}-{event.release}){adopted_note}"
+                            "outbox_item_completed",
+                            outbox_id=outbox_item.id,
+                            event_id=event.id,
+                            job=event.job,
+                            release=event.release,
+                            card_id=job_record.trello_card_id,
+                            destination=outbox_item.destination,
+                            action=outbox_item.action,
+                            retry_count=outbox_item.retry_count,
+                            adopted=bool(trello_result.get('adopted')),
+                            status="ok",
                         )
                         return True
                     else:
@@ -408,14 +603,32 @@ class OutboxService:
                         outbox_item.next_retry_at = datetime.utcnow() + timedelta(seconds=delay_seconds)
                         outbox_item.status = 'pending'
 
-                        logger.warning(
-                            f"Outbox {outbox_item.id} failed, will retry ({outbox_item.retry_count}/{outbox_item.max_retries}): {str(api_error)[:100]}"
+                        logger.debug(
+                            "outbox_retry_scheduled",
+                            outbox_id=outbox_item.id,
+                            event_id=outbox_item.event_id,
+                            destination=outbox_item.destination,
+                            action=outbox_item.action,
+                            retry_count=outbox_item.retry_count,
+                            max_retries=outbox_item.max_retries,
+                            error=str(api_error),
+                            error_type=type(api_error).__name__,
+                            exc_info=True,
                         )
                     else:
                         outbox_item.status = 'failed'
                         logger.error(
-                            f"Outbox {outbox_item.id} failed after {outbox_item.max_retries} retries: {str(api_error)[:100]}",
-                            exc_info=True
+                            "outbox_delivery_failed",
+                            outbox_id=outbox_item.id,
+                            event_id=outbox_item.event_id,
+                            destination=outbox_item.destination,
+                            action=outbox_item.action,
+                            retry_count=outbox_item.retry_count,
+                            max_retries=outbox_item.max_retries,
+                            status="error",
+                            error=str(api_error),
+                            error_type=type(api_error).__name__,
+                            exc_info=True,
                         )
 
                     db.session.commit()
@@ -425,7 +638,16 @@ class OutboxService:
                 # Get card_id from job record
                 card_id = job_record.trello_card_id
                 if not card_id:
-                    logger.warning(f"Outbox {outbox_item.id}: Job {event.job}-{event.release} has no trello_card_id")
+                    logger.warning(
+                    "outbox_card_id_missing",
+                    outbox_id=outbox_item.id,
+                    event_id=event.id,
+                    job=event.job,
+                    release=event.release,
+                    destination=outbox_item.destination,
+                    action=outbox_item.action,
+                    status="error",
+                )
                     outbox_item.status = 'failed'
                     outbox_item.error_message = "Job has no trello_card_id"
                     db.session.commit()
@@ -449,7 +671,18 @@ class OutboxService:
                     JobEventService.close(event.id)
                     db.session.commit()
 
-                    logger.info(f"Outbox {outbox_item.id} completed (no Trello-relevant fields changed)")
+                    logger.info(
+                        "outbox_item_completed",
+                        outbox_id=outbox_item.id,
+                        event_id=event.id,
+                        job=event.job,
+                        release=event.release,
+                        card_id=card_id,
+                        destination=outbox_item.destination,
+                        action=outbox_item.action,
+                        retry_count=outbox_item.retry_count,
+                        status="skipped",
+                    )
                     return True
 
                 # Execute the Trello API call(s)
@@ -495,7 +728,13 @@ class OutboxService:
                         )
                     except Exception as mirror_error:
                         logger.warning(
-                            f"Outbox {outbox_item.id}: failed to sync mirror card content: {mirror_error}"
+                            "mirror_card_sync_failed",
+                            outbox_id=outbox_item.id,
+                            event_id=event.id,
+                            card_id=card_id,
+                            error=str(mirror_error),
+                            error_type=type(mirror_error).__name__,
+                            exc_info=True,
                         )
 
                     # Success! Mark outbox item as completed
@@ -508,7 +747,18 @@ class OutboxService:
                     JobEventService.close(event.id)
                     db.session.commit()
 
-                    logger.info(f"Outbox {outbox_item.id} completed successfully (update_release_fields)")
+                    logger.info(
+                        "outbox_item_completed",
+                        outbox_id=outbox_item.id,
+                        event_id=event.id,
+                        job=event.job,
+                        release=event.release,
+                        card_id=card_id,
+                        destination=outbox_item.destination,
+                        action=outbox_item.action,
+                        retry_count=outbox_item.retry_count,
+                        status="ok",
+                    )
                     return True
 
                 except Exception as api_error:
@@ -521,14 +771,32 @@ class OutboxService:
                         outbox_item.next_retry_at = datetime.utcnow() + timedelta(seconds=delay_seconds)
                         outbox_item.status = 'pending'
 
-                        logger.warning(
-                            f"Outbox {outbox_item.id} failed, will retry ({outbox_item.retry_count}/{outbox_item.max_retries}): {str(api_error)[:100]}"
+                        logger.debug(
+                            "outbox_retry_scheduled",
+                            outbox_id=outbox_item.id,
+                            event_id=outbox_item.event_id,
+                            destination=outbox_item.destination,
+                            action=outbox_item.action,
+                            retry_count=outbox_item.retry_count,
+                            max_retries=outbox_item.max_retries,
+                            error=str(api_error),
+                            error_type=type(api_error).__name__,
+                            exc_info=True,
                         )
                     else:
                         outbox_item.status = 'failed'
                         logger.error(
-                            f"Outbox {outbox_item.id} failed after {outbox_item.max_retries} retries: {str(api_error)[:100]}",
-                            exc_info=True
+                            "outbox_delivery_failed",
+                            outbox_id=outbox_item.id,
+                            event_id=outbox_item.event_id,
+                            destination=outbox_item.destination,
+                            action=outbox_item.action,
+                            retry_count=outbox_item.retry_count,
+                            max_retries=outbox_item.max_retries,
+                            status="error",
+                            error=str(api_error),
+                            error_type=type(api_error).__name__,
+                            exc_info=True,
                         )
 
                     db.session.commit()
@@ -536,7 +804,14 @@ class OutboxService:
 
             else:
                 # Unsupported destination/action combination
-                logger.error(f"Outbox {outbox_item.id}: Unsupported {outbox_item.destination}/{outbox_item.action}")
+                logger.error(
+                    "outbox_action_unsupported",
+                    outbox_id=outbox_item.id,
+                    event_id=event.id,
+                    destination=outbox_item.destination,
+                    action=outbox_item.action,
+                    status="error",
+                )
                 outbox_item.status = 'failed'
                 outbox_item.error_message = f"Unsupported: {outbox_item.destination}/{outbox_item.action}"
                 db.session.commit()
@@ -544,7 +819,18 @@ class OutboxService:
                 
         except Exception as e:
             # Unexpected error during processing
-            logger.error(f"Outbox {outbox_item.id}: Unexpected error: {e}", exc_info=True)
+            logger.error(
+                "outbox_process_failed",
+                outbox_id=outbox_item.id,
+                event_id=outbox_item.event_id,
+                destination=outbox_item.destination,
+                action=outbox_item.action,
+                retry_count=outbox_item.retry_count,
+                status="error",
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
             outbox_item.status = 'pending'  # Reset to pending so it can be retried
             outbox_item.error_message = f"Unexpected error: {str(e)}"
             outbox_item.retry_count += 1
@@ -597,7 +883,17 @@ class OutboxService:
                         if list_id:
                             lists_to_sort.add(list_id)
             except Exception as e:
-                logger.error(f"Error processing outbox {item.id}: {e}", exc_info=True)
+                logger.error(
+                    "outbox_batch_item_failed",
+                    outbox_id=item.id,
+                    event_id=item.event_id,
+                    destination=item.destination,
+                    action=item.action,
+                    retry_count=item.retry_count,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    exc_info=True,
+                )
 
         # Batch sort: sort each affected list once after all fab_order updates
         if lists_to_sort:
@@ -608,8 +904,18 @@ class OutboxService:
                     try:
                         sort_list_if_needed(list_id, cfg.FAB_ORDER_FIELD_ID, None, "batch")
                     except Exception as e:
-                        logger.error(f"Batch sort failed for list {list_id}: {e}", exc_info=True)
+                        logger.error(
+                            "trello_list_sort_failed",
+                            list_id=list_id,
+                            error=str(e),
+                            error_type=type(e).__name__,
+                            exc_info=True,
+                        )
 
         if processed_count > 0:
-            logger.debug(f"Processed {processed_count}/{len(pending_items)} outbox items")
+            logger.debug(
+                "outbox_batch_processed",
+                count=processed_count,
+                batch_size=len(pending_items),
+            )
         return processed_count

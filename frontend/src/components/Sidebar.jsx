@@ -82,6 +82,7 @@ export default function Sidebar({ isAuthenticated, isAdmin, canSeeReport, onLogo
     ...NAV_ITEMS,
     ...(canSeeReport ? [{ label: 'Invoicing', path: '/invoicing-report', icon: ICONS.invoicing }] : []),
     ...(isAdmin ? [
+      { label: 'Subs', path: '/subs', icon: ICONS.invoicing },
       { label: 'Meetings', path: '/meetings', icon: ICONS.meetings },
       { label: 'Bug Tracker', path: '/board', icon: ICONS.bug },
     ] : []),

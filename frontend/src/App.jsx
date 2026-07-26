@@ -21,6 +21,8 @@ import DraftingWorkLoadAdmin from './pages/DraftingWorkLoadAdmin';
 import Events from './pages/Events';
 import ReleasesLayout from './pages/ReleasesLayout';
 import JobLogContent from './pages/JobLogContent';
+import Projects from './pages/Projects';
+import ProjectDetail from './pages/ProjectDetail';
 import Archive from './pages/Archive';
 import PMBoardContent from './pages/PMBoardContent';
 import Login from './pages/Login';
@@ -31,12 +33,16 @@ import ToDos from './pages/ToDos';
 import TMTickets from './pages/TMTickets';
 import SubcontractorAdmin from './pages/SubcontractorAdmin';
 import FcCollection from './pages/FcCollection';
+import SubmittalMatching from './pages/SubmittalMatching';
 import InvoicingReport from './pages/InvoicingReport';
 import RentalReports from './pages/RentalReports';
 import SubcontractorShell from './components/SubcontractorShell';
 import SubcontractorAcceptInvite from './pages/SubcontractorAcceptInvite';
 import SubcontractorTicketList from './pages/SubcontractorTicketList';
 import SubcontractorTicketDetail from './pages/SubcontractorTicketDetail';
+import Metrics from './pages/Metrics';
+import InstallSchedule from './pages/InstallSchedule';
+import Subs from './pages/Subs';
 import { checkAuth } from './utils/auth';
 import { checkSubcontractorAuth } from './utils/subcontractorAuth';
 import './App.css';
@@ -96,6 +102,8 @@ function AppContent() {
                 <Route path="job-log" element={<JobLogContent />} />
                 <Route path="pm-board" element={<PMBoardContent />} />
               </Route>
+              <Route path="projects" element={<Projects />} />
+              <Route path="projects/:id" element={<ProjectDetail />} />
               <Route path="archive" element={<Archive />} />
               <Route path="events" element={<Events />} />
               <Route path="drafting-work-load" element={<DraftingWorkLoad />} />
@@ -106,9 +114,13 @@ function AppContent() {
               <Route path="todos" element={<ToDos />} />
               <Route path="tm-tickets" element={<TMTickets />} />
               <Route path="subcontractors" element={<SubcontractorAdmin />} />
+              <Route path="install-schedule" element={<InstallSchedule />} />
               <Route path="invoicing-report" element={<InvoicingReport />} />
               <Route path="rental-reports" element={<RentalReports />} />
+              <Route path="subs" element={<Subs />} />
               <Route path="admin/fc-collection" element={<FcCollection />} />
+              <Route path="admin/submittal-matching" element={<SubmittalMatching />} />
+              <Route path="admin/metrics" element={<Metrics />} />
               <Route path="*" element={<Navigate to="/job-log" replace />} />
             </>
           ) : (

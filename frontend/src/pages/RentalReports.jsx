@@ -16,6 +16,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { sunbeltApi } from '../services/sunbeltApi';
 import { checkAuth } from '../utils/auth';
+import Stat from '../components/shared/Stat';
 
 // Week-over-week change -> left-border accent.
 const CHANGE_META = {
@@ -84,22 +85,6 @@ function RentalRow({ r, today }) {
             </td>
             <td className={`${cell} text-gray-500 dark:text-slate-400`}>{shortDate(r.billed_through)}</td>
         </tr>
-    );
-}
-
-function Stat({ label, value, tone = 'default' }) {
-    const tones = {
-        default: 'text-gray-900 dark:text-slate-100',
-        red: 'text-red-600 dark:text-red-400',
-        amber: 'text-amber-600 dark:text-amber-400',
-        orange: 'text-orange-600 dark:text-orange-400',
-        slate: 'text-gray-500 dark:text-slate-400',
-    };
-    return (
-        <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-slate-500">{label}</div>
-            <div className={`text-lg font-bold leading-tight ${tones[tone]}`}>{value}</div>
-        </div>
     );
 }
 

@@ -54,6 +54,20 @@ Tests use `TESTING=1` env var (set automatically in `tests/conftest.py`) to forc
 
 Test layering: pure unit (no Flask/DB) → service (real logic, in-memory DB or mocked DB) → integration (HTTP via `test_client` + in-memory DB). External services (Procore, Trello, OneDrive) are always mocked; the DB is always real (in-memory). Shared fixtures (`app`, `client`, `mock_admin_user`, `mock_non_admin_user`) live in `tests/conftest.py`. See `tests/README.md` for the full strategy, coverage map, and known gaps.
 
+## Roadmap and requirements
+
+**`docs/feature-catalog.md` is the source of truth for what is being built and
+why.** Every feature discussed with the client, with its current codebase state,
+a plan, dependencies, effort, and rank. Read it before planning new work — it
+records scope decisions (what was deferred, dropped, or already exists) that are
+not derivable from the code. `docs/ops-planning.md` is the meeting-level rollup
+behind it.
+
+Both cite source meetings by date and transcript line, e.g. `[L121–136]`. **Those
+transcripts are deliberately not in this repo** — they live locally at
+`~/Desktop/Transcripts/MHMW/`, with per-meeting findings in `processed/`. A
+citation you cannot open is expected, not a missing file.
+
 ## Architecture
 
 Flask backend + React 19 frontend. The frontend is built to `frontend/dist/` and served as static files by Flask in production. In local dev, run both servers separately and proxy API calls from Vite to Flask.
@@ -137,12 +151,12 @@ The full emission standard is `docs/logging-standard.md` — read it before addi
 
 - One idiom: `get_logger(__name__)` from `app/logging_config.py`. Never stdlib `logging.getLogger`, never `app.logger`/`current_app.logger`, never `print()` on a runtime path (CLI scripts under `scripts/` may print), never `logging.basicConfig()`.
 - Events, not sentences: `logger.info("stage_updated", release_id=rid, from_stage=a, to_stage=b)`. F-strings are banned in logger calls; data goes in kwargs using the canonical field names from the standard's registry (`request_id`, `user_id`, `job`, `release`, `submittal_id`, `duration_ms`, `status`, `error`, `error_type`, …).
-- Levels: DEBUG = narrative; INFO = a state actually changed (one line, owned by the layer making the change — reads/polls/no-ops never log at INFO); WARNING = unexpected but handled; ERROR = always with `exc_info=True`, never sampled or swallowed. Every external call (Trello/Procore/Graph/Anthropic) and background-job entry must emit an ERROR with traceback on failure.
+- Levels: DEBUG = narrative; INFO = a state actually changed (one line, owned by the layer making the change — reads/polls/no-ops never log at INFO); WARNING = unexpected but handled; ERROR = always with `exc_info=True`, never sampled or swallowed. Every external call (Trello/Procore/Graph/Anthropic) and background-job entry must emit an ERROR with traceback on failure. A lost outbound update (outbox delivery exhausted) is an ERROR, not a warning.
 - Prefer one wide completion event per unit of work (request/webhook/job) over many thin progress lines; play-by-play is DEBUG.
 - Durability rule: if losing the record would matter next week it's a DB event row (`ReleaseEvents`/`SubmittalEvents`/ledger), not a log line. Never log secrets, tokens, or connection strings (log the host, never the URI).
 - Migration is a ratchet: new code complies fully; migrate logging in any file you touch; never mass-rewrite cold paths for style.
 
-Output is JSON via structlog; level is set by the `LOG_LEVEL` env var (default INFO). Note: `SyncContext` in `logging_config.py` is currently dead code — don't model new work on it.
+Output is single-rendered JSON via structlog on both stdout and the rotating file (`logs/app.log`, 10MB max, 5 backups); level is set by the `LOG_LEVEL` env var (default INFO). Note: `SyncContext` in `logging_config.py` is currently dead code (never called) — don't model new work on it; correlation is a planned follow-up (bind `request_id` via `structlog.contextvars`).
 
 ### Frontend structure
 React pages under `frontend/src/pages/`, reusable components under `frontend/src/components/`, API calls in `frontend/src/services/`, custom hooks in `frontend/src/hooks/`. Uses Tailwind CSS, react-router-dom, axios, @dnd-kit for drag-drop, maplibre-gl for maps.

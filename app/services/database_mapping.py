@@ -8,7 +8,7 @@ exports:
   JobMappingResult: Dataclass capturing the match result and field diffs for one job.
   MappingStatistics: Dataclass aggregating counts and per-field update tallies for a mapping run.
   map_production_fab_order_to_sandbox: Convenience function that maps fab_order from production to sandbox in one call.
-imports_from: [sqlalchemy, pandas]
+imports_from: [sqlalchemy, pandas, app/logging_config]
 imported_by: []
 invariants:
   - Jobs are matched by (job, release) composite key — duplicates in the lookup silently overwrite earlier rows.
@@ -28,6 +28,10 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 import pandas as pd
+
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -392,7 +396,15 @@ class DatabaseMappingService:
             
             return True
         except Exception as e:
-            print(f"Error updating job {job_id}-{release}: {e}")
+            logger.error(
+                "job_fields_update_failed",
+                job=job_id,
+                release=release,
+                count=len(fields),
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
             return False
 
 

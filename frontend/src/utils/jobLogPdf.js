@@ -29,6 +29,7 @@ import {
     HOLD_FLAG_STROKE_WIDTH,
 } from './holdFlag';
 import { HEADER_OVERRIDES } from '../constants/columnHeaders';
+import { DATE_COLUMNS } from './jobLogColumns';
 
 const PAGE_WIDTH_PT = 1224;
 const PAGE_HEIGHT_PT = 792;
@@ -70,7 +71,6 @@ const PRINT_WIDTH_OVERRIDES = {
     'Notes': 8,
 };
 
-const DATE_COLUMNS = new Set(['Released', 'Start install', 'Comp. ETA']);
 
 const COLOR_GRAYED = [156, 163, 175];
 const COLOR_EVEN_ROW = [219, 234, 254];

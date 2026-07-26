@@ -40,14 +40,16 @@ def handle_errors(operation_name, raw_error=False):
                 return f(*args, **kwargs)
             except Exception as exc:
                 if raw_error:
-                    logger.error(f"{operation_name} failed", exc_info=True)
+                    logger.error("route_operation_failed", operation=operation_name,
+                                 error=str(exc), error_type=type(exc).__name__, exc_info=True)
                     db.session.rollback()
                     return jsonify({
                         "error": str(exc),
                         "error_type": type(exc).__name__
                     }), 500
                 else:
-                    logger.error(f"Error in {operation_name}", error=str(exc))
+                    logger.error("route_operation_failed", operation=operation_name,
+                                 error=str(exc), error_type=type(exc).__name__, exc_info=True)
                     db.session.rollback()
                     return jsonify({
                         "error": f"Failed to {operation_name}",

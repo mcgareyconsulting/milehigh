@@ -9,7 +9,7 @@ from app.lake.ingest import m365_mail
 
 
 def _enable(app):
-    app.config["BB_MAIL_INGEST_ENABLED"] = True
+    app.config["CARMEN_MAIL_INGEST_ENABLED"] = True
 
 
 def test_pull_endpoint_requires_auth(app, client):
@@ -44,7 +44,7 @@ def test_pull_endpoint_admin_ok(app, client, mock_admin_user):
 
 
 def test_pull_endpoint_disabled_returns_503(app, client, mock_admin_user):
-    app.config["BB_MAIL_INGEST_ENABLED"] = False
+    app.config["CARMEN_MAIL_INGEST_ENABLED"] = False
     with patch("app.auth.utils.get_current_user", return_value=mock_admin_user):
         resp = client.post("/lake/ingest/mail/pull", json={})
     assert resp.status_code == 503

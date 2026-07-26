@@ -63,7 +63,7 @@ def update_job_scheduling_fields(
     """
     # Protect hard dates (red dates) — never overwrite user-set dates
     if job.start_install_formulaTF is False:
-        logger.debug(f"Skipping scheduling update for hard-date job {job.job}-{job.release}")
+        logger.debug("scheduling_update_skipped_hard_date", job=job.job, release=job.release)
         return job
 
     if reference_date is None:
@@ -115,9 +115,13 @@ def update_job_scheduling_fields(
     # Log changes
     if old_start_install != job.start_install or old_comp_eta != job.comp_eta:
         logger.info(
-            f"Updated scheduling for job {job.job}-{job.release}: "
-            f"start_install={old_start_install}→{job.start_install}, "
-            f"comp_eta={old_comp_eta}→{job.comp_eta}"
+            "scheduling_updated",
+            job=job.job,
+            release=job.release,
+            from_start_install=old_start_install,
+            to_start_install=job.start_install,
+            from_comp_eta=old_comp_eta,
+            to_comp_eta=job.comp_eta,
         )
     
     if commit:
@@ -151,7 +155,11 @@ def recalculate_all_jobs_scheduling(
     if reference_date is None:
         reference_date = date.today()
 
-    logger.info(f"Starting scheduling recalculation (stage_group={stage_group}, reference_date={reference_date})")
+    logger.debug(
+        "scheduling_recalculation_started",
+        stage_group=stage_group,
+        reference_date=reference_date.isoformat(),
+    )
 
     # Fetch jobs (filtered by stage_group if specified)
     query = Releases.query
@@ -174,14 +182,14 @@ def recalculate_all_jobs_scheduling(
     total_jobs = len(all_jobs)
     
     if total_jobs == 0:
-        logger.warning("No jobs found in database")
+        logger.debug("scheduling_recalculation_no_jobs", stage_group=stage_group, count=0)
         return {
             'total_jobs': 0,
             'updated': 0,
             'errors': []
         }
     
-    logger.info(f"Processing {total_jobs} jobs")
+    logger.debug("scheduling_recalculation_jobs_loaded", count=total_jobs)
     
     # Convert to dictionaries for calculation
     jobs_dicts = []
@@ -225,11 +233,17 @@ def recalculate_all_jobs_scheduling(
             # Commit in batches
             if (i + 1) % batch_size == 0:
                 db.session.commit()
-                logger.debug(f"Committed batch: {i + 1}/{total_jobs} jobs processed")
+                logger.debug("scheduling_batch_committed", count=i + 1, total_jobs=total_jobs)
                 
         except Exception as e:
-            error_msg = f"Error updating job {job.job}-{job.release}: {str(e)}"
-            logger.error(error_msg, exc_info=True)
+            logger.error(
+                "scheduling_job_update_failed",
+                job=job.job,
+                release=job.release,
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
             errors.append({
                 'job': f"{job.job}-{job.release}",
                 'error': str(e)
@@ -240,15 +254,23 @@ def recalculate_all_jobs_scheduling(
     try:
         db.session.commit()
     except Exception as e:
-        logger.error(f"Error in final commit: {str(e)}", exc_info=True)
+        logger.error(
+            "scheduling_final_commit_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         errors.append({
             'job': 'final_commit',
             'error': str(e)
         })
     
     logger.info(
-        f"Scheduling recalculation complete: {updated_count}/{total_jobs} jobs updated, "
-        f"{len(errors)} errors"
+        "scheduling_recalculation_complete",
+        total_jobs=total_jobs,
+        updated=updated_count,
+        error_count=len(errors),
+        stage_group=stage_group,
     )
     
     return {

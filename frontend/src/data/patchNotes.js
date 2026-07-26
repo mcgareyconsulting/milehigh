@@ -17,6 +17,235 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.306',
+    date: 'July 23, 2026',
+    summary:
+      'Optional Chrome desktop alerts for mentions and to-dos while Brain stays open in a tab.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Desktop notifications (opt-in)',
+        detail:
+          'Open the notification bell and click Enable to allow Chrome desktop alerts. Mentions, to-dos, and other bell notifications will pop on your desktop when Brain is open but in the background — even if you\'re in another window. Turn them off anytime from the same menu. Alerts pause if you close the Brain tab.',
+      },
+    ],
+  },
+  {
+    version: 'v2.0.305',
+    date: 'July 21, 2026',
+    summary:
+      'Project health now measures itself against the GC\'s weekly lookahead, and Banana Boy has learned how MHMW actually drafts.',
+    changes: [
+      {
+        type: 'new',
+        title: 'GC lookahead cross-check on Project health',
+        adminOnly: true,
+        detail:
+          'A project\'s health score can now be checked against the general contractor\'s 3-week lookahead: each dated GC need is lined up against our releases and submittals, and the score is docked for real slips and gaps using the GC\'s own dates instead of a generic staleness signal. Running as a pilot on one live job while GC lookahead ingestion is built out.',
+      },
+      {
+        type: 'improved',
+        title: 'Banana Boy knows MHMW\'s conventions',
+        adminOnly: true,
+        detail:
+          'BB chat and the drawing reviewer now draw on a curated MHMW knowledge base — code conventions, abbreviations and lumber, fasteners and parts, weld symbols, and the DRR and submittal-for-GC workflows — so answers and reviews are grounded in how MHMW actually drafts.',
+      },
+      {
+        type: 'fixed',
+        title: 'Install-window cockpit hidden on shipping-lane Timeline cards',
+        detail:
+          'The install-window cockpit no longer shows on Timeline cards in the shipping lanes, where it doesn\'t apply — it now appears only where an install window is meaningful.',
+      },
+    ],
+  },
+  {
+    version: 'v2.0.301',
+    date: 'July 19, 2026',
+    summary:
+      'A new Ship Date on the Job Log that fills itself in from the install date, and the Timeline now mirrors each assigned release into its installer\'s lane.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Ship Date on the Job Log',
+        detail:
+          'Releases now carry a Ship Date, shown as its own column on the Job Log and editable in the Start Install modal. Enter one date and the other auto-fills — ship defaults to one business day before install, and either can be set independently. The Ship Date cell is colored to match the Start install cell exactly (green upcoming, yellow past, red for ASAP), so the paired columns always agree.',
+      },
+      {
+        type: 'improved',
+        title: 'Timeline mirrors releases into installer lanes',
+        detail:
+          'When a release is assigned to an installer, the Timeline now mirrors it into that installer\'s lane as a range bar spanning Start install through its completion estimate. The installer lanes read as a true Gantt of who is on what and when, while the shipping lanes stay day-bucketed.',
+      },
+    ],
+  },
+  {
+    version: 'v2.0.296',
+    date: 'July 18, 2026',
+    summary:
+      'A next-week install schedule view, a Materials Ordered column on the Job Log, live data flowing into the Projects tab, and a cleaner top navigation.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Next-week install schedule',
+        detail:
+          'A new Install Schedule view lays out the coming week\'s installs grouped by crew, hard-scheduled dates first, and flags overlaps and overloaded days. Install hours come from what\'s entered on the release today, so anything still unassigned shows up in its own bucket to make the gap obvious.',
+      },
+      {
+        type: 'improved',
+        title: 'Materials Ordered has its own Job Log column',
+        detail:
+          'Ordered-but-not-received material now shows as its own column on the Job Log, so you can scan which releases are still waiting on parts without opening each one. BB can also read a release\'s material-order status when you ask about it in chat.',
+      },
+      {
+        type: 'new',
+        title: 'Live data on the Projects tab',
+        adminOnly: true,
+        detail:
+          'The Projects tab now overlays real sandbox data onto the demo scaffold — releases, submittals, a merged activity feed, health tiles, and percent-complete all render from live records, with a banner and per-tab dots marking which sections are live versus still demo. Financials and Contract stay on demo data until T&M and change-order ingestion lands.',
+      },
+      {
+        type: 'improved',
+        title: 'Cleaner top navigation',
+        detail:
+          'Reworked the top navigation bar\'s structure so it lays out and scales more cleanly across screen sizes.',
+      },
+      {
+        type: 'improved',
+        title: 'Push delivery for the Banana Boy mailbox',
+        adminOnly: true,
+        detail:
+          'Email forwarded to the Banana Boy mailbox can now arrive by Microsoft Graph push notification instead of waiting for the next poll, so supplier orders and forwards land closer to real time. Off by default until the subscription is switched on.',
+      },
+    ],
+  },
+  {
+    version: 'v2.0.291',
+    date: 'July 18, 2026',
+    summary:
+      'BB drawing review on a submittal is now reliable on large sets, and the Materials Ordered list scrolls when it gets long.',
+    changes: [
+      {
+        type: 'fixed',
+        title: 'BB submittal review no longer times out',
+        adminOnly: true,
+        detail:
+          'Reviewing a For-Construction drawing on a submittal now runs in the background instead of blocking the request. The Claude call takes minutes, which was tripping the server\'s request timeout and killing the worker mid-review; the review now moves from pending to complete (or error) on its own and the panel polls for the result, so large or slow reviews finish cleanly and surface a real error message if the call fails.',
+      },
+      {
+        type: 'improved',
+        title: 'Materials Ordered list scrolls when long',
+        detail:
+          'On a release with a lot of ordered material, the Materials Ordered section in Job Details now scrolls within its own area instead of overflowing the modal.',
+      },
+    ],
+  },
+  {
+    version: 'v2.0.289',
+    date: 'July 13, 2026',
+    summary:
+      'A system-usage dashboard with real AI cost and reliability tracking, and BB drawing review moved onto the submittal itself — pulling For-Construction sets straight from Procore.',
+    changes: [
+      {
+        type: 'new',
+        title: 'System-usage & AI dashboard',
+        adminOnly: true,
+        detail:
+          'A new Metrics page shows how the app is actually being used — engagement and adoption, content and activity, release throughput, and system health — over a Day / Week / Month window. Every AI call across the Brain (BB chat, drawing review, supplier-order capture, meeting notes) is now metered, so the dashboard reports real AI spend, reliability, and quality instead of guesswork.',
+      },
+      {
+        type: 'improved',
+        title: 'BB drawing review on the submittal, straight from Procore',
+        adminOnly: true,
+        detail:
+          'Banana Boy\'s code-compliance review now lives on the submittal itself: open a submittal and pull its For-Construction drawings directly from Procore, then review each document in place. Every document runs its own review with a verdict tally and an in-line findings list, you can choose a deep (Opus) or lighter, faster (Sonnet) pass, and re-run any document as the set changes.',
+      },
+    ],
+  },
+  {
+    version: 'v2.0.288',
+    date: 'July 12, 2026',
+    summary:
+      'A redesigned Timeline that reads like the board on its side, incoming material orders you can now open right from it, and a new tool for matching submittals to their releases.',
+    changes: [
+      {
+        type: 'improved',
+        title: 'Redesigned Timeline, and a much better tablet view',
+        detail:
+          'The Timeline is now a day/week bucket board — the Trello board turned on its side — with a Shipping Planning and a Shipping Completed lane on top of the installer-team lanes. Zoom scales the columns from single days out to whole weeks, cards sit on their exact Start-install date, and the whole view was reworked to look and behave far better on an iPad in landscape.',
+      },
+      {
+        type: 'new',
+        title: 'Incoming material orders on the Timeline',
+        detail:
+          'PU / pickup, stock, and galvanizing "ready to ship" orders now appear as chips on the Timeline\'s Shipping Planning lane, positioned by their ready or ordered date so you can see what still has to come in. The chips are now larger and clickable — click one to open that release\'s job details scrolled straight to its Materials Ordered list.',
+      },
+      {
+        type: 'new',
+        title: 'Match submittals to releases',
+        adminOnly: true,
+        detail:
+          'A new admin tool suggests which release each drafting submittal belongs to, scoring every suggestion as Confident, Pick-one, or Weak. You confirm, pick between candidates, or mark no match — tightening the submittal-to-release link that the rest of the Brain relies on.',
+      },
+    ],
+  },
+  {
+    version: 'v2.0.284',
+    date: 'July 9, 2026',
+    summary:
+      'BB can now review a drawing set for code compliance, supplier galvanizing and stock status shows up on job details, and verbal releases are easier and safer to enter.',
+    changes: [
+      {
+        type: 'new',
+        title: 'BB code-compliance review for drawings',
+        adminOnly: true,
+        detail:
+          'Banana Boy can now review a release\'s full For-Construction drawing set against a library of fabrication and structural code rules, flagging issues by severity with the sheet citations it used to reach each finding. PMs can accept or deny each flag to help BB improve.',
+      },
+      {
+        type: 'new',
+        title: 'Galvanizing & stock order status tracking',
+        adminOnly: true,
+        detail:
+          'Supplier-order capture now also picks up galvanizing "ready to ship" and stock "ready for pickup" notifications forwarded to the mailbox, showing them on the job details panel with their own Planning → Complete status alongside itemized material orders.',
+      },
+      {
+        type: 'improved',
+        title: 'Paste-in verbal releases, plus duplicate protection',
+        detail:
+          'The Verbal Release modal now has a Paste mode — paste one row from a spreadsheet and it fills the form for you. Both verbal and bulk release entry also now catch likely duplicates (same job, name, and description under a different release number) and ask you to confirm before creating them.',
+      },
+    ],
+  },
+  {
+    version: 'v2.0.281',
+    date: 'July 5, 2026',
+    summary:
+      'Ask BB about any release or submittal, cheaper and more reliable supplier-order capture, and a behind-the-scenes logging and security cleanup.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Ask BB about a release or submittal',
+        adminOnly: true,
+        detail:
+          'A new read-only BB chat: type a release or submittal number and BB assembles its full lifecycle — status, submittals, a merged event timeline, and open to-dos — into one grounded summary. Read-only for now; every answer is drawn straight from the Brain.',
+      },
+      {
+        type: 'improved',
+        title: 'Cheaper, more reliable supplier-order capture',
+        adminOnly: true,
+        detail:
+          'Supplier-order emails forwarded to the Banana Boy mailbox are now scanned exactly once instead of being re-checked on every poll, and re-scanned only when a late attachment lands. This removes a large silent AI cost and speeds up ingestion.',
+      },
+      {
+        type: 'fixed',
+        title: 'Logging and security hardening',
+        adminOnly: true,
+        detail:
+          'A ground-up cleanup of application logs: closed two spots where credentials could reach the logs, cut steady-state log noise, and made every log line consistent and parseable. No change to how the app behaves.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.278',
     date: 'July 1, 2026',
     summary:

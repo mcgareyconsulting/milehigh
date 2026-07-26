@@ -5,21 +5,22 @@
  * exports:
  *   JobDetailsModal: Portal modal showing all fields of a single job/release record
  * imports_from: [react, react-dom, react-router-dom]
- * imported_by: [frontend/src/components/JobsTableRow.jsx]
+ * imported_by: [frontend/src/components/JobsTableRow.jsx, frontend/src/components/GanttChart.jsx]
  * invariants:
  *   - Renders via createPortal to document.body to escape table overflow clipping
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 import { jobsApi } from '../services/jobsApi';
 import { EventsModal } from './EventsModal';
 
-export function JobDetailsModal({ isOpen, onClose, job }) {
+export function JobDetailsModal({ isOpen, onClose, job, scrollToMaterials = false, onOrdersChanged = null }) {
     const [eventsOpen, setEventsOpen] = useState(false);
     const [materialOrders, setMaterialOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(false);
+    const materialsRef = useRef(null);
 
     // Identifiers derived before any early return so the effect's deps are stable.
     const jobId = job ? (job['Job #'] || job.job) : null;
@@ -36,6 +37,14 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
         return () => { cancelled = true; };
     }, [isOpen, jobId, relId]);
 
+    // When opened from the Timeline's material-order chip, bring the Materials
+    // Ordered section into view once its data has settled.
+    useEffect(() => {
+        if (!isOpen || !scrollToMaterials || ordersLoading) return;
+        const el = materialsRef.current;
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, [isOpen, scrollToMaterials, ordersLoading]);
+
     const handleToggleReceived = async (order) => {
         const next = order.status !== 'received';
         try {
@@ -43,6 +52,9 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
             setMaterialOrders((prev) =>
                 prev.map((o) => (o.id === order.id ? (data?.order || o) : o))
             );
+            // Let the Job Log refresh its Mats column right away rather than
+            // waiting for the next poll.
+            if (onOrdersChanged) onOrdersChanged();
         } catch (e) {
             // Leave the row unchanged (e.g. insufficient permissions).
         }
@@ -183,7 +195,7 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                         </div>
                     </div>
 
-                    <div className="border-t border-gray-200 dark:border-slate-600 pt-4">
+                    <div ref={materialsRef} className="border-t border-gray-200 dark:border-slate-600 pt-4">
                             <h4 className="text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
                                 Materials Ordered
                             </h4>
@@ -194,25 +206,35 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                                     No materials ordered for this release.
                                 </p>
                             ) : (
-                                <ul className="space-y-2">
+                                <ul className="space-y-2 max-h-64 overflow-y-auto pr-1">
                                     {materialOrders.map((o) => {
+                                        // Status orders (galvanizing / stock) track a planning→complete
+                                        // shipping lifecycle, not the itemized ordered/received toggle.
+                                        const isStatusOrder = Boolean(o.shipping_status);
                                         const received = o.status === 'received';
+                                        const complete = o.shipping_status === 'complete';
+                                        const badgeLabel = isStatusOrder
+                                            ? (complete ? 'Complete' : 'Planning')
+                                            : (received ? 'Received' : 'Ordered');
+                                        const badgeGreen = isStatusOrder ? complete : received;
                                         const meta = [o.supplier, o.po_number ? `PO ${o.po_number}` : null]
                                             .filter(Boolean).join(' · ');
                                         return (
                                             <li key={o.id} className="border-l-2 border-accent-500 pl-3">
                                                 <div className="flex items-center justify-between gap-2">
-                                                    <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${received
+                                                    <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${badgeGreen
                                                         ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
                                                         : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}>
-                                                        {received ? 'Received' : 'Ordered'}
+                                                        {badgeLabel}
                                                     </span>
-                                                    <button
-                                                        onClick={() => handleToggleReceived(o)}
-                                                        className="text-xs text-accent-600 dark:text-accent-400 hover:underline"
-                                                    >
-                                                        {received ? 'Mark ordered' : 'Mark received'}
-                                                    </button>
+                                                    {!isStatusOrder && (
+                                                        <button
+                                                            onClick={() => handleToggleReceived(o)}
+                                                            className="text-xs text-accent-600 dark:text-accent-400 hover:underline"
+                                                        >
+                                                            {received ? 'Mark ordered' : 'Mark received'}
+                                                        </button>
+                                                    )}
                                                 </div>
                                                 <p className="text-sm text-gray-900 dark:text-slate-100 mt-0.5">
                                                     {o.quantity != null ? `(${o.quantity}) ` : ''}{o.description}
@@ -224,6 +246,11 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                                                     <p className="text-xs text-gray-500 dark:text-slate-400">
                                                         {o.ordered_by ? `Ordered by ${o.ordered_by}` : 'Ordered'}
                                                         {o.ordered_at ? ` · ${formatDate(o.ordered_at)}` : ''}
+                                                    </p>
+                                                )}
+                                                {isStatusOrder && o.ready_at && (
+                                                    <p className="text-xs text-gray-500 dark:text-slate-400">
+                                                        Ready · {formatDate(o.ready_at)}
                                                     </p>
                                                 )}
                                             </li>

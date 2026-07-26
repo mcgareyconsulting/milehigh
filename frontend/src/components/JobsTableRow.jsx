@@ -7,7 +7,7 @@
  * imports_from: [react, ../services/jobsApi, ../constants/jumpToHighlight, ./JobDetailsModal, ./StartInstallDateModal, ./StageIconRow]
  * imported_by: [frontend/src/pages/JobLog.jsx, frontend/src/pages/Archive.jsx]
  * invariants:
- *   - Stage dropdown options must stay in sync with PMBoardList stage definitions
+ *   - Stage dropdown options must stay in sync with constants/stages.js definitions
  *   - Admin-only actions (delete, unarchive, field edit) are gated on the isAdmin prop
  *   - Duplicate fab order detection relies on the duplicateFabOrders set passed from parent
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
@@ -15,8 +15,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { setAsapAndAssign } from '../utils/asap';
+import { localTodayStr, toYmd } from '../utils/formatters';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import { JobDetailsModal } from './JobDetailsModal';
+import { MaterialOrderBadge } from './MaterialOrderBadge';
 import { NotesHistoryModal } from './NotesHistoryModal';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { StageIconRow } from './StageIconRow';
@@ -24,6 +26,7 @@ import { ASAP_PROPAGATED_ROW_CLASS } from './AsapPropagationTag';
 import { PdfMarkupModal } from './PdfMarkupModal';
 import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
 import { useTheme } from '../context/ThemeContext';
+import { useReleases } from '../context/ReleasesContext';
 
 // Master switch for the stage photo gate. Held OFF for now — the gate UI/infra
 // stays in place so flipping this back to true re-enables it. Keep in sync with
@@ -36,7 +39,11 @@ const STAGE_PHOTO_GATE_ENABLED = false;
 const STAGE_PHOTO_GATES = ['Welded QC', 'Paint Complete'];
 
 export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, compact = false, showActions = true }) {
+    const { refreshMaterialSummary } = useReleases();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    // When the modal is opened from the Mat. Ord. cell, jump straight to the
+    // Materials Ordered section instead of the top of the modal.
+    const [modalScrollToMaterials, setModalScrollToMaterials] = useState(false);
     const [isNotesHistoryOpen, setIsNotesHistoryOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
     const [pdfMarkupOpen, setPdfMarkupOpen] = useState(false);
@@ -246,6 +253,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // Local state for start install
     const [localStartInstall, setLocalStartInstall] = useState(row['Start install'] ?? null);
     const [updatingStartInstall, setUpdatingStartInstall] = useState(false);
+    // Local state for ship date (independent hard date; no Trello/scheduling side effects)
+    const [localShipDate, setLocalShipDate] = useState(row['Ship Date'] ?? null);
 
     const [showStageDropdown, setShowStageDropdown] = useState(false);
     const [dropdownDirection, setDropdownDirection] = useState('down');
@@ -352,11 +361,12 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         setLocalNotes(row['Notes'] ?? '');
         setNotesInputValue(row['Notes'] ?? '');
         setLocalStartInstall(row['Start install'] ?? null);
+        setLocalShipDate(row['Ship Date'] ?? null);
         setLocalJobComp(row['Job Comp'] ?? '');
         setLocalInvoiced(row['Invoiced'] ?? '');
         setJobCompInputValue(row['Job Comp'] ?? '');
         setInvoicedInputValue(row['Invoiced'] ?? '');
-    }, [row['Stage'], row['Fab Order'], row['Notes'], row['Start install'], row['Job Comp'], row['Invoiced']]);
+    }, [row['Stage'], row['Fab Order'], row['Notes'], row['Start install'], row['Ship Date'], row['Job Comp'], row['Invoiced']]);
 
     // Rotate stage options so current stage is at top (wheel behavior)
     const rotatedStageOptions = useMemo(() => {
@@ -412,7 +422,22 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const jobCompIsX = (localJobComp || '').toString().trim().toUpperCase() === 'X';
     const invoicedIsX = (localInvoiced || '').toString().trim().toUpperCase() === 'X';
     const isGrayed = isComplete || jobCompIsX;
-    const rowBgClass = isGrayed ? 'bg-gray-300 dark:bg-slate-600' : (rowIndex % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-blue-200 dark:bg-slate-700');
+    // Completed rows are muted + receding: pale slab, dimmed content (via the `jl-done`
+    // rule in index.css). Light mode: paler than the old gray-400 slab so it falls back
+    // instead of competing with the blue banding. Dark mode: DARKER than the active rows
+    // (slate-900 vs 800/700) — finished work recedes; it must never glow brighter.
+    const rowBgClass = isGrayed ? 'bg-gray-200 dark:bg-slate-950' : (rowIndex % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-blue-300 dark:bg-slate-600');
+    // ONE translucent divider ink for the entire table — same values as the header in
+    // JobLogContent.jsx (keep in sync): black @ 18% in light, white @ 12% in dark.
+    // Translucent ink self-adjusts over white, blue, and gray rows, so the grid reads as a
+    // single continuous lattice instead of changing color per row type.
+    const cellDividerClass = 'border-black/[0.18] dark:border-white/[0.12]';
+    // Vertical cell dividers use box-shadow, not a real border — under `border-collapse` a
+    // border is centered on the shared boundary between two cells, while the header's divider
+    // (a non-collapsed overlay) sits flush at its own edge; mixing the two causes a visible
+    // sub-pixel drift between the header and body dividers. box-shadow isn't subject to
+    // border-collapse, so using it in both places guarantees identical positioning.
+    const cellVDividerShadow = 'shadow-[inset_-1px_0_0_0_#0000002e] dark:shadow-[inset_-1px_0_0_0_#ffffff1f]';
     const cellPy = isOldMan ? 'py-2' : 'py-0.5';
     const cellText = isOldMan ? 'text-[13px]' : 'text-[11px]';
 
@@ -647,6 +672,24 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         }
     };
 
+    // Handle ship date change from modal (independent of the install-date save)
+    const handleShipDateSave = async (shipDate) => {
+        const jobNumber = row['Job #'];
+        const releaseNumber = row['Release #'];
+        const oldValue = localShipDate;
+
+        // Optimistic update
+        setLocalShipDate(shipDate);
+        try {
+            await jobsApi.updateShipDate(jobNumber, releaseNumber, shipDate);
+            if (onUpdate) onUpdate();
+        } catch (error) {
+            console.error(`[SHIP_DATE] Failed to update ship date for job ${jobNumber}-${releaseNumber}:`, error);
+            setLocalShipDate(oldValue);
+            alert(`Failed to update ship date: ${error.message}`);
+        }
+    };
+
     const handleSetAsap = async (installer) => {
         const jobNumber = row['Job #'];
         const releaseNumber = row['Release #'];
@@ -681,9 +724,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         const releaseNumber = row['Release #'];
 
         const oldValue = localStartInstall;
+        const oldShipDate = localShipDate;
 
-        // Optimistic update
+        // Optimistic update — clearing the hard date also drops the tied ship date.
         setLocalStartInstall(null);
+        setLocalShipDate(null);
         setIsStartInstallModalOpen(false);
         if (onCascadeRecalculating) onCascadeRecalculating(true);
 
@@ -698,6 +743,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         } catch (error) {
             console.error(`[START_INSTALL] Failed to clear hard date for job ${row['Job #']}-${row['Release #']}:`, error);
             setLocalStartInstall(oldValue);
+            setLocalShipDate(oldShipDate);
             alert(`Failed to clear hard date: ${error.message}`);
         } finally {
             if (onCascadeRecalculating) onCascadeRecalculating(false);
@@ -828,7 +874,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 </tr>
             )}
             <tr
-                className={`group ${rowBgClass} hover:bg-gray-100 dark:hover:bg-slate-600 transition-all duration-200 border-b border-gray-400 dark:border-slate-500 ${row._asapPropagated ? ASAP_PROPAGATED_ROW_CLASS : ''} ${isDragOver ? 'bg-blue-50 dark:bg-blue-900/30' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
+                className={`group ${isGrayed ? 'jl-done' : ''} ${rowBgClass} hover:bg-gray-100 dark:hover:bg-slate-500 transition-all duration-200 border-b ${cellDividerClass} ${row._asapPropagated ? ASAP_PROPAGATED_ROW_CLASS : ''} ${isDragOver ? 'bg-blue-50 dark:bg-blue-900/30' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
                 draggable={isDraggable}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
@@ -841,7 +887,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     let rawValue = row[column];
 
                     // Format date columns
-                    if (column === 'Released' || column === 'Start install' || column === 'Comp. ETA') {
+                    if (column === 'Released' || column === 'Start install' || column === 'Comp. ETA' || column === 'Ship Date') {
                         rawValue = formatDate(rawValue);
                     } else {
                         rawValue = formatCellValue(rawValue, column);
@@ -858,6 +904,13 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     const isReleaseNumber = column === 'Release #';
                     const paddingClass = compact ? 'px-0.5' : (isReleaseNumber ? 'px-1' : 'px-2');
 
+                    // The true last visible column (no trailing gear/actions column) gets no
+                    // vertical divider — nothing to its right to separate from. Without this,
+                    // the last column's divider bleeds past the table's edge next to the
+                    // scrollbar.
+                    const isTrueLastColumn = columns[columns.length - 1] === column && !(isAdmin && showActions);
+                    const vDividerClass = isTrueLastColumn ? '' : cellVDividerShadow;
+
 
                     // See COLUMN_WIDTH_PERCENT in pages/JobLog.jsx for the viewport
                     // tuning + responsive plan before changing min-widths in this file.
@@ -865,7 +918,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center relative`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-center relative`}
                                 style={{ minWidth: '230px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -898,7 +951,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center relative`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-center relative`}
                                 style={compact ? { width: '92px', minWidth: '92px', maxWidth: '92px' } : { minWidth: '115px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -968,7 +1021,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${isDuplicateFabOrder ? '' : rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${isDuplicateFabOrder ? '' : rowBgClass} ${vDividerClass} text-center`}
                                 style={isDuplicateFabOrder ? { backgroundColor: dupColor } : undefined}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -1029,7 +1082,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`relative ${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center whitespace-normal`}
+                                className={`relative ${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-center whitespace-normal`}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
@@ -1084,7 +1137,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             <td
                                 key={`${row.id}-${column}`}
                                 data-editable-x="true"
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-center`}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <input
@@ -1107,9 +1160,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         }
                                     }}
                                     disabled={updatingJobComp}
-                                    className={`w-full px-1 py-0.5 ${cellText} border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-center ${updatingJobComp ? 'opacity-50 cursor-wait' : ''}`}
+                                    className={`w-full min-w-0 px-1 py-0.5 ${cellText} border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-center ${updatingJobComp ? 'opacity-50 cursor-wait' : ''}`}
                                     placeholder="—"
-                                    style={{ minWidth: '48px' }}
                                 />
                             </td>
                         );
@@ -1121,7 +1173,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             <td
                                 key={`${row.id}-${column}`}
                                 data-editable-x="true"
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-center`}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <input
@@ -1144,9 +1196,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         }
                                     }}
                                     disabled={updatingInvoiced}
-                                    className={`w-full px-1 py-0.5 ${cellText} border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-center ${updatingInvoiced ? 'opacity-50 cursor-wait' : ''}`}
+                                    className={`w-full min-w-0 px-1 py-0.5 ${cellText} border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-center ${updatingInvoiced ? 'opacity-50 cursor-wait' : ''}`}
                                     placeholder="—"
-                                    style={{ minWidth: '48px' }}
                                 />
                             </td>
                         );
@@ -1191,13 +1242,70 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${startInstallBgClass} border-r border-gray-400 dark:border-slate-500 text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''}`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${startInstallBgClass} ${vDividerClass} text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''}`}
                                 onClick={() => !updatingStartInstall && setIsStartInstallModalOpen(true)}
                                 title={titleText}
                             >
                                 <div className="leading-tight">{displayValue}</div>
                                 <div className={`text-[10px] leading-tight ${isAsap || isHardDate || isHardDatePast ? 'opacity-80' : 'text-gray-500 dark:text-slate-400'}`}>
                                     {row['installer'] || '—'}
+                                </div>
+                            </td>
+                        );
+                    }
+
+                    // Handle Ship Date column: clickable cell that opens the same modal.
+                    // The ship date is a derived milestone (~1 biz day before Start install),
+                    // so its cell MIRRORS the paired Start install cell's color exactly — the
+                    // two columns must always read the same. Key every branch on the INSTALL
+                    // date/flags, not the ship date's own past/future: ship crosses "today" a
+                    // day earlier than install, so keying on shipDay would show yellow while
+                    // install is still green. ASAP propagates red; formula/no-color/no-date
+                    // fall through to neutral, matching Start install above.
+                    if (column === 'Ship Date') {
+                        const isAsap = row['start_install_asap'] === true;
+                        // Show "ASAP" instead of the underlying date, matching the Start install cell.
+                        const displayValue = isAsap ? 'ASAP' : formatDate(localShipDate);
+                        const isNoColor = row['start_install_no_color'] === true;
+                        const hasDate = !!localShipDate;
+                        // Same hard-date test the Start install cell uses.
+                        const isHardDate = !isAsap && !isNoColor && row['start_install_formulaTF'] === false && localStartInstall;
+                        const isHardDatePast = isHardDate && toYmd(localStartInstall) < localTodayStr();
+                        let shipBgClass;
+                        if (isAsap) {
+                            shipBgClass = 'bg-red-500 text-white hover:bg-red-600 font-semibold';
+                        } else if (!hasDate || isNoColor || !isHardDate) {
+                            shipBgClass = `${rowBgClass} text-gray-900 dark:text-slate-100 hover:bg-accent-50 dark:hover:bg-slate-600`;
+                        } else if (isHardDatePast) {
+                            shipBgClass = 'bg-yellow-400 text-gray-900 hover:bg-yellow-500 font-semibold';
+                        } else {
+                            shipBgClass = 'bg-green-400 text-gray-900 hover:bg-green-500 font-semibold';
+                        }
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${shipBgClass} ${vDividerClass} text-center cursor-pointer transition-colors`}
+                                onClick={() => setIsStartInstallModalOpen(true)}
+                                title={`${displayValue} — Click to edit`}
+                            >
+                                <div className="leading-tight">{displayValue}</div>
+                            </td>
+                        );
+                    }
+
+                    // Material order status — a banana glyph (green/amber/red) when the
+                    // release has orders, blank otherwise. Click opens the modal at the
+                    // Materials Ordered section.
+                    if (column === 'Mat. Ord.') {
+                        const matStatus = row['Mat. Ord.'];
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`${paddingClass} ${cellPy} ${cellText} align-middle ${rowBgClass} ${vDividerClass} text-center ${matStatus ? 'cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors' : ''}`}
+                                onClick={matStatus ? () => { setModalScrollToMaterials(true); setIsModalOpen(true); } : undefined}
+                            >
+                                <div className="flex items-center justify-center">
+                                    <MaterialOrderBadge status={matStatus} />
                                 </div>
                             </td>
                         );
@@ -1211,7 +1319,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
+                                className={`px-1 ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
                                 title={`${tooltipValue} - Click to view details`}
                                 onClick={() => setIsModalOpen(true)}
                                 style={{
@@ -1249,7 +1357,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center`}
+                                className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-center`}
                             >
                                 <div className="flex items-center justify-center">
                                     {opensHub ? (
@@ -1283,7 +1391,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-gray-900 dark:text-slate-100 text-center ${shouldWrapAndTruncate
+                            className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-gray-900 dark:text-slate-100 text-center ${shouldWrapAndTruncate
                                 ? ''
                                 : whitespaceClass
                                 }`}
@@ -1315,7 +1423,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 })}
                 {isAdmin && showActions && (
                     <td
-                        className={`px-1 ${cellPy} text-center align-middle border-r border-gray-400 dark:border-slate-500 bg-white dark:bg-slate-800 w-8 relative`}
+                        className={`px-1 ${cellPy} text-center align-middle bg-white dark:bg-slate-800 w-8 relative`}
                         style={{ width: '32px' }}
                     >
                         <button
@@ -1363,8 +1471,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             </tr>
             <JobDetailsModal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={() => { setIsModalOpen(false); setModalScrollToMaterials(false); }}
                 job={row}
+                scrollToMaterials={modalScrollToMaterials}
+                onOrdersChanged={refreshMaterialSummary}
             />
             <NotesHistoryModal
                 isOpen={isNotesHistoryOpen}
@@ -1377,8 +1487,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 isOpen={isStartInstallModalOpen}
                 onClose={() => setIsStartInstallModalOpen(false)}
                 currentDate={localStartInstall}
+                currentShipDate={localShipDate}
                 currentInstaller={row['installer']}
                 onSave={handleStartInstallSave}
+                onSaveShipDate={handleShipDateSave}
                 onClearHardDate={handleClearHardDate}
                 onSetAsap={handleSetAsap}
                 onClearAsap={handleClearAsap}

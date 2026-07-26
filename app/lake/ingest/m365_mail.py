@@ -5,11 +5,11 @@ lands them idempotently in RawSourceRecord. The mailbox set is admin-governed:
 it's the membership of an Entra security group (the same group the
 ApplicationAccessPolicy scopes the app to), so onboarding a mailbox is just
 "admin adds it to the group." Falls back to an explicit list or the single
-bb@mhmw.com forwarding mailbox.
+carmen_ai@mhmw.com forwarding mailbox.
 
 `pull()` is the per-mailbox entry point for both triggers:
   - the scheduled poll across the set (since=watermark), via `poll()`;
-  - an on-demand BB request ("read the email I forwarded you"), optionally with
+  - an on-demand Carmen request ("read the email I forwarded you"), optionally with
     a Graph $search query and an explicit mailbox.
 """
 import base64
@@ -29,11 +29,17 @@ logger = get_logger(__name__)
 SOURCE = "m365_mail"
 RECORD_TYPE = "email"
 
-# Fields pulled from Graph. `body` is the full HTML/text; the rest is envelope
-# + threading metadata used for later normalization/entity-linking.
+# Full message fields (detail/push path). `body` is the full HTML/text; the rest
+# is envelope + threading metadata used for later normalization/entity-linking.
 GRAPH_SELECT = (
     "id,subject,from,toRecipients,ccRecipients,receivedDateTime,sentDateTime,"
     "bodyPreview,body,conversationId,internetMessageId,hasAttachments,webLink"
+)
+# List/poll path omits `body` — Graph 504s when $select includes body across a
+# page of messages. Body is hydrated per-message after the list returns.
+LIST_SELECT = (
+    "id,subject,from,toRecipients,ccRecipients,receivedDateTime,sentDateTime,"
+    "bodyPreview,conversationId,internetMessageId,hasAttachments,webLink"
 )
 
 # Re-read this far behind the watermark to absorb clock skew / late arrivals;
@@ -171,13 +177,16 @@ def _land(message, mailbox):
         existing.occurred_at = occurred_at
         existing.payload = payload
         existing.external_pointer = external_pointer
+        # Content changed (e.g. a late-arriving attachment) — let the material-order
+        # extractor look at it once more rather than trusting the prior scan.
+        existing.material_order_scanned_at = None
         return "updated"
 
     return "unchanged"
 
 
 def _mailbox():
-    return current_app.config.get("BB_MAILBOX", "bb@mhmw.com")
+    return current_app.config.get("CARMEN_MAILBOX", "carmen_ai@mhmw.com")
 
 
 def _group_member_mailboxes(group_id):
@@ -200,20 +209,43 @@ def resolve_mailboxes():
     """The set of mailboxes to ingest.
 
     Priority: the admin-governed security group (members discovered via Graph) →
-    an explicit BB_MAILBOXES comma list → the single BB_MAILBOX. Adding a mailbox
+    an explicit CARMEN_MAILBOXES comma list → the single CARMEN_MAILBOX. Adding a mailbox
     to the group is picked up automatically on the next poll, no code/config change.
     """
-    group_id = current_app.config.get("BB_INGEST_GROUP_ID")
+    group_id = current_app.config.get("CARMEN_INGEST_GROUP_ID")
     if group_id:
         return _group_member_mailboxes(group_id)
-    raw = current_app.config.get("BB_MAILBOXES")
+    raw = current_app.config.get("CARMEN_MAILBOXES")
     if raw:
         return [m.strip().lower() for m in raw.split(",") if m.strip()]
     return [_mailbox()]
 
 
+def _hydrate_message(mailbox, stub):
+    """Fetch full message (incl. body) for a list stub; fall back to stub on failure.
+
+    List responses deliberately omit body (Graph 504s on fat list selects). A
+    failed detail GET still returns the envelope so the poll can advance and the
+    message lands with bodyPreview only rather than being dropped entirely.
+    """
+    message_id = stub.get("id")
+    if not message_id:
+        return stub
+    try:
+        return graph_get(
+            f"/users/{mailbox}/messages/{message_id}",
+            params={"$select": GRAPH_SELECT},
+        )
+    except Exception as exc:  # noqa: BLE001 — one bad message must not abort the page
+        logger.warning(
+            "m365_message_hydrate_failed",
+            mailbox=mailbox, message_id=message_id, error=str(exc),
+        )
+        return stub
+
+
 def pull(since=None, query=None, max_results=DEFAULT_MAX_RESULTS, mailbox=None):
-    """Pull mail from the BB mailbox and land it in the lake (bronze).
+    """Pull mail from the Carmen mailbox and land it in the lake (bronze).
 
     Args:
         since: only fetch messages received after this datetime (poll path).
@@ -225,7 +257,8 @@ def pull(since=None, query=None, max_results=DEFAULT_MAX_RESULTS, mailbox=None):
     re-pulling the same window lands 0 new rows.
     """
     mailbox = mailbox or _mailbox()
-    params = {"$select": GRAPH_SELECT, "$top": max_results}
+    # List without body — fat $select (body) is a common Graph 504 trigger.
+    params = {"$select": LIST_SELECT, "$top": max_results}
     if query:
         # Graph forbids combining $search with $orderby/$filter; search results
         # are relevance-ordered.
@@ -237,7 +270,8 @@ def pull(since=None, query=None, max_results=DEFAULT_MAX_RESULTS, mailbox=None):
             params["$filter"] = f"receivedDateTime gt {iso}"
 
     data = graph_get(f"/users/{mailbox}/mailFolders/Inbox/messages", params=params)
-    messages = data.get("value", []) or []
+    stubs = data.get("value", []) or []
+    messages = [_hydrate_message(mailbox, stub) for stub in stubs]
 
     counts = {"created": 0, "updated": 0, "unchanged": 0}
     landed_ids = []

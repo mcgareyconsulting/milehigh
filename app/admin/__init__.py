@@ -304,7 +304,7 @@ def sunbelt_upload():
 
     Multipart form: `file` (the CSV) and optional `snapshot_date` (YYYY-MM-DD,
     defaults to today). All ingest routes through ingest_snapshot — the same seam
-    a future bb@mhmw.com email adapter will use.
+    a future carmen_ai@mhmw.com email adapter will use.
     """
     from app.brain.sunbelt.parser import parse_sunbelt_csv, SunbeltCsvError
     from app.brain.sunbelt.ingest import ingest_snapshot

@@ -11,6 +11,7 @@
  */
 import React from 'react';
 import { formatDate } from '../utils/formatters';
+import { BBStatusBadge } from './bbReview/BBStatusBadge';
 
 const fmt = (v) => (v == null || v === '' ? '—' : String(v));
 
@@ -45,6 +46,8 @@ export default function SubmittalCard({ submittal, onOpen, isHighlighted = false
             } bg-white dark:bg-slate-800`}
             title="Tap for full submittal details"
         >
+            <BBStatusBadge status={submittal.bb_status} className="absolute bottom-2 left-2 z-10" />
+
             <div className="flex-shrink-0 flex items-center justify-between gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-700/60 border-b border-gray-200 dark:border-slate-600">
                 <div className="flex items-baseline gap-1.5 font-mono min-w-0">
                     <span className="text-base font-bold text-gray-900 dark:text-slate-100">#{orderNum}</span>

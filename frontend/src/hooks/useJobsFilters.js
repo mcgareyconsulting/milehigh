@@ -19,6 +19,7 @@
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { computeTotalFabHrs } from '../utils/fabHours';
+import { DATE_COLUMNS } from '../utils/jobLogColumns';
 
 // Stages that make up the Paint department (the `paint` quick-filter set).
 const PAINT_STAGES = ['Welded QC', 'Paint Start'];
@@ -386,9 +387,8 @@ export function useJobsFilters(jobs = []) {
      */
     const NUMERIC_COLUMNS = useMemo(() => new Set(['Job #', 'Fab Order', 'Fab Hrs', 'Install HRS']), []);
 
-    // Date-valued columns compare chronologically (asc = oldest first).
-    const DATE_COLUMNS = useMemo(() => new Set(['Released', 'Start install', 'Comp. ETA']), []);
-
+    // Date-valued columns (compare chronologically, asc = oldest first) — single source of
+    // truth in jobLogColumns so the header filter, sort, print, and CSV stay in agreement.
     const compareByColumn = useCallback((a, b, column, direction) => {
         const va = a?.[column];
         const vb = b?.[column];
@@ -421,7 +421,7 @@ export function useJobsFilters(jobs = []) {
             cmp = String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' });
         }
         return direction === 'desc' ? -cmp : cmp;
-    }, [NUMERIC_COLUMNS, DATE_COLUMNS]);
+    }, [NUMERIC_COLUMNS]);
 
     /**
      * Base-filtered jobs (project name, job #, release #, etc.) before any subset

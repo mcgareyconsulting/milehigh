@@ -94,6 +94,10 @@ export function mergeJobs(prevJobs, incomingJobs) {
 
 const ReleasesContext = createContext(null);
 
+// Synthetic Job Log column (not a backend release field): the material-order
+// status rollup is fetched separately and merged onto each row under this key.
+const MATERIAL_STATUS_COLUMN = 'Mat. Ord.';
+
 export function ReleasesProvider({ children, enabled = true }) {
     const [jobs, setJobs] = useState([]);
     const [columns, setColumns] = useState([]);
@@ -101,6 +105,26 @@ export function ReleasesProvider({ children, enabled = true }) {
     const [error, setError] = useState(null);
     const [lastUpdated, setLastUpdated] = useState(null);
     const hasFetchedAllRef = useRef(false);
+    // Sparse map "job-release" → 'received'|'pending'|'overdue' for releases that
+    // have material orders. Refreshed alongside the release poll.
+    const [materialStatus, setMaterialStatus] = useState({});
+    const lastSummaryJsonRef = useRef('');
+
+    const fetchMaterialSummary = useCallback(async () => {
+        try {
+            const summary = await jobsApi.getMaterialOrderSummary();
+            const json = JSON.stringify(summary);
+            // Only churn state when the rollup actually changed, so a no-op poll
+            // keeps the merged jobs array referentially stable (no needless re-render).
+            if (json === lastSummaryJsonRef.current) return;
+            lastSummaryJsonRef.current = json;
+            const map = {};
+            for (const s of summary) map[`${s.job}-${s.release}`] = s.status;
+            setMaterialStatus(map);
+        } catch (err) {
+            console.warn('[MATERIAL] Failed to fetch material order summary:', err);
+        }
+    }, []);
 
     const fetchData = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
@@ -220,8 +244,9 @@ export function ReleasesProvider({ children, enabled = true }) {
         if (!hasFetchedAllRef.current) {
             hasFetchedAllRef.current = true;
             fetchAllData();
+            fetchMaterialSummary();
         }
-    }, [enabled, fetchAllData]);
+    }, [enabled, fetchAllData, fetchMaterialSummary]);
 
     // Poll for updates every 30 seconds, pauses when tab is not visible to save resources
     useEffect(() => {
@@ -240,6 +265,7 @@ export function ReleasesProvider({ children, enabled = true }) {
                 if (!document.hidden) {
                     console.log('[CURSOR] Polling interval triggered');
                     fetchData(true);
+                    fetchMaterialSummary();
                 } else {
                     console.log('[CURSOR] Tab is hidden, skipping poll');
                 }
@@ -262,6 +288,7 @@ export function ReleasesProvider({ children, enabled = true }) {
                 console.log('[CURSOR] Tab visible, starting polling and fetching immediately');
                 startPolling();
                 fetchData(true); // Immediately fetch when tab becomes visible
+                fetchMaterialSummary();
             }
         };
 
@@ -277,17 +304,38 @@ export function ReleasesProvider({ children, enabled = true }) {
             stopPolling();
             document.removeEventListener('visibilitychange', visibilityChangeHandler);
         };
-    }, [enabled, fetchData]);
+    }, [enabled, fetchData, fetchMaterialSummary]);
+
+    // Merge the material-order status onto each row under the synthetic column key.
+    // A release with no orders gets null → the Job Log renders a blank cell.
+    const jobsWithMaterial = useMemo(
+        () => jobs.map(job => ({
+            ...job,
+            [MATERIAL_STATUS_COLUMN]:
+                materialStatus[`${job['Job #']}-${job['Release #']}`] ?? null,
+        })),
+        [jobs, materialStatus]
+    );
+
+    // Advertise the synthetic column so the Job Log header/filter picks it up
+    // (display order still comes from columnOrder in jobLogColumns.js).
+    const columnsWithMaterial = useMemo(
+        () => (columns.includes(MATERIAL_STATUS_COLUMN)
+            ? columns
+            : [...columns, MATERIAL_STATUS_COLUMN]),
+        [columns]
+    );
 
     const value = useMemo(() => ({
-        jobs,
-        columns,
+        jobs: jobsWithMaterial,
+        columns: columnsWithMaterial,
         loading,
         error,
         lastUpdated,
         refetch: fetchData,
         fetchAll: fetchAllData,
-    }), [jobs, columns, loading, error, lastUpdated, fetchData, fetchAllData]);
+        refreshMaterialSummary: fetchMaterialSummary,
+    }), [jobsWithMaterial, columnsWithMaterial, loading, error, lastUpdated, fetchData, fetchAllData, fetchMaterialSummary]);
 
     return (
         <ReleasesContext.Provider value={value}>

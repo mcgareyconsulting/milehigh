@@ -67,7 +67,7 @@ class UpdateFabOrderCommand:
         # 1️⃣ Fetch job record
         job_record: Releases = Releases.query.filter_by(job=self.job_id, release=self.release).first()
         if not job_record:
-            logger.warning(f"Job not found: {self.job_id}-{self.release}")
+            logger.debug("job_not_found", job=self.job_id, release=self.release)
             raise ValueError(f"Job {self.job_id}-{self.release} not found")
 
         # Capture old state for payload
@@ -76,7 +76,7 @@ class UpdateFabOrderCommand:
 
         # Ensure old_fab_order is not NaN for JSON serialization
         if isinstance(old_fab_order, float) and math.isnan(old_fab_order):
-            logger.warning(f"Job {self.job_id}-{self.release} has NaN fab_order, converting to None")
+            logger.warning("fab_order_nan_coerced", job=self.job_id, release=self.release)
             old_fab_order = None
 
         # 1b. Fixed-tier guard: stages with auto-assigned fab_order
@@ -84,17 +84,22 @@ class UpdateFabOrderCommand:
         tier = get_fixed_tier(job_record.stage)
         if tier is not None:
             self.fab_order = tier
-            logger.info(
-                f"Job {self.job_id}-{self.release} is fixed tier {tier} "
-                f"(stage={job_record.stage}), overriding fab_order to {tier}"
+            logger.debug(
+                "fab_order_fixed_tier_override",
+                job=self.job_id,
+                release=self.release,
+                stage=job_record.stage,
+                tier=tier,
             )
 
         # 1c. Complete is terminal — no ordering. Always force fab_order to None.
         if (job_record.stage or "").strip().lower() == "complete":
             if self.fab_order is not None:
-                logger.info(
-                    f"Job {self.job_id}-{self.release} is Complete; "
-                    f"forcing fab_order to NULL (was {self.fab_order})"
+                logger.debug(
+                    "fab_order_forced_null_complete",
+                    job=self.job_id,
+                    release=self.release,
+                    old=self.fab_order,
                 )
             self.fab_order = None
 
@@ -117,7 +122,11 @@ class UpdateFabOrderCommand:
 
         # Check if event was deduplicated
         if event is None:
-            logger.info(f"Event already exists for job {self.job_id}-{self.release} fab_order update")
+            logger.debug(
+                "fab_order_update_deduplicated",
+                job=self.job_id,
+                release=self.release,
+            )
             raise ValueError("Event already exists")
         
         # 4️⃣ Update job fields
@@ -145,13 +154,23 @@ class UpdateFabOrderCommand:
                 from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
                 recalculate_all_jobs_scheduling(stage_group='FABRICATION')
             except Exception as e:
-                logger.error(f"Scheduling recalculation failed after fab_order update: {e}", exc_info=True)
+                logger.error(
+                    "scheduling_recalc_failed",
+                    job=self.job_id,
+                    release=self.release,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    exc_info=True,
+                )
 
-        logger.info(f"update_fab_order completed successfully", extra={
-            'job': self.job_id,
-            'release': self.release,
-            'event_id': event.id
-        })
+        logger.info(
+            "fab_order_updated",
+            release_id=job_record.id,
+            job=self.job_id,
+            release=self.release,
+            event_id=event.id,
+            fab_order=self.fab_order,
+        )
         
         # 8️⃣ Return structured result
         return FabOrderUpdateResult(

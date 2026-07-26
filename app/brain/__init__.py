@@ -29,12 +29,14 @@ brain_bp = Blueprint("brain", __name__)
 
 from app.brain.job_log import routes as job_log_routes
 from app.brain.job_log import pdf_markup_routes  # noqa: F401  (registers /releases/<id>/drawing endpoints)
+from app.brain.pdf_review import routes as pdf_review_routes  # noqa: F401  (registers /releases/<id>/drawing/versions/<vid>/carmen-review endpoints)
 from app.brain.job_log import photo_routes  # noqa: F401  (registers /releases/<id>/photos endpoints)
 from app.brain.drafting_work_load import routes as dwl_routes
 from app.brain.map import routes as map_routes
 from app.brain.board import routes as board_routes
 from app.brain.board import photo_routes as board_photo_routes  # noqa: F401  (registers /board/items/<id>/photos endpoints)
 from app.brain.meetings import routes as meetings_routes
+from app.brain.carmen_chat import routes as carmen_chat_routes  # noqa: F401  (registers /carmen-chat endpoints)
 from app.brain import notification_routes
 from app.brain import todos_routes  # noqa: F401  (registers /todos endpoints)
 from app.brain.material_orders import routes as material_orders_routes  # noqa: F401  (registers /material-orders endpoints)
@@ -42,3 +44,9 @@ from app.brain.tm import routes as tm_routes  # noqa: F401  (registers /tm-ticke
 from app.brain.tm.photos import routes as tm_photo_routes  # noqa: F401  (registers /tm-tickets/<id>/attachments endpoints)
 from app.brain.tm.subcontractors import routes as tm_subcontractor_admin_routes  # noqa: F401  (registers /subcontractors + /tm-tickets/<id>/subcontractors endpoints)
 from app.brain.tm.subcontractor_view import routes as tm_subcontractor_view_routes  # noqa: F401  (registers /subcontractor/tm-tickets endpoints)
+from app.brain.projects import routes as projects_routes  # noqa: F401  (registers /projects read endpoints)
+from app.brain.submittal_matching import routes as submittal_matching_routes  # noqa: F401  (registers /submittal-matching endpoints)
+from app.brain.metrics import routes as metrics_routes  # noqa: F401  (registers /metrics endpoints)
+from app.brain.install_schedule import routes as install_schedule_routes  # noqa: F401  (registers /install-schedule endpoints)
+from app.brain.subs import routes as subs_routes  # noqa: F401  (registers /subs endpoints)
+from app.brain.lookahead import routes as lookahead_routes  # noqa: F401  (registers /lookahead PDF endpoints)

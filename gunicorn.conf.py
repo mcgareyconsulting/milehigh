@@ -3,7 +3,7 @@ from gunicorn import glogging
 
 # Paths to suppress from access logs when the response is 200.
 # Non-200 responses (errors, auth failures) are still logged.
-_QUIET_PATHS = {'/brain/notifications/unread-count'}
+_QUIET_PATHS = {'/brain/notifications/unread-count', '/brain/jobs?since='}
 
 
 class _QuietPathFilter(logging.Filter):
@@ -16,3 +16,6 @@ class Logger(glogging.Logger):
     def setup(self, cfg):
         super().setup(cfg)
         self.access_log.addFilter(_QuietPathFilter())
+
+
+logger_class = Logger

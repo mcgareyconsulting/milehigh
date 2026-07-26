@@ -121,7 +121,7 @@ def reorder_board_items():
         item.position = id_to_pos[item.id]
 
     db.session.commit()
-    logger.info(f"Reordered {len(ordered_ids)} items in column '{status_value}'")
+    logger.info("board_items_reordered", count=len(ordered_ids), column=status_value)
     return jsonify({'ok': True, 'updated': len(ordered_ids)})
 
 
@@ -152,7 +152,7 @@ def create_board_item():
     db.session.add(item)
     db.session.commit()
 
-    logger.info(f"Board item #{item.id} created by {user.username}: {title}")
+    logger.info("board_item_created", item_id=item.id, user_id=user.id, title=title)
     return jsonify(item.to_dict(include_activity=True)), 201
 
 
@@ -206,9 +206,10 @@ def update_board_item(item_id):
 def delete_board_item(item_id):
     """Delete a board item and all its activity."""
     item = BoardItem.query.get_or_404(item_id)
+    title = item.title
     db.session.delete(item)
     db.session.commit()
-    logger.info(f"Board item #{item_id} deleted by {get_current_user().username}")
+    logger.info("board_item_deleted", item_id=item_id, user_id=get_current_user().id, title=title)
     return jsonify({'ok': True})
 
 

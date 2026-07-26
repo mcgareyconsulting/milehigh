@@ -295,6 +295,19 @@ def extract_into_meeting(meeting, *, regenerate=False, notify=True):
     meeting.extract_cost_usd = round(cost, 6)
     db.session.commit()
 
+    # Ledger the blended extraction spend (skip pure-stub runs that made no API call).
+    if (in_tok or out_tok or cost) and usage["model"] != "stub":
+        from app.services import ai_usage
+        ai_usage.record(
+            "meetings",
+            model=usage["model"],
+            input_tokens=in_tok,
+            output_tokens=out_tok,
+            cost_usd=round(cost, 6),
+            entity_type="meeting",
+            entity_id=meeting.id,
+        )
+
     if notify:
         _notify_reviewer(meeting, created)
     logger.info("meeting_extracted", meeting_id=meeting.id, items=created)

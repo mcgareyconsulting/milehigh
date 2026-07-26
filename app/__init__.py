@@ -42,7 +42,7 @@ from app.models import db
 from app.logging_config import configure_logging, get_logger
 
 # Configure logging
-logger = configure_logging(log_level="INFO", log_file="logs/app.log")
+logger = configure_logging(log_level=os.environ.get("LOG_LEVEL", "INFO"), log_file="logs/app.log")
 
 
 def init_scheduler(app):
@@ -87,7 +87,7 @@ def init_scheduler(app):
 
     # --- Optional heartbeat job to confirm scheduler alive ---
     scheduler.add_job(
-        func=lambda: logger.info("Scheduler heartbeat: alive"),
+        func=lambda: logger.info("scheduler_heartbeat"),
         trigger="interval",
         minutes=30,
         id="heartbeat",
@@ -119,21 +119,21 @@ def init_scheduler(app):
         replace_existing=True,
     )
 
-    # --- Banana Boy mailbox poll (bb@mhmw.com → data lake bronze) ---
+    # --- Carmen mailbox poll (carmen_ai@mhmw.com → data lake bronze) ---
     # Incrementally pulls forwarded emails into RawSourceRecord. Gated by
-    # BB_MAIL_INGEST_ENABLED so it stays dormant until the Azure app-only
+    # CARMEN_MAIL_INGEST_ENABLED so it stays dormant until the Azure app-only
     # access policy is in place. On-demand pulls go through /lake/ingest/mail/pull.
-    bb_mail_poll_minutes = app.config.get("BB_MAIL_POLL_MINUTES", 15)
+    bb_mail_poll_minutes = app.config.get("CARMEN_MAIL_POLL_MINUTES", 15)
 
     def bb_mail_poll():
         with app.app_context():
-            if not app.config.get("BB_MAIL_INGEST_ENABLED"):
+            if not app.config.get("CARMEN_MAIL_INGEST_ENABLED"):
                 return
             from app.lake.ingest import m365_mail
             try:
                 result = m365_mail.poll()
                 if result.get("created") or result.get("updated"):
-                    logger.info("BB mail poll landed records", **{
+                    logger.info("Carmen mail poll landed records", **{
                         k: result[k] for k in ("mailboxes", "created", "updated", "unchanged", "fetched")
                     })
                 # Consume newly-landed emails into supplier material orders (no-op
@@ -144,36 +144,66 @@ def init_scheduler(app):
                 except Exception as e:
                     logger.error("Material order ingest failed", error=str(e), exc_info=True)
             except Exception as e:
-                logger.error("BB mail poll failed", error=str(e), exc_info=True)
+                logger.error("Carmen mail poll failed", error=str(e), exc_info=True)
 
     scheduler.add_job(
         func=bb_mail_poll,
         trigger="interval",
         minutes=bb_mail_poll_minutes,
         id="bb_mail_poll",
-        name="BB Mailbox Poll",
+        name="Carmen Mailbox Poll",
         replace_existing=True,
     )
 
-    # Surface the BB ingest gate at startup so it's obvious whether forwarded
+    # Surface the Carmen ingest gate at startup so it's obvious whether forwarded
     # mail will actually be pulled. Logs on every boot regardless of the flag.
     # Tenant + client id are common to both the app-only and device-code flows;
     # the device-code (public client) path has no secret, so we don't require one.
-    _bb_enabled = bool(app.config.get("BB_MAIL_INGEST_ENABLED"))
+    _bb_enabled = bool(app.config.get("CARMEN_MAIL_INGEST_ENABLED"))
     _bb_has_app_reg = bool(
         app.config.get("AZURE_TENANT_ID") and app.config.get("AZURE_CLIENT_ID")
     )
     logger.info(
-        "BB mail ingest status",
+        "Carmen mail ingest status",
         enabled=_bb_enabled,
-        mailbox=app.config.get("BB_MAILBOX"),
+        mailbox=app.config.get("CARMEN_MAILBOX"),
         poll_minutes=bb_mail_poll_minutes,
         azure_app_registered=_bb_has_app_reg,
         note=(
             "active — polling on schedule" if _bb_enabled and _bb_has_app_reg
-            else "DORMANT — set BB_MAIL_INGEST_ENABLED=1"
+            else "DORMANT — set CARMEN_MAIL_INGEST_ENABLED=1"
             + ("" if _bb_has_app_reg else " and AZURE_TENANT_ID / AZURE_CLIENT_ID")
         ),
+    )
+
+    # --- Graph subscription renewal (Carmen mail push webhook) ---
+    # Keeps the Graph change-notification subscription alive: mailbox message
+    # subscriptions expire in ~70h, so this ensures/renews it well inside that
+    # window (and re-creates it if lapsed). Gated by CARMEN_MAIL_WEBHOOK_ENABLED so it
+    # stays dormant until GRAPH_NOTIFICATION_URL + client-state are configured. A
+    # lapsed subscription fails silently — the poll floor is the safety net, but
+    # this job is what keeps the fast path fast.
+    graph_sub_renew_minutes = app.config.get("GRAPH_SUBSCRIPTION_RENEW_MINUTES", 720)
+
+    def graph_subscription_renew():
+        with app.app_context():
+            if not app.config.get("CARMEN_MAIL_WEBHOOK_ENABLED"):
+                return
+            from app.lake.ingest import graph_subscription
+            try:
+                result = graph_subscription.ensure()
+                if result.get("action") in ("created", "renewed"):
+                    logger.info("Graph subscription ensured", **result)
+            except Exception as e:
+                logger.error("Graph subscription renewal failed", error=str(e), exc_info=True)
+
+    scheduler.add_job(
+        func=graph_subscription_renew,
+        trigger="interval",
+        minutes=graph_sub_renew_minutes,
+        id="graph_subscription_renew",
+        name="Graph Subscription Renewal",
+        replace_existing=True,
     )
 
     # --- Checklist deadline notifications (daily 6:00 AM Mountain Time) ---
@@ -250,9 +280,15 @@ def init_scheduler(app):
         },
         {
             "id": "bb_mail_poll",
-            "name": "BB Mailbox Poll",
+            "name": "Carmen Mailbox Poll",
             "schedule": f"Every {bb_mail_poll_minutes} minutes",
-            "description": "Pull forwarded emails from bb@mhmw.com into the data lake (when enabled)",
+            "description": "Pull forwarded emails from carmen_ai@mhmw.com into the data lake (when enabled)",
+        },
+        {
+            "id": "graph_subscription_renew",
+            "name": "Graph Subscription Renewal",
+            "schedule": f"Every {graph_sub_renew_minutes} minutes",
+            "description": "Ensure/renew the Carmen-mail Graph change-notification subscription (when enabled)",
         },
         {
             "id": "checklist_due_scan",
@@ -264,7 +300,7 @@ def init_scheduler(app):
             "id": "calendar_recall_poll",
             "name": "Calendar → Recall Scheduler",
             "schedule": f"Every {calendar_recall_poll_minutes} minutes",
-            "description": "Schedule Recall bots for upcoming Teams meetings on the BB calendar (when enabled)",
+            "description": "Schedule Recall bots for upcoming Teams meetings on the Carmen calendar (when enabled)",
         },
     ]
 
@@ -300,10 +336,25 @@ def create_app():
     configure_database(app)
 
     # Log the environment being used
-    logger.info(f"Starting application in {config_class.ENV} environment")
-    logger.info(
-        f"Database URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')[:50]}..."
-    )
+    logger.info("app_starting", environment=config_class.ENV)
+    # Log only the DB host — never the username, password, or the raw URI
+    # (even truncated), which would leak Postgres credentials into Render
+    # stdout and logs/app.log.
+    from urllib.parse import urlsplit
+
+    db_uri = app.config.get("SQLALCHEMY_DATABASE_URI")
+    if db_uri:
+        try:
+            parsed = urlsplit(db_uri)
+            db_host = parsed.hostname or "unknown"
+            db_name = parsed.path.lstrip("/") or "unknown"
+        except ValueError:
+            db_host = "unparseable"
+            db_name = "unparseable"
+    else:
+        db_host = "not set"
+        db_name = "not set"
+    logger.info("database_configured", host=db_host, database=db_name)
     if app.config.get("TRELLO_MOCK"):
         logger.info("TRELLO_MOCK enabled — outbound move_card calls will be simulated and inbound webhooks dropped")
 
@@ -357,6 +408,8 @@ def create_app():
     # in frontend/src/App.jsx.
     SPA_PATHS_UNDER_API_PREFIX = {
         "admin/fc-collection",
+        "admin/metrics",
+        "admin/submittal-matching",
     }
 
     def is_api_route(path):
@@ -404,16 +457,27 @@ def create_app():
                             # Processed some items, check again soon for more
                             time.sleep(0.5)
                 except Exception as e:
-                    logger.error(f"Error in outbox retry worker: {e}", exc_info=True)
+                    logger.error(
+                        "outbox_retry_worker_failed",
+                        error=str(e),
+                        error_type=type(e).__name__,
+                        exc_info=True,
+                    )
                     # Wait longer on error before retrying
                     time.sleep(5)
 
-        # Start the background thread as a daemon (will stop when main process stops)
-        outbox_thread = threading.Thread(
-            target=outbox_retry_worker, daemon=True, name="outbox-retry-worker"
-        )
-        outbox_thread.start()
-        logger.info("Outbox retry worker thread started successfully")
+        # Start the background thread as a daemon (will stop when main process stops).
+        # Skipped under TESTING: a live retry loop races the test suite (it processes
+        # outbox rows out from under tests that assert on pending counts) and floods
+        # logs querying tables the in-memory test DB doesn't have.
+        if os.environ.get("TESTING"):
+            logger.info("Skipping outbox retry worker thread under TESTING")
+        else:
+            outbox_thread = threading.Thread(
+                target=outbox_retry_worker, daemon=True, name="outbox-retry-worker"
+            )
+            outbox_thread.start()
+            logger.info("Outbox retry worker thread started successfully")
 
         # Initialize the scheduler for Trello queue drainer + heartbeat
         init_scheduler(app)

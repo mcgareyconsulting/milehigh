@@ -13,6 +13,11 @@ coverage.xml
 htmlcov/
 test-results.xml
 
+#Codex
+.agents/
+.codex/
+AGENTS.md
+
 # Log files
 logs/
 *.log

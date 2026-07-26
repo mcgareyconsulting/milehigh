@@ -1,5 +1,5 @@
 // Ordered Job Log stage progression with short display labels.
-// Mirrors the inline lists in JobsTableRow.jsx and PMBoardList.jsx — keep in
+// Mirrors the inline list in JobsTableRow.jsx — keep in
 // lock-step with those (and app/api/helpers.py STAGE_PROGRESSION_RANK) when
 // stages change. Used by the touch-view StageEditor dropdown.
 export const STAGE_OPTIONS = [
