@@ -2,7 +2,7 @@
 from app.models import User
 from app.auth.utils import hash_password
 
-from tests.conftest import make_user as _make_base_user
+from tests.conftest import make_user as _make_base_user, make_subcontractor
 
 
 def _make_user(username, password="hunter2", *, password_set=True, **kwargs):
@@ -30,6 +30,27 @@ def test_login_success_returns_user_and_creates_session(app, client):
     # Session is set — /me should now return the user
     me = client.get("/api/auth/me")
     assert me.status_code == 200
+
+
+def test_login_clears_a_stale_subcontractor_session(app, client):
+    """A browser previously logged in as a subcontractor (e.g. an admin testing
+    both identities in one tab) must not end up with BOTH session keys set —
+    that would let a staff login silently retain subcontractor-scoped access."""
+    _make_user("alice@example.com", "correct-horse")
+    sub = make_subcontractor('sam@acme.test', accepted=True)
+
+    with client.session_transaction() as sess:
+        sess['subcontractor_id'] = sub.id
+
+    resp = client.post(
+        "/api/auth/login",
+        json={"username": "alice@example.com", "password": "correct-horse"},
+    )
+    assert resp.status_code == 200
+
+    with client.session_transaction() as sess:
+        assert 'subcontractor_id' not in sess
+        assert sess.get('user_id') is not None
 
 
 def test_login_username_is_case_insensitive(app, client):
@@ -183,6 +204,28 @@ def test_set_password_first_login_succeeds(app, client):
     with app.app_context():
         u = User.query.filter_by(username="alice@example.com").first()
         assert u.password_set is True
+
+
+def test_set_password_clears_a_stale_subcontractor_session(app, client):
+    _make_user("alice@example.com", password_set=False)
+    sub = make_subcontractor('sam@acme.test', accepted=True)
+
+    with client.session_transaction() as sess:
+        sess['subcontractor_id'] = sub.id
+
+    resp = client.post(
+        "/api/auth/set-password",
+        json={
+            "username": "alice@example.com",
+            "new_password": "secure-pw-1",
+            "confirm_password": "secure-pw-1",
+        },
+    )
+    assert resp.status_code == 200
+
+    with client.session_transaction() as sess:
+        assert 'subcontractor_id' not in sess
+        assert sess.get('user_id') is not None
 
 
 def test_set_password_already_set_returns_400(app, client):

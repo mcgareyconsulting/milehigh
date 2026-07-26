@@ -3,24 +3,29 @@
  * schema_version: 1
  * purpose: Create/edit modal for a native T&M ticket — a mobile-first form for the field
  *          header (job/date/location/GC/foreman), labor/materials/equipment line items,
- *          photo/video attachments, and signature name. Create makes a draft; Save persists
- *          edits to a draft; Void discards.
+ *          photo/video attachments, subcontractor assignment, and signature name. Create
+ *          makes a draft; Save persists edits to a draft; Void discards.
  * exports:
  *   TMTicketFormModal: Portal modal. Props: isOpen, ticket (null = create), releaseCandidates, onClose, onSaved.
- * imports_from: [react, react-dom, ../services/tmApi, ./TMTicketAttachments]
+ * imports_from: [react, react-dom, ../services/tmApi, ../services/subcontractorAdminApi, ./TMTicketAttachments, ./TMSubcontractorAssignment]
  * imported_by: [pages/TMTickets.jsx]
  * invariants:
  *   - ticket === null => create mode; ticket.status === 'draft' => editable; otherwise read-only.
- *   - Create mode STAGES attachments client-side (no ticket id yet) and uploads them
- *     sequentially, best-effort, after the ticket is created — mirrors NewItemModal.jsx.
- *     Edit mode uploads immediately via TMTicketAttachments, which owns its own fetch.
+ *   - Create mode STAGES attachments AND subcontractor picks client-side (no ticket id yet)
+ *     and applies them sequentially, best-effort, after the ticket is created — mirrors
+ *     NewItemModal.jsx. Edit mode hits both APIs immediately via the child components, which
+ *     own their own fetch.
  *   - Re-fetches release candidates whenever the job number field changes to a valid integer.
  *   - Closes on backdrop click and Escape, matching the other modals (ReleaseDetailModal, etc).
  */
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { createTicket, updateTicket, voidTicket, getReleaseCandidates, uploadTicketAttachment } from '../services/tmApi';
+import { assignSubcontractor } from '../services/subcontractorAdminApi';
 import TMTicketAttachments from './TMTicketAttachments';
+import TMSubcontractorAssignment from './TMSubcontractorAssignment';
+import { LineItemTable } from './tmLineItems';
+import { emptyLabor, emptyMaterial, emptyEquipment, inputClass, labelClass } from './tmFieldHelpers';
 
 const isMediaFile = (file) => {
     const type = (file?.type || '').toLowerCase();
@@ -43,12 +48,6 @@ const STATUS_BADGE = {
     rejected: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
 };
 
-const emptyLabor = () => ({ name: '', company: '', classification: '', hours_reg: '', hours_ot: '', hours_dt: '', notes: '' });
-const emptyMaterial = () => ({ description: '', quantity: '', unit: '', length: '', notes: '' });
-const emptyEquipment = () => ({ description: '', quantity: '', hours: '', operator: '', notes: '' });
-
-const inputClass = 'w-full px-3 py-2.5 sm:py-2 text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 disabled:opacity-70';
-const labelClass = 'block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1';
 // Comfortable tap targets (~44px) for primary actions on narrow phones (iPhone SE/e-tier
 // and similar ~375-393px portrait widths), sized back down at the sm: breakpoint (640px+)
 // where a mouse/trackpad is more likely.
@@ -59,131 +58,6 @@ function StatusBadge({ status }) {
         <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_BADGE[status] || STATUS_BADGE.draft}`}>
             {STATUS_LABEL[status] || status}
         </span>
-    );
-}
-
-// Below sm: (640px — covers ~375-430px portrait phones like the iPhone SE/e-tier), a
-// horizontally-scrolling table of 5-7 columns nested inside an already-scrolling modal is
-// unusable on a touchscreen: ambiguous scroll direction, controls scrolled out of reach.
-// So under sm: each row renders as a stacked card instead; the table returns at sm:+ where
-// there's room for it. Both share the same columns/rows/onChange contract.
-function LineItemCards({ columns, rows, onChange, onRemove }) {
-    if (rows.length === 0) {
-        return (
-            <div className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-3 text-center text-xs text-gray-400 dark:text-slate-500">
-                No rows
-            </div>
-        );
-    }
-    return (
-        <div className="space-y-2">
-            {rows.map((row, idx) => (
-                <div key={idx} className="rounded-lg border border-gray-200 dark:border-slate-700 p-3 bg-gray-50/50 dark:bg-slate-900/30">
-                    <div className="grid grid-cols-2 gap-2">
-                        {columns.map(c => (
-                            <div key={c.key} className={c.wide ? 'col-span-2' : ''}>
-                                <label className="block text-[11px] font-medium text-gray-500 dark:text-slate-400 mb-0.5">{c.label}</label>
-                                <input
-                                    type={c.numeric ? 'number' : 'text'}
-                                    value={row[c.key] ?? ''}
-                                    onChange={e => onChange(idx, { [c.key]: e.target.value })}
-                                    className="w-full px-2.5 py-2.5 text-sm rounded-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
-                                />
-                            </div>
-                        ))}
-                    </div>
-                    <button type="button" onClick={() => onRemove(idx)}
-                        className="mt-2 w-full min-h-[40px] text-xs font-medium rounded-md border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
-                        Remove row
-                    </button>
-                </div>
-            ))}
-        </div>
-    );
-}
-
-function LineItemTable({ title, readOnly, columns, rows, onChange, onAdd, onRemove }) {
-    return (
-        <div>
-            <div className="flex items-center justify-between mb-1">
-                <h4 className="text-xs font-semibold text-gray-600 dark:text-slate-300">{title}</h4>
-                {!readOnly && (
-                    <button type="button" onClick={onAdd}
-                        className="text-xs px-3 py-1.5 rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700">
-                        + Add row
-                    </button>
-                )}
-            </div>
-
-            {readOnly ? null : (
-                <div className="sm:hidden">
-                    <LineItemCards columns={columns} rows={rows} onChange={onChange} onRemove={onRemove} />
-                </div>
-            )}
-            {readOnly && rows.length === 0 && (
-                <div className="sm:hidden rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-3 text-center text-xs text-gray-400 dark:text-slate-500">
-                    No rows
-                </div>
-            )}
-            {readOnly && rows.length > 0 && (
-                <div className="sm:hidden space-y-2">
-                    {rows.map((row, idx) => (
-                        <div key={idx} className="rounded-lg border border-gray-200 dark:border-slate-700 p-3 bg-gray-50/50 dark:bg-slate-900/30">
-                            <div className="grid grid-cols-2 gap-2">
-                                {columns.map(c => (
-                                    <div key={c.key} className={c.wide ? 'col-span-2' : ''}>
-                                        <span className="block text-[11px] font-medium text-gray-500 dark:text-slate-400 mb-0.5">{c.label}</span>
-                                        <span className="block text-sm text-gray-900 dark:text-slate-100 truncate">{row[c.key] || '—'}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            <div className="hidden sm:block overflow-x-auto rounded-lg border border-gray-200 dark:border-slate-700">
-                <table className="min-w-full text-xs">
-                    <thead className="bg-gray-50 dark:bg-slate-900/40">
-                        <tr>
-                            {columns.map(c => (
-                                <th key={c.key} className="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-slate-400 whitespace-nowrap">{c.label}</th>
-                            ))}
-                            {!readOnly && <th className="px-2 py-1.5" />}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.length === 0 ? (
-                            <tr>
-                                <td colSpan={columns.length + (readOnly ? 0 : 1)} className="px-2 py-2 text-center text-gray-400 dark:text-slate-500">
-                                    No rows
-                                </td>
-                            </tr>
-                        ) : rows.map((row, idx) => (
-                            <tr key={idx} className="border-t border-gray-100 dark:border-slate-800">
-                                {columns.map(c => (
-                                    <td key={c.key} className="px-1 py-1">
-                                        <input
-                                            type={c.numeric ? 'number' : 'text'}
-                                            value={row[c.key] ?? ''}
-                                            disabled={readOnly}
-                                            onChange={e => onChange(idx, { [c.key]: e.target.value })}
-                                            className="w-full min-w-[70px] px-1.5 py-1 text-xs rounded border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 disabled:opacity-70"
-                                        />
-                                    </td>
-                                ))}
-                                {!readOnly && (
-                                    <td className="px-1 py-1">
-                                        <button type="button" onClick={() => onRemove(idx)} title="Remove row"
-                                            className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-xs px-1">✕</button>
-                                    </td>
-                                )}
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
     );
 }
 
@@ -211,6 +85,9 @@ export default function TMTicketFormModal({ isOpen, ticket, releaseCandidates: i
     const [stagedAttachments, setStagedAttachments] = useState([]);
     const stagedFileInputRef = useRef(null);
     const stagedCameraInputRef = useRef(null);
+    // Create-mode only: subcontractor ids picked before the ticket exists, assigned
+    // sequentially once the ticket is created — mirrors stagedAttachments above.
+    const [stagedSubcontractorIds, setStagedSubcontractorIds] = useState([]);
 
     const isCreate = !ticket;
     const readOnly = !!ticket && ticket.status !== 'draft';
@@ -235,6 +112,7 @@ export default function TMTicketFormModal({ isOpen, ticket, releaseCandidates: i
         setCandidates(initialCandidates || (ticket?.release ? [ticket.release] : []));
         setError(null);
         setStagedAttachments(prev => { prev.forEach(s => URL.revokeObjectURL(s.url)); return []; });
+        setStagedSubcontractorIds([]);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, ticket?.id]);
 
@@ -323,6 +201,13 @@ export default function TMTicketFormModal({ isOpen, ticket, releaseCandidates: i
                         console.warn('Failed to upload staged attachment', staged.file.name, err);
                     }
                 }
+                for (const subId of stagedSubcontractorIds) {
+                    try {
+                        await assignSubcontractor(created.id, subId);
+                    } catch (err) {
+                        console.warn('Failed to assign staged subcontractor', subId, err);
+                    }
+                }
             } else {
                 await updateTicket(ticket.id, buildBody());
             }
@@ -359,7 +244,7 @@ export default function TMTicketFormModal({ isOpen, ticket, releaseCandidates: i
     const modalContent = (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4" onClick={onClose}>
             <div
-                className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-2xl overflow-hidden"
+                className="w-full max-w-2xl max-h-[90vh] max-h-[90dvh] flex flex-col rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-2xl overflow-hidden"
                 onClick={e => e.stopPropagation()}
             >
                 <div className="shrink-0 flex items-center justify-between gap-3 px-4 sm:px-5 py-4 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
@@ -372,7 +257,7 @@ export default function TMTicketFormModal({ isOpen, ticket, releaseCandidates: i
                     <button onClick={onClose} aria-label="Close" className="shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 text-2xl leading-none">×</button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 min-h-0 overflow-y-auto">
                 {error && (
                     <div className="mx-4 sm:mx-5 mt-4 px-3 py-2 rounded-lg bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-sm">{error}</div>
                 )}
@@ -522,6 +407,7 @@ export default function TMTicketFormModal({ isOpen, ticket, releaseCandidates: i
                     />
 
                     {isCreate ? (
+                        <>
                         <div>
                             <div className="flex items-center gap-2 mb-1.5">
                                 <h4 className="text-xs font-semibold text-gray-600 dark:text-slate-300">
@@ -569,8 +455,19 @@ export default function TMTicketFormModal({ isOpen, ticket, releaseCandidates: i
                                 </div>
                             )}
                         </div>
+                        <TMSubcontractorAssignment
+                            ticketId={null}
+                            readOnly={false}
+                            stagedIds={stagedSubcontractorIds}
+                            onStage={(id) => setStagedSubcontractorIds(prev => (prev.includes(id) ? prev : [...prev, id]))}
+                            onUnstage={(id) => setStagedSubcontractorIds(prev => prev.filter(x => x !== id))}
+                        />
+                        </>
                     ) : (
-                        <TMTicketAttachments ticketId={ticket.id} readOnly={readOnly} />
+                        <>
+                            <TMTicketAttachments ticketId={ticket.id} readOnly={readOnly} />
+                            <TMSubcontractorAssignment ticketId={ticket.id} readOnly={readOnly} />
+                        </>
                     )}
 
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">

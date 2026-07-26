@@ -60,12 +60,14 @@ def login():
         # Update last login
         user.last_login = datetime.utcnow()
         db.session.commit()
-        
-        # Create session
+
+        # Create session — clear first so a stale subcontractor_id from an earlier
+        # session in this same browser can never coexist with a staff session.
+        session.clear()
         session['user_id'] = user.id
         session['username'] = user.username
         session.permanent = True
-        
+
         logger.info(f"User {username} logged in successfully")
         
         return jsonify({
@@ -219,7 +221,8 @@ def set_password():
         user.last_login = datetime.utcnow()
         db.session.commit()
 
-        # Create session
+        # Create session — clear first (see /login's identical comment).
+        session.clear()
         session['user_id'] = user.id
         session['username'] = user.username
         session.permanent = True

@@ -23,7 +23,7 @@ import MobileNavDrawer from './MobileNavDrawer';
 import PatchNotesModal from './PatchNotesModal';
 import { CURRENT_VERSION } from '../data/patchNotes';
 
-function AppShellInner({ isAuthenticated }) {
+function AppShellInner({ isAuthenticated, subcontractor }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { isDark, isOldMan, toggleDark, toggleOldMan } = useTheme();
@@ -94,50 +94,58 @@ function AppShellInner({ isAuthenticated }) {
           {CURRENT_VERSION}
         </button>
 
-        {/* Everything else expands from the right; search is the leftmost item */}
+        {/* Everything else expands from the right; search is the leftmost item.
+            A subcontractor who wandered in here can't use ANY of these staff-only
+            links — showing the full bar next to "this area is for staff only" would
+            be actively contradictory, so it collapses to just the essentials. */}
         <div className="ml-auto flex items-center gap-2">
-          {/* Quick search — leftmost of the right cluster */}
-          <QuickSearch />
+          {!subcontractor && (
+            <>
+              {/* Quick search — leftmost of the right cluster */}
+              <QuickSearch />
 
-          {/* Map + Location shortcuts — visible on 2xl+ only */}
-          <div className="hidden min-[1440px]:flex items-center gap-2">
-            {navBtn('/jobsite-map', 'Map')}
-            <button
-              type="button"
-              onClick={handleLocationToggle}
-              disabled={locationRequesting}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm transition-all ${
-                locationEnabled
-                  ? 'bg-green-500 text-white hover:bg-green-600'
-                  : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
-              } ${locationRequesting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
-              title={locationEnabled ? 'Turn off location filter' : 'Filter by your current location'}
-            >
-              {locationRequesting ? (
-                <>
-                  <span className="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                  Location…
-                </>
-              ) : locationEnabled ? (
-                <>📍 Location on</>
-              ) : (
-                <>📍 Location</>
-              )}
-            </button>
-          </div>
+              {/* Map + Location shortcuts — visible on 2xl+ only */}
+              <div className="hidden min-[1440px]:flex items-center gap-2">
+                {navBtn('/jobsite-map', 'Map')}
+                <button
+                  type="button"
+                  onClick={handleLocationToggle}
+                  disabled={locationRequesting}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm transition-all ${
+                    locationEnabled
+                      ? 'bg-green-500 text-white hover:bg-green-600'
+                      : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+                  } ${locationRequesting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
+                  title={locationEnabled ? 'Turn off location filter' : 'Filter by your current location'}
+                >
+                  {locationRequesting ? (
+                    <>
+                      <span className="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      Location…
+                    </>
+                  ) : locationEnabled ? (
+                    <>📍 Location on</>
+                  ) : (
+                    <>📍 Location</>
+                  )}
+                </button>
+              </div>
 
-          {/* Inline nav buttons — 2xl+ only */}
-          <div className="hidden min-[1440px]:flex items-center gap-2">
-            {navBtn('/job-log', 'Job Log')}
-            {navBtn('/drafting-work-load', 'Drafting WL')}
-            {navBtn('/events', 'Events')}
-            {navBtn('/todos', 'To-Dos')}
-            {canSeeReport && navBtn('/invoicing-report', 'Invoicing')}
-            {isAdmin && navBtn('/rental-reports', 'Rentals')}
-            {isAdmin && navBtn('/meetings', 'Meetings')}
-            {isAdmin && navBtn('/board', 'Bug Tracker')}
-            {isAdmin && navBtn('/tm-tickets', 'T&M')}
-          </div>
+              {/* Inline nav buttons — 2xl+ only */}
+              <div className="hidden min-[1440px]:flex items-center gap-2">
+                {navBtn('/job-log', 'Job Log')}
+                {navBtn('/drafting-work-load', 'Drafting WL')}
+                {navBtn('/events', 'Events')}
+                {navBtn('/todos', 'To-Dos')}
+                {canSeeReport && navBtn('/invoicing-report', 'Invoicing')}
+                {isAdmin && navBtn('/rental-reports', 'Rentals')}
+                {isAdmin && navBtn('/meetings', 'Meetings')}
+                {isAdmin && navBtn('/board', 'Bug Tracker')}
+                {isAdmin && navBtn('/tm-tickets', 'T&M')}
+                {isAdmin && navBtn('/subcontractors', 'Subcontractors')}
+              </div>
+            </>
+          )}
 
           {/* Notification bell (always visible if authenticated) */}
           {isAuthenticated && <NotificationBell />}
@@ -197,6 +205,14 @@ function AppShellInner({ isAuthenticated }) {
             >
               Logout
             </button>
+          ) : subcontractor ? (
+            <button
+              type="button"
+              onClick={() => navigate('/sub/tickets')}
+              className="hidden min-[1440px]:inline-flex px-4 py-2 text-sm font-medium text-white bg-accent-500 hover:bg-accent-600 rounded-lg shadow-md ring-2 ring-accent-400 ring-offset-2 dark:ring-offset-slate-800 focus:outline-none focus:ring-2 focus:ring-accent-500"
+            >
+              My tickets
+            </button>
           ) : (
             <button
               type="button"
@@ -225,13 +241,14 @@ function AppShellInner({ isAuthenticated }) {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         isAuthenticated={isAuthenticated}
+        subcontractor={subcontractor}
         isAdmin={isAdmin}
         canSeeReport={canSeeReport}
         locationEnabled={locationEnabled}
         locationRequesting={locationRequesting}
         onLocationToggle={handleLocationToggle}
         onLogout={handleLogout}
-        onLogin={() => navigate('/login')}
+        onLogin={() => navigate(subcontractor ? '/sub/tickets' : '/login')}
       />
 
       <PatchNotesModal isOpen={showPatchNotes} onClose={() => setShowPatchNotes(false)} isAdmin={isAdmin} />
@@ -244,11 +261,11 @@ function AppShellInner({ isAuthenticated }) {
   );
 }
 
-function AppShell({ isAuthenticated }) {
+function AppShell({ isAuthenticated, subcontractor }) {
   return (
     <LocationProvider>
       <ReleasesProvider enabled={!!isAuthenticated}>
-        <AppShellInner isAuthenticated={isAuthenticated} />
+        <AppShellInner isAuthenticated={isAuthenticated} subcontractor={subcontractor} />
       </ReleasesProvider>
     </LocationProvider>
   );

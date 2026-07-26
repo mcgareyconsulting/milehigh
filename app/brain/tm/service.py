@@ -112,6 +112,23 @@ def void_ticket(ticket: TMTicket, username: str) -> TMTicket:
     return ticket
 
 
+def submit_ticket(ticket: TMTicket, actor: str) -> tuple[TMTicket | None, str | None]:
+    """Hand a filled-out draft back to the originator to confirm. draft-only,
+    mirrors void_ticket's shape. `actor` identifies whoever submitted it —
+    a plain username for an admin, or f"subcontractor:{id}:{email}" when
+    called from the subcontractor-facing route — reusing the existing
+    `reviewed_by` free-text column rather than adding a second actor column.
+    """
+    if ticket.status != "draft":
+        return None, f"Ticket is {ticket.status}; only a draft can be submitted"
+    ticket.status = "submitted"
+    ticket.reviewed_by = actor
+    ticket.reviewed_at = datetime.utcnow()
+    db.session.commit()
+    logger.info("tm_ticket_submitted", ticket_id=ticket.id, submitted_by=actor)
+    return ticket, None
+
+
 def release_candidates(job) -> list:
     """Slim active releases matching a job number, for the form's release picker."""
     if job in (None, ""):

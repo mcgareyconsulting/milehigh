@@ -103,6 +103,38 @@ def graph_get(path, params=None, headers=None, timeout=DEFAULT_TIMEOUT, token_ge
     raise last_exc if last_exc else RuntimeError("graph_get exhausted retries")
 
 
+def graph_post(path, json_body, params=None, headers=None, timeout=DEFAULT_TIMEOUT, token_getter=None):
+    """POST a JSON body to a Graph resource. Same retry/401-refresh behavior as
+    graph_get. Many Graph write endpoints (e.g. /me/sendMail) return 202/204
+    with an empty body on success, so this returns None rather than always
+    parsing JSON — callers that expect a body still get it when present.
+    """
+    token_getter = token_getter or get_app_token
+    url = path if path.startswith("http") else f"{GRAPH_BASE}{path}"
+    force_refresh = False
+    last_exc = None
+    for attempt in range(MAX_RETRIES):
+        token = token_getter(force_refresh=force_refresh)
+        request_headers = {"Authorization": f"Bearer {token}", "Accept": "application/json",
+                            "Content-Type": "application/json"}
+        if headers:
+            request_headers.update(headers)
+        try:
+            resp = requests.post(url, headers=request_headers, params=params, json=json_body, timeout=timeout)
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            last_exc = exc
+            logger.warning("graph_post_transient", url=url, attempt=attempt, error=str(exc))
+            continue
+        if resp.status_code == 401:
+            logger.warning("graph_post_401", url=url, attempt=attempt)
+            last_exc = requests.HTTPError("401 Unauthorized", response=resp)
+            force_refresh = True
+            continue
+        resp.raise_for_status()
+        return resp.json() if resp.content else None
+    raise last_exc if last_exc else RuntimeError("graph_post exhausted retries")
+
+
 def graph_get_binary(path, params=None, timeout=DEFAULT_TIMEOUT, token_getter=None):
     """GET a Graph resource and return the raw response bytes (not JSON).
 

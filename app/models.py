@@ -1964,3 +1964,97 @@ class TMTicketAttachment(db.Model):
             },
             "uploaded_at": _dt(self.uploaded_at),
         }
+
+
+class Subcontractor(db.Model):
+    """An external subcontractor account — a standing identity, invited once by
+    an admin, assigned to zero or more T&M tickets over time via
+    `TMTicketSubcontractor`.
+
+    Deliberately a SEPARATE table from `User`, not a role flag on it: a bug or
+    bulk-update touching `User` can never accidentally grant an external
+    account `is_admin`. Session identity is `session['subcontractor_id']`
+    (never `session['user_id']`) — see app/subcontractor_auth/.
+
+    `password_hash` is nullable (unlike `User`, where a hash always exists) —
+    it stays null from creation until the invite is accepted. `invite_accepted_at`
+    doubles as the "has set a password" flag, replacing `User`'s separate
+    `password_set` boolean with one self-documenting timestamp. The invite
+    token itself is never stored raw — only `invite_token_hash` (sha256 hex) —
+    and both token fields are cleared on acceptance so a replayed raw token
+    can never match again (single-use enforcement).
+    """
+    __tablename__ = "subcontractors"
+
+    id = db.Column(db.Integer, primary_key=True)
+    company_name = db.Column(db.String(128), nullable=False)
+    contact_name = db.Column(db.String(128), nullable=False)
+    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True, server_default='1')
+
+    invited_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    invited_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    invite_token_hash = db.Column(db.String(64), nullable=True)
+    invite_token_expires_at = db.Column(db.DateTime, nullable=True)
+    invite_accepted_at = db.Column(db.DateTime, nullable=True)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    last_login = db.Column(db.DateTime, nullable=True)
+
+    invited_by = db.relationship("User", foreign_keys=[invited_by_user_id])
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "company_name": self.company_name,
+            "contact_name": self.contact_name,
+            "email": self.email,
+            "is_active": self.is_active,
+            "invited_at": _dt(self.invited_at),
+            "invite_accepted": self.invite_accepted_at is not None,
+            "invite_accepted_at": _dt(self.invite_accepted_at),
+            "created_at": _dt(self.created_at),
+            "last_login": _dt(self.last_login),
+        }
+
+
+class TMTicketSubcontractor(db.Model):
+    """Assignment of a T&M ticket to a subcontractor — "PM/lead shares it to the
+    person doing the work" (2026-07-22 ops meeting). Many-to-many by design: a
+    join table rather than a single FK column on `TMTicket`, since a ticket
+    could conceivably be shared to more than one person and the codebase has no
+    precedent for a dual-typed (User-or-Subcontractor) polymorphic owner FK.
+
+    Unassign is a hard delete, not a soft-delete like `TMTicketAttachment` —
+    this row only encodes "can this subcontractor currently see this ticket,"
+    with no evidentiary/audit reason to retain it after revocation.
+    """
+    __tablename__ = "tm_ticket_subcontractors"
+    __table_args__ = (
+        db.UniqueConstraint("tm_ticket_id", "subcontractor_id", name="uq_tm_ticket_subcontractor"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    tm_ticket_id = db.Column(db.Integer, db.ForeignKey("tm_tickets.id", ondelete="CASCADE"),
+                              nullable=False, index=True)
+    subcontractor_id = db.Column(db.Integer, db.ForeignKey("subcontractors.id", ondelete="CASCADE"),
+                                  nullable=False, index=True)
+    assigned_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    assigned_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    ticket = db.relationship("TMTicket", backref=db.backref(
+        "subcontractor_assignments", lazy="dynamic", cascade="all, delete-orphan"))
+    subcontractor = db.relationship("Subcontractor", backref=db.backref(
+        "ticket_assignments", lazy="dynamic", cascade="all, delete-orphan"))
+    assigned_by = db.relationship("User", foreign_keys=[assigned_by_user_id])
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "tm_ticket_id": self.tm_ticket_id,
+            "subcontractor_id": self.subcontractor_id,
+            "subcontractor": self.subcontractor.to_dict() if self.subcontractor else None,
+            "assigned_by_user_id": self.assigned_by_user_id,
+            "assigned_at": _dt(self.assigned_at),
+        }

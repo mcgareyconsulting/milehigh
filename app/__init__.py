@@ -28,6 +28,7 @@ from app.trello import trello_bp
 from app.procore import procore_bp
 from app.brain import brain_bp
 from app.auth.routes import auth_bp
+from app.subcontractor_auth.routes import subcontractor_auth_bp
 from app.history import history_bp
 from app.admin import admin_bp
 from app.api import api_bp
@@ -602,6 +603,7 @@ def create_app():
     app.register_blueprint(api_bp, url_prefix="/api")
     app.register_blueprint(brain_bp, url_prefix="/brain")
     app.register_blueprint(auth_bp)
+    app.register_blueprint(subcontractor_auth_bp)
     app.register_blueprint(history_bp)
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(lake_bp, url_prefix="/lake")
