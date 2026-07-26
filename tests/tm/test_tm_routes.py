@@ -1,8 +1,7 @@
 """HTTP tests for native T&M ticket routes (app/brain/tm/routes.py).
 
 Integration layer: real test_client + in-memory DB. The native creation path does
-no external calls, so nothing is patched. (The parked vision extractor is covered
-by tests/tm/test_tm_extract.py.)
+no external calls, so nothing is patched.
 """
 from app.models import TMTicket, db
 from tests.conftest import make_release

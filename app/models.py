@@ -1813,11 +1813,6 @@ class TMTicket(db.Model):
     table, not a JSON column) — mirrors `BoardItemPhoto`/`ReleasePhoto` for
     audit fields (uploader, size, timestamp) and soft-delete. Fetched separately
     via GET /tm-tickets/<id>/attachments, not embedded in to_dict().
-
-    The `*_extraction` / `source_*` columns are VESTIGIAL: they belong to the
-    parked legacy-paper vision-ingestion path (app/brain/tm/extract.py, reachable
-    only via service.create_from_upload) kept for a future "photograph a paper
-    ticket" import. Native tickets leave them null.
     """
     __tablename__ = "tm_tickets"
     __table_args__ = (
@@ -1851,19 +1846,7 @@ class TMTicket(db.Model):
     foreman_name = db.Column(db.String(128), nullable=True)
     created_by = db.Column(db.String(80), nullable=True)         # username of the field creator
 
-    # Extraction provenance (VESTIGIAL — parked legacy-paper vision path only)
-    raw_extraction = db.Column(db.JSON, nullable=True)    # verbatim model output incl. per-field confidence
-    extract_model = db.Column(db.String(64), nullable=True)
-    extract_error = db.Column(db.String(512), nullable=True)  # set when extraction failed and fields start blank
-
-    # Source document provenance (VESTIGIAL — parked legacy-paper vision path only)
-    source_storage_key = db.Column(db.String(128), nullable=True)  # content-addressed key in tm storage
-    source_filename = db.Column(db.String(255), nullable=True)
-    source_media_type = db.Column(db.String(64), nullable=True)
-    source_record_id = db.Column(db.Integer, nullable=True)        # raw_source_records.id (loose link)
-
     # Trail
-    uploaded_by = db.Column(db.String(80), nullable=True)          # username (vestigial: legacy upload path)
     reviewed_by = db.Column(db.String(80), nullable=True)
     reviewed_at = db.Column(db.DateTime, nullable=True)
 
@@ -1898,13 +1881,6 @@ class TMTicket(db.Model):
             "gc_contact_name": self.gc_contact_name,
             "foreman_name": self.foreman_name,
             "created_by": self.created_by,
-            "raw_extraction": self.raw_extraction,
-            "extract_model": self.extract_model,
-            "extract_error": self.extract_error,
-            "source_filename": self.source_filename,
-            "source_media_type": self.source_media_type,
-            "source_record_id": self.source_record_id,
-            "uploaded_by": self.uploaded_by,
             "reviewed_by": self.reviewed_by,
             "reviewed_at": _dt(self.reviewed_at),
             "created_at": _dt(self.created_at),

@@ -4,10 +4,6 @@ The live path is native digital creation: the field form POSTs ticket JSON, whic
 lands as a 'draft' (create_ticket), is edited while still a draft (update_ticket),
 or discarded to 'void' (void_ticket) — rows are never deleted. Signature capture,
 internal approval and the CO pipeline arrive in later phases.
-
-The legacy-paper vision path (create_from_upload + _land_bronze, calling
-app/brain/tm/extract.py) is PARKED at the bottom of this file: kept intact for a
-future "photograph a paper ticket" import, but no route exposes it.
 """
 from datetime import datetime
 
@@ -15,8 +11,6 @@ from app.models import db, Releases, TMTicket
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
-
-MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
 # Fields the creation/edit form may set. Line-item lists are stored as given (the
 # form owns their shape); scalars are coerced in _apply_fields. release_id is
@@ -162,91 +156,3 @@ def list_tickets(status=None) -> list:
 
 def get_ticket(ticket_id) -> TMTicket | None:
     return db.session.get(TMTicket, ticket_id)
-
-
-# ---------------------------------------------------------------------------
-# PARKED: legacy-paper vision ingestion.
-#
-# create_from_upload reads a scanned/photographed paper ticket with Claude vision
-# (app/brain/tm/extract.py) and lands a draft with the extracted fields plus a
-# bronze RawSourceRecord. No route currently exposes this — it is retained for a
-# future "photograph a paper ticket" import feature and is only reachable via a
-# direct service call (see tests/tm/test_tm_extract.py for the extractor).
-# ---------------------------------------------------------------------------
-
-import hashlib  # noqa: E402 — parked path only
-
-from app.models import RawSourceRecord  # noqa: E402
-from app.brain.tm import extract as tm_extract  # noqa: E402
-from app.brain.tm import storage  # noqa: E402
-
-
-def _land_bronze(data: bytes, media_type: str, filename: str, storage_key: str, username: str) -> RawSourceRecord:
-    """Upsert the upload into the bronze lake table, keyed by content hash."""
-    digest = hashlib.sha256(data).hexdigest()
-    external_id = f"sha256:{digest}"
-    record = RawSourceRecord.query.filter_by(source="upload", external_id=external_id).first()
-    if record is None:
-        record = RawSourceRecord(
-            source="upload",
-            record_type="tm_ticket_scan",
-            external_id=external_id,
-            content_hash=digest,
-            payload={
-                "filename": filename,
-                "media_type": media_type,
-                "storage_key": storage_key,
-                "uploaded_by": username,
-            },
-        )
-        db.session.add(record)
-        db.session.flush()
-    return record
-
-
-def create_from_upload(data: bytes, media_type: str, filename: str, username: str) -> TMTicket:
-    """PARKED. Store the document, land bronze, extract via vision, create a draft.
-
-    Extraction failure is non-fatal: the ticket is still created blank with
-    extract_error set, so the reviewer can key it in manually.
-    """
-    storage_key = storage.save(data, media_type)
-    record = _land_bronze(data, media_type, filename, storage_key, username)
-
-    ticket = TMTicket(
-        status="draft",
-        source_storage_key=storage_key,
-        source_filename=filename,
-        source_media_type=media_type,
-        source_record_id=record.id,
-        uploaded_by=username,
-        extract_model=tm_extract.EXTRACT_MODEL,
-    )
-
-    try:
-        result = tm_extract.extract(data, media_type)
-        ticket.job = result["job"]
-        ticket.date_of_work = _parse_date(result["date_of_work"])
-        ticket.customer = result["customer"]
-        ticket.work_description = result["work_description"]
-        ticket.labor = result["labor"]
-        ticket.materials = result["materials"]
-        ticket.equipment = result["equipment"]
-        ticket.signature_present = result["signature_present"]
-        ticket.signature_name = result["signature_name"]
-        ticket.raw_extraction = result["raw"]
-    except Exception as e:  # noqa: BLE001 — any failure → blank ticket for manual entry
-        ticket.extract_error = str(e)[:512]
-        logger.error("tm_ticket_extraction_failed", filename=filename, error=str(e),
-                     error_type=type(e).__name__, exc_info=True)
-
-    db.session.add(ticket)
-    db.session.commit()
-    logger.info(
-        "tm_ticket_created_from_upload",
-        ticket_id=ticket.id,
-        job=ticket.job,
-        extracted=ticket.extract_error is None,
-        uploaded_by=username,
-    )
-    return ticket

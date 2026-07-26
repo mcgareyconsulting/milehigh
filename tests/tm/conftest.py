@@ -19,13 +19,6 @@ _TM_PATCH_TARGETS = (
 
 
 @pytest.fixture(autouse=True)
-def tm_storage_root(app, tmp_path):
-    """Point TM_TICKET_STORAGE_ROOT at a tmp dir so uploads never write into the repo."""
-    app.config["TM_TICKET_STORAGE_ROOT"] = str(tmp_path / "tm_tickets")
-    yield
-
-
-@pytest.fixture(autouse=True)
 def mock_send_mail():
     """Every test in this directory gets outbound email mocked, no exceptions —
     subcontractor invite/resend routes call the real send_mail() otherwise,
