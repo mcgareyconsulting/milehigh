@@ -29,11 +29,17 @@ logger = get_logger(__name__)
 SOURCE = "m365_mail"
 RECORD_TYPE = "email"
 
-# Fields pulled from Graph. `body` is the full HTML/text; the rest is envelope
-# + threading metadata used for later normalization/entity-linking.
+# Full message fields (detail/push path). `body` is the full HTML/text; the rest
+# is envelope + threading metadata used for later normalization/entity-linking.
 GRAPH_SELECT = (
     "id,subject,from,toRecipients,ccRecipients,receivedDateTime,sentDateTime,"
     "bodyPreview,body,conversationId,internetMessageId,hasAttachments,webLink"
+)
+# List/poll path omits `body` — Graph 504s when $select includes body across a
+# page of messages. Body is hydrated per-message after the list returns.
+LIST_SELECT = (
+    "id,subject,from,toRecipients,ccRecipients,receivedDateTime,sentDateTime,"
+    "bodyPreview,conversationId,internetMessageId,hasAttachments,webLink"
 )
 
 # Re-read this far behind the watermark to absorb clock skew / late arrivals;
@@ -215,6 +221,29 @@ def resolve_mailboxes():
     return [_mailbox()]
 
 
+def _hydrate_message(mailbox, stub):
+    """Fetch full message (incl. body) for a list stub; fall back to stub on failure.
+
+    List responses deliberately omit body (Graph 504s on fat list selects). A
+    failed detail GET still returns the envelope so the poll can advance and the
+    message lands with bodyPreview only rather than being dropped entirely.
+    """
+    message_id = stub.get("id")
+    if not message_id:
+        return stub
+    try:
+        return graph_get(
+            f"/users/{mailbox}/messages/{message_id}",
+            params={"$select": GRAPH_SELECT},
+        )
+    except Exception as exc:  # noqa: BLE001 — one bad message must not abort the page
+        logger.warning(
+            "m365_message_hydrate_failed",
+            mailbox=mailbox, message_id=message_id, error=str(exc),
+        )
+        return stub
+
+
 def pull(since=None, query=None, max_results=DEFAULT_MAX_RESULTS, mailbox=None):
     """Pull mail from the Carmen mailbox and land it in the lake (bronze).
 
@@ -228,7 +257,8 @@ def pull(since=None, query=None, max_results=DEFAULT_MAX_RESULTS, mailbox=None):
     re-pulling the same window lands 0 new rows.
     """
     mailbox = mailbox or _mailbox()
-    params = {"$select": GRAPH_SELECT, "$top": max_results}
+    # List without body — fat $select (body) is a common Graph 504 trigger.
+    params = {"$select": LIST_SELECT, "$top": max_results}
     if query:
         # Graph forbids combining $search with $orderby/$filter; search results
         # are relevance-ordered.
@@ -240,7 +270,8 @@ def pull(since=None, query=None, max_results=DEFAULT_MAX_RESULTS, mailbox=None):
             params["$filter"] = f"receivedDateTime gt {iso}"
 
     data = graph_get(f"/users/{mailbox}/mailFolders/Inbox/messages", params=params)
-    messages = data.get("value", []) or []
+    stubs = data.get("value", []) or []
+    messages = [_hydrate_message(mailbox, stub) for stub in stubs]
 
     counts = {"created": 0, "updated": 0, "unchanged": 0}
     landed_ids = []
