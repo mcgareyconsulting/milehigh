@@ -2,7 +2,7 @@
 @milehigh-header
 schema_version: 1
 purpose: Render a GC-facing multi-phase look-ahead schedule to a print-ready landscape PDF
-  (Gantt only). Compact phase key lives in the footer; no date-table appendix.
+  (Gantt only). Phase color legend sits under the header; page chrome in the footer.
 exports:
   render_schedule_pdf(schedule) -> bytes
 imports_from: [io, datetime, reportlab]
@@ -12,6 +12,7 @@ invariants:
   - Does not invent dates; draws only bars present on the schedule model.
   - ROW_H must leave room for code + title + stage without adjacent-row overlap.
   - Gantt-only output — no multi-page date appendix.
+  - Every page shows the phase color legend (Drafting / Fab / Paint / Ship / Install).
 """
 from __future__ import annotations
 
@@ -43,10 +44,12 @@ LABEL_W = 2.55 * inch
 # Three-line labels (code / title / stage) need ~28pt of vertical text; 32pt row keeps a gap.
 ROW_H = 32
 BAR_H = 10
-HEADER_H = 42  # title + one subtitle line (no topline legend)
+# Title + subtitle + phase color legend strip under the header rule.
+HEADER_H = 58
+LEGEND_H = 16
 DAY_MIN_W = 8  # px-ish points floor per day column
-# Footer holds the compact phase key + page number.
-FOOTER_RESERVE = 34
+# Footer: paint note + page number only (phase key lives under the header).
+FOOTER_RESERVE = 22
 
 PHASE_COLORS = {
     PHASE_DRAFTING: colors.Color(0.45, 0.35, 0.70),
@@ -55,6 +58,15 @@ PHASE_COLORS = {
     PHASE_SHIPPING: colors.Color(0.20, 0.55, 0.35),
     PHASE_INSTALLATION: colors.Color(0.15, 0.55, 0.60),
 }
+
+# Full GC-facing labels for the legend (bar colors map 1:1 to these phases).
+PHASE_LEGEND_ITEMS = (
+    (PHASE_DRAFTING, "Drafting"),
+    (PHASE_FABRICATION, "Fabrication"),
+    (PHASE_PAINT, "Paint"),
+    (PHASE_SHIPPING, "Shipping"),
+    (PHASE_INSTALLATION, "Installation"),
+)
 
 SOURCE_EDGE = {
     SOURCE_HARD: colors.Color(0.10, 0.45, 0.15),      # green-ish stroke
@@ -127,7 +139,6 @@ def render_schedule_pdf(schedule: dict[str, Any]) -> bytes:
     rows = list(schedule.get("rows") or [])
 
     title = _document_title(schedule)
-    # Short subtitle only — phase key lives in the footer, not a second legend row.
     chart_span_start, chart_span_end = _chart_range(schedule)
     subtitle = (
         f"Chart {chart_span_start.isoformat()} → {chart_span_end.isoformat()}  ·  "
@@ -161,7 +172,7 @@ def render_schedule_pdf(schedule: dict[str, Any]) -> bytes:
 
     def _new_gantt_page():
         nonlocal y, page_num, chart_top
-        _draw_footer(c, page_w, page_num, schedule)
+        _draw_footer(c, page_w, page_num)
         c.showPage()
         page_num += 1
         _draw_header(c, page_w, page_h, title, subtitle)
@@ -187,7 +198,7 @@ def render_schedule_pdf(schedule: dict[str, Any]) -> bytes:
         c.setFillColor(colors.grey)
         c.drawString(chart_left, y - 14, "No active releases or open drafting packages for this job.")
 
-    _draw_footer(c, page_w, page_num, schedule)
+    _draw_footer(c, page_w, page_num)
     c.save()
     return buf.getvalue()
 
@@ -202,6 +213,41 @@ def _draw_header(c, page_w, page_h, title, subtitle):
     c.setStrokeColor(colors.Color(0.78, 0.80, 0.84))
     c.setLineWidth(0.5)
     c.line(MARGIN, page_h - MARGIN - 32, page_w - MARGIN, page_h - MARGIN - 32)
+    # Phase color legend — same colors as the Gantt bars (release + drafting/sub rows).
+    _draw_phase_legend(c, MARGIN, page_h - MARGIN - 32 - LEGEND_H, page_w - 2 * MARGIN)
+
+
+def _draw_phase_legend(c, x, y, width):
+    """Color key for each production phase used on release / drafting bars.
+
+    Drawn on every page under the header so a GC can read the chart without
+    hunting for a footer strip.
+    """
+    c.setFont("Helvetica-Bold", 7)
+    c.setFillColor(colors.Color(0.28, 0.30, 0.34))
+    label = "Phase colors:"
+    c.drawString(x, y + 2, label)
+    cx = x + c.stringWidth(label, "Helvetica-Bold", 7) + 10
+
+    c.setFont("Helvetica", 7)
+    for phase, name in PHASE_LEGEND_ITEMS:
+        if cx + 90 > x + width:
+            break
+        c.setFillColor(PHASE_COLORS[phase])
+        c.setStrokeColor(colors.Color(0.55, 0.57, 0.60))
+        c.setLineWidth(0.4)
+        c.roundRect(cx, y, 10, 10, 1.5, fill=1, stroke=1)
+        c.setFillColor(colors.Color(0.22, 0.24, 0.28))
+        c.drawString(cx + 13, y + 2, name)
+        cx += c.stringWidth(name, "Helvetica", 7) + 28
+
+    # Date-source edge key (border of each bar) — sits after the phase swatches.
+    source_note = "Border: green=committed · navy=projected · amber=estimated (hatched)"
+    c.setFont("Helvetica", 6)
+    note_w = c.stringWidth(source_note, "Helvetica", 6)
+    if cx + note_w + 8 <= x + width:
+        c.setFillColor(colors.Color(0.42, 0.44, 0.48))
+        c.drawString(cx + 6, y + 2, source_note)
 
 
 def _draw_day_axis(c, left, top, day_w, range_start, total_days):
@@ -308,42 +354,15 @@ def _draw_phase_bar(c, left, y, day_w, range_start, total_days, phase):
             xx += step
 
 
-def _draw_footer(c, page_w, page_num, schedule):
-    """Compact phase key + source note + page number (replaces the old topline legend)."""
-    y_swatch = MARGIN + 10
-    y_note = MARGIN - 2
+def _draw_footer(c, page_w, page_num):
+    """Paint provisional note + page number (phase legend is under the header)."""
+    y_note = MARGIN + 4
 
-    # Hairline above footer
     c.setStrokeColor(colors.Color(0.82, 0.84, 0.87))
     c.setLineWidth(0.4)
-    c.line(MARGIN, MARGIN + 22, page_w - MARGIN, MARGIN + 22)
-
-    items = [
-        (PHASE_DRAFTING, "Drafting"),
-        (PHASE_FABRICATION, "Fab"),
-        (PHASE_PAINT, "Paint*"),
-        (PHASE_SHIPPING, "Ship"),
-        (PHASE_INSTALLATION, "Install"),
-    ]
-    cx = MARGIN
-    c.setFont("Helvetica", 6.5)
-    for phase, label in items:
-        c.setFillColor(PHASE_COLORS[phase])
-        c.roundRect(cx, y_swatch, 8, 8, 1.2, fill=1, stroke=0)
-        c.setFillColor(colors.Color(0.28, 0.28, 0.32))
-        c.drawString(cx + 11, y_swatch + 1, label)
-        cx += 52
-
-    # Date-source edge key (short)
-    c.setFillColor(colors.Color(0.40, 0.42, 0.46))
-    c.setFont("Helvetica", 6)
-    c.drawString(
-        cx + 6,
-        y_swatch + 1,
-        "Border: green=committed · navy=projected · amber=estimated (hatched)",
-    )
+    c.line(MARGIN, MARGIN + 16, page_w - MARGIN, MARGIN + 16)
 
     c.setFillColor(colors.Color(0.48, 0.48, 0.52))
     c.setFont("Helvetica", 5.5)
-    c.drawString(MARGIN, y_note, "*Paint duration is provisional (3 business days).")
+    c.drawString(MARGIN, y_note, "Paint duration is provisional (3 business days).")
     c.drawRightString(page_w - MARGIN, y_note, f"Page {page_num}")
