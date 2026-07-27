@@ -156,6 +156,7 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
                 {navBtn('/install-schedule', 'Install Schedule')}
                 {canSeeReport && navBtn('/invoicing-report', 'Invoicing')}
                 {/* Rentals nav removed 2026-07-12 (company change) — /rental-reports route + backend stay for direct URL / re-enable */}
+                {/* Subs collapses Subcontractors (invite/registry) + Invoice Paid under one stub */}
                 {isAdmin && navBtn('/subs', 'Subs')}
                 {isAdmin && navBtn('/meetings', 'Meetings')}
                 {isAdmin && navIconBtn('/board', 'Bug Tracker', (
@@ -176,7 +177,6 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
                   </svg>
                 ))}
                 {isAdmin && navBtn('/tm-tickets', 'T&M')}
-                {isAdmin && navBtn('/subcontractors', 'Subcontractors')}
                 {isAdmin && navBtn('/admin/submittal-matching', 'Matching')}
               </div>
             </>

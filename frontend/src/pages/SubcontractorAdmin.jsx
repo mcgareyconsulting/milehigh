@@ -7,7 +7,7 @@
  * exports:
  *   SubcontractorAdmin: Page component, admin-gated server-side on every route it calls.
  * imports_from: [react, ../services/subcontractorAdminApi]
- * imported_by: [App.jsx]
+ * imported_by: [App.jsx via SubsLayout at /subs/subcontractors]
  * invariants:
  *   - Mirrors TMTickets.jsx's mobile-first card list (below sm:) / table (sm:+) pattern for
  *     visual consistency across the T&M feature area.

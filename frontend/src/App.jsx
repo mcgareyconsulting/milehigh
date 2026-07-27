@@ -42,6 +42,7 @@ import SubcontractorTicketList from './pages/SubcontractorTicketList';
 import SubcontractorTicketDetail from './pages/SubcontractorTicketDetail';
 import Metrics from './pages/Metrics';
 import InstallSchedule from './pages/InstallSchedule';
+import SubsLayout from './pages/SubsLayout';
 import Subs from './pages/Subs';
 import { checkAuth } from './utils/auth';
 import { checkSubcontractorAuth } from './utils/subcontractorAuth';
@@ -113,11 +114,18 @@ function AppContent() {
               <Route path="meetings" element={<Meetings />} />
               <Route path="todos" element={<ToDos />} />
               <Route path="tm-tickets" element={<TMTickets />} />
-              <Route path="subcontractors" element={<SubcontractorAdmin />} />
+              {/* Legacy path — Subcontractors roster now lives under Subs */}
+              <Route path="subcontractors" element={<Navigate to="/subs/subcontractors" replace />} />
               <Route path="install-schedule" element={<InstallSchedule />} />
+              {/* Customer billing report — stays top-level Invoicing, not under Subs */}
               <Route path="invoicing-report" element={<InvoicingReport />} />
               <Route path="rental-reports" element={<RentalReports />} />
-              <Route path="subs" element={<Subs />} />
+              {/* Subs shell: Subcontractors (invite/registry) + Invoice Paid (installer paid) */}
+              <Route path="subs" element={<SubsLayout />}>
+                <Route index element={<Navigate to="subcontractors" replace />} />
+                <Route path="subcontractors" element={<SubcontractorAdmin />} />
+                <Route path="invoice-paid" element={<Subs />} />
+              </Route>
               <Route path="admin/fc-collection" element={<FcCollection />} />
               <Route path="admin/submittal-matching" element={<SubmittalMatching />} />
               <Route path="admin/metrics" element={<Metrics />} />
