@@ -4,7 +4,7 @@ Every feature discussed in the 2026-07-22 Bill review and the Lexi conversation,
 with current codebase state, a plan, dependencies, and effort. Ranked summary at
 the end.
 
-**Reconciled against merged PRs 2026-07-25** — see *Shipped since this catalog
+**Reconciled against merged PRs 2026-07-26** — see *Shipped since this catalog
 was written* below. Statuses in the Tier 1 table were verified in the code, not
 taken from PR titles.
 
@@ -21,34 +21,47 @@ Source findings: `~/Desktop/Transcripts/MHMW/processed/`. Meeting rollup:
 > Nothing in this catalog is worth building if the data it operates on cannot
 > be recovered.
 >
-> **Status 2026-07-25 — still true.** A runbook and data-architecture plan exist
+> **Status 2026-07-26 — still true.** A runbook and data-architecture plan exist
 > on `claude/render-backup-data-architecture-vlizsr` (unmerged, 610 lines of
-> docs). **Nothing has been enabled.** The week it was scheduled for has ended
-> with the exposure unchanged.
+> docs). **Nothing has been enabled**; nothing backup-related has reached main.
+> The week it was scheduled for has ended with the exposure unchanged — and this
+> batch just added `tm_tickets`, `tm_ticket_attachments`, and `subcontractors`
+> to the set of tables with no backup behind them.
 
 ---
 
 ## Shipped since this catalog was written
 
-Reconciled against merged PRs on 2026-07-25. Item sections below carry the
+Reconciled against merged PRs on 2026-07-26. Item sections below carry the
 detail; this is the index.
 
 | Item | PR | Note |
 |---|---|---|
 | **C8 Procore markup rotation** | #310 | ✅ Done. Root cause was *not* the predicted annotation transform |
-| **I1 Subs view v1** | #311 | ✅ Done (already reflected below). OCIP remains |
+| **I1 Subs view v1** | #311, #322 | ✅ Done. #322 collapsed Subs + Subcontractors into one tabbed shell. OCIP remains |
 | **G1 Desktop notifications** | #312 | ⚠️ Shipped, but as foreground `Notification`, **not Web Push** |
-| **C9 Carmen rename** | #313, #315 | ✅ Done — **deeper than this catalog recommended.** Mailbox moved |
-| **C1 Note field defect** | in review | PR open 2026-07-25 |
-| **E4 GC-facing lookahead builder** | #314 | **Was not in this catalog.** New entry added; unranked |
+| **C9 Carmen rename** | #313, #315, #319 | ✅ Done — **deeper than this catalog recommended.** Mailbox moved |
+| **C1 Note field defect** | #317 | ✅ Done — and fixed **the way the plan asked**, by extracting one shared control |
+| **E4 GC-facing lookahead builder** | #314, #316, #318, #320 | **Was not in this catalog.** Now backend **+ PDF export + Carmen tooling**. Still unranked |
+| **A1 Time & materials** | #321 | ✅ v1 shipped **2026-07-26, a day early** — and **with** the sub-facing layer this catalog deferred |
+| **I3 External user access** | #321 | ✅ v1 shipped — as a **separate `Subcontractor` identity**, not a `User` role |
+
+> **Two items shipped ahead of their own plans in this batch, and both are worth
+> noticing.** A1 landed a day before its Monday commitment *and* absorbed I3,
+> which the catalog had explicitly deferred out of it — the entry below argues
+> these two were always the same work, and the branch agreed. That is a plan
+> being right, not a plan being skipped. The cost shows up as **plan steps
+> silently not done** (A1's signature canvas) rather than as anything visibly
+> broken; both are recorded in the item sections.
 
 **A note on state.** A survey of `origin/main` before writing this changed
 several plans from "build" to "wire." Already on main: `app/brain/lookahead/`
 (parser + crosscheck), `app/brain/pdf_review/`, `app/brain/projects/`,
 `app/brain/install_schedule/`, `app/brain/metrics/`, `app/brain/material_orders/`.
 Already modeled: `SunbeltRental`, `ReleasePhoto`, `BBReviewFeedback`,
-`DrawingVersionComment`, `Notification`. Not on main: `app/brain/tm/` (empty
-package — the real work is on `feature/tm-ingestion`).
+`DrawingVersionComment`, `Notification`. **`app/brain/tm/` is now real** (#321) —
+`routes.py`, `service.py`, `photos/`, `subcontractors/`, `subcontractor_view/`,
+plus `app/subcontractor_auth/`.
 
 ---
 
@@ -69,43 +82,73 @@ package — the real work is on `feature/tm-ingestion`).
 > tables that look alike are far cheaper to evolve than one that has to serve
 > all three.
 
-### A1. Time & materials — **HIGH (Bill), committed Monday 7/27**
+### A1. Time & materials — **✅ v1 SHIPPED 2026-07-26 (PR #321), a day before the Monday commitment.**
+
+> **Status 2026-07-26.** Merged to main. `app/brain/tm/` is no longer empty:
+> `routes.py`, `service.py`, `photos/` (attachment upload + storage),
+> `subcontractors/` (roster + invite), `subcontractor_view/` (the sub-facing
+> read/fill surface), plus `app/subcontractor_auth/` and five migrations.
+> **The migrations have not been run in any environment** — see the deploy note
+> at the end of this entry.
+>
+> **What shipped against the plan below, item by item:**
+>
+> | Plan step | Outcome |
+> |---|---|
+> | 1. Strip the ingestion path | ✅ Done. `drop_tm_ticket_extraction_columns.py`; no extraction columns remain on `TMTicket`, service and test gone |
+> | 2. Authorization handoff | ⚠️ **Shipped in a different shape.** No `assigned_to` on the ticket and no seeded → shared → filled → confirmed states. Assignment is a `TMTicketSubcontractor` join table, and the lifecycle is `draft → submitted → pending_approval → approved → co_generated → co_sent → co_approved → invoiced` (+ `rejected`/`void`) |
+> | 3. Signature: iPad canvas capture | ❌ **Not done.** Still the `signature_present` boolean + `signature_name` this step was written to replace. **The one confirmed requirement that did not ship** |
+> | 4. Rebase, tests, migration order | ✅ `tests/tm/`, `tests/subcontractor_auth/` present and passing |
+> | 5. Hand over migration commands | ⚠️ Outstanding — nothing has been run |
+> | 6. Ship to a small group | ⏳ Next |
+>
+> **Step 2's divergence is a real scope question, not a detail.** The plan's
+> handoff gated *internal* origination — a PM seeds, a worker fills, the
+> originator confirms, and **installers cannot self-start**, which was called
+> out as "the point." What shipped assigns tickets to *subcontractor* accounts
+> instead. The self-start gate holds for subs (they only see what is assigned),
+> but the internal seed → fill → confirm loop and the approval states are not
+> the same mechanism. **Confirm with Daniel which one v1 is meant to be**
+> before building on top of the status enum.
+>
+> **Step 3 is the one to schedule.** Typed-name-only was explicitly rejected on
+> 2026-07-22; a T&M ticket's signature is the artifact that makes it billable.
+> Build it on pointer events, not mouse events, for the iPad reason below.
 
 > **Requirements confirmed with Daniel 2026-07-22.** Scope below is settled, not
-> inferred from the transcript.
+> inferred from the transcript. **Retained as the record of what v1 was asked
+> for** — read it against the outcome table above.
 
 **Scope decisions:**
 
 | Decision | |
 |---|---|
-| **Paper ticket ingestion — DROPPED** | Origination path only. Tickets are created in the app, not scanned in. |
-| **Sub-facing layer — not on the Monday docket** | Deferred, not cancelled |
-| **O&P / financials — nothing yet** | No rates, no pricing, no contract terms in v1 |
-| **Signature — iPad canvas capture** | Not typed-name-only |
+| **Paper ticket ingestion — DROPPED** | Origination path only. Tickets are created in the app, not scanned in. ✅ held |
+| **Sub-facing layer — not on the Monday docket** | Deferred, not cancelled — **and then shipped anyway in #321.** See I3 |
+| **O&P / financials — nothing yet** | No rates, no pricing, no contract terms in v1. ✅ held — and it is what makes the sub layer safe today |
+| **Signature — iPad canvas capture** | Not typed-name-only. ❌ **did not ship** |
 
-**State:** `feature/tm-ingestion`, 4 commits, ~4,700 lines, unmerged. Ships
-`TMTickets.jsx`, `TMTicketFormModal.jsx`, `TMTicketAttachments.jsx`, `tmApi.js`,
-three migrations, three test files, `docs/specs/tm-module-build-doc.md`.
-`app/brain/tm/` on main is an empty package.
+**State:** ✅ **merged to main (PR #321).** Ships `TMTickets.jsx`,
+`TMTicketFormModal.jsx`, `TMTicketAttachments.jsx`, `tmLineItems.jsx`,
+`tmFieldHelpers.js`, `tmApi.js`, the four subcontractor-facing pages, five
+migrations, and `tests/tm/` + `tests/subcontractor_auth/`.
+`docs/specs/tm-module-build-doc.md` came with it.
 
 > **`docs/specs/tm-module-build-doc.md` is a long-term Brain vision document,
 > not the v1 requirement set.** It describes O&P separation, contract
 > integration, permission tiers, automated GC distribution, and 14-day
 > follow-up — none of which are in scope here. Do not build to it.
 
-**The branch was built for the dropped path.** `raw_extraction`,
-`extract_model`, `extract_error`, `source_storage_key`, `source_filename`, the
-extraction service, and `tests/test_tm_extract.py` all exist to serve paper
-intake. Status defaults to `pending_review` — a review-the-extraction state.
-What survives the scope cut: the `tm_tickets` table, the form modal, the
-attachments component, the tickets page, and the header fields added by
-`reshape_tm_tickets_p1` (location, gc_company, gc_contact_name, foreman_name,
-created_by, attachments).
+**The branch was built for the dropped path** — `raw_extraction`, `extract_model`,
+`extract_error`, `source_storage_key`, `source_filename`, the extraction service,
+and `tests/test_tm_extract.py` all existed to serve paper intake, with status
+defaulting to `pending_review`. ✅ **All of it was stripped before merge**, per
+plan step 1. What survived is what the plan said should: the `tm_tickets` table,
+the form modal, the attachments component, the tickets page, and the header
+fields from `reshape_tm_tickets_p1` (location, gc_company, gc_contact_name,
+foreman_name, created_by, attachments).
 
-**So Monday is a build, not a merge** — the authorization handoff is the module,
-and it is the part that doesn't exist.
-
-**Plan:**
+**Plan** *(as written 2026-07-22; outcome per step in the status block above)***:**
 1. **Strip the ingestion path.** Trim the extraction columns out of
    `add_tm_tickets` rather than shipping dead schema — the migrations have not
    run anywhere yet, so this is free now and awkward later. Drop the extraction
@@ -125,12 +168,39 @@ and it is the part that doesn't exist.
 5. Hand over migration commands per environment. No prod DDL from Claude.
 6. Ship to a small group and collect the "this sucks / this is great" pass.
 
-**Tripwire for later:** the sub-facing layer is safely deferred *only because
-there are no financials yet*. When O&P lands, the role gate ships in the same
-commit — gated at the serializer, never at the component. A sub role must never
-receive rates in an API response.
+**🔴 Tripwire — now armed, and it moved from "later" to "load-bearing."** The
+original note read: the sub-facing layer is safely deferred *only because there
+are no financials yet*. The layer is no longer deferred — it shipped — so the
+condition is now the only thing holding. **Verified on main 2026-07-26:**
+`subcontractor_view/routes.py` serves subcontractors through the **same
+`TMTicket.to_dict()`** the internal routes use. There is no sub-scoped
+serializer. That is correct today, because `TMTicket` carries no rates, pricing,
+or O&P — there is nothing to leak.
 
-**Depends on:** nothing. **Effort:** M
+**The moment a financial column is added to `TMTicket`, the sub-facing API leaks
+it by default.** No code change, no review, no test failure. Adding the field is
+the leak. So: **when O&P lands, the sub-scoped serializer ships in the same
+commit** — gated at the serializer, never at the component. A sub must never
+receive rates in an API response. Consider landing the split serializer *before*
+the first financial field, so the gate exists before there is anything to gate.
+
+**Deploy — outstanding.** Five migrations came with #321 and **none have been
+run in any environment.** Order is not free: `create_subcontractors_tables`
+creates `tm_ticket_subcontractors`, which carries an FK to `tm_tickets`, so it
+**must run after `add_tm_tickets`** or it fails on a missing referenced table.
+
+```bash
+python migrations/add_tm_tickets.py                      # creates tm_tickets
+python migrations/reshape_tm_tickets_p1.py               # header columns
+python migrations/add_tm_ticket_attachments.py           # attachments table; drops the JSON column
+python migrations/drop_tm_ticket_extraction_columns.py   # removes the dropped paper-intake path
+python migrations/create_subcontractors_tables.py        # FK → tm_tickets, so last
+```
+
+Per `migrations/README.md`, per environment. No prod DDL from Claude.
+
+**Remaining for v1:** signature canvas (plan step 3), the step-2 handoff
+question, migrations, then the small-group ship. **Effort:** S–M remaining.
 
 ---
 
@@ -500,18 +570,28 @@ be fetched.
 
 ## C. BB / Carmen
 
-### C1. Note field on accept/reject — **IN REVIEW. PR open 2026-07-25.**
+### C1. Note field on accept/reject — **✅ SHIPPED 2026-07-25 (PR #317).**
 
-> **Not a new feature.** The backend and one frontend surface already implement
-> this fully. The Procore document review surface — the one Bill uses — is
+> **Not a new feature.** The backend and one frontend surface already implemented
+> this fully. The Procore document review surface — the one Bill uses — was
 > missing the notes control entirely.
 
-> **Status 2026-07-25:** fix is in a PR. Worth recording how it survived a week:
-> **PR #310 edited `DocumentRow.jsx` — the exact file — and went past this.**
-> Verified on main at that point, `FindingRow` still read only
-> `initial?.decision`, held no `notes` state, and posted no `notes` key. A
-> diagnosed P1 sitting in a file someone else was already editing is the cheap
-> failure mode to watch for.
+> **Status 2026-07-26: done, and done the way plan step 1 asked.** #317 extracted
+> the control into a shared `FindingFeedbackForm` in `bbReview/shared.jsx` and
+> imported it into `DocumentRow.jsx`, rather than copying the textarea across.
+> That was the step written specifically to stop the two surfaces diverging
+> again — **taking it mattered more than the fix itself**, because the copy-paste
+> version would have rebuilt the exact condition that caused this.
+>
+> Worth keeping as a record of how it survived a week: **PR #310 edited
+> `DocumentRow.jsx` — the exact file — and went past this.** At that point
+> `FindingRow` still read only `initial?.decision`, held no `notes` state, and
+> posted no `notes` key. **A diagnosed P1 sitting in a file someone else is
+> already editing is the cheap failure mode to watch for.**
+>
+> **The K1 dependency is now live.** This was the input to every downstream
+> learning loop, and notes are being captured from here on. C5 and A4 remain the
+> first loops that would invent their own storage — see K1.
 
 **What already exists:**
 - `BBReviewFeedback` has `notes` (Text), `decision` (accepted|rejected),
@@ -1033,7 +1113,7 @@ gates everything above it.
 
 ---
 
-### E4. GC-facing lookahead schedule builder — **ADDED 2026-07-25. Shipped as backend (PR #314). Unranked.**
+### E4. GC-facing lookahead schedule builder — **ADDED 2026-07-25. Backend + PDF + Carmen tooling shipped (#314, #316, #318, #320). Still unranked.**
 
 > **This item did not exist in the catalog.** It is being recorded after the
 > fact, not planned into it. It came out of the 2026-07-22 meeting cycle without
@@ -1048,12 +1128,25 @@ gates everything above it.
 
 They share `app/brain/lookahead/` and the word "lookahead," and nothing else.
 
-**State:** backend only, on main. `pipeline.py` (272 lines) — read-only
-`get_project_pipeline` loading active releases, open DRRs, and GC approvals for a
-job. `schedule_builder.py` (544 lines) — turns that into
-drafting / fabrication / paint / shipping / installation bars. Unit tests on
-job-500-shaped fixtures. **No UI, no PDF export, no Carmen tooling yet** — the
-PR names those as next.
+**State (updated 2026-07-26):** on main, and it grew a delivery path in one day.
+`pipeline.py` (272 lines) — read-only `get_project_pipeline` loading active
+releases, open DRRs, and GC approvals for a job. `schedule_builder.py`
+(544 lines) — turns that into drafting / fabrication / paint / shipping /
+installation bars. Unit tests on job-500-shaped fixtures.
+
+**Since #314:** `export_pdf.py` renders a landscape Gantt PDF with a phase color
+legend (#316, legend restored #320), `artifacts.py` persists it,
+`routes.py` serves it, and **two Carmen tools** — `build_project_lookahead` and
+`render_project_lookahead_pdf` — put it behind a chat request, surfaced by
+`carmen/LookaheadPdfCard.jsx` (#318).
+
+> **The "where does this surface" question below got answered by default: it
+> surfaces in Carmen chat.** That is a reasonable v1 and it is also the cheapest
+> possible answer — a PM has to know to ask for it. **It is still worth deciding
+> deliberately** whether an outbound GC schedule belongs on the project page, on
+> a scheduled cadence, or behind a chat request, because the answer determines
+> whether this gets used or gets forgotten. The scoping pass is not cancelled by
+> the fact that something shipped.
 
 **Two modeling decisions already baked in, worth knowing before extending:**
 
@@ -1067,13 +1160,13 @@ PR names those as next.
   tee-time ever feeds this, that is a decision to make explicitly, not a
   refactor to drift into.
 
-**Open, and all of it:** where this surfaces (project page? its own export?),
-who triggers it, whether the output is a PDF we send or a page the GC is given
-access to (which would touch I3), and how a generated schedule reconciles
-against the GC's own lookahead coming back in through A4. **Needs a scoping pass
-and a rank.**
+**Still open:** whether chat is the right surface or only the first one, who
+triggers it and on what cadence, whether the GC eventually gets a page instead
+of a PDF (which would touch I3 — and I3 now has real external-identity
+infrastructure to build on), and how a generated schedule reconciles against the
+GC's own lookahead coming back in through A4. **Still needs a rank.**
 
-**Effort:** backend done. UI + export unscoped.
+**Effort:** backend, export, and trigger done. Surfacing decision open.
 
 ---
 
@@ -1247,9 +1340,21 @@ gating formalizes existing behavior rather than imposing new behavior.
 > it'll just be who's assigned."*
 
 **State:** **v1 shipped (admin Subs page + paid flag).** Installer assignment
-exists on releases; `/subs` lists active assigned releases grouped by installer
-with a yes/no `installer_invoice_paid` toggle (distinct from Job Log `invoiced`
-customer billing). OCIP not built yet. `ProjectManager` exists.
+exists on releases; the paid view lists active assigned releases grouped by
+installer with a yes/no `installer_invoice_paid` toggle (distinct from Job Log
+`invoiced` customer billing). OCIP not built yet. `ProjectManager` exists.
+
+> **Restructured 2026-07-26 (#322).** `/subs` is now a tabbed shell —
+> **Subcontractors** (the #321 invite/roster admin) and **Invoice Paid** (the
+> #311 page, renamed from "Subs"). The separate top-nav *Subcontractors* item is
+> gone; `/subcontractors` redirects into the shell. **This is the beginning of
+> Lexi's actual ask.** She asked for a subs tab showing *"all your
+> subcontractors, and what they're doing, and all the jobs they're currently
+> assigned to"* — the shell is now the place that lives, with the roster and the
+> paid view under one roof. What is still missing from her sentence is the
+> middle of it: **sub → assigned jobs in one view.** Today the roster shows who
+> exists and Invoice Paid shows releases by installer; neither shows a
+> subcontractor's full assignment picture. That, plus OCIP, is what remains.
 
 **What Lexi asked for**, twice and unprompted: *"You'd go up here and click subs.
 You'd get a list of all your subcontractors. And what they're doing. And all the
@@ -1287,57 +1392,88 @@ don't."* Daniel's read: the tool has to exist first — *"once you have your
 system, then you can go out there and get on their ass."*
 
 **Plan:**
-1. ~~Subs tab: subcontractor → releases → projects, from existing assignment data.~~ **Done** (`/subs`, admin-only).
+1. ~~Subs tab~~ **Done** (`/subs` shell, admin-only, #311 + #322). **Partial:**
+   subcontractor → *all* assigned releases/projects in one view is still not
+   there — see the note above.
 2. OCIP flag on `Projects`; surface unenrolled subs on flagged projects.
 3. ~~**Ship rough v1 to Lexi *and* Bill together**~~ — still collect feedback.
 4. Lexi emails back useful / not useful.
 5. ~~Paid status~~ done (manual flag); QuickBooks later.
 
-**Effort:** S–M for v1 (paid slice done); OCIP remains.
+**Effort:** S–M for v1 (paid slice done); the sub → jobs rollup and OCIP remain.
 
 ---
 
-### I3. External user access — **IN PROGRESS 2026-07-25. Reported going well.**
+### I3. External user access — **✅ v1 SHIPPED 2026-07-26 (PR #321), in the same commit as A1.**
 
 > **Elevated by Daniel 2026-07-22:** *"as soon as T&Ms are rolling, we will need
-> this, so needs to be elevated with T&M processing."* Under way three days
-> later, ahead of A1 rather than behind it.
+> this, so needs to be elevated with T&M processing."* It shipped *with* T&M,
+> not after it — **the catalog's claim that A1's deferred sub-facing layer and
+> I3 were the same piece of work was correct**, and the branch built them
+> together.
 
-> **The plan's own warning applies hardest while it's going well.** The risk here
-> was never step 1 — it is step 3, *what gets missed*. Endpoint-by-endpoint
-> financial-leakage auditing produces no visible progress and no satisfying
-> milestone, so "working well" measured against steps 1 and 2 is exactly the
-> state in which step 3 gets shortened. Budget it explicitly.
+> **Built differently from the plan, and the difference is an improvement.** The
+> plan said *external role on `User`*. What shipped is a **separate
+> `Subcontractor` model with its own session key and its own decorator**:
+> `subcontractor_auth/utils.py` reads `session['subcontractor_id']` and never
+> `session['user_id']`, `subcontractor_login_required` **refuses a `User`
+> session outright** (an internal admin must log in separately — no shared or
+> elevated path), and password hashing is imported from `app/auth/utils.py`
+> rather than reimplemented, so "same hashing as internal accounts" holds by
+> construction. `tests/subcontractor_auth/test_session_isolation.py` covers the
+> boundary. **A separate identity table cannot accidentally inherit a staff
+> permission check** — which a role flag on `User` very much can.
+
+> **🔴 Step 3 — the endpoint audit — is the part that did not happen, exactly as
+> predicted.** The warning written here said the risk was never step 1 but step
+> 3, *what gets missed*, and that "working well" on steps 1–2 is the state in
+> which step 3 gets shortened. **That is what occurred.** Verified on main:
+> `subcontractor_view/routes.py` returns `TMTicket.to_dict()` — the same
+> serializer internal routes use. **No leak exists today** because `TMTicket`
+> holds no rates, pricing, or O&P. The audit was not performed; it was rendered
+> temporarily unnecessary by there being nothing to find. See A1's tripwire —
+> the two are the same commitment, and it comes due when O&P lands.
 
 **Why T&M forces it.** The confirmed A1 flow has a PM seeding a ticket and
 **sharing it to the person doing the work** — frequently a subcontractor
 foreman, not an employee. The branch's own build doc lists **Subcontractor** as
-the first permission tier. A1's Monday v1 works internally; the moment T&M is
-actually *rolling* in the field, the fill-it-out step lands on someone with no
-account.
+the first permission tier. An internal-only T&M v1 works until T&M is actually
+*rolling* in the field — at which point the fill-it-out step lands on someone
+with no account.
 
 **A1's deferred sub-facing layer and I3 are the same piece of work.** Both are
 "a role that sees only what's assigned to it, without financials." Building them
-separately means building it twice.
+separately means building it twice. ✅ **Borne out** — #321 built them together,
+and the deferral in A1's scope table never took effect.
 
-**State:** Greenfield. `User` has `is_admin`, `is_drafter`, `is_active`,
-`is_bb_chat` — **no external role**. The app was built assuming every
-authenticated user is staff.
+**State:** ✅ **shipped for the T&M surface.** `app/subcontractor_auth/`
+(invite-token accept, login, logout, `/me`), the `Subcontractor` model with
+hashed invite tokens and expiry, `app/brain/tm/subcontractors/` (admin roster +
+invite), `app/brain/tm/subcontractor_view/` (assigned tickets only), a separate
+`SubcontractorShell` and four subcontractor pages, and outbound invite mail via
+`app/microsoft/mailer.py`. **Scoped to T&M tickets** — no other surface is
+exposed to an external identity yet.
 
 **Plan:**
-1. External role: sees only what is assigned to them, no financials.
-2. **Parity with what a Trello card exposes today** — Bill's stated bar, and
-   Trello shows very little: *"right now they can see the cards that are
-   assigned to them, and that's it."*
-3. **Audit every endpoint for financial leakage under the new role.** This is
-   the real cost and the real risk — not the flag, but what gets missed.
-   Serializer-level gating, never component-level.
-4. This **is** the Trello decommission path.
+1. ~~External role: sees only what is assigned to them, no financials.~~
+   ✅ **Done** — as a separate identity rather than a `User` role, and scoped to
+   T&M.
+2. ~~**Parity with what a Trello card exposes today**~~ ✅ Met for T&M — a sub
+   sees the tickets assigned to them and nothing else, which is the Trello bar:
+   *"right now they can see the cards that are assigned to them, and that's it."*
+3. ❌ **Audit every endpoint for financial leakage under the new role.**
+   **Not done.** Currently vacuous (no financial fields exist on `TMTicket`) but
+   **not discharged** — it comes due with O&P, and A1's tripwire is the same
+   commitment. This remains the real cost and the real risk.
+4. **Trello decommission path — now actually open.** External identity was the
+   blocker; it exists. Nothing has moved on decommission yet.
 
-**Blocks:** A1 sub-facing T&M · A3 punch list reaching subcontractor installers
-(most of its real audience) · I4 installer invoicing · Trello decommission.
+**Still blocks:** A3 punch list reaching subcontractor installers (needs the
+punch surface exposed to the external identity, not just T&M) · I4 installer
+invoicing · Trello decommission.
 
-**Effort:** L — and the risk profile is "what you miss," not "what you build."
+**Effort:** L → **mostly spent.** What remains is step 3 and extending the
+identity beyond T&M, and the risk profile is still "what you miss."
 
 ---
 
@@ -1460,10 +1596,17 @@ work beside them.
 
 ---
 
-### K1. Learning substrate — **decision needed before C1 ships**
+### K1. Learning substrate — **trigger moved: decide before C5 or A4, not C1**
 
 **Raised by Daniel 2026-07-22:** *"probably need to rethink the learning tables
 ecosystem because we will have many learning loops going forward."*
+
+> **Retrigger 2026-07-26.** C1 shipped (#317) without forcing this decision,
+> because it wrote to `BBReviewFeedback`, which already existed. **C1 is now
+> capturing notes**, so the second loop is live and accumulating — but it did not
+> invent storage, so the substrate question is still open and now genuinely
+> deferred to **C5 and A4**, the first loops that *would* invent their own
+> tables. Decide before either.
 
 **State:** One loop is built and has its own tables — `MeetingLearning` and
 `ExtractionSignal` in `app/brain/meetings/`, which distill aliases, owner maps,
@@ -1714,35 +1857,47 @@ the transcript alone.
 
 | Item | Effort | Note |
 |---|---|---|
-| **K4 Backups** | S–M | **Still no backup as of 2026-07-25.** A runbook exists on an unmerged branch; nothing is enabled. The week it was scheduled for has passed and the exposure is unchanged. Not a feature — the precondition for every other item being worth building |
+| **K4 Backups** | S–M | **Still no backup as of 2026-07-26.** A runbook exists on an unmerged branch; nothing is enabled. The week it was scheduled for has passed and the exposure is unchanged — **and it now covers T&M tickets, field photos, and subcontractor accounts too.** Not a feature — the precondition for every other item being worth building |
 
 ---
 
 ### TIER 1 — Elevated, near-term
 
 Ordered by sequence, not just importance. Prerequisites first.
-**Status column reconciled against merged PRs 2026-07-25.**
+**Status column reconciled against merged PRs 2026-07-26.**
 
 | # | Item | Effort | Status | Note |
 |---|---|---|---|---|
-| 1 | **A1 Time & materials** | M | open | Committed **Mon 2026-07-27**. `feature/tm-ingestion` still unmerged; `app/brain/tm/` on main is still empty. Origination path only — a **build**, not a merge |
-| 2 | **I3 External user access** | L | **in progress** | Reported going well 2026-07-25. Elevated *with* T&M — the fill-it-out step lands on sub foremen. Same work as A1's deferred sub-facing layer |
+| 1 | **A1 Time & materials** | M | ✅ v1 **#321** | Shipped **2026-07-26**, a day before the Monday commitment. **Signature canvas did not ship**; migrations not run. See A1 |
+| 2 | **I3 External user access** | L | ✅ v1 **#321** | Shipped in the same commit as A1 — a separate `Subcontractor` identity, not a `User` role. **Step 3 (endpoint audit) not done** |
 | 3 | **K2 Grid engine** | M | **in progress** | `feature/updated-projects` — built as a standalone `components/grid/` with per-user layout persistence. **Prerequisite for D1 and D2** |
 | 4 | **D1 Projects page** | L | **in progress** | Same branch as K2, bound project-scoped. Elevated with A1/A2 |
 | 5 | **A2 Change orders** | M | blocked | Email capture only. **Blocked on Bill** for the CO log + a sample email |
-| 6 | **D2 Personal page** | L | not started | Renders K2 bound to a user. Nothing built as of 2026-07-25 — **the binding K2 was built to make cheap** |
+| 6 | **D2 Personal page** | L | not started | Renders K2 bound to a user. Nothing built as of 2026-07-26 — **the binding K2 was built to make cheap** |
 | 7 | **G1 Desktop notifications** | S | ✅ **#312** | Shipped as **foreground notifications, not Web Push** — fires only with a tab open. Scope widened to to-dos as well as mentions |
-| 8 | **C1 Note field defect** | S | **in review** | PR open 2026-07-25 |
+| 8 | **C1 Note field defect** | S | ✅ **#317** | Fixed by extracting one shared control, per plan step 1 — the step that keeps the two surfaces from diverging again |
 | 9 | **C8 Procore markup rotation** | S | ✅ **#310** | Real cause was our own stamping pass, not the annotation transform |
-| 10 | **I1 Subs view + OCIP** | S–M | ✅ v1 **#311** | Subs page + paid flag shipped. **OCIP still outstanding** and it is the half with the compliance failure behind it |
+| 10 | **I1 Subs view + OCIP** | S–M | ✅ v1 **#311**, **#322** | Paid flag + tabbed Subs shell. **OCIP still outstanding** — the half with the compliance failure behind it — plus sub → assigned jobs |
 
-**The four S items all moved.** Three shipped and one is in review, inside three
-days — which is the case for keeping small unblocked items in the queue
-alongside the large ones.
+**Seven of ten Tier 1 items are now shipped**, inside four days. All four S items
+landed, which is the case for keeping small unblocked items queued alongside the
+large ones — but the two large ones (A1, I3) landing *together and early* is the
+more interesting result, and it happened because the catalog said they were one
+piece of work.
 
-**What this leaves in Tier 1:** six items, five of them L or M, one blocked on
-Bill. The next thing that lands is A1 on Monday, and K2 is the prerequisite
-sitting under both D1 and D2.
+**What this leaves in Tier 1: three items.** K2 is the prerequisite under both D1
+and D2; A2 is blocked on Bill. **K2 → D1 → D2 is now the whole critical path.**
+
+> **Shipped ≠ deployed, and this is the batch where that matters.** A1 ships five
+> unrun migrations and I3 ships an external login. Neither is live anywhere. The
+> next action on Tier 1 is not a build — it is running migrations per
+> environment and putting T&M in front of a small group.
+
+> **Two commitments were deferred rather than met, and both are now easy to
+> lose** because their items read ✅: **A1's signature canvas** (typed-name-only
+> was explicitly rejected) and **I3's endpoint audit** (vacuous today, due with
+> O&P). Neither blocks the small-group ship. Both are load-bearing before this
+> touches money.
 
 ---
 
@@ -1762,7 +1917,7 @@ sitting under both D1 and D2.
 |---|---|
 | **K3 Data infra: object storage migration** | **L.** All binaries sit on a single Render disk — no object storage exists. Caps scaling at one instance. Pulling it forward is one way to solve K4 step 3 |
 | **L1 Styling v3 — full redesign** | **XL.** Recommendation: v3 foundation first, new surfaces built native, legacy migrated progressively — otherwise K2/D1/D2/D4 get built twice |
-| **E4 GC-facing lookahead builder** | **Backend shipped (#314) before it had an entry.** Outbound — the inverse of A4. No UI, no export, no trigger, no rank. Needs a scoping pass |
+| **E4 GC-facing lookahead builder** | **Shipped before it had an entry, and kept shipping** (#314 backend, #316/#320 PDF export, #318 Carmen tools). Outbound — the inverse of A4. Has a trigger now (ask Carmen); **still no rank and no deliberate surfacing decision** |
 
 ---
 
@@ -1832,7 +1987,7 @@ deferred.** If one Procore submittal advances GC→DRR→FC and our sync freezes
 DWL DRR filtering, `start_install`, Rel assignment. Resolvable with a read-only
 SQL check. See B3.
 
-**There is no backup — see K4.** Confirmed 2026-07-22, **still true 2026-07-25.**
+**There is no backup — see K4.** Confirmed 2026-07-22, **still true 2026-07-26.**
 Prod Postgres and the binary storage disk are both unprotected. A runbook and
 data-architecture plan were written to
 `claude/render-backup-data-architecture-vlizsr` and never merged or executed.
