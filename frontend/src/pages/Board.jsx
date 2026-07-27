@@ -1,7 +1,7 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Admin-only Kanban board for tracking bugs, features, and tasks with drag-and-drop reordering and cross-column status changes.
+ * purpose: Admin-only Kanban board for tracking bugs, features, and tasks (affectionately: Ongoing Complaints) with drag-and-drop reordering and cross-column status changes.
  * exports:
  *   Board: Page component rendering four-column Kanban (Open, In Progress, Deployed, Closed) with detail panel
  * imports_from: [react, react-router-dom, ../utils/auth, ../services/boardApi, ../components/board/BoardDetail, ../components/board/NewItemModal, @dnd-kit/core, @dnd-kit/sortable]
@@ -153,7 +153,7 @@ function KanbanColumn({ status, items, selectedId, onCardClick, isOver }) {
             >
                 {items.length === 0 && (
                     <div className={`py-6 text-center text-[10px] ${isOver ? 'text-accent-500' : 'text-gray-400 dark:text-slate-600'}`}>
-                        {isOver ? 'Drop here' : 'No items'}
+                        {isOver ? 'Drop here' : 'Nothing to complain about'}
                     </div>
                 )}
                 <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
@@ -331,7 +331,14 @@ export default function Board() {
         <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
             {/* Header bar */}
             <div className="shrink-0 px-5 py-2.5 flex items-center gap-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                <h1 className="text-lg font-bold text-accent-600 dark:text-accent-300 tracking-tight">Bug Tracker</h1>
+                <div className="min-w-0">
+                    <h1 className="text-lg font-bold text-accent-600 dark:text-accent-300 tracking-tight leading-tight">
+                        Ongoing Complaints
+                    </h1>
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">
+                        Bug Tracker
+                    </p>
+                </div>
 
                 <div className="flex items-center gap-1 ml-3">
                     {CATEGORY_FILTERS.map(c => (
@@ -348,7 +355,7 @@ export default function Board() {
                     <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
-                    <input type="text" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Search..."
+                    <input type="text" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Search complaints..."
                         className="pl-8 pr-3 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent w-44 placeholder:text-gray-400 dark:placeholder:text-slate-500" />
                 </div>
 
@@ -357,7 +364,7 @@ export default function Board() {
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
                     </svg>
-                    New
+                    File a Complaint
                 </button>
             </div>
 
