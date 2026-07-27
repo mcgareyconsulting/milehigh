@@ -4,6 +4,10 @@ Every feature discussed in the 2026-07-22 Bill review and the Lexi conversation,
 with current codebase state, a plan, dependencies, and effort. Ranked summary at
 the end.
 
+**Reconciled against merged PRs 2026-07-25** — see *Shipped since this catalog
+was written* below. Statuses in the Tier 1 table were verified in the code, not
+taken from PR titles.
+
 Source findings: `~/Desktop/Transcripts/MHMW/processed/`. Meeting rollup:
 [`ops-planning.md`](ops-planning.md).
 
@@ -16,6 +20,27 @@ Source findings: `~/Desktop/Transcripts/MHMW/processed/`. Meeting rollup:
 > it is scheduled for **this week**, and it outranks every feature below it.
 > Nothing in this catalog is worth building if the data it operates on cannot
 > be recovered.
+>
+> **Status 2026-07-25 — still true.** A runbook and data-architecture plan exist
+> on `claude/render-backup-data-architecture-vlizsr` (unmerged, 610 lines of
+> docs). **Nothing has been enabled.** The week it was scheduled for has ended
+> with the exposure unchanged.
+
+---
+
+## Shipped since this catalog was written
+
+Reconciled against merged PRs on 2026-07-25. Item sections below carry the
+detail; this is the index.
+
+| Item | PR | Note |
+|---|---|---|
+| **C8 Procore markup rotation** | #310 | ✅ Done. Root cause was *not* the predicted annotation transform |
+| **I1 Subs view v1** | #311 | ✅ Done (already reflected below). OCIP remains |
+| **G1 Desktop notifications** | #312 | ⚠️ Shipped, but as foreground `Notification`, **not Web Push** |
+| **C9 Carmen rename** | #313, #315 | ✅ Done — **deeper than this catalog recommended.** Mailbox moved |
+| **C1 Note field defect** | in review | PR open 2026-07-25 |
+| **E4 GC-facing lookahead builder** | #314 | **Was not in this catalog.** New entry added; unranked |
 
 **A note on state.** A survey of `origin/main` before writing this changed
 several plans from "build" to "wire." Already on main: `app/brain/lookahead/`
@@ -475,11 +500,18 @@ be fetched.
 
 ## C. BB / Carmen
 
-### C1. Note field on accept/reject — **P1. Diagnosed 2026-07-22: missing control on one of two surfaces.**
+### C1. Note field on accept/reject — **IN REVIEW. PR open 2026-07-25.**
 
 > **Not a new feature.** The backend and one frontend surface already implement
 > this fully. The Procore document review surface — the one Bill uses — is
 > missing the notes control entirely.
+
+> **Status 2026-07-25:** fix is in a PR. Worth recording how it survived a week:
+> **PR #310 edited `DocumentRow.jsx` — the exact file — and went past this.**
+> Verified on main at that point, `FindingRow` still read only
+> `initial?.decision`, held no `notes` state, and posted no `notes` key. A
+> diagnosed P1 sitting in a file someone else was already editing is the cheap
+> failure mode to watch for.
 
 **What already exists:**
 - `BBReviewFeedback` has `notes` (Text), `decision` (accepted|rejected),
@@ -639,59 +671,61 @@ lives — decide before building). **Effort:** M
 
 ---
 
-### C8. Procore markup rotation bug — **ELEVATED. Attack soon.**
+### C8. Procore markup rotation bug — **✅ SHIPPED 2026-07-23 (PR #310).**
 
 > **Raised in system priority by Daniel 2026-07-22:** *"need to fix, we should
 > elevate this in the overall system priority… should be a quick fix and
 > something to attack soon."* Fix regardless of the October Procore exit.
+> **Estimate held — S, one branch, one day.**
 
-**State:** Procore-sourced markups render in the wrong position — rotated 90°
-and offset from where they were placed. Bill demonstrated it live and diagnosed
-it himself: *"if you rotated it 90 it would be right where it's supposed to
-be"* [L156–160]. Not illegible, just displaced.
+**Was:** Procore-sourced markups rendered rotated 90° and offset from where they
+were placed. Bill demonstrated it live and diagnosed it himself: *"if you
+rotated it 90 it would be right where it's supposed to be"* [L156–160].
 
-**Likely cause:** the markup coordinate space is not being rotated alongside the
-page. Procore stores annotation coordinates against the page's native
-orientation; if the renderer applies page rotation to the image but not to the
-annotation transform, markups land rotated and offset by exactly that amount —
-which is what Bill saw.
+**The predicted cause was wrong, and the difference is worth keeping.** This
+catalog guessed the renderer applied page rotation to the image but not to the
+annotation transform. It was the opposite end of the pipe: **our own BB stamping
+pass was baking the page rotation into the page content**, which moved Procore's
+already-correct markups out from under it. Fix is in `app/brain/pdf_review/stamp.py`
+— leave `/Rotate` alone and rotate the stamp into the page's coordinate space
+instead.
 
-**Plan:**
-1. **Pin the exact location first** — find where markup coordinates are mapped
-   on ingest/render. This is the first task on the branch and it validates the
-   "quick fix" assumption before anyone commits to it.
-2. Reproduce with a known landscape sheet.
-3. Apply the page rotation matrix to annotation coordinates, not just the page
-   image.
-4. **Verify against a portrait sheet too** — the trap here is a hardcoded 90°
-   swap that fixes landscape and breaks portrait.
+**The portrait trap the plan warned about is covered.** `tests/brain/test_bb_stamp.py`
+parametrizes 0/90/180/270 twice over — once asserting page rotation and existing
+markups are untouched, once asserting the stamp lands upright in the visual
+upper-left. No hardcoded 90° swap.
 
-**Effort:** S expected — unconfirmed until step 1.
+**Follow-up worth confirming with Bill:** he reported this from the viewer, so
+confirm on a real Procore sheet that the displacement is gone — the tests prove
+the stamping pass is innocent now, not that no second cause exists.
 
 ---
 
-### C9. Carmen Miranda rename — **DEFERRED, waiting on Bill. Conversion confirmed.**
+### C9. Carmen Miranda rename — **✅ SHIPPED 2026-07-25 (PRs #313, #315). Scoped wider than recommended.**
 
 > **Confirmed 2026-07-22:** BB **will** be converted to Carmen Miranda.
-> Deferred until Bill delivers.
+> Shipped three days later, going well past the display layer this catalog
+> recommended.
 
-**Blocked on Bill:** an avatar image, and a decision on the email — keep BB's or
-mint a new one. He raised the wrinkle himself: *"you could keep BB internal if
-you want, but then there's two of them"* [L98–100].
+**What shipped:** a deep rename — `app/brain/carmen_chat/` (was `bb_chat`),
+config variables, and **the mailbox itself: `carmen_ai@mhmw.com`**
+(`Config.CARMEN_MAILBOX`, `RECALL_CALENDAR_MAILBOX`). Roughly 60 backend files
+across both PRs. The banana theme was deliberately kept.
 
-**Recommended scope — display layer only** (proposed, not yet confirmed):
+**This overrode the catalog's recommendation**, which was `BB*` stays internal,
+display strings only, *don't touch the mailbox the entire ingestion path depends
+on*. Recorded rather than re-litigated — it is done and it merged clean. The
+consequence to hold onto: **the mail ingestion path, the Recall calendar poller,
+and the Graph subscription now all key off a new mailbox**, so anything that
+referenced `bb@mhmw.com` out in Azure, Graph consent, or a forwarding rule needs
+to point at the new address. That is external config, not code, and code review
+cannot catch it.
 
-`BB` is load-bearing as an internal identifier — `BBDrawingReview`,
-`BBReviewFeedback`, `BBChatConversation`, `BBChatMessage`, `User.is_bb_chat`,
-`app/brain/bb_chat/`, `frontend/src/components/bbReview/`, `BBReviewPanel.jsx`,
-and the **bb@mhmw.com mailbox the entire email ingestion path depends on**.
+**Loose end:** `app/brain/bb_chat/` still exists on main containing nothing but
+`__pycache__`, with no importers. Delete the directory.
 
-Renaming user-visible strings and the avatar is an afternoon. Renaming schema,
-modules, and the mailbox is not, and carries real risk for zero user-visible
-gain. Recommendation: **`BB*` stays as the internal name in code, models, and
-mail; only display strings and the avatar change.**
-
-**Effort:** S for display-only.
+**Resolved without Bill:** the email decision (a new mailbox was minted).
+**Still owed by Bill:** the avatar image.
 
 ---
 
@@ -722,6 +756,17 @@ leash off on that one"* [L536–544].
 **State:** Shipped and seen. `app/brain/projects/`, `Projects.jsx`,
 `ProjectDetail.jsx`. Alta Metro carries live data; the rest is mock. Bill's
 verdict: *"this is awesome… the PMs liked it."*
+
+**Rework in progress 2026-07-25** on `feature/updated-projects`, sharing a branch
+with K2: `components/projects/` gains `projectPanels.jsx`,
+`projectPanelBodies.jsx`, `PanelModal.jsx`, `vocab.jsx`, and `demoProjects.js`,
+rendered on K2's grid. ~7,400 lines across the branch.
+
+**Two things to watch as it lands:** `demoProjects.js` means mock data is still
+carrying the page, so which sections are wired to live data is the question that
+decides whether this is shippable or a demo; and **Bill still owes the layout
+spec** — building the arrangement before it arrives is the rework this entry
+already warned about.
 
 ---
 
@@ -792,9 +837,17 @@ is specifying.
 > grid engine to display custom metrics."* See **K2**.
 
 **State:** `ToDos.jsx` and `app/brain/todos_routes.py` exist; `Notification`
-exists. No per-user aggregate view. Bill traces the idea to a text Daniel sent
-him — *"the cover page where you would open up the brain and it would tell you,
-hey you're Dalton, this is what you need to do"* [L690].
+exists. No per-user aggregate view. **Not started as of 2026-07-25**, while K2
+and D1 are both in flight on `feature/updated-projects`. Bill traces the idea to
+a text Daniel sent him — *"the cover page where you would open up the brain and
+it would tell you, hey you're Dalton, this is what you need to do"* [L690].
+
+**This is the item that proves or disproves K2.** The grid shell was built
+separably specifically so this binding is cheap. Starting it soon after D1 lands
+— while the panel contract is still fresh and still changeable — is worth more
+than waiting for D1 to be finished, because anything the user-scoped binding
+needs that the contract doesn't offer is far cheaper to add now than after
+projects has shipped on it.
 
 **Plan:**
 1. Render the **K2 grid engine** bound to a user instead of a project.
@@ -980,6 +1033,50 @@ gates everything above it.
 
 ---
 
+### E4. GC-facing lookahead schedule builder — **ADDED 2026-07-25. Shipped as backend (PR #314). Unranked.**
+
+> **This item did not exist in the catalog.** It is being recorded after the
+> fact, not planned into it. It came out of the 2026-07-22 meeting cycle without
+> a catalog entry and shipped before it got one.
+
+**Do not confuse it with A4 — they point opposite directions.**
+
+| | Direction |
+|---|---|
+| **A4 Lookahead upload + markup** | **Inbound.** The GC's four-week lookahead comes to us; we parse it and cross-check against our releases |
+| **E4 Lookahead schedule builder** | **Outbound.** We generate a schedule *from our own pipeline* and give it to the GC |
+
+They share `app/brain/lookahead/` and the word "lookahead," and nothing else.
+
+**State:** backend only, on main. `pipeline.py` (272 lines) — read-only
+`get_project_pipeline` loading active releases, open DRRs, and GC approvals for a
+job. `schedule_builder.py` (544 lines) — turns that into
+drafting / fabrication / paint / shipping / installation bars. Unit tests on
+job-500-shaped fixtures. **No UI, no PDF export, no Carmen tooling yet** — the
+PR names those as next.
+
+**Two modeling decisions already baked in, worth knowing before extending:**
+
+- **Provisional 3-day paint estimate** and **ship = install − 1 business day**
+  when unset. Both are placeholders standing in for data we do not have. The
+  paint figure is the same ~3–4 days E2 flags as varying widely by product type
+  — a big Ultralox job has no paint at all. **When E2's stage weights land, this
+  builder should consume them rather than keep its own constant.**
+- **It deliberately does not invent dates from a job-local fab queue.** That is
+  the right call and it is exactly the boundary E1 (tee-time) would cross. If
+  tee-time ever feeds this, that is a decision to make explicitly, not a
+  refactor to drift into.
+
+**Open, and all of it:** where this surfaces (project page? its own export?),
+who triggers it, whether the output is a PDF we send or a page the GC is given
+access to (which would touch I3), and how a generated schedule reconciles
+against the GC's own lookahead coming back in through A4. **Needs a scoping pass
+and a rank.**
+
+**Effort:** backend done. UI + export unscoped.
+
+---
+
 ## F. Meeting → action
 
 ### F1. Meeting extraction bands — **LOW–MEDIUM. Combined item (absorbs former F2). Revisit.**
@@ -1025,10 +1122,47 @@ moves before they land.
 
 ## G. Adoption
 
-### G1. Desktop notifications — **HIGH PRIORITY. Elevated — near-term win.**
+### G1. Desktop notifications — **✅ SHIPPED 2026-07-25 (PR #312) — as foreground notifications, not Web Push.**
 
 > **Elevated by Daniel 2026-07-22:** *"high priority, elevate — and a huge near
-> term win."* Small effort, outsized adoption return.
+> term win."* Small effort, outsized adoption return. **Shipped in three days.**
+
+---
+
+#### What shipped, and the one difference that matters
+
+`frontend/src/utils/desktopNotifications.js` + `NotificationBell.jsx`. It uses
+the browser `Notification` constructor, fired from the bell's existing 30-second
+poll. There is **no service worker, no VAPID key, and no backend push** — no
+`pywebpush` in `requirements.txt`, nothing server-side at all.
+
+**So notifications only fire while a Brain tab is open.** The plan's step 1 said
+"Web Push from the Brain"; this is the foreground half of that. For the described
+use case — Bill at his desk with the Brain open — it works. What it does *not*
+do is reach a closed browser, or the iPad/phone PWA in the background, which is
+where Bill actually reads things on the move.
+
+**Whether that gap matters is a product call, not a bug.** Worth asking after a
+week of use: does anyone notice they only get alerts with the tab open? If yes,
+true Web Push is a separate, larger piece of work (service worker, VAPID,
+subscription storage, server-side send) — not an extension of this.
+
+**Two other deltas from the plan:**
+
+- **Scope is mentions *and* to-dos**, not the recommended mentions-only. The
+  fatigue risk the plan named is now live rather than avoided — watch it.
+- **The opt-in moment was handled correctly.** `requestPermission()` is
+  documented as gesture-only and is fired from a button, not page load. That was
+  flagged as "the one real risk" and it did not land.
+
+**Still outstanding: the training doc.** Plan step 2, committed to by Daniel,
+with Bill getting everyone onto Chrome. The feature's entire premise is that
+built surfaces are invisible to the people they're for — shipping the mechanism
+without telling anyone reproduces that exact failure one level up.
+
+---
+
+#### Original plan, retained for the Web Push follow-up
 
 **State:** `Notification` and the bell exist. `/admin/metrics` showed **nobody
 used mentions all week** — every mention surface already built is invisible to
@@ -1163,10 +1297,17 @@ system, then you can go out there and get on their ass."*
 
 ---
 
-### I3. External user access — **ELEVATED. Ships with T&M processing.**
+### I3. External user access — **IN PROGRESS 2026-07-25. Reported going well.**
 
 > **Elevated by Daniel 2026-07-22:** *"as soon as T&Ms are rolling, we will need
-> this, so needs to be elevated with T&M processing."*
+> this, so needs to be elevated with T&M processing."* Under way three days
+> later, ahead of A1 rather than behind it.
+
+> **The plan's own warning applies hardest while it's going well.** The risk here
+> was never step 1 — it is step 3, *what gets missed*. Endpoint-by-endpoint
+> financial-leakage auditing produces no visible progress and no satisfying
+> milestone, so "working well" measured against steps 1 and 2 is exactly the
+> state in which step 3 gets shortened. Budget it explicitly.
 
 **Why T&M forces it.** The confirmed A1 flow has a PM seeding a ticket and
 **sharing it to the person doing the work** — frequently a subcontractor
@@ -1241,11 +1382,36 @@ to-dos. Bill called it *"very down the road."*
 
 ## K. Cross-cutting architecture
 
-### K2. Configurable grid engine — **ELEVATED. Shared by D1, D2, and metrics.**
+### K2. Configurable grid engine — **IN PROGRESS 2026-07-25 (`feature/updated-projects`). Shared by D1, D2, and metrics.**
 
 > **Scoped with Daniel 2026-07-22:** *"we will build a similar grid engine to
 > display custom metrics."* Elevated alongside D1 and D2, which both render on
 > it.
+
+---
+
+#### Status 2026-07-25 — built as its own layer, which was the point
+
+`frontend/src/components/grid/` — `PanelGrid.jsx`, `useGridLayout.js`,
+`layoutMerge.js`, `density.js`, `gridTheme.css`, with tests on the grid, the
+merge, and the panels. Per-user persistence is real: `migrations/add_user_panel_layouts.py`
+plus `services/layoutApi.js` and `tests/brain/test_layout_routes.py`. A
+`GridDemo.jsx` page exercises the shell independently of any binding.
+
+**It lives in `components/grid/`, not inside `components/projects/`.** That is
+the whole argument of this entry surviving contact with the build — the shell is
+separable, so D2 binds it rather than reimplementing it.
+
+**`layoutMerge.js` answers the open question below by implication.** Merging a
+stored layout against a current panel set is what makes positions survive panels
+being added or removed. Confirm the persistence key is per (user, surface) as
+recommended, so the projects layout and the personal layout cannot overwrite
+each other when D2 lands.
+
+**The real test is D2**, which has not started. Until a second surface binds it,
+"reusable" is a design intention rather than a demonstrated fact.
+
+---
 
 **What it is:** a configurable box-grid shell — draggable boxes with per-user
 persisted positions, each box summarizing something and drilling through to the
@@ -1548,29 +1714,35 @@ the transcript alone.
 
 | Item | Effort | Note |
 |---|---|---|
-| **K4 Backups** | S–M | **There is no backup.** Not a feature — the precondition for every other item being worth building. Postgres *and* the binary storage disk are both unprotected |
+| **K4 Backups** | S–M | **Still no backup as of 2026-07-25.** A runbook exists on an unmerged branch; nothing is enabled. The week it was scheduled for has passed and the exposure is unchanged. Not a feature — the precondition for every other item being worth building |
 
 ---
 
 ### TIER 1 — Elevated, near-term
 
 Ordered by sequence, not just importance. Prerequisites first.
+**Status column reconciled against merged PRs 2026-07-25.**
 
-| # | Item | Effort | Note |
-|---|---|---|---|
-| 1 | **A1 Time & materials** | M | Committed **Mon 2026-07-27**. Origination path only — paper ingestion dropped, which means this is a **build**, not a merge |
-| 2 | **I3 External user access** | L | Elevated *with* T&M — the fill-it-out step lands on sub foremen. Same work as A1's deferred sub-facing layer |
-| 3 | **K2 Grid engine** | M | **Prerequisite for D1 and D2.** Not extra work beside them |
-| 4 | **D1 Projects page** | L | Elevated with A1/A2 — *"gives us more reason to interact with this page"* |
-| 5 | **A2 Change orders** | M | Email capture only. **Blocked on Bill** for the CO log + a sample email |
-| 6 | **D2 Personal page** | L | Renders K2 bound to a user |
-| 7 | **G1 Desktop notifications** | S | *"Huge near-term win."* Makes every existing mention surface visible |
-| 8 | **C1 Note field defect** | S | Diagnosed: the control exists on one surface, missing on the one Bill uses |
-| 9 | **C8 Procore markup rotation** | S | Elevated. Fix despite the October exit |
-| 10 | **I1 Subs view + OCIP** | S–M | Assignment data already exists; OCIP is one column and a rule |
+| # | Item | Effort | Status | Note |
+|---|---|---|---|---|
+| 1 | **A1 Time & materials** | M | open | Committed **Mon 2026-07-27**. `feature/tm-ingestion` still unmerged; `app/brain/tm/` on main is still empty. Origination path only — a **build**, not a merge |
+| 2 | **I3 External user access** | L | **in progress** | Reported going well 2026-07-25. Elevated *with* T&M — the fill-it-out step lands on sub foremen. Same work as A1's deferred sub-facing layer |
+| 3 | **K2 Grid engine** | M | **in progress** | `feature/updated-projects` — built as a standalone `components/grid/` with per-user layout persistence. **Prerequisite for D1 and D2** |
+| 4 | **D1 Projects page** | L | **in progress** | Same branch as K2, bound project-scoped. Elevated with A1/A2 |
+| 5 | **A2 Change orders** | M | blocked | Email capture only. **Blocked on Bill** for the CO log + a sample email |
+| 6 | **D2 Personal page** | L | not started | Renders K2 bound to a user. Nothing built as of 2026-07-25 — **the binding K2 was built to make cheap** |
+| 7 | **G1 Desktop notifications** | S | ✅ **#312** | Shipped as **foreground notifications, not Web Push** — fires only with a tab open. Scope widened to to-dos as well as mentions |
+| 8 | **C1 Note field defect** | S | **in review** | PR open 2026-07-25 |
+| 9 | **C8 Procore markup rotation** | S | ✅ **#310** | Real cause was our own stamping pass, not the annotation transform |
+| 10 | **I1 Subs view + OCIP** | S–M | ✅ v1 **#311** | Subs page + paid flag shipped. **OCIP still outstanding** and it is the half with the compliance failure behind it |
 
-**Four of these are S.** C1, C8, G1, and most of I1 are small, unblocked, and
-independent — they can land while the larger items are in flight.
+**The four S items all moved.** Three shipped and one is in review, inside three
+days — which is the case for keeping small unblocked items in the queue
+alongside the large ones.
+
+**What this leaves in Tier 1:** six items, five of them L or M, one blocked on
+Bill. The next thing that lands is A1 on Monday, and K2 is the prerequisite
+sitting under both D1 and D2.
 
 ---
 
@@ -1590,6 +1762,7 @@ independent — they can land while the larger items are in flight.
 |---|---|
 | **K3 Data infra: object storage migration** | **L.** All binaries sit on a single Render disk — no object storage exists. Caps scaling at one instance. Pulling it forward is one way to solve K4 step 3 |
 | **L1 Styling v3 — full redesign** | **XL.** Recommendation: v3 foundation first, new surfaces built native, legacy migrated progressively — otherwise K2/D1/D2/D4 get built twice |
+| **E4 GC-facing lookahead builder** | **Backend shipped (#314) before it had an entry.** Outbound — the inverse of A4. No UI, no export, no trigger, no rank. Needs a scoping pass |
 
 ---
 
@@ -1638,7 +1811,7 @@ now the first loops that would invent their own tables.** Decide before either.
 | **B2 Submittal workflows** | Waits on the working session + Bill's lifecycle flowchart |
 | **B3 Soft-link sub/DRR/FC** | Deferred as a feature — **but carries an open correctness question** |
 | **B4 Customer Procore access** | **Bill owns** — a question for his Procore rep |
-| **C9 Carmen rename** | Confirmed happening; waiting on Bill's avatar + email decision |
+| ~~**C9 Carmen rename**~~ | **✅ Shipped 2026-07-25** (#313, #315) — no longer deferred. Only the avatar is still owed |
 | **C10 Carmen runs actions** | — |
 | **D3 Photo feedback loop** | *"Cute idea, defer"* |
 | **G2 Photo-gated stages** | Gate after adoption, not to force it |
@@ -1659,9 +1832,22 @@ deferred.** If one Procore submittal advances GC→DRR→FC and our sync freezes
 DWL DRR filtering, `start_install`, Rel assignment. Resolvable with a read-only
 SQL check. See B3.
 
-**There is no backup — see K4.** Confirmed 2026-07-22. Prod Postgres and the
-binary storage disk are both unprotected. This outranks everything else in the
-catalog and is scheduled for this week.
+**There is no backup — see K4.** Confirmed 2026-07-22, **still true 2026-07-25.**
+Prod Postgres and the binary storage disk are both unprotected. A runbook and
+data-architecture plan were written to
+`claude/render-backup-data-architecture-vlizsr` and never merged or executed.
+This outranked everything else in the catalog for a week in which four other
+items shipped.
+
+**Carmen's mailbox moved and the code review cannot prove the outside moved with
+it.** `carmen_ai@mhmw.com` replaced `bb@mhmw.com` in `Config.CARMEN_MAILBOX` and
+`RECALL_CALENDAR_MAILBOX`. Azure app registration, Graph admin consent, the mail
+subscription, and any forwarding rule pointing at the old address are all
+external config. Verify the ingestion poll and the Recall calendar poller are
+still landing records.
+
+**`app/brain/bb_chat/` is an orphan** — empty but for `__pycache__`, no
+importers. Delete it.
 
 **E1's integration point is undecided.** Where the capacity check attaches —
 green-date entry, install modal, timeline panel, or its own page. Bill's
@@ -1674,7 +1860,7 @@ blocked on another person; all were explicitly flagged as needing more thought.
 
 ## Blocked on Bill
 
-Eight items, none of which Daniel can unblock:
+Eight items, none of which Daniel can unblock. **One shrank on 2026-07-25.**
 
 | Owed | Blocks |
 |---|---|
@@ -1682,7 +1868,7 @@ Eight items, none of which Daniel can unblock:
 | Sample change order email | **A2 — the classifier can't start without it** |
 | Projects page markdown / full-page spec | D1 layout |
 | Parts page "brain stem" Excel | C2 quantitative comparison |
-| Carmen avatar + email decision | C9 |
+| Carmen **avatar** — ~~email decision~~ resolved by minting `carmen_ai@mhmw.com` | C9 cosmetics only; the rename already shipped without it |
 | Stage weight approval | E2 |
 | Lifecycle flowchart + AI steps | B2 |
 | Procore export plan; customer-Procore question to his rep | B1, B4 |

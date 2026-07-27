@@ -17,6 +17,83 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.322',
+    date: 'July 26, 2026',
+    summary:
+      'Banana Boy is now Carmen, the paper T&M ticket goes digital with its own subcontractor portal, and Carmen can hand you a GC-ready look-ahead schedule as a PDF.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Digital T&M tickets, with a subcontractor portal',
+        adminOnly: true,
+        detail:
+          'The paper T&M form now has a digital counterpart under the new T&M tab. Open a ticket against a job or release, key the date, location, and description of work, add labor, material, and equipment line items, and attach photos straight from a phone or iPad in the field. Tickets carry a real lifecycle — a discarded draft is voided, never deleted — so the record survives. Subcontractors get their own invite-by-email login and a stripped-down portal showing only the tickets assigned to them, with no rates, pricing, or financial data visible anywhere. Costs, O&P, and automatic change-order generation land in a later phase.',
+      },
+      {
+        type: 'improved',
+        title: 'Subcontractor work lives under one Subs tab',
+        adminOnly: true,
+        detail:
+          'Subcontractors and the installer invoice tracker were two separate items in the top nav; they are now two tabs under a single Subs tab — Subcontractors for inviting and managing the roster, Invoice Paid for marking which installer invoices have been paid. Old links to /subcontractors still work and land on the right tab. Customer billing stays where it was, under its own Invoicing tab.',
+      },
+      {
+        type: 'improved',
+        title: 'Banana Boy is now Carmen',
+        detail:
+          'BB has been renamed Carmen across the app — the chat assistant, the drawing reviewer, and the mailbox that ingests forwarded email, which now lives at carmen_ai@mhmw.com. Nothing about how she works changed, and the banana stays.',
+      },
+      {
+        type: 'new',
+        title: 'GC look-ahead schedule PDF from Carmen',
+        adminOnly: true,
+        detail:
+          'Ask Carmen for a look-ahead on a job and she builds a multi-phase production schedule — drafting, fabrication, paint, shipping, installation — from that job\'s live releases, open DRRs, and GC approvals, then renders it as a print-ready landscape Gantt PDF with a phase color legend, downloadable right from the chat. She draws only dates that actually exist on the records: hard dates, projected dates, and clearly marked estimates, never invented ones.',
+      },
+      {
+        type: 'improved',
+        title: 'Better accept/reject flow on drawing-review findings',
+        adminOnly: true,
+        detail:
+          'Accepting or rejecting a finding from the drawing reviewer now lets you attach a note explaining the call, in a roomier form that saves cleanly and keeps your decision visible on the finding.',
+      },
+      {
+        type: 'fixed',
+        title: 'Carmen\'s mailbox rides out Microsoft hiccups',
+        adminOnly: true,
+        detail:
+          'Forwarded email polling now retries with backoff when Microsoft returns a throttle or temporary server error, instead of failing the whole poll and leaving messages waiting for the next cycle.',
+      },
+    ],
+  },
+  {
+    version: 'v2.0.311',
+    date: 'July 23, 2026',
+    summary:
+      'A Subs page for tracking installer invoice payments, and Procore markups now land where they belong on reviewed drawings.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Subs page for installer invoices',
+        adminOnly: true,
+        detail:
+          'A new admin Subs page lists every active release that has an installer assigned, grouped by installer, with a Yes/No toggle for whether that installer has been paid. Filter by paid, unpaid, or installer to see what is still outstanding. This is separate from the Job Log\'s Invoiced column, which still tracks customer billing.',
+      },
+      {
+        type: 'fixed',
+        title: 'Procore markups no longer rotated on reviewed drawings',
+        detail:
+          'On rotated sheets, the page-number stamp added for drawing review was throwing every Procore markup 90 degrees off and out of place. The stamp now rotates itself to match the sheet instead of rewriting the page, so markups sit exactly where Procore put them and the stamp still reads upright.',
+      },
+      {
+        type: 'fixed',
+        title: 'Admin pages load on a direct link or refresh',
+        adminOnly: true,
+        detail:
+          'The metrics and submittal-matching admin pages returned a 404 when opened by URL or refreshed. Both now load correctly.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.306',
     date: 'July 23, 2026',
     summary:
