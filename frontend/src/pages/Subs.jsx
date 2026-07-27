@@ -1,13 +1,14 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Admin Subs page — active releases assigned to subcontractor installers,
- *   grouped by installer, with a yes/no toggle for installer invoice paid.
- *   Distinct from Job Log "Invoiced" (MHMW customer billing).
+ * purpose: Admin "Invoice Paid" tab under the Subs shell — active releases assigned
+ *   to subcontractor installers, grouped by installer, with a yes/no toggle for
+ *   installer invoice paid. Distinct from top-level customer "Invoicing" and from
+ *   Job Log "Invoiced".
  * exports:
  *   Subs: Page component (admin-gated).
  * imports_from: [react, ../utils/auth, ../services/subsApi]
- * imported_by: [App.jsx]
+ * imported_by: [App.jsx via SubsLayout at /subs/invoice-paid]
  * invariants:
  *   - Renders an access message (no fetch) unless the authenticated user is_admin.
  *   - Server enforces admin; optimistic toggle reverts on error.
@@ -147,7 +148,7 @@ export default function Subs() {
     if (!authorized) {
         return (
             <div className="p-6 text-gray-600 dark:text-slate-300">
-                Subs is available to admins only.
+                Invoice Paid is available to admins only.
             </div>
         );
     }
@@ -158,7 +159,7 @@ export default function Subs() {
                 <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
                     <div>
                         <h1 className="text-xl font-semibold text-gray-900 dark:text-slate-100">
-                            Subs
+                            Invoice Paid
                         </h1>
                         <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
                             Active releases by installer. Mark whether the subcontractor invoice is paid.
