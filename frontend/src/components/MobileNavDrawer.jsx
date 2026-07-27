@@ -29,7 +29,7 @@ const NAV_ITEMS = [
 const ADMIN_ITEMS = [
     { label: 'Subs', path: '/subs' },
     { label: 'Meetings', path: '/meetings' },
-    { label: 'Bug Tracker', path: '/board' },
+    { label: 'Ongoing Complaints', path: '/board' },
     { label: 'T&M', path: '/tm-tickets' },
     { label: 'Submittal Matching', path: '/admin/submittal-matching' },
 ];

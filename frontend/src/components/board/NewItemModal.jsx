@@ -138,7 +138,7 @@ export default function NewItemModal({ onClose, onCreated }) {
                 {/* Header */}
                 <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-6 py-4 rounded-t-xl">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-bold text-white">New Item</h2>
+                        <h2 className="text-xl font-bold text-white">File a Complaint</h2>
                         <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl leading-none">&times;</button>
                     </div>
                 </div>
@@ -157,7 +157,7 @@ export default function NewItemModal({ onClose, onCreated }) {
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             className="w-full px-4 py-2.5 border border-gray-300 dark:border-slate-500 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white dark:bg-slate-600 dark:text-slate-100"
-                            placeholder="Short summary of the issue or feature"
+                            placeholder="What's the complaint?"
                             autoFocus
                         />
                     </div>
@@ -257,7 +257,7 @@ export default function NewItemModal({ onClose, onCreated }) {
                             disabled={submitting}
                             className="px-4 py-2 text-sm font-medium text-white bg-accent-500 hover:bg-accent-600 rounded-lg disabled:opacity-50 transition-colors"
                         >
-                            {submitting ? (staged.length ? 'Creating & uploading…' : 'Creating...') : 'Create'}
+                            {submitting ? (staged.length ? 'Filing & uploading…' : 'Filing...') : 'File Complaint'}
                         </button>
                     </div>
                 </form>

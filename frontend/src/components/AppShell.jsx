@@ -159,7 +159,7 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
                 {/* Subs collapses Subcontractors (invite/registry) + Invoice Paid under one stub */}
                 {isAdmin && navBtn('/subs', 'Subs')}
                 {isAdmin && navBtn('/meetings', 'Meetings')}
-                {isAdmin && navIconBtn('/board', 'Bug Tracker', (
+                {isAdmin && navIconBtn('/board', 'Ongoing Complaints', (
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                     {/* Antennae */}
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 4Q7 1 5 2M15 4Q17 1 19 2" />

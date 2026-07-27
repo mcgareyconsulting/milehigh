@@ -84,7 +84,7 @@ export default function Sidebar({ isAuthenticated, isAdmin, canSeeReport, onLogo
     ...(isAdmin ? [
       { label: 'Subs', path: '/subs', icon: ICONS.invoicing },
       { label: 'Meetings', path: '/meetings', icon: ICONS.meetings },
-      { label: 'Bug Tracker', path: '/board', icon: ICONS.bug },
+      { label: 'Ongoing Complaints', path: '/board', icon: ICONS.bug },
     ] : []),
   ];
 
