@@ -338,26 +338,37 @@ export default function NotificationBell({
                         color: open ? 'var(--rail-fg-active)' : 'var(--rail-fg)',
                     }}
                 >
-                    <span className="shrink-0 grid place-items-center" style={{ width: 19, height: 19 }}>
+                    <span className="shrink-0 relative grid place-items-center" style={{ width: 19, height: 19 }}>
                         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                             <path d="M6 9a6 6 0 1 1 12 0v5l2 3H4l2-3z M10 20a2 2 0 0 0 4 0" />
                         </svg>
+                        {/* Collapsed rail: badge hangs off the top-right of the icon, not over it. */}
+                        {!expanded && unreadCount > 0 && (
+                            <span
+                                className="absolute grid place-items-center font-bold text-white pointer-events-none"
+                                style={{
+                                    background: '#e0483c', borderRadius: 999, fontSize: 10,
+                                    minWidth: 17, height: 17, padding: '0 5px',
+                                    top: -7, right: -9,
+                                    boxShadow: '0 0 0 2px var(--rail-bg)',
+                                }}
+                            >
+                                {unreadCount > 99 ? '99+' : unreadCount}
+                            </span>
+                        )}
                     </span>
                     {expanded && (
                         <span className="truncate" style={{ fontSize: 12.5, fontWeight: 600 }}>Notifications</span>
                     )}
                     {expanded && <span className="flex-1" />}
-                    {unreadCount > 0 && (
+                    {/* Expanded rail: badge sits at the end of the row label. */}
+                    {expanded && unreadCount > 0 && (
                         <span
                             className="grid place-items-center font-bold text-white"
                             style={{
                                 background: '#e0483c', borderRadius: 999, fontSize: 10,
                                 minWidth: 17, height: 17, padding: '0 5px',
-                                position: expanded ? 'static' : 'absolute',
-                                top: expanded ? undefined : 4,
-                                right: expanded ? undefined : 9,
-                                boxShadow: expanded ? 'none' : '0 0 0 2px var(--rail-bg)',
                             }}
                         >
                             {unreadCount > 99 ? '99+' : unreadCount}
@@ -371,14 +382,16 @@ export default function NotificationBell({
                     className="relative p-2 rounded-lg text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-accent-500"
                     aria-label="Notifications"
                 >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={BELL_ICON_PATH} />
-                    </svg>
-                    {unreadCount > 0 && (
-                        <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-4.5 h-4.5 min-w-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full">
-                            {unreadCount > 99 ? '99+' : unreadCount}
-                        </span>
-                    )}
+                    <span className="relative inline-flex">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={BELL_ICON_PATH} />
+                        </svg>
+                        {unreadCount > 0 && (
+                            <span className="absolute -top-1.5 -right-2.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full pointer-events-none">
+                                {unreadCount > 99 ? '99+' : unreadCount}
+                            </span>
+                        )}
+                    </span>
                 </button>
             )}
 

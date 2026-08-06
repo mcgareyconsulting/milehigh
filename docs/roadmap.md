@@ -77,7 +77,7 @@ Every open item in one place. Detail lives in the workstream sections below.
 | **P8** | Aging / outstanding view — status + timer | S–M | P2, D1 | Not started |
 | **P10** | Backfill `phase` + `source` on 3,892 legacy rows | S | P1 | Not started. **Shrank from "unscopeable"** |
 | **P11** | **Procore document export** — PDFs, drawing sets, returned markups, correspondence. `Submittals` holds metadata only; the files live on Procore's servers and vanish at lapse | S + ? | K3 | 🔴 Not started. **Read-only delta inventory (~1d) in week 1** sizes the pull; the only item with a cliff rather than a deadline, and no second attempt |
-| **C3** | Universal PDF tool — absorbs the revision stack (P9) | L | — | Not started. **Promoted onto the critical path** |
+| **C3** | Universal PDF tool — absorbs the revision stack (P9) | L | — | Not started. **Promoted onto the critical path.** Scoping resolved 2026-08-08: **generalize the DWL viewer** — client-validated source of truth, "needs a brainstorm" retired |
 | **D1** | Projects page — container for P8 + the submittal section | L | K2 | In progress (`feature/updated-projects`) |
 | | | **~48 d + P11 (unknown until inventory)** | | |
 
@@ -113,11 +113,11 @@ Every open item in one place. Detail lives in the workstream sections below.
 | **BUG-6** | Row 164 — Nov 2025 outlier still in the DWL | S | — | **Dropped** 2026-08-06 (data, not code) |
 | **DP** | Drafter edit permissions, `job` → `released` | S | — | **Fixed** 2026-08-06 — drafters get gear “Edit row” (job→released); PATCH via `drafter_or_admin`; delete stays admin |
 | **N6** | Ship ↔ Install 'Break' button | S | — | **Fixed** 2026-08-06 — Break/Link in install+ship modal; linked = auto 1 biz day, broken = independent |
-| **N5** | Ship-complete date cascade re-anchor | S | — | Extract date logic from the complete-zone cascade |
-| **N7** | Job log modal merge + redesign | M | — | **In flight, uncommitted** |
+| **N5** | Shipping-stage date discipline — formula dates blank at ship stages, hard dates wash white, **Paint Complete + hard date auto-rolls to Ship Planning** (generalizes the ASAP intercept, `stage/command.py:142`) | M | — | Spec expanded 2026-08-08 |
+| **N7** | Job log modal merge + redesign — + main-card change-log feed (dates + stage changes off `ReleaseEvents`) + banana icon flow replaces the progress bar | M | — | **In flight, uncommitted.** UI only — functionality frozen per the redesign package |
 | **N9** | Photo watermark + GPS — needs Pillow + pillow-heif | M | — | Capture standard settled. **§10.3 open** |
 | **H1** | Polish sweep — rolling calendar, full-screen modals, metrics load | M | N7 | Not started |
-| | | **~14.5 d** | | |
+| | | **~12 d remaining** (bug pile + DP + N6 shipped 2026-08-06) | | |
 
 ### Workstream 4 — Carmen
 
@@ -159,7 +159,7 @@ come out of Workstream 1**, or the date moves.
 |---|---|
 | P1, P0, P2, P4, P7, P10 | The record, the workflow, DRR creation, and a way for returns to land. Without any one of these there is no system |
 | **P11** — the document export | The one unrecoverable item. Inventory in week 1; the pull paced by rate limits and **verified complete before the lapse** |
-| **C3 narrow** — revision viewer only, not the universal tool | Meets the need; the universal-tool brainstorm moves after October |
+| **C3 narrow** — revision viewer only, not the universal tool | Meets the need — and starts from the **DWL viewer, the client-validated source of truth** (2026-08-08), which cuts its risk. The full universal tool moves after October |
 | **D1 minimal** — submittal tab only | Bill named "brain projects," but a container is enough |
 | FC conversion + release into the job log | The hand-off to everything that already works |
 
@@ -500,10 +500,10 @@ out of it at any point.
 | **N7** | **Job log modal merge + redesign** — **in flight, uncommitted** on the `feature/unified-release-modal` worktree. Soft dependency for punch-list and T&M entry points | M |
 | **N9** | **Photo watermark + GPS** — new 2026-08-06 | M |
 | **N10** | **Bulk edit on the job log** — see Workstream 2 | M |
-| **N5** | **Ship-complete date cascade** | S |
+| **N5** | **Shipping-stage date discipline** — spec expanded 2026-08-08, see below | M |
 | **N6** | **Ship ↔ Install 'Break' button** — **Fixed** 2026-08-06 in `StartInstallDateModal` | S |
 | **DP** | **Drafter edit permissions**, `job` → `released` columns — **Fixed** 2026-08-06: gear modal + API, not inline | S |
-| **H1** | Polish sweep — rolling calendar, full-screen modals, metrics load times | M |
+| **H1** | Polish sweep — rolling calendar, full-screen modals, metrics load times, **"left sidebar mode" toggle in the theme settings** (alongside dark mode / old-man mode, `ThemeContext.jsx`) | M |
 
 ### N9 — photo watermark
 
@@ -526,6 +526,37 @@ and stores it undecoded, and iPads shoot HEIC by default. That is why this is an
 - **`Projects.geofence_geojson` already does point-in-polygon** via PostGIS in
   `drafting_work_load/service.py:682`, so *"was this photo actually taken on
   site"* is a query with a working precedent — not new infrastructure.
+
+### N7 — unified modal, client requirements added 2026-08-08
+
+Three additions to the in-flight modal work, all client-stated:
+
+1. **Generalized change-log on the main card.** The rich change-log tab stays;
+   the main card gains a lightweight feed — *"ship date set by X at this time,"*
+   stage changes. **Dates and stage changes only.** This is a filtered render of
+   `ReleaseEvents` (which already carries actor, timestamp, from/to) — a query
+   and a component, not new tracking. Open design thought: whether/how it flows
+   into the notes corner.
+2. **The bottom progress bar is replaced by the banana-code icon flow.** The
+   placement is liked; the visual swaps to the banana stage icons — and the
+   banana code is **live production code**, not archaeology:
+   `StageIconRow.jsx` (7 dept icons × 4 states, `/icons/<dept>_<state>.png`,
+   already imported by `JobsTableRow`, `JobLog`, `Archive`). The swap is one
+   import into the modal.
+3. Per the Job Log redesign package: **functionality frozen, UI only** — these
+   two are display work over existing data, which fits that constraint.
+
+### N-PDF — the DWL viewer is the PDF source of truth (scoping decision, 2026-08-08)
+
+The client is *"incredibly pleased"* with the Drafting Work Load PDF
+viewer/markup/review — specifically the left sidebar and the page toggle. **All
+future PDF modal / viewing / review work generalizes that component; nothing new
+gets invented.**
+
+This resolves C3's biggest unknown. The catalog flagged C3 as *"needs a
+brainstorm before build"* — the brainstorm has now happened in production, by the
+client using it. C3-narrow (the October revision viewer) starts from the DWL
+viewer, which lowers its risk on the critical path.
 
 #### GPS source — tested 2026-08-06, and the answer is "not from EXIF"
 
@@ -647,13 +678,42 @@ first time someone checks a coordinate against where they know they stood.
 most of the time, what it's supposed to look like, where it's at."* A stamped
 photo is self-describing, which is exactly what the invoicing pile needs.
 
-### N5 — ship-complete date cascade
+### N5 — shipping-stage date discipline
 
-The complete-zone cascade keeps its `job_comp X → install stage` behavior. **The
-date manipulation is extracted out of it and re-anchored to the ship-complete
-stage**, so it fires sooner: drop ASAP and the red color, drop green/yellow too,
-and set the date to the ship-complete event date. Touches
-`neutralize_install_date_cascade`.
+**Spec expanded 2026-08-08** — the 8/4 note ("drop ASAP + red after ship
+complete") grew into a full rule set for what happens to dates when a release
+reaches a shipping stage. The complete-zone cascade keeps its
+`job_comp X → install stage` behavior untouched; the date manipulation moves out
+of it and lives here.
+
+**The fork is hard date vs formula date** (`start_install_formula` is the
+existing discriminator):
+
+| Release state at Ship Planning / Ship Complete | Behavior |
+|---|---|
+| **Formula (estimated) dates** | **Blank `start_install` and `ship_date`.** No re-estimation — the user must set both manually. An estimate that survived to the truck is stale by definition |
+| **Hard `start_install`, no ship date** | **Hard date wins the fork** (confirmed 2026-08-08): wash the color, keep the hard start-install date; the user sets ship date whenever they set it |
+| **Hard dates** | Keep the dates, **wash the color to white** — no ASAP red, no green/yellow. The original N5 behavior |
+
+**Auto-fill is suppressed in the no-hard-date flow.** Normally setting either
+date fills the other (ship = install − 1 biz day). At Ship Planning/Complete
+with no hard date, the modal behaves as if N6's **Break is on by default** —
+both dates are set independently, otherwise the auto-fill re-estimates the very
+thing this rule just blanked (confirmed 2026-08-08).
+
+**Paint Complete auto-roll — the ASAP intercept generalizes.**
+`stage/command.py:142` already rips an ASAP release hitting Paint Complete
+straight to Ship Planning (`via: 'Paint Complete'`, one event, one Trello move).
+The condition widens from `start_install_asap` to **any hard date**:
+
+| At Paint Complete | Then |
+|---|---|
+| Hard date set | **Auto-roll to Shipping Planning** |
+| No hard date | Stays in Paint Complete |
+
+Effort: **S → M.** The intercept generalization is small; the formula-blanking
+path touches the scheduling calculator's assumptions and needs the same
+event/undo treatment the existing cascade has.
 
 ---
 
