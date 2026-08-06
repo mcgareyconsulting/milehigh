@@ -511,16 +511,29 @@ def get_fab_hours_total():
         else_=Releases.fab_hrs,
     )
 
-    # Stages that zero out fab hours (work complete or past fabrication).
-    zero_stages = [
-        'Welded QC', 'Paint Start', 'Paint Complete', 'Store at MHMW',
-        'Ship Planning', 'Ship Complete', 'Install Start', 'Install Complete',
-        'Complete',
-    ]
+    # Stage modifiers must match STAGE_HOUR_PERCENTAGES / frontend FAB_MODIFIER
+    # (Banana Code matrix). Intermediate fab stages used to fall through to 1.0
+    # so stage changes like Fitup Start / Weld Start did not drop Total Fab HRS
+    # (BUG-5). Keep this CASE in sync with get_fab_modifier().
     modifier = case(
+        (Releases.stage == 'Released', 1.0),
+        (Releases.stage == 'Material Ordered', 1.0),
         (Releases.stage == 'Cut Start', 0.9),
+        (Releases.stage == 'Cut Complete', 0.9),
+        (Releases.stage == 'Fitup Start', 0.75),
         (Releases.stage == 'Fitup Complete', 0.5),
-        (Releases.stage.in_(zero_stages), 0.0),
+        (Releases.stage == 'Weld Start', 0.4),
+        (Releases.stage == 'Weld Complete', 0.0),
+        (Releases.stage == 'Hold', 0.0),
+        (Releases.stage == 'Welded QC', 0.0),
+        (Releases.stage == 'Paint Start', 0.0),
+        (Releases.stage == 'Paint Complete', 0.0),
+        (Releases.stage == 'Store at MHMW', 0.0),
+        (Releases.stage == 'Ship Planning', 0.0),
+        (Releases.stage == 'Ship Complete', 0.0),
+        (Releases.stage == 'Install Start', 0.0),
+        (Releases.stage == 'Install Complete', 0.0),
+        (Releases.stage == 'Complete', 0.0),
         else_=1.0,
     )
     total = db.session.query(

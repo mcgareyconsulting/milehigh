@@ -100,7 +100,7 @@ Every open item in one place. Detail lives in the workstream sections below.
 | **BUG-2** | Ball-in-court uncheck 1 → 0 does nothing | S | — | **Fixed** 2026-08-06 — order `0` clears to NULL (was rejected FE+BE) |
 | **BUG-3** | Release-number duplicate — confirm with David/Dalton | S | — | **Fixed** 2026-08-06 — uniqueness is (job, release, job_name); job # wrap allows 410-108 Alta after 410-108 Columbine |
 | **BUG-4** | Monday-morning drag-and-drop drop | S | — | **Dropped** 2026-08-06 |
-| **BUG-5** | Stage-change hours reaching the fab side — verify only | S | — | Secondhand via Colton |
+| **BUG-5** | Stage-change hours reaching the fab side — verify only | S | — | **Verified + fixed** 2026-08-06 — pipeline OK; KPI modifiers incomplete vs Banana Code (Weld Complete etc. stayed 100%); aligned FE+BE+hours_summary to `STAGE_HOUR_PERCENTAGES` |
 | **BUG-6** | Row 164 — Nov 2025 outlier still in the DWL | S | — | **Dropped** 2026-08-06 (data, not code) |
 | **DP** | Drafter edit permissions, `job` → `released` | S | — | Agreed and widened by Bill |
 | **N6** | Ship ↔ Install 'Break' button | S | — | Clean and small |
@@ -464,7 +464,7 @@ out of it at any point.
 | **Ball-in-court uncheck 1 → 0 does nothing** — Bill self-noted it live. **Fixed** 2026-08-06: ORDER # `0` / uncheck maps to NULL (unordered); previously FE and BE rejected 0 so the cell appeared to do nothing | [L1064–1068] |
 | **Release-number duplicate** — uniqueness is **(job #, release #, project name)**. Same project (incl. archived) cannot re-issue; same digits under a different name after job-# wrap is allowed. Migration: `releases_unique_job_release_name.py` | [L1051–1095] |
 | ~~Monday-morning drag-and-drop drop~~ — **Dropped** 2026-08-06 | [L1376–1378] |
-| Stage-change hours possibly not reaching the fab side — secondhand via Colton, needs a check only | [L1322–1330] |
+| Stage-change hours → fab total — **Verified**: stage write works; remaining fab is computed (not stored). **Gap fixed**: sparse FAB_MODIFIER/SQL ignored mid-fab stages so totals did not drop on those steps. Now derived from Banana Code matrix. SchedulingConfig still uses separate legacy map (scheduling only) | [L1322–1330] |
 | ~~Row 164 — a November 2025 outlier still in the DWL~~ — **Dropped** 2026-08-06 (data, not code) | [L1057–1090] |
 
 ### Features

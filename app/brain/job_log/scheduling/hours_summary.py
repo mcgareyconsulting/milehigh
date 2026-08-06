@@ -9,35 +9,17 @@ exports:
 imports_from: [app.api.helpers]
 imported_by: [app/brain/job_log/scheduling/__init__.py]
 invariants:
-  - Install hour totals are stage-driven (STAGE_HOUR_PERCENTAGES); Job Comp does not affect them
+  - Fab and install hour totals are stage-driven (STAGE_HOUR_PERCENTAGES Banana Code matrix)
+  - Job Comp does not affect install hour totals
   - Unknown stages default to fab modifier 1.0 (conservative) and install modifier 0.0 (excluded)
-updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+updated_by_agent: 2026-08-06T00:00:00Z
 
 Aggregate KPI helpers: total remaining fab hours and total remaining install hours.
 """
-from app.api.helpers import get_install_modifier
+from app.api.helpers import get_fab_modifier, get_install_modifier
 
-_FAB_MODIFIER_TABLE = {
-    'Released':         1.0,
-    'Cut Start':        0.9,
-    'Fitup Complete':   0.5,
-    'Welded QC':        0.0,
-    'Paint Complete':   0.0,
-    'Store at MHMW':    0.0,
-    'Ship Planning':    0.0,
-    'Ship Complete':    0.0,
-    'Install Start':    0.0,
-    'Install Complete': 0.0,
-    'Complete':         0.0,
-}
-
-
-def get_fab_modifier(stage: str) -> float:
-    """Return the remaining-work multiplier for a fabrication stage.
-
-    Unknown stages default to 1.0 (conservative).
-    """
-    return _FAB_MODIFIER_TABLE.get(stage, 1.0)
+# Re-export so existing `from ...hours_summary import get_fab_modifier` keeps working.
+# Implementation lives on STAGE_HOUR_PERCENTAGES in app.api.helpers (BUG-5).
 
 
 def _parse_job_comp(value) -> float:

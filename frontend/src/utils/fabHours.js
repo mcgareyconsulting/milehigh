@@ -8,15 +8,23 @@
  *   getFabModifier: lookup with default 1.0 for unknown stages
  *   computeTotalFabHrs: sum of (Fab Hrs * modifier) over a jobs array
  * invariants:
- *   - This table is the source of truth for the FRONTEND. The backend mirrors
- *     it as a SQL CASE in app/brain/job_log/routes.py (/brain/fab-hours-total).
- *     Keep both in sync when stage modifiers change.
+ *   - Mirrors app.api.helpers.STAGE_HOUR_PERCENTAGES["fab"] / 100 (Banana Code).
+ *   - Backend SQL CASE in /brain/fab-hours-total and get_fab_modifier() must match.
+ *   - Unknown stages default to 1.0 (conservative).
+ * updated_by_agent: 2026-08-06T00:00:00Z
  */
 
+/** Remaining-fab multiplier per stage (1.0 = full Fab Hrs still in the total). */
 export const FAB_MODIFIER = {
     'Released':         1.0,
+    'Material Ordered': 1.0,
     'Cut Start':        0.9,
+    'Cut Complete':     0.9,
+    'Fitup Start':      0.75,
     'Fitup Complete':   0.5,
+    'Weld Start':       0.4,
+    'Weld Complete':    0.0,
+    'Hold':             0.0,
     'Welded QC':        0.0,
     'Paint Start':      0.0,
     'Paint Complete':   0.0,
