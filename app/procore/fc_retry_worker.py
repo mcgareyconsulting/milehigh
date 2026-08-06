@@ -114,7 +114,7 @@ def _persist_viewer_url(release_id, job, release, viewer_url, card_id, submittal
             add_procore_link(card_id, viewer_url)
         except Exception as link_err:
             logger.warning(
-                "FC retry: persisted viewer_url but failed to add Trello link",
+                "fc_retry_trello_link_failed",
                 job=job, release=release, error=str(link_err),
             )
 
@@ -127,7 +127,7 @@ def _process_release(project_id, release_id, job, release, card_id, all_submitta
     try:
         final_pdfs = get_final_pdf_viewers(project_id, matching)
     except Exception as exc:
-        logger.exception("FC retry: final_pdf_viewers raised", job=job, release=release)
+        logger.exception("fc_retry_final_pdf_fetch_failed", job=job, release=release)
         _safe_rollback()
         return "errored", {**base, "error": f"final pdf fetch raised: {exc}"}
     if not final_pdfs:
@@ -140,7 +140,7 @@ def _process_release(project_id, release_id, job, release, card_id, all_submitta
             release_id, job, release, viewer_url, card_id, submittal_id=submittal_id
         )
     except Exception as exc:
-        logger.exception("FC retry: persist failed", job=job, release=release)
+        logger.exception("fc_retry_persist_failed", job=job, release=release)
         _safe_rollback()
         return "errored", {**base, "error": f"persist failed: {exc}"}
     return "succeeded", {**base, "viewer_url": viewer_url, "submittal_id": submittal_id}
@@ -162,7 +162,7 @@ def _process_candidates(candidates, project_map, buckets):
         try:
             all_submittals = fetch_all_submittals(project_id)
         except Exception as exc:
-            logger.exception("FC retry: submittals fetch raised", project_id=project_id)
+            logger.exception("fc_retry_submittals_fetch_failed", project_id=project_id)
             for release_id, job, release, _ in group:
                 buckets["errored"].append({
                     "job": job, "release": release,
@@ -175,7 +175,7 @@ def _process_candidates(candidates, project_map, buckets):
                 project_id, release_id, job, release, card_id, all_submittals
             )
             buckets[bucket].append(entry)
-            logger.debug("FC retry per-release", job=job, release=release, bucket=bucket)
+            logger.debug("fc_retry_release_processed", job=job, release=release, bucket=bucket)
             if idx < len(group) - 1:
                 time.sleep(PER_RELEASE_SLEEP_SECONDS)
 
@@ -208,7 +208,7 @@ def retry_missing_fc_viewer_urls(trigger="cron"):
 
     candidates = _candidate_snapshot()
     logger.info(
-        "FC retry worker starting",
+        "fc_retry_started",
         trigger=trigger, candidates=len(candidates), lookback_days=LOOKBACK_DAYS,
     )
 
@@ -218,7 +218,7 @@ def retry_missing_fc_viewer_urls(trigger="cron"):
         try:
             company_id = get_companies_list()
         except Exception as exc:
-            logger.exception("FC retry: company lookup raised")
+            logger.exception("fc_retry_company_lookup_failed")
             company_id = None
             company_error = f"company lookup raised: {exc}"
         else:
@@ -231,7 +231,7 @@ def retry_missing_fc_viewer_urls(trigger="cron"):
             try:
                 project_map = fetch_all_projects(company_id)
             except Exception as exc:
-                logger.exception("FC retry: project listing raised")
+                logger.exception("fc_retry_project_listing_failed")
                 for _rid, job, release, _ in candidates:
                     buckets["errored"].append({
                         "job": job, "release": release,
@@ -260,7 +260,7 @@ def retry_missing_fc_viewer_urls(trigger="cron"):
     db.session.commit()
 
     logger.info(
-        "FC retry worker finished",
+        "fc_retry_finished",
         trigger=trigger, run_id=run.id, candidates=run.candidates,
         succeeded=run.succeeded, still_missing=run.still_missing,
         errored=run.errored, duration_ms=duration_ms,
