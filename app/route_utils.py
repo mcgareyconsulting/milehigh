@@ -99,3 +99,18 @@ def get_or_404(model, error_msg=None, **filter_kwargs):
         msg = error_msg or f"{model.__name__} not found"
         return None, (jsonify({"error": msg}), 404)
     return record, None
+
+
+def get_release_or_404(job, release, error_msg="Job not found"):
+    """Look up a release by (job, release) or return a 404 error tuple.
+
+    Same contract as get_or_404, but goes through Releases.resolve so a
+    job-number-wrap duplicate (same digits, different job_name) hits the
+    active row instead of an arbitrary one.
+    """
+    from app.models import Releases
+
+    record = Releases.resolve(job, release)
+    if record is None:
+        return None, (jsonify({"error": error_msg}), 404)
+    return record, None

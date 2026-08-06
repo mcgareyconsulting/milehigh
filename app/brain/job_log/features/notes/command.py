@@ -64,9 +64,7 @@ class UpdateNotesCommand:
     def execute(self) -> NotesUpdateResult:
         notes = "" if self.notes is None else str(self.notes).strip()
 
-        job_record: Releases = Releases.query.filter_by(
-            job=self.job_id, release=self.release
-        ).first()
+        job_record: Releases = Releases.resolve(self.job_id, self.release)
         if not job_record:
             logger.debug("job_not_found", job=self.job_id, release=self.release)
             raise ValueError(f"Job {self.job_id}-{self.release} not found")

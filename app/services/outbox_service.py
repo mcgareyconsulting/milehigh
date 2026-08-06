@@ -99,7 +99,7 @@ class OutboxService:
                 return False
             
             # Get the job record to derive card_id and other data
-            job_record = Releases.query.filter_by(job=event.job, release=event.release).first()
+            job_record = Releases.resolve(event.job, event.release)
             if not job_record:
                 logger.error(
                     "outbox_release_not_found",

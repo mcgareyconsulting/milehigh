@@ -107,7 +107,7 @@ def set_installer_invoice_paid(
     Raises:
         ValueError: release not found.
     """
-    job_record = Releases.query.filter_by(job=job, release=release).first()
+    job_record = Releases.resolve(job, release)
     if not job_record:
         raise ValueError(f"Job {job}-{release} not found")
 

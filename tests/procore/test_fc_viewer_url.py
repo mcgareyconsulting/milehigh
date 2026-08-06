@@ -138,6 +138,49 @@ class TestGetFinalPdfViewers:
         assert len(results) >= 1
         assert results[0]["viewer_url"] == "https://app.procore.com/fallback/1"
 
+    def test_fallback_excludes_non_pdf_attachments(self):
+        """A DWG/markup with a viewer_url must not be linked: a wrong URL
+        persisted here is permanent (fc_retry_worker skips non-gray rows)."""
+        sub = {
+            "id": 4004,
+            "title": "410-111",
+            "last_distributed_submittal": {
+                "distributed_responses": [
+                    {"response_name": "Final PDF Pack", "submittal_approver_id": 99},
+                ]
+            },
+        }
+        wf = {
+            "attachments": [
+                {"approver_id": 1, "name": "Stair Layout.dwg", "viewer_url": "/fallback/dwg"},
+                {"approver_id": 2, "name": "markup rev2", "viewer_url": "/fallback/markup"},
+            ]
+        }
+        with patch("app.procore.procore.get_workflow_data", return_value=wf):
+            results = get_final_pdf_viewers(55, [sub])
+        assert results == []
+
+    def test_fallback_skipped_when_disallowed(self):
+        """allow_fallback=False (card-creation path) never best-effort links —
+        the row stays gray so fc_retry_worker can link the real pack later."""
+        sub = {
+            "id": 5005,
+            "title": "410-112",
+            "last_distributed_submittal": {
+                "distributed_responses": [
+                    {"response_name": "Final PDF Pack", "submittal_approver_id": 99},
+                ]
+            },
+        }
+        wf = {
+            "attachments": [
+                {"approver_id": 1, "name": "Final Set.pdf", "viewer_url": "/fallback/1"},
+            ]
+        }
+        with patch("app.procore.procore.get_workflow_data", return_value=wf):
+            results = get_final_pdf_viewers(55, [sub], allow_fallback=False)
+        assert results == []
+
 
 class TestSubmittalsForRelease:
     def test_filters_fc_and_identifier(self):

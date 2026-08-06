@@ -104,9 +104,7 @@ class UpdateStageCommand:
     def execute(self) -> StageUpdateResult:
         from app.api.helpers import get_stage_group_from_stage, get_fixed_tier, STAGE_PROGRESSION_RANK
 
-        job_record: Releases = Releases.query.filter_by(
-            job=self.job_id, release=self.release
-        ).first()
+        job_record: Releases = Releases.resolve(self.job_id, self.release)
         if not job_record:
             logger.debug("job_not_found", job=self.job_id, release=self.release)
             raise ValueError(f"Job {self.job_id}-{self.release} not found")

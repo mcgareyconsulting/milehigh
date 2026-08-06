@@ -123,7 +123,7 @@ def _release_row(ref):
     m = re.match(r"\s*(\d+)\s*-\s*(\w+)\s*$", str(ref))
     if not m:
         return None
-    return Releases.query.filter_by(job=int(m.group(1)), release=m.group(2)).first()
+    return Releases.resolve(int(m.group(1)), m.group(2))
 
 
 def _resolve_release(ref):

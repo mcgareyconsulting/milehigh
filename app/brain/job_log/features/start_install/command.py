@@ -67,9 +67,7 @@ class UpdateStartInstallCommand:
     undone_event_id: Optional[int] = None
 
     def execute(self) -> StartInstallUpdateResult:
-        job_record: Releases = Releases.query.filter_by(
-            job=self.job_id, release=self.release
-        ).first()
+        job_record: Releases = Releases.resolve(self.job_id, self.release)
         if not job_record:
             logger.debug("job_not_found", job=self.job_id, release=self.release)
             raise ValueError(f"Job {self.job_id}-{self.release} not found")

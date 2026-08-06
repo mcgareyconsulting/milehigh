@@ -569,7 +569,7 @@ def sync_trello_with_db(dry_run: bool = False) -> Dict:
                 update_trello_card(card_id, new_list_id=list_info['id'])
                 
                 # Update DB job record with new list info
-                job = Releases.query.filter_by(job=mismatch['job'], release=mismatch['release']).first()
+                job = Releases.resolve(mismatch['job'], mismatch['release'])
                 if job:
                     from app.trello.api import get_list_name_by_id
                     job.trello_list_id = list_info['id']
@@ -615,7 +615,7 @@ def sync_trello_with_db(dry_run: bool = False) -> Dict:
     logger.debug("db_only_card_creation_started", count=len(scan_results['db_only']))
     for job_info in scan_results['db_only']:
         # Get the job from database
-        job = Releases.query.filter_by(job=job_info['job'], release=job_info['release']).first()
+        job = Releases.resolve(job_info['job'], job_info['release'])
         if not job:
             logger.warning("release_not_found", job_release=job_info['identifier'], status="skipped")
             continue

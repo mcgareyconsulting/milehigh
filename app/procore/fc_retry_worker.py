@@ -102,7 +102,7 @@ def _persist_viewer_url(release_id, job, release, viewer_url, card_id, submittal
     if release_id is not None:
         record = Releases.query.get(release_id)
     if record is None:
-        record = Releases.query.filter_by(job=job, release=release).first()
+        record = Releases.resolve(job, release)
     if record is None:
         return
     record.viewer_url = viewer_url
