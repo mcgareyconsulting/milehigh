@@ -1527,14 +1527,14 @@ function ReleasesLayout() {
                         {cascadeStatus === 'recalculating' ? (
                             <>
                                 <span className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-accent-500 border-t-transparent"></span>
-                                <span className="text-sm font-medium text-gray-700 dark:text-slate-200">Recalculating start install dates...</span>
+                                <span className="text-sm font-medium text-gray-700 dark:text-slate-200">Recalculating ship &amp; start install dates...</span>
                             </>
                         ) : (
                             <>
                                 <svg className="h-5 w-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                 </svg>
-                                <span className="text-sm font-medium text-green-700 dark:text-green-400">Start install dates updated</span>
+                                <span className="text-sm font-medium text-green-700 dark:text-green-400">Ship &amp; start install dates updated</span>
                             </>
                         )}
                     </div>

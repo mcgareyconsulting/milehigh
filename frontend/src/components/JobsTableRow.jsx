@@ -1286,9 +1286,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${shipBgClass} ${vDividerClass} text-center cursor-pointer transition-colors`}
-                                onClick={() => setIsStartInstallModalOpen(true)}
-                                title={`${displayValue} — Click to edit`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${shipBgClass} ${vDividerClass} text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''}`}
+                                onClick={() => !updatingStartInstall && setIsStartInstallModalOpen(true)}
+                                title={updatingStartInstall
+                                    ? 'Recalculating dates…'
+                                    : `${displayValue} — Click to edit`}
                             >
                                 <div className="leading-tight">{displayValue}</div>
                             </td>
