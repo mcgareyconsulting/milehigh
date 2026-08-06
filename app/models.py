@@ -444,8 +444,15 @@ class JobChangeLog(db.Model):
 
 class Releases(db.Model):
     __tablename__ = "releases"
+    # Uniqueness is (job #, release #, project name). Job numbers wrap/reuse;
+    # the same 410-108 may belong to a different project (Columbine vs Alta).
+    # Same job+release+name never twice (including when one row is archived).
+    # Replaces the old table-wide UniqueConstraint("_job_release_uc") on
+    # (job, release) only — see migrations/releases_unique_job_release_name.py.
     __table_args__ = (
-        db.UniqueConstraint("job", "release", name="_job_release_uc"),
+        db.UniqueConstraint(
+            "job", "release", "job_name", name="uq_releases_job_release_name"
+        ),
         db.Index("idx_releases_last_updated_at_id", "last_updated_at", "id"),  # cursor poll: filter + ORDER BY match
         db.Index("idx_releases_archived_active", "is_archived", "is_active"),  # every list endpoint
         db.Index("idx_releases_stage_group", "stage_group"),

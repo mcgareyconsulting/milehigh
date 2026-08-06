@@ -142,6 +142,34 @@ STAGE_HOUR_PERCENTAGES = {
 }
 
 
+def _stage_hour_pct(stage: Optional[str]) -> Optional[Dict[str, int]]:
+    """Look up STAGE_HOUR_PERCENTAGES with case-insensitive fallback."""
+    if not stage:
+        return None
+    pct = STAGE_HOUR_PERCENTAGES.get(stage)
+    if pct is not None:
+        return pct
+    stage_lower = stage.lower()
+    for key, value in STAGE_HOUR_PERCENTAGES.items():
+        if key.lower() == stage_lower:
+            return value
+    return None
+
+
+def get_fab_modifier(stage: Optional[str]) -> float:
+    """Return the remaining-fab-hours multiplier (0.0–1.0) for a stage.
+
+    Derived from STAGE_HOUR_PERCENTAGES (client Banana Code matrix) so Job Log
+    / DWL totals and stage transitions share one source of truth (BUG-5).
+    Unknown stages default to 1.0 (conservative — keep full hours in the total
+    until the stage is recognized). Empty/None stage → 1.0.
+    """
+    pct = _stage_hour_pct(stage)
+    if pct is None:
+        return 1.0
+    return pct["fab"] / 100.0
+
+
 def get_install_modifier(stage: Optional[str]) -> float:
     """Return the remaining-install-hours multiplier (0.0–1.0) for a stage.
 
@@ -150,16 +178,7 @@ def get_install_modifier(stage: Optional[str]) -> float:
     from install-hour totals — the matrix covers every canonical stage, so
     a miss almost always indicates a non-canonical drift to investigate).
     """
-    if not stage:
-        return 0.0
-    pct = STAGE_HOUR_PERCENTAGES.get(stage)
-    if pct is None:
-        # Case-insensitive fallback for incidental drift
-        stage_lower = stage.lower()
-        for key, value in STAGE_HOUR_PERCENTAGES.items():
-            if key.lower() == stage_lower:
-                pct = value
-                break
+    pct = _stage_hour_pct(stage)
     if pct is None:
         return 0.0
     return pct["install"] / 100.0

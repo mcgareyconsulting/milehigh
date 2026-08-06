@@ -80,6 +80,7 @@ class TestSubmittalOrderingEngine:
 
     @pytest.mark.parametrize("value", [
         1.0, None,  # plain valid order number and the "no order" sentinel
+        0,  # BUG-2: 0 is a clear synonym for unordered (normalized by route/engine)
         0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,  # urgency slots
     ])
     def test_validate_order_number_valid(self, value):
@@ -88,7 +89,7 @@ class TestSubmittalOrderingEngine:
         assert error is None
 
     @pytest.mark.parametrize("value", [
-        'INVALID', 0,  # non-numeric and zero
+        'INVALID',  # non-numeric
         0.05, 0.15, 0.25, 0.95,  # off-grid urgency slots
     ])
     def test_validate_order_number_invalid(self, value):
@@ -566,6 +567,20 @@ class TestSubmittalOrderingEngineExtra:
         updates = SubmittalOrderingEngine.calculate_updates(update_request, group)
         update_dict = {sid: order for sid, order in updates}
         assert update_dict['A'] is None
+
+    def test_calculate_updates_zero_clears_like_null(self):
+        """BUG-2: new_order=0 is a clear synonym — uncheck 1 → 0 must clear, not error."""
+        group = [
+            {'submittal_id': 'A', 'order_number': 1.0},
+            {'submittal_id': 'B', 'order_number': 2.0},
+        ]
+        update_request = SubmittalOrderUpdate(
+            submittal_id='A', new_order=0, old_order=1.0, ball_in_court='Drafter A'
+        )
+        updates = SubmittalOrderingEngine.calculate_updates(update_request, group)
+        update_dict = {sid: order for sid, order in updates}
+        assert update_dict['A'] is None
+        assert 'B' not in update_dict
 
     def test_calculate_updates_routes_to_urgent(self):
         """Test that new_order=0.5 routes to handle_set_to_urgent."""

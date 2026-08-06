@@ -27,7 +27,12 @@ from app.services.outbox_service import OutboxService
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
 from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, ReleasePhoto, Submittals, User, PendingStartInstall
-from app.auth.utils import login_required, get_current_user, admin_required
+from app.auth.utils import (
+    login_required,
+    get_current_user,
+    admin_required,
+    drafter_or_admin_required,
+)
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER, active_releases_filter
 from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
@@ -311,6 +316,49 @@ def _validate_row(row_values, row_idx, row):
     
     return True, None
 
+def _norm_job_name(value):
+    """Normalize project/job name for identity compares (strip + casefold)."""
+    return str(value or '').strip().casefold()
+
+
+def _find_job_release_name_collision(job_number, release_number, job_name):
+    """Hard uniqueness key is (job #, release #, project name).
+
+    Job numbers wrap/reuse over time, so the same 410-108 may legitimately
+    belong to a different project (archived 410-108 Columbine must not block
+    a new 410-108 Alta Metro). Same job # + release # + same project name
+    collides even when the existing row is archived — long-running projects
+    must not re-issue a release number within themselves.
+    """
+    target_name = _norm_job_name(job_name)
+    candidates = Releases.query.filter_by(
+        job=job_number, release=str(release_number).strip()
+    ).all()
+    for row in candidates:
+        if _norm_job_name(row.job_name) == target_name:
+            return row
+    return None
+
+
+def _release_numbers_for_job_name(job_number, job_name):
+    """Numeric release #s already used under this job # + project name.
+
+    Includes archived rows (same project must not re-issue a Rel). Scoped to
+    project name so another project's use of job # 410 does not force Alta to
+    skip numbers Columbine already consumed.
+    """
+    target_name = _norm_job_name(job_name)
+    taken = set()
+    for r in Releases.query.filter_by(job=job_number).all():
+        if _norm_job_name(r.job_name) != target_name:
+            continue
+        try:
+            taken.add(int(r.release))
+        except (ValueError, TypeError):
+            pass
+    return taken
+
+
 def _find_near_duplicate(job_number, release_number, row_values):
     """Find an existing active release for the same job that looks like the
     same content under a different release number (e.g. a verbal release
@@ -320,7 +368,7 @@ def _find_near_duplicate(job_number, release_number, row_values):
     after normalization -- avoids flagging two rows that both simply have
     blank descriptions. Returns the matched Releases row, or None.
     """
-    job_name = str(row_values.get('job_name') or '').strip().casefold()
+    job_name = _norm_job_name(row_values.get('job_name'))
     description = str(row_values.get('description') or '').strip().casefold()
     if not job_name or not description:
         return None
@@ -332,7 +380,7 @@ def _find_near_duplicate(job_number, release_number, row_values):
     ).all()
 
     for candidate in candidates:
-        candidate_job_name = str(candidate.job_name or '').strip().casefold()
+        candidate_job_name = _norm_job_name(candidate.job_name)
         candidate_description = str(candidate.description or '').strip().casefold()
         if candidate_job_name == job_name and candidate_description == description:
             return candidate
@@ -468,16 +516,29 @@ def get_fab_hours_total():
         else_=Releases.fab_hrs,
     )
 
-    # Stages that zero out fab hours (work complete or past fabrication).
-    zero_stages = [
-        'Welded QC', 'Paint Start', 'Paint Complete', 'Store at MHMW',
-        'Ship Planning', 'Ship Complete', 'Install Start', 'Install Complete',
-        'Complete',
-    ]
+    # Stage modifiers must match STAGE_HOUR_PERCENTAGES / frontend FAB_MODIFIER
+    # (Banana Code matrix). Intermediate fab stages used to fall through to 1.0
+    # so stage changes like Fitup Start / Weld Start did not drop Total Fab HRS
+    # (BUG-5). Keep this CASE in sync with get_fab_modifier().
     modifier = case(
+        (Releases.stage == 'Released', 1.0),
+        (Releases.stage == 'Material Ordered', 1.0),
         (Releases.stage == 'Cut Start', 0.9),
+        (Releases.stage == 'Cut Complete', 0.9),
+        (Releases.stage == 'Fitup Start', 0.75),
         (Releases.stage == 'Fitup Complete', 0.5),
-        (Releases.stage.in_(zero_stages), 0.0),
+        (Releases.stage == 'Weld Start', 0.4),
+        (Releases.stage == 'Weld Complete', 0.0),
+        (Releases.stage == 'Hold', 0.0),
+        (Releases.stage == 'Welded QC', 0.0),
+        (Releases.stage == 'Paint Start', 0.0),
+        (Releases.stage == 'Paint Complete', 0.0),
+        (Releases.stage == 'Store at MHMW', 0.0),
+        (Releases.stage == 'Ship Planning', 0.0),
+        (Releases.stage == 'Ship Complete', 0.0),
+        (Releases.stage == 'Install Start', 0.0),
+        (Releases.stage == 'Install Complete', 0.0),
+        (Releases.stage == 'Complete', 0.0),
         else_=1.0,
     )
     total = db.session.query(
@@ -2131,24 +2192,22 @@ def release_job_data():
                 # Parse validated values
                 job_number = int(row_values['job'])
                 release_number = str(row_values['release']).strip()
+                job_name_value = str(row_values['job_name']).strip()
 
-                # Check if job-release already exists
-                existing_job = Releases.query.filter_by(job=job_number, release=release_number).first()
+                # Hard uniqueness: (job #, release #, project name). Job numbers
+                # wrap; same digits on a different project name is allowed
+                # (archived 410-108 Columbine must not block 410-108 Alta Metro).
+                existing_job = _find_job_release_name_collision(
+                    job_number, release_number, job_name_value
+                )
                 if existing_job:
-                    job_name_value = str(row_values['job_name']).strip()
-
-                    # Suggest the next free release for this job, starting from
-                    # the colliding number + 1 (matches client's "rolling release" workflow).
+                    # Suggest next free release under this job # + project name.
                     suggested = None
                     try:
                         attempted_int = int(release_number)
-                        # Get all numeric releases for this job to check availability
-                        taken = set()
-                        for r in Releases.query.filter_by(job=job_number).all():
-                            try:
-                                taken.add(int(r.release))
-                            except (ValueError, TypeError):
-                                pass
+                        taken = _release_numbers_for_job_name(
+                            job_number, job_name_value
+                        )
                         candidate = attempted_int + 1
                         while candidate in taken:
                             candidate += 1
@@ -2161,7 +2220,7 @@ def release_job_data():
                         'row': row_idx,
                         'job': job_number,
                         'release': release_number,
-                        'job_name': job_name_value,
+                        'job_name': job_name_value or (existing_job.job_name or ''),
                         'suggested_next': suggested
                     })
                     continue
@@ -3521,8 +3580,10 @@ def trello_scan_create():
 
 
 # ==============================================================================
-# Admin Job Log Editing Endpoints
+# Job Log row editing (admin + drafter)
 # ==============================================================================
+# Drafters may PATCH these fields (DP / Bill 8-6: job → released block via gear
+# menu, not inline). Delete stays admin-only.
 
 # Editable field mapping: display name -> (db_field, type_converter)
 EDITABLE_FIELDS = {
@@ -3595,12 +3656,15 @@ def _coerce_editable_field(field, value):
 
 @brain_bp.route("/jobs/<int:job>/<release>", methods=["PATCH"])
 @login_required
-@admin_required
+@drafter_or_admin_required
 @handle_errors("update job fields", raw_error=True)
 @require_json("fields")
 def update_job_fields(job, release):
     """
     Update one or more columns for a job record in a single commit.
+
+    Allowed for **admins and drafters** (DP). Field set is the job→released
+    block only (see EDITABLE_FIELDS). Soft-delete remains admin-only.
 
     Parameters:
         job: int - Job number
@@ -3643,8 +3707,9 @@ def update_job_fields(job, release):
         setattr(job_record, db_field, converted_value)
         payload[field] = {'old_value': old_value, 'new_value': serialize_value(converted_value)}
 
+    user = get_current_user()
     job_record.last_updated_at = datetime.utcnow()
-    job_record.source_of_update = 'Admin'
+    job_record.source_of_update = 'Admin' if (user and user.is_admin) else 'Brain'
 
     # Key the event on the record's post-edit job/release, not the pre-edit
     # URL params — if this request renamed job/release, every later lookup by

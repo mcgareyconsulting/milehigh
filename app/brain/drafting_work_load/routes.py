@@ -137,6 +137,14 @@ def update_submittal_order():
     if not submittal_id:
         return jsonify({"error": "submittal_id is required"}), 400
 
+    # 0 means "clear / unordered" (BUG-2: uncheck 1 → 0). Never store 0.
+    if order_number is not None:
+        try:
+            if float(order_number) == 0:
+                order_number = None
+        except (ValueError, TypeError):
+            pass  # leave as-is; validate_order_number rejects non-numeric
+
     # Validate order number
     is_valid, error_msg = SubmittalOrderingService.validate_order_number(order_number)
     if not is_valid:

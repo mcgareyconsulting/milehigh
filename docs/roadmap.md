@@ -105,14 +105,14 @@ Every open item in one place. Detail lives in the workstream sections below.
 
 | ID | Item | Effort | Depends on | Status |
 |---|---|---|---|---|
-| **BUG-1** | FC / Procore link graying on the job log | ? | — | **Colton's top complaint.** Start at `fc_retry_worker.py`. **Patch, don't rebuild** — this subsystem retires with the Procore teardown (tracked on a separate map) |
-| **BUG-2** | Ball-in-court uncheck 1 → 0 does nothing | S | — | Bill self-noted live |
-| **BUG-3** | Release-number duplicate — confirm with David/Dalton | S | — | Rollover otherwise verified |
-| **BUG-4** | Monday-morning drag-and-drop drop | S | — | David's annoyance |
-| **BUG-5** | Stage-change hours reaching the fab side — verify only | S | — | Secondhand via Colton |
-| **BUG-6** | Row 164 — Nov 2025 outlier still in the DWL | S | — | Data, not code |
-| **DP** | Drafter edit permissions, `job` → `released` | S | — | Agreed and widened by Bill |
-| **N6** | Ship ↔ Install 'Break' button | S | — | Clean and small |
+| **BUG-1** | FC / Procore link graying on the job log | M | — | **Fixed** 2026-08-06 — paginate FC submittals; detail refetch + fallback after FC update; retry empty URL / 30d lookback / active filter. **Patch, don't rebuild** — subsystem retires with Procore teardown |
+| **BUG-2** | Ball-in-court uncheck 1 → 0 does nothing | S | — | **Fixed** 2026-08-06 — order `0` clears to NULL (was rejected FE+BE) |
+| **BUG-3** | Release-number duplicate — confirm with David/Dalton | S | — | **Fixed** 2026-08-06 — uniqueness is (job, release, job_name); job # wrap allows 410-108 Alta after 410-108 Columbine |
+| **BUG-4** | Monday-morning drag-and-drop drop | S | — | **Dropped** 2026-08-06 |
+| **BUG-5** | Stage-change hours reaching the fab side — verify only | S | — | **Verified + fixed** 2026-08-06 — pipeline OK; KPI modifiers incomplete vs Banana Code (Weld Complete etc. stayed 100%); aligned FE+BE+hours_summary to `STAGE_HOUR_PERCENTAGES` |
+| **BUG-6** | Row 164 — Nov 2025 outlier still in the DWL | S | — | **Dropped** 2026-08-06 (data, not code) |
+| **DP** | Drafter edit permissions, `job` → `released` | S | — | **Fixed** 2026-08-06 — drafters get gear “Edit row” (job→released); PATCH via `drafter_or_admin`; delete stays admin |
+| **N6** | Ship ↔ Install 'Break' button | S | — | **Fixed** 2026-08-06 — Break/Link in install+ship modal; linked = auto 1 biz day, broken = independent |
 | **N5** | Ship-complete date cascade re-anchor | S | — | Extract date logic from the complete-zone cascade |
 | **N7** | Job log modal merge + redesign | M | — | **In flight, uncommitted** |
 | **N9** | Photo watermark + GPS — needs Pillow + pillow-heif | M | — | Capture standard settled. **§10.3 open** |
@@ -486,12 +486,12 @@ out of it at any point.
 
 | Item | Source |
 |---|---|
-| **FC / Procore link graying on the job log** — Colton's top complaint; breaks when the FC set updates; behaves differently on number vs name click. Start at `app/procore/fc_retry_worker.py` + `FcCollectionRun` | [L1334–1371] |
-| **Ball-in-court uncheck 1 → 0 does nothing** — Bill self-noted it live | [L1064–1068] |
-| **Release-number duplicate** reported once; rollover otherwise verified sequential | [L1051–1095] |
-| Monday-morning drag-and-drop drop | [L1376–1378] |
-| Stage-change hours possibly not reaching the fab side — secondhand via Colton, needs a check only | [L1322–1330] |
-| Row 164 — a November 2025 outlier still in the DWL | [L1057–1090] |
+| **FC / Procore link graying on the job log** — gray = missing `viewer_url`. **Fixed** 2026-08-06: paginated submittal fetch; Final PDF Pack detail refetch + workflow fallback after FC updates; retry worker treats `''` as missing, 30d lookback, `active_releases_filter`. Number vs name click difference is intentional (name → modal, # → drawing/Procore) | [L1334–1371] |
+| **Ball-in-court uncheck 1 → 0 does nothing** — Bill self-noted it live. **Fixed** 2026-08-06: ORDER # `0` / uncheck maps to NULL (unordered); previously FE and BE rejected 0 so the cell appeared to do nothing | [L1064–1068] |
+| **Release-number duplicate** — uniqueness is **(job #, release #, project name)**. Same project (incl. archived) cannot re-issue; same digits under a different name after job-# wrap is allowed. Migration: `releases_unique_job_release_name.py` | [L1051–1095] |
+| ~~Monday-morning drag-and-drop drop~~ — **Dropped** 2026-08-06 | [L1376–1378] |
+| Stage-change hours → fab total — **Verified**: stage write works; remaining fab is computed (not stored). **Gap fixed**: sparse FAB_MODIFIER/SQL ignored mid-fab stages so totals did not drop on those steps. Now derived from Banana Code matrix. SchedulingConfig still uses separate legacy map (scheduling only) | [L1322–1330] |
+| ~~Row 164 — a November 2025 outlier still in the DWL~~ — **Dropped** 2026-08-06 (data, not code) | [L1057–1090] |
 
 ### Features
 
@@ -501,8 +501,8 @@ out of it at any point.
 | **N9** | **Photo watermark + GPS** — new 2026-08-06 | M |
 | **N10** | **Bulk edit on the job log** — see Workstream 2 | M |
 | **N5** | **Ship-complete date cascade** | S |
-| **N6** | **Ship ↔ Install 'Break' button** | S |
-| **DP** | **Drafter edit permissions**, `job` → `released` columns | S |
+| **N6** | **Ship ↔ Install 'Break' button** — **Fixed** 2026-08-06 in `StartInstallDateModal` | S |
+| **DP** | **Drafter edit permissions**, `job` → `released` columns — **Fixed** 2026-08-06: gear modal + API, not inline | S |
 | **H1** | Polish sweep — rolling calendar, full-screen modals, metrics load times | M |
 
 ### N9 — photo watermark

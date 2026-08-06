@@ -105,10 +105,10 @@ function JobLogContent() {
         return { tableColumns: cols, tableWidthPercents: widths };
     }, [isDesktop, columnHeaders, columnWidthPercents]);
 
-    // The admin row-actions column (⚙ edit/delete) is desktop-only (14"+ screens) — no
-    // exposure on tablet/mobile. Gates the header cell, the per-row actions, and the
-    // empty/divider colSpan math so the table stays aligned. Admin cell-editing is unaffected.
-    const showAdminActions = isAdmin && isDesktop;
+    // Row-actions column (⋯ menu) is desktop-only (14"+ screens). Admins get
+    // Edit + Delete; drafters get Edit only (DP: job→released fields via modal).
+    // Gates the header cell, per-row actions, and colSpan math so the table stays aligned.
+    const showRowActions = (isAdmin || isDrafter) && isDesktop;
 
     // Drag-and-drop reorder is disabled — keep no-op handlers so JobsTableRow's props stay satisfied.
     const draggedIndex = null;
@@ -209,7 +209,7 @@ function JobLogContent() {
                                             </th>
                                         );
                                     })}
-                                    {showAdminActions && (
+                                    {showRowActions && (
                                         <th className="px-1 py-0.5 text-center text-xl font-bold text-ink uppercase tracking-wider bg-head-bg w-8">
                                             ⚙
                                         </th>
@@ -226,7 +226,7 @@ function JobLogContent() {
                                         <>
                                             <tr>
                                                 <td
-                                                    colSpan={tableColumnCount + (showAdminActions ? 1 : 0)}
+                                                    colSpan={tableColumnCount + (showRowActions ? 1 : 0)}
                                                     className="px-6 py-6 text-center text-amber-800 dark:text-amber-200 font-medium bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800"
                                                 >
                                                     <span className="mr-2">⚠️</span>
@@ -254,7 +254,7 @@ function JobLogContent() {
                                                     stageGroupColors={stageGroupColors}
                                                     stageGroupDupColors={stageGroupDupColors}
                                                     isAdmin={isAdmin}
-                                                    showActions={showAdminActions}
+                                                    showActions={showRowActions}
                                                     isDrafter={isDrafter}
                                                     onDelete={handleDeleteJob}
                                                     tableScrollRef={tableScrollRef}
@@ -265,7 +265,7 @@ function JobLogContent() {
                                     ) : (
                                         <tr>
                                             <td
-                                                colSpan={tableColumnCount + (showAdminActions ? 1 : 0)}
+                                                colSpan={tableColumnCount + (showRowActions ? 1 : 0)}
                                                 className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-white dark:bg-slate-800 rounded-md"
                                             >
                                                 {hasJobsData
@@ -280,7 +280,7 @@ function JobLogContent() {
                                         row._asapDivider ? (
                                             <tr key={row.id}>
                                                 <td
-                                                    colSpan={tableColumnCount + (showAdminActions ? 1 : 0)}
+                                                    colSpan={tableColumnCount + (showRowActions ? 1 : 0)}
                                                     className={`${ASAP_DIVIDER_BOX_CLASS} border-y`}
                                                 >
                                                     <AsapDividerLabel count={row._asapCount} />
@@ -308,7 +308,7 @@ function JobLogContent() {
                                             stageGroupColors={stageGroupColors}
                                             stageGroupDupColors={stageGroupDupColors}
                                             isAdmin={isAdmin}
-                                            showActions={showAdminActions}
+                                            showActions={showRowActions}
                                             isDrafter={isDrafter}
                                             onDelete={handleDeleteJob}
                                             tableScrollRef={tableScrollRef}

@@ -14,14 +14,35 @@ from app.brain.job_log.scheduling.hours_summary import (
 # ---------------------------------------------------------------------------
 
 class TestGetFabModifier:
+    """Must track STAGE_HOUR_PERCENTAGES fab % (Banana Code) — BUG-5."""
+
     def test_released(self):
         assert get_fab_modifier('Released') == 1.0
+
+    def test_material_ordered(self):
+        assert get_fab_modifier('Material Ordered') == 1.0
 
     def test_cut_start(self):
         assert get_fab_modifier('Cut Start') == 0.9
 
+    def test_cut_complete(self):
+        assert get_fab_modifier('Cut Complete') == 0.9
+
+    def test_fitup_start(self):
+        assert get_fab_modifier('Fitup Start') == 0.75
+
     def test_fitup_complete(self):
         assert get_fab_modifier('Fitup Complete') == 0.5
+
+    def test_weld_start(self):
+        assert get_fab_modifier('Weld Start') == 0.4
+
+    def test_weld_complete_zero(self):
+        # Pre-fix this fell through to 1.0 so stage change did not drop fab hrs.
+        assert get_fab_modifier('Weld Complete') == 0.0
+
+    def test_hold_zero(self):
+        assert get_fab_modifier('Hold') == 0.0
 
     def test_welded_qc_zero(self):
         assert get_fab_modifier('Welded QC') == 0.0
@@ -30,7 +51,6 @@ class TestGetFabModifier:
         assert get_fab_modifier('Paint Complete') == 0.0
 
     def test_install_start_zero(self):
-        # Past fab — install_start is included in install hour planning, not fab
         assert get_fab_modifier('Install Start') == 0.0
 
     def test_install_complete_zero(self):
@@ -44,6 +64,9 @@ class TestGetFabModifier:
 
     def test_empty_string_conservative(self):
         assert get_fab_modifier('') == 1.0
+
+    def test_case_insensitive(self):
+        assert get_fab_modifier('weld start') == 0.4
 
 
 # ---------------------------------------------------------------------------
@@ -101,6 +124,15 @@ class TestCalculateTotalFabHrs:
             {'Fab Hrs': 80,  'Stage': 'Welded QC'},       # 80  * 0.0 = 0
         ]
         assert calculate_total_fab_hrs(jobs) == pytest.approx(340.0)
+
+    def test_mid_fab_stages_reduce_total(self):
+        """BUG-5: Fitup Start / Weld Start / Weld Complete must move the total."""
+        jobs = [
+            {'Fab Hrs': 100, 'Stage': 'Fitup Start'},    # 75
+            {'Fab Hrs': 100, 'Stage': 'Weld Start'},      # 40
+            {'Fab Hrs': 100, 'Stage': 'Weld Complete'},   # 0
+        ]
+        assert calculate_total_fab_hrs(jobs) == pytest.approx(115.0)
 
     def test_missing_fab_hrs_treated_as_zero(self):
         jobs = [{'Stage': 'Released'}]

@@ -69,5 +69,13 @@ def admin_client(app, mock_admin_user):
 
 
 @pytest.fixture
+def drafter_client(app, mock_non_admin_user):
+    """Logged-in drafter (not admin) — DP job-log field edits."""
+    mock_non_admin_user.is_drafter = True
+    mock_non_admin_user.is_admin = False
+    yield from _authed_client(app, mock_non_admin_user)
+
+
+@pytest.fixture
 def non_admin_client(app, mock_non_admin_user):
     yield from _authed_client(app, mock_non_admin_user)

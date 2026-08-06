@@ -292,12 +292,63 @@ def fetch_all_projects(company_id):
     return {p["project_number"]: p["id"] for p in projects}
 
 
+def _submittal_type_name(submittal):
+    """Type name from a list or detail payload (dict or plain string)."""
+    t = submittal.get("type") if isinstance(submittal, dict) else None
+    if isinstance(t, dict):
+        return (t.get("name") or "").strip()
+    if isinstance(t, str):
+        return t.strip()
+    return ""
+
+
+def _is_for_construction(submittal):
+    """True if submittal type is For Construction (tolerate minor naming drift)."""
+    name = _submittal_type_name(submittal).lower()
+    return name == "for construction" or name.startswith("for construction")
+
+
 def fetch_all_submittals(project_id):
-    """Fetch every submittal for a project in one call (unfiltered)."""
+    """Fetch every submittal for a project with pagination.
+
+    A single unpaginated GET only returns the first page; large projects then
+    miss FC submittals and `viewer_url` stays empty (gray Procore on the job
+    log — BUG-1). Prefer the paginated v1.1 list; fall back to the v2 client.
+    """
     url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.1/projects/{project_id}/submittals"
     headers = {"Authorization": f"Bearer {get_access_token()}"}
-    result = _request_json(url, headers=headers)
-    return result if isinstance(result, list) else []
+    all_rows = []
+    page = 1
+    per_page = 100
+    while True:
+        batch = _request_json(
+            url, headers=headers, params={"page": page, "per_page": per_page}
+        )
+        if not isinstance(batch, list):
+            # Unexpected shape — try the session client once if we have nothing.
+            if not all_rows:
+                try:
+                    client = get_procore_client()
+                    return client.get_submittals(project_id) or []
+                except Exception:
+                    logger.exception(
+                        "fetch_all_submittals_fallback_failed", project_id=project_id
+                    )
+                    return []
+            break
+        all_rows.extend(batch)
+        if len(batch) < per_page:
+            break
+        page += 1
+        if page > 200:  # hard stop — pathological project
+            logger.warning(
+                "fetch_all_submittals_page_cap",
+                project_id=project_id,
+                pages=page,
+                count=len(all_rows),
+            )
+            break
+    return all_rows
 
 
 def submittals_for_release(all_submittals, job, release):
@@ -306,7 +357,7 @@ def submittals_for_release(all_submittals, job, release):
     return [
         s for s in all_submittals
         if _identifier_matches(identifier, _normalize_title(s.get("title", "")))
-        and (s.get("type") or {}).get("name") == "For Construction"
+        and _is_for_construction(s)
     ]
 
 # Function to get project id by project name
@@ -423,23 +474,23 @@ def get_submittal_by_id(project_id, submittal_id):
 
 # Get Submittals by Project ID and Identifier
 def get_submittals_by_project_id(project_id, identifier):
-    """Get submittals by project ID and identifier"""
-    url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.1/projects/{project_id}/submittals"
-    headers = {"Authorization": f"Bearer {get_access_token()}"}
-    submittals = _request_json(url, headers=headers)
-    if not isinstance(submittals, list):
+    """Get FC submittals for a project whose title matches job-release identifier.
+
+    Uses paginated fetch_all_submittals so large projects are not truncated.
+    """
+    submittals = fetch_all_submittals(project_id)
+    if not submittals:
         logger.warning(
-            "submittals_payload_unexpected",
+            "submittals_payload_empty",
             project_id=project_id,
             identifier=identifier,
-            payload_type=type(submittals).__name__,
         )
         return []
     normalized_identifier = (identifier or "").strip().lower()
     return [
         s for s in submittals
         if _identifier_matches(normalized_identifier, _normalize_title(s.get("title", "")))
-        and s.get("type", {}).get("name") == "For Construction"
+        and _is_for_construction(s)
     ]
 
 
@@ -455,41 +506,153 @@ def get_workflow_data(project_id, submittal_id):
     return workflow_data
 
 
+def _final_pdf_approver_ids(submittal):
+    """Approver ids for Final PDF Pack rows on last_distributed_submittal."""
+    last = submittal.get("last_distributed_submittal") if isinstance(submittal, dict) else None
+    if not isinstance(last, dict):
+        return []
+    responses = last.get("distributed_responses") or []
+    ids = []
+    for r in responses:
+        if not isinstance(r, dict):
+            continue
+        name = (r.get("response_name") or "").strip().lower()
+        # Exact + tolerant match — Procore sometimes renames after FC set updates.
+        if name == "final pdf pack" or (
+            "final" in name and "pdf" in name
+        ):
+            aid = r.get("submittal_approver_id")
+            if aid is not None:
+                ids.append(aid)
+    return ids
+
+
+def _normalize_viewer_url(viewer_url):
+    if not viewer_url:
+        return None
+    viewer_url = str(viewer_url).strip()
+    if not viewer_url:
+        return None
+    if viewer_url.startswith("http://") or viewer_url.startswith("https://"):
+        return viewer_url
+    if viewer_url.startswith("/"):
+        return f"https://app.procore.com{viewer_url}"
+    return f"https://app.procore.com/{viewer_url}"
+
+
+def _viewer_results_from_workflow(project_id, submittal_id, title, approver_ids):
+    """Match workflow_data attachments to Final PDF Pack approver ids."""
+    results = []
+    workflow_data = get_workflow_data(project_id, submittal_id)
+    attachments = workflow_data.get("attachments") if isinstance(workflow_data, dict) else []
+    approver_set = set(approver_ids)
+    for att in attachments or []:
+        if not isinstance(att, dict):
+            continue
+        if att.get("approver_id") not in approver_set:
+            continue
+        full = _normalize_viewer_url(att.get("viewer_url"))
+        if full:
+            results.append({
+                "title": title,
+                "submittal_id": submittal_id,
+                "approver_id": att.get("approver_id"),
+                "filename": att.get("name"),
+                "viewer_url": full,
+            })
+    return results
+
+
+def _viewer_results_from_workflow_fallback(project_id, submittal_id, title):
+    """When distribution metadata is missing after an FC update, take any
+    workflow attachment that looks like a Final PDF / has a viewer_url on a
+    PDF-ish name. Prefer names containing 'final'."""
+    workflow_data = get_workflow_data(project_id, submittal_id)
+    attachments = workflow_data.get("attachments") if isinstance(workflow_data, dict) else []
+    scored = []
+    for att in attachments or []:
+        if not isinstance(att, dict):
+            continue
+        full = _normalize_viewer_url(att.get("viewer_url"))
+        if not full:
+            continue
+        name = (att.get("name") or "").lower()
+        # Prefer final-pack-ish names; accept other PDFs as last resort.
+        if "final" in name:
+            score = 0
+        elif name.endswith(".pdf") or "pdf" in name:
+            score = 1
+        else:
+            score = 2
+        scored.append((score, {
+            "title": title,
+            "submittal_id": submittal_id,
+            "approver_id": att.get("approver_id"),
+            "filename": att.get("name"),
+            "viewer_url": full,
+        }))
+    scored.sort(key=lambda x: x[0])
+    return [row for _, row in scored[:3]]  # at most a few candidates
+
+
 # Get Final PDF Viewers by Project ID and Submittals
 def get_final_pdf_viewers(project_id, submittals):
-    """Extract viewer URLs for 'Final PDF Pack' responses"""
+    """Extract viewer URLs for 'Final PDF Pack' responses.
+
+    List endpoints often omit or stale ``last_distributed_submittal`` after an
+    FC set update (BUG-1 graying). For each match we:
+      1. Read Final PDF Pack approver ids from the list payload
+      2. If missing, re-fetch the full submittal by id
+      3. Match workflow_data attachments by approver_id
+      4. If still empty, fall back to workflow PDF attachments with a viewer_url
+    """
     final_results = []
 
     for sub in submittals:
+        if not isinstance(sub, dict) or sub.get("id") is None:
+            continue
         submittal_id = sub["id"]
         title = sub.get("title")
 
-        # Step 1: Find response name "Final PDF Pack"
-        responses = sub.get("last_distributed_submittal", {}).get("distributed_responses", [])
-        approver_ids = [
-            r.get("submittal_approver_id")
-            for r in responses if r.get("response_name") == "Final PDF Pack"
-        ]
+        approver_ids = _final_pdf_approver_ids(sub)
+        detail = None
         if not approver_ids:
-            continue
+            # List payload incomplete / FC just re-distributed — get the detail.
+            try:
+                detail = get_submittal_by_id(project_id, submittal_id)
+            except Exception:
+                logger.exception(
+                    "final_pdf_detail_fetch_failed",
+                    project_id=project_id,
+                    submittal_id=submittal_id,
+                )
+                detail = None
+            if isinstance(detail, dict):
+                approver_ids = _final_pdf_approver_ids(detail)
+                if detail.get("title"):
+                    title = detail.get("title")
 
-        # Step 2: Get workflow data
-        workflow_data = get_workflow_data(project_id, submittal_id)
+        if approver_ids:
+            matched = _viewer_results_from_workflow(
+                project_id, submittal_id, title, approver_ids
+            )
+            if matched:
+                final_results.extend(matched)
+                continue
 
-        # Step 3: Match approver_id → attachment → viewer_url
-        attachments = workflow_data.get("attachments") if isinstance(workflow_data, dict) else []
-        for att in attachments or []:
-            if att.get("approver_id") in approver_ids:
-                viewer_url = att.get("viewer_url")
-                if viewer_url:
-                    full_viewer_url = f"https://app.procore.com{viewer_url}"
-                    final_results.append({
-                        "title": title,
-                        "submittal_id": submittal_id,
-                        "approver_id": att.get("approver_id"),
-                        "filename": att.get("name"),
-                        "viewer_url": full_viewer_url,
-                    })
+        # FC update left distribution metadata empty but attachments still have
+        # viewer_urls — better a best-effort link than a permanent gray button.
+        fallback = _viewer_results_from_workflow_fallback(
+            project_id, submittal_id, title
+        )
+        if fallback:
+            logger.info(
+                "final_pdf_viewer_fallback",
+                project_id=project_id,
+                submittal_id=submittal_id,
+                count=len(fallback),
+            )
+            final_results.extend(fallback)
 
     return final_results
 

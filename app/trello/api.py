@@ -399,22 +399,32 @@ def get_all_trello_cards():
     return relevant_data
 
 
-def check_job_exists_in_db(job_number, release_number):
+def check_job_exists_in_db(job_number, release_number, job_name=None):
     """
-    Check if a job with the given job number and release number already exists in the database.
+    Check if a (job #, release #, project name) triple already exists.
+
+    Uniqueness is name-scoped: the same job/release digits may belong to a
+    different project when job numbers wrap. When ``job_name`` is omitted,
+    any row with that job+release counts as a hit (legacy callers).
 
     Args:
         job_number: The job number (can be int or string)
         release_number: The release number (can be int or string)
+        job_name: Optional project name; when set, only same-name rows collide
 
     Returns:
-        Job object if found, None if not found
+        Releases object if found, None if not found
 
     Raises:
         Exception: For debugging purposes - will be caught and logged by caller
     """
     try:
-        logger.debug("job_lookup_started", job=str(job_number), release=str(release_number))
+        logger.debug(
+            "job_lookup_started",
+            job=str(job_number),
+            release=str(release_number),
+            job_name=str(job_name) if job_name is not None else None,
+        )
 
         # Convert job_number to int, keep release_number as string to preserve format like "v862"
         try:
@@ -428,10 +438,21 @@ def check_job_exists_in_db(job_number, release_number):
 
         logger.debug("job_identifiers_converted", job=str(job_int), release=release_str)
 
-        # Use Flask application context for database access
-        existing_job = Releases.query.filter_by(
+        candidates = Releases.query.filter_by(
             job=job_int, release=release_str
-        ).one_or_none()
+        ).all()
+        if job_name is None:
+            existing_job = candidates[0] if candidates else None
+        else:
+            target = str(job_name or "").strip().casefold()
+            existing_job = next(
+                (
+                    row
+                    for row in candidates
+                    if str(row.job_name or "").strip().casefold() == target
+                ),
+                None,
+            )
         logger.debug(
             "job_lookup_completed",
             job=str(job_int),
@@ -675,8 +696,9 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
             )
             return {"success": False, "error": error_msg}
 
+        job_name = excel_data.get("Job")
         logger.debug("duplicate_job_check_started", job=str(job_number), release=str(release_number))
-        existing_job = check_job_exists_in_db(job_number, release_number)
+        existing_job = check_job_exists_in_db(job_number, release_number, job_name=job_name)
 
         if existing_job:
             error_msg = f"Job {job_number}-{release_number} already exists in database"

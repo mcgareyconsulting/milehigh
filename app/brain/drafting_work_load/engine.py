@@ -123,8 +123,9 @@ class SubmittalOrderingEngine:
     def validate_order_number(order_number: Optional[float]) -> Tuple[bool, Optional[str]]:
         """
         Validate order number.
-        - NULL is allowed (clears order number)
-        - Must be > 0
+        - NULL is allowed (clears order number / unordered)
+        - 0 is allowed as a clear synonym (normalized to NULL by the route; never stored)
+        - Must be > 0 when set
         - If < 1 (urgency slot), must be exactly one of: 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9
         - If >= 1, any integer or decimal is allowed
         
@@ -135,8 +136,9 @@ class SubmittalOrderingEngine:
         
         try:
             order_float = float(order_number)
+            # 0 is a user-facing "uncheck" synonym for clear; callers normalize to None.
             if order_float == 0:
-                return False, "order_number cannot be 0"
+                return True, None
             
             # If it's an urgency slot (0 < order < 1), it must be exactly one of the 9 slots
             if 0 < order_float < 1:
@@ -456,6 +458,14 @@ class SubmittalOrderingEngine:
             raise ValueError(f"Submittal {update_request.submittal_id} not found in group")
 
         new_order = update_request.new_order
+
+        # 0 is a clear synonym (unordered) — same path as NULL
+        if new_order is not None:
+            try:
+                if float(new_order) == 0:
+                    new_order = None
+            except (ValueError, TypeError):
+                pass
 
         if new_order is None:
             return SubmittalOrderingEngine.handle_set_to_null(submittal_data, all_group_submittals_data)

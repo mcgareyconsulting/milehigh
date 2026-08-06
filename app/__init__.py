@@ -49,6 +49,12 @@ def init_scheduler(app):
     """Initialize the background scheduler for Trello queue draining and heartbeat."""
     from app.trello import drain_trello_queue
 
+    # Tests never need APScheduler. Starting it registers an atexit shutdown that
+    # logs after pytest closes stdout → noisy "I/O operation on closed file".
+    if os.environ.get("TESTING") or app.config.get("TESTING"):
+        logger.info("Skipping scheduler startup under TESTING")
+        return None
+
     # --- Prevent scheduler duplication in multi-worker environments ---
     # Only run the scheduler on one instance
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true" and not os.environ.get(
@@ -257,7 +263,19 @@ def init_scheduler(app):
     )
 
     scheduler.start()
-    atexit.register(lambda: scheduler.shutdown(wait=False))
+
+    def _shutdown_scheduler():
+        # atexit runs after pytest (and some reloaders) close streams; APScheduler
+        # still logs "Scheduler has been shut down" → ValueError on write. Silence
+        # that logger for the shutdown call and never raise from atexit.
+        try:
+            import logging
+            logging.getLogger("apscheduler.scheduler").setLevel(logging.CRITICAL)
+            scheduler.shutdown(wait=False)
+        except Exception:
+            pass
+
+    atexit.register(_shutdown_scheduler)
 
     jobs_list = [
         {

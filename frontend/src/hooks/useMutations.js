@@ -7,10 +7,10 @@
  * imports_from: [react, ../services/draftingWorkLoadApi]
  * imported_by: [../pages/DraftingWorkLoad.jsx]
  * invariants:
- *   - Order number 0 is rejected; values between 0-1 must be exact tenths (0.1-0.9)
+ *   - Order number 0 is treated as clear (NULL / unordered); values between 0-1 must be exact tenths (0.1-0.9)
  *   - Every mutation triggers refetch(true) on both success and failure to keep UI in sync
- *   - Dash, blank, empty string, null, and undefined all clear the order number to NULL
- * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ *   - Dash, blank, empty string, null, undefined, and 0 all clear the order number to NULL
+ * updated_by_agent: 2026-08-06T00:00:00Z
  */
 import { useState, useCallback } from 'react';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
@@ -45,14 +45,16 @@ export function useMutations(refetch) {
     }, [refetch]);
 
     const updateOrderNumber = useCallback(async (submittalId, orderNumber) => {
-        // Handle dash, blank, empty string, null, or undefined as NULL (clear order number)
+        // Clear = unordered: dash, blank, null, undefined, or 0 (BUG-2: uncheck 1 → 0)
         const trimmedValue = typeof orderNumber === 'string' ? orderNumber.trim() : orderNumber;
         const isClearValue = trimmedValue === '' ||
             trimmedValue === '-' ||
             trimmedValue === null ||
-            trimmedValue === undefined;
+            trimmedValue === undefined ||
+            trimmedValue === 0 ||
+            trimmedValue === '0';
 
-        const parsedValue = isClearValue
+        let parsedValue = isClearValue
             ? null
             : parseFloat(trimmedValue);
 
@@ -61,10 +63,9 @@ export function useMutations(refetch) {
             return;
         }
 
-        // Block 0 - order numbers must be > 0 or NULL
-        if (parsedValue !== null && parsedValue === 0) {
-            setError('Order number cannot be 0');
-            return;
+        // 0 means "no order" — same as blank. Never store 0 in the DB.
+        if (parsedValue === 0) {
+            parsedValue = null;
         }
 
         // Validate urgency slots: if < 1, must be exactly 0.1, 0.2, ..., 0.9

@@ -1,9 +1,9 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Lets users set or clear the Start Install date on a release, or flag the release ASAP. Any date entered is treated as a hard date; flagging ASAP sets a hard Start Install one week out (and triggers the Paint Complete → Ship Planning auto-advance).
+ * purpose: Lets users set or clear the Start Install date on a release, or flag the release ASAP. Any date entered is treated as a hard date; flagging ASAP sets a hard Start Install one week out (and triggers the Paint Complete → Ship Planning auto-advance). Ship and Install stay linked (ship = install − 1 biz day) until the user hits Break (N6).
  * exports:
- *   StartInstallDateModal: Date-picker modal with Save, Set ASAP, Clear Hard Date, Clear ASAP actions
+ *   StartInstallDateModal: Date-picker modal with Save, Set ASAP, Clear Hard Date, Clear ASAP, Break/Link actions
  * imports_from: [react]
  * imported_by: [frontend/src/components/JobsTableRow.jsx]
  * invariants:
@@ -14,15 +14,24 @@
  *     Saving an already-ASAP row with an installer change assigns the installer and keeps the date.
  *   - Clear Hard Date button is only shown when the row currently has a hard date (startInstallFormulaTF === false && currentDate && !isAsap).
  *   - Clear ASAP button is only shown when the row currently has ASAP set (isAsap === true).
- * updated_by_agent: 2026-05-12T00:00:00Z
+ *   - Ship ↔ Install auto-estimate only runs while `linked` is true (default when gap is empty or 1 biz day). Break (N6) sets linked false; Link re-enables and re-applies ship = install − 1.
+ * updated_by_agent: 2026-08-06T00:00:00Z
  */
 import React, { useState, useEffect } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { toYmd, subtractBusinessDays, addBusinessDays } from '../utils/formatters';
 
+/** True when ship is empty or exactly one business day before install. */
+function areDatesLinked(installYmd, shipYmd) {
+    if (!installYmd && !shipYmd) return true;
+    if (!installYmd || !shipYmd) return true; // empty other side still "linkable"
+    return shipYmd === subtractBusinessDays(installYmd, 1);
+}
+
 export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShipDate, currentInstaller, onSave, onSaveShipDate, onClearHardDate, onSetAsap, onClearAsap, jobNumber, releaseNumber, startInstallFormulaTF, isAsap }) {
     const [dateInput, setDateInput] = useState('');
     const [shipDateInput, setShipDateInput] = useState('');
+    const [linked, setLinked] = useState(true);
     const [asapToggle, setAsapToggle] = useState(false);
     const [installer, setInstaller] = useState('');
     const [installerOptions, setInstallerOptions] = useState([]);
@@ -35,12 +44,13 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
         if (isOpen) {
             setAsapToggle(!!isAsap);
             setInstaller(initialInstaller);
-            setShipDateInput(toYmd(currentShipDate));
-            if (currentDate && !isAsap) {
-                setDateInput(toYmd(currentDate));
-            } else {
-                setDateInput('');
-            }
+            const shipYmd = toYmd(currentShipDate);
+            const installYmd = currentDate && !isAsap ? toYmd(currentDate) : '';
+            setShipDateInput(shipYmd);
+            setDateInput(installYmd);
+            // Start linked when the pair is empty/one-sided or already 1 biz day apart;
+            // a deliberately larger gap opens unlinked so Break is not required first.
+            setLinked(areDatesLinked(installYmd, shipYmd));
             setError('');
         }
     }, [isOpen, currentDate, currentShipDate, isAsap, initialInstaller]);
@@ -53,20 +63,12 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
         }
     }, [isOpen, installerOptions.length]);
 
-    // The two dates stay linked at exactly one business day apart (ship = install − 1).
-    // Editing either estimates the other — symmetrically — as long as they're currently
-    // linked (or the other is empty). A larger, deliberately-set gap is left untouched so
-    // manual entry sticks.
+    // While linked: ship = install − 1 business day (symmetric edits).
+    // After Break (N6): either field edits alone; Link re-ties them.
     const handleDateInputChange = (e) => {
         const value = e.target.value;
-        const prevInstall = dateInput;
         setDateInput(value);
-        // Re-estimate Ship (install − 1 biz day) only when the two were linked, and never on a
-        // clear — clearing Install leaves Ship alone, which also lets you set a custom gap by
-        // clearing one field and typing the other independently.
-        const shipLinked = !shipDateInput
-            || (prevInstall && shipDateInput === subtractBusinessDays(prevInstall, 1));
-        if (value && shipLinked) {
+        if (value && linked) {
             setShipDateInput(subtractBusinessDays(value, 1));
         }
         setError('');
@@ -74,13 +76,26 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
 
     const handleShipDateChange = (e) => {
         const value = e.target.value;
-        const prevShip = shipDateInput;
         setShipDateInput(value);
         // ASAP owns the install date, so never move it from a ship edit.
-        const installLinked = !dateInput
-            || (prevShip && dateInput === addBusinessDays(prevShip, 1));
-        if (value && installLinked && !asapToggle) {
+        if (value && linked && !asapToggle) {
             setDateInput(addBusinessDays(value, 1));
+        }
+        setError('');
+    };
+
+    const handleBreak = () => {
+        setLinked(false);
+        setError('');
+    };
+
+    const handleLink = () => {
+        // Re-link and snap to the default relationship (prefer install as anchor).
+        setLinked(true);
+        if (dateInput) {
+            setShipDateInput(subtractBusinessDays(dateInput, 1));
+        } else if (shipDateInput && !asapToggle) {
+            setDateInput(addBusinessDays(shipDateInput, 1));
         }
         setError('');
     };
@@ -127,6 +142,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
     const handleCancel = () => {
         setDateInput('');
         setShipDateInput('');
+        setLinked(true);
         setAsapToggle(!!isAsap);
         setInstaller(initialInstaller);
         setError('');
@@ -176,10 +192,8 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
                         </span>
                     </label>
 
-                    {/* Ship Date → Start Install, left to right (chronological flow). Editing
-                        one estimates the other (ship = install − 1 business day); either can be
-                        overridden manually for larger ship→install gaps. */}
-                    <div className="mb-2 flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+                    {/* Ship Date → Start Install; Break/Link sits in the middle (N6). */}
+                    <div className="mb-2 flex flex-col sm:flex-row items-stretch sm:items-end gap-2 sm:gap-3">
                         <div className="flex-1 min-w-0">
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
                                 Ship Date
@@ -191,8 +205,28 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500"
                             />
                         </div>
-                        <div className="hidden sm:flex items-center pb-2 text-gray-400 text-xl select-none" aria-hidden="true">
-                            →
+                        <div className="flex flex-col items-center justify-end pb-0.5 shrink-0 self-center sm:self-end">
+                            {asapToggle ? (
+                                <span className="text-gray-400 text-xl select-none px-1" aria-hidden="true">→</span>
+                            ) : linked ? (
+                                <button
+                                    type="button"
+                                    onClick={handleBreak}
+                                    className="px-2.5 py-1.5 text-xs font-semibold rounded-md border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 transition-colors whitespace-nowrap"
+                                    title="Break link — stop auto-updating the other date when you edit one"
+                                >
+                                    Break
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={handleLink}
+                                    className="px-2.5 py-1.5 text-xs font-semibold rounded-md border border-accent-300 bg-accent-50 text-accent-800 hover:bg-accent-100 transition-colors whitespace-nowrap"
+                                    title="Link dates (ship = start install − 1 business day)"
+                                >
+                                    Link
+                                </button>
+                            )}
                         </div>
                         <div className="flex-1 min-w-0">
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -209,13 +243,16 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
                             />
                         </div>
                     </div>
+
                     {error && (
                         <p className="text-red-600 text-sm mb-2">{error}</p>
                     )}
                     <p className="text-gray-500 text-xs mb-6">
                         {asapToggle
                             ? 'ASAP sets a hard Start Install one week out and displays "ASAP" in red.'
-                            : 'Ship is estimated one business day before Start Install; edit either to override for a larger gap. Saving Start Install sets a hard date and cascades; Ship date does not push to Trello or affect scheduling.'}
+                            : linked
+                                ? 'Ship and Install are linked (ship = install − 1 business day). Use Break between the fields for an independent gap. Saving Start Install sets a hard date and cascades; Ship date does not push to Trello or affect scheduling.'
+                                : 'Ship and Install are independent. Use Link between the fields to re-tie them. Saving Start Install sets a hard date and cascades; Ship date does not push to Trello or affect scheduling.'}
                     </p>
 
                     <div className="mb-6">
