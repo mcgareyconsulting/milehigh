@@ -262,4 +262,68 @@ Please specifically answer:
 
 ---
 
+## 12. Second-pass review findings (Claude, 2026-08-06)
+
+Findings confirmed against the code on `claude/procorel-ink-bug-review-rw52et`
+(commit `50d207e`). Every factual claim in §§2–6 checked out: the UI gray
+condition is gated on truthy `viewer_url` exactly where §10 says
+(`ReleaseNumberLink.jsx:37`, `JobsTableRow.jsx:1372`,
+`PdfVersionHistoryModal.jsx:330`); the candidate-filter widening matches
+`active_releases_filter` semantics and the `Releases` column types
+(`released` is `Date`, `last_updated_at` is `DateTime`); the cron entry,
+pagination, detail refetch, and PK-first persist are all as described.
+`pytest tests/procore/` and the full suite pass.
+
+**Checklist answers (§9):**
+
+1. **Fallback (R1): keep, with two tightenings applied in this review.**
+   (a) The detail refetch now also runs when the *list* payload has approver
+   ids that fail to match workflow attachments — previously stale ids after a
+   re-distribute skipped detail entirely and jumped straight to the name-based
+   fallback. (b) The fallback no longer accepts arbitrary attachments: only
+   `final`-named or PDF-ish names qualify; photos/markups are refused (a wrong
+   link is worse than a gray one). `workflow_data` is now fetched once per
+   submittal instead of up to twice.
+2. **Dual code path: yes — fixed.** `backfill_fc_drawing_viewer_urls.py`
+   redefined an *unpaginated* `fetch_all_submittals` plus a strict
+   `submittals_for_release` that raised `AttributeError` on string/None `type`
+   payloads. It now imports the shared paginated/tolerant versions from
+   `app.procore.procore`. No other writers of `viewer_url` exist
+   (`card_creation.py` and `/procore/add-link` both go through the shared
+   hardened path).
+3. **Persist by id: yes for the worker.** The first-attempt path
+   (`add_procore_link_to_trello_card`) still resolves by `(job, release)`
+   `.first()`, but it runs at creation time when a wrapped duplicate cannot
+   yet exist for that identifier, so left as-is; flag if a paste-time
+   collision is ever observed.
+4. **No open-redirect concern.** `viewer_url` values come from Procore API
+   responses, not user input; only path-relative values are prefixed, and a
+   protocol-relative `//host` value would still resolve under
+   `https://app.procore.com//…`.
+5. **Re-collect non-empty URLs: defer.** Agree with §3.F — a refresh feature
+   with its own staleness signal (compare `last_distributed_submittal`
+   timestamps), not a retry-worker tweak.
+6. **No regression** to identifier tightness (word-boundary
+   `_identifier_matches` unchanged, covered by tests) or FC gating
+   (`_is_for_construction` excludes DRR/GC Approval; `startswith` breadth is
+   acceptable — no colliding Procore type names in use).
+7. **Logging: procore.py events comply; the worker's did not.** Sentence-style
+   event names (`"FC retry worker starting"`, `"FC retry: persist failed"`, …)
+   pre-dated this PR but the ratchet applies to touched files — renamed to
+   structured events (`fc_retry_started`, `fc_retry_persist_failed`,
+   `fc_retry_finished`, …). Ops note: grep for `fc_retry_` after deploy, not
+   "FC retry". Also added the missing `fetch_all_submittals_page_error`
+   warning when pagination dies mid-stream — a silently truncated list
+   otherwise reads as "no matching FC submittal" (still_missing) instead of
+   an error.
+
+**Risk asks:** R5 — keep 30 days (correctness over thrift, per doc). R2 —
+the single workflow fetch per submittal (above) removes the double-fetch;
+per-project detail caps not needed at MHMW volumes.
+
+New tests: stale-list-approver-ids resolved via detail refetch; fallback
+refuses non-PDF attachments. 15 FC viewer tests total, all passing.
+
+---
+
 *Written for PR ship with Workstream 3 bug pile. Elevate to Claude with this file + the procore/fc_retry diffs as the review package.*

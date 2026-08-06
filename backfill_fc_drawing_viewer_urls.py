@@ -21,42 +21,19 @@ from collections import defaultdict
 from app import create_app
 from app.models import Releases, db
 from app.config import Config as cfg
+# Shared with the app + nightly retry worker so there is exactly one
+# collection code path: paginated submittal fetch, tolerant type matching.
 from app.procore.procore import (
     get_access_token,
     _request_json,
     _normalize_title,
     _identifier_matches,
+    _is_for_construction,
+    fetch_all_projects,
+    fetch_all_submittals,
+    submittals_for_release,
     get_final_pdf_viewers,
 )
-
-
-def fetch_all_projects(company_id):
-    """Fetch every Procore project in one call. Returns {job_number_str: project_id}."""
-    url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.1/projects?company_id={company_id}"
-    headers = {
-        "Authorization": f"Bearer {get_access_token()}",
-        "Procore-Company-Id": str(company_id),
-    }
-    projects = _request_json(url, headers=headers) or []
-    return {p["project_number"]: p["id"] for p in projects}
-
-
-def fetch_all_submittals(project_id):
-    """Fetch every submittal for a project in one call (unfiltered)."""
-    url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.1/projects/{project_id}/submittals"
-    headers = {"Authorization": f"Bearer {get_access_token()}"}
-    result = _request_json(url, headers=headers)
-    return result if isinstance(result, list) else []
-
-
-def submittals_for_release(all_submittals, job, release):
-    """Filter a pre-fetched submittal list for a specific job-release identifier."""
-    identifier = f"{job}-{release}".strip().lower()
-    return [
-        s for s in all_submittals
-        if _identifier_matches(identifier, _normalize_title(s.get("title", "")))
-        and s.get("type", {}).get("name") == "For Construction"
-    ]
 
 
 def run_backfill(dry_run=False, filter_job=None, commit_every=50, delay=0.25, refresh_submittal_id=False):
@@ -230,10 +207,7 @@ def run_compare(filter_job=None, delay=0.25):
         # ── 4. Compare matching per project ────────────────────────────────────
         for project_id, proj_records in groups.items():
             all_submittals = fetch_all_submittals(project_id)
-            fc_submittals = [
-                s for s in all_submittals
-                if (s.get("type") or {}).get("name") == "For Construction"
-            ]
+            fc_submittals = [s for s in all_submittals if _is_for_construction(s)]
             print(f"Project {project_id} — {len(proj_records)} release(s), {len(fc_submittals)} FC submittal(s)")
             if delay:
                 time.sleep(delay)
