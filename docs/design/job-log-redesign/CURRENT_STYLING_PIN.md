@@ -256,7 +256,9 @@ Tablet may drop BY + Released and renorm remaining widths.
 ## 7b. Surfaces sharing this system
 
 The Events page, the Drafting Work Load table, and the Archive (Aug 2026
-follow-up) reuse the Job Log styling wholesale rather than defining their own:
+follow-up) reuse the Job Log styling wholesale rather than defining their own.
+Staff app pages also share the **token shell** (canvas / surface / ink / hairline)
+even when they are not lattice tables.
 
 | Concern | Files |
 |---------|-------|
@@ -267,10 +269,15 @@ follow-up) reuse the Job Log styling wholesale rather than defining their own:
 | Hover (`jl-row` inset overlay) | same |
 | Type (`text-jl` body, `text-jl-2` secondary, Plex Mono for ids/dates/order #) | `EventsList.jsx`, `TableRow.jsx`, `frontend/src/components/DateCellPill.jsx` |
 | Events-in-modal chrome (surface-2 header, 14px radius, `dc-pop`) | `frontend/src/components/EventsModal.jsx` |
+| Token shell (`bg-canvas` / `bg-surface` / `text-ink*` / `border-hairline*`) | ToDos, Board, Meetings, Metrics, Install Schedule, T&M, Invoicing, Projects (+ detail), Subs layout + pages, Submittal Matching, FC Collection, Rental Reports, DWL Admin, Jobsite Map overlays, Job Search, History/Operations/Logs (legacy routes) |
+| App chrome | `AppShell` top bar uses `bg-surface` + `border-hairline`; optional left rail via ThemeContext `isSidebarMode` (default off) |
 
 DWL-only intentional deltas: HOLD yellow row override, DRR green Type cell,
 Draft-tab green accent, and the drag-over drop indicator (painted per-cell —
 `<tr>` borders don't render under `border-collapse: separate`).
+
+Subcontractor portal pages keep a separate invite/login presentation and are
+not required to match staff Job Log chrome.
 
 ---
 

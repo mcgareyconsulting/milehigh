@@ -60,16 +60,16 @@ const secs = (s) => (s == null ? '—' : s >= 60 ? `${(s / 60).toFixed(1)}m` : `
 function SectionTitle({ children, note }) {
     return (
         <div className="flex items-baseline gap-2 mt-6 mb-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">{children}</h2>
-            {note && <span className="text-[11px] text-gray-400 dark:text-slate-500">{note}</span>}
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-3">{children}</h2>
+            {note && <span className="text-[11px] text-ink-3">{note}</span>}
         </div>
     );
 }
 
 function ChartCard({ title, children, height = 220 }) {
     return (
-        <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
-            <div className="text-xs font-medium text-gray-600 dark:text-slate-300 mb-2">{title}</div>
+        <div className="rounded-lg border border-hairline bg-surface p-3">
+            <div className="text-xs font-medium text-ink-2 mb-2">{title}</div>
             <div style={{ width: '100%', height }}>
                 <ResponsiveContainer>{children}</ResponsiveContainer>
             </div>
@@ -79,19 +79,19 @@ function ChartCard({ title, children, height = 220 }) {
 
 function Leaderboard({ title, rows, valueKey, format = num }) {
     return (
-        <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
-            <div className="text-xs font-medium text-gray-600 dark:text-slate-300 mb-2">{title}</div>
+        <div className="rounded-lg border border-hairline bg-surface p-3">
+            <div className="text-xs font-medium text-ink-2 mb-2">{title}</div>
             {rows.length === 0 ? (
-                <div className="text-xs text-gray-400 dark:text-slate-500 py-2">No activity in this window.</div>
+                <div className="text-xs text-ink-3 py-2">No activity in this window.</div>
             ) : (
                 <table className="w-full text-sm">
                     <tbody>
                         {rows.slice(0, 8).map((r, i) => (
-                            <tr key={r.user_id ?? r.feature ?? r.model ?? r.action ?? r.stage ?? i} className="border-t border-gray-100 dark:border-slate-700/60 first:border-0">
-                                <td className="py-1 text-gray-700 dark:text-slate-200 truncate">
+                            <tr key={r.user_id ?? r.feature ?? r.model ?? r.action ?? r.stage ?? i} className="border-t border-hairline first:border-0">
+                                <td className="py-1 text-ink-2 truncate">
                                     {r.username || r.feature || r.model || r.action || r.stage || `User ${r.user_id ?? '—'}`}
                                 </td>
-                                <td className="py-1 text-right font-semibold tabular-nums text-gray-900 dark:text-slate-100">
+                                <td className="py-1 text-right font-semibold tabular-nums text-ink">
                                     {format(r[valueKey])}
                                 </td>
                             </tr>
@@ -143,10 +143,10 @@ function Metrics() {
     }, [authorized, period, load]);
 
     if (authorized === null) {
-        return <div className="p-6 text-gray-500 dark:text-slate-400">Loading…</div>;
+        return <div className="w-full min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas p-6 text-ink-3">Loading…</div>;
     }
     if (!authorized) {
-        return <div className="p-6 text-gray-600 dark:text-slate-300">Metrics are available to admins only.</div>;
+        return <div className="w-full min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas p-6 text-ink-2">Metrics are available to admins only.</div>;
     }
 
     const tooltipStyle = {
@@ -183,11 +183,12 @@ function Metrics() {
         : [];
 
     return (
+        <div className="w-full min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas">
         <div className="w-full max-w-[1400px] mx-auto p-4">
             {/* Header */}
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">System Metrics</h1>
-                <div className="inline-flex rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
+                <h1 className="text-xl font-bold text-ink">System Metrics</h1>
+                <div className="inline-flex rounded-lg border border-hairline overflow-hidden">
                     {PERIODS.map((p) => (
                         <button
                             key={p.key}
@@ -195,7 +196,7 @@ function Metrics() {
                             onClick={() => setPeriod(p.key)}
                             className={`px-3 py-1.5 text-sm font-medium transition-colors ${period === p.key
                                 ? 'bg-accent-500 text-white'
-                                : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'}`}
+                                : 'bg-surface text-ink-2 hover:bg-surface-2'}`}
                         >
                             {p.label}
                         </button>
@@ -205,13 +206,13 @@ function Metrics() {
 
             {/* Digest line — the same text an agent would ingest */}
             {data?.digest?.text && (
-                <div className="mt-3 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/60 px-3 py-2 text-sm text-gray-600 dark:text-slate-300">
+                <div className="mt-3 rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-sm text-ink-2">
                     {data.digest.text}
                 </div>
             )}
 
             {error && <div className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</div>}
-            {loading && <div className="mt-3 text-xs text-gray-400 dark:text-slate-500">Refreshing…</div>}
+            {loading && <div className="mt-3 text-xs text-ink-3">Refreshing…</div>}
 
             {s && (
                 <>
@@ -241,14 +242,14 @@ function Metrics() {
                     {/* Engagement */}
                     <SectionTitle note="active = any tracked action; logins from last_login">Engagement</SectionTitle>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                        <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
-                            <div className="text-xs font-medium text-gray-600 dark:text-slate-300 mb-2">Active users</div>
+                        <div className="rounded-lg border border-hairline bg-surface p-3">
+                            <div className="text-xs font-medium text-ink-2 mb-2">Active users</div>
                             {(engagement?.roster || []).length === 0 ? (
-                                <div className="text-xs text-gray-400 dark:text-slate-500 py-2">No activity in this window.</div>
+                                <div className="text-xs text-ink-3 py-2">No activity in this window.</div>
                             ) : (
                                 <table className="w-full text-sm">
                                     <thead>
-                                        <tr className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-slate-500">
+                                        <tr className="text-[10px] uppercase tracking-wide text-ink-3">
                                             <td className="py-1">User</td>
                                             <td className="py-1 text-right">Actions</td>
                                             <td className="py-1 text-right">Last login</td>
@@ -256,10 +257,10 @@ function Metrics() {
                                     </thead>
                                     <tbody>
                                         {engagement.roster.slice(0, 10).map((r) => (
-                                            <tr key={r.user_id} className="border-t border-gray-100 dark:border-slate-700/60">
-                                                <td className="py-1 text-gray-700 dark:text-slate-200 truncate">{r.username || `User ${r.user_id}`}</td>
-                                                <td className="py-1 text-right tabular-nums text-gray-900 dark:text-slate-100">{num(r.actions)}</td>
-                                                <td className="py-1 text-right text-gray-400 dark:text-slate-500">{r.last_login ? r.last_login.slice(0, 10) : '—'}</td>
+                                            <tr key={r.user_id} className="border-t border-hairline">
+                                                <td className="py-1 text-ink-2 truncate">{r.username || `User ${r.user_id}`}</td>
+                                                <td className="py-1 text-right tabular-nums text-ink">{num(r.actions)}</td>
+                                                <td className="py-1 text-right text-ink-3">{r.last_login ? r.last_login.slice(0, 10) : '—'}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -424,6 +425,7 @@ function Metrics() {
                     )}
                 </>
             )}
+        </div>
         </div>
     );
 }

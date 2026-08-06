@@ -754,7 +754,7 @@ function ReleasesLayout() {
     return (
         <>
             <div
-                className="w-full h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas dark:bg-slate-900 flex flex-col"
+                className="w-full h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas flex flex-col"
                 style={{
                     width: '100%',
                     minWidth: '100%',
@@ -779,7 +779,7 @@ function ReleasesLayout() {
                                             onClick={() => setSelectedProjectNames([])}
                                             className={`w-full px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.length === 0
                                                 ? 'bg-blue-700 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
+                                                : 'bg-surface border border-hairline-strong text-ink-2 hover:bg-surface-2'
                                                 }`}
                                             title="Clear the project filter and show releases from every project."
                                         >
@@ -797,7 +797,7 @@ function ReleasesLayout() {
                                                 }}
                                                 className={`w-full px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.includes(option)
                                                     ? 'bg-blue-700 text-white'
-                                                    : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
+                                                    : 'bg-surface border border-hairline-strong text-ink-2 hover:bg-surface-2'
                                                     }`}
                                                 title={`Toggle "${option}" — when selected, only releases from this project are shown. Select multiple to combine projects.`}
                                             >
@@ -931,7 +931,7 @@ function ReleasesLayout() {
                                             onChange={(e) => setSearch(e.target.value)}
                                             placeholder="Job #, release, name, description..."
                                             title="Live-filter the visible rows by Job #, Release #, project name, or description. Case-insensitive substring match."
-                                            className="min-w-0 flex-1 max-w-xs px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                            className="min-w-0 flex-1 max-w-xs px-2 py-0.5 text-xs border border-hairline-strong rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-input-bg text-ink"
                                         />
                                         <button
                                             onClick={() => { resetFilters(); setReviewMode(false); }}

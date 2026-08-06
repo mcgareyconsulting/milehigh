@@ -142,20 +142,20 @@ export default function JobsiteMap() {
     return (
         <div className="relative" style={{ height: 'calc(100vh - var(--app-chrome-h))' }}>
             {loading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
-                    <span className="text-gray-600">Loading jobsites...</span>
+                <div className="absolute inset-0 flex items-center justify-center bg-surface/80 z-10">
+                    <span className="text-ink-2">Loading jobsites...</span>
                 </div>
             )}
             {error && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
+                <div className="absolute inset-0 flex items-center justify-center bg-surface/80 z-10">
                     <span className="text-red-500">Error: {error}</span>
                 </div>
             )}
             {!loading && !error && geojson?.features?.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-                    <div className="bg-white/90 rounded-lg px-6 py-4 text-center shadow-md pointer-events-auto">
-                        <p className="text-gray-700 font-medium">No jobsites found</p>
-                        <p className="text-gray-500 text-sm mt-1">
+                    <div className="bg-surface/90 rounded-lg px-6 py-4 text-center shadow-md border border-hairline pointer-events-auto">
+                        <p className="text-ink-2 font-medium">No jobsites found</p>
+                        <p className="text-ink-3 text-sm mt-1">
                             Jobsites with geofence polygons will appear here.
                         </p>
                     </div>

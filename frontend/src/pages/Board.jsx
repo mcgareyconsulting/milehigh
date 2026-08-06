@@ -39,13 +39,13 @@ const STATUSES = [
     { value: 'open',        label: 'Open',        dot: 'bg-blue-400',    bg: 'bg-blue-50 dark:bg-blue-950/30',      border: 'border-blue-200 dark:border-blue-800/40',    gradientTop: 'rgba(254, 240, 138, 0.18)' },
     { value: 'in_progress', label: 'In Progress',  dot: 'bg-yellow-400',  bg: 'bg-yellow-50 dark:bg-yellow-950/30',  border: 'border-yellow-200 dark:border-yellow-800/40', gradientTop: 'rgba(254, 215, 170, 0.20)' },
     { value: 'deployed',    label: 'Deployed',     dot: 'bg-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/30', border: 'border-emerald-200 dark:border-emerald-800/40', gradientTop: 'rgba(187, 247, 208, 0.20)' },
-    { value: 'closed',      label: 'Closed',       dot: 'bg-gray-400',    bg: 'bg-gray-50 dark:bg-gray-800/30',      border: 'border-gray-200 dark:border-gray-700',        gradientTop: 'rgba(203, 213, 225, 0.15)' },
+    { value: 'closed',      label: 'Closed',       dot: 'bg-ink-3',    bg: 'bg-surface-2',      border: 'border-hairline',        gradientTop: 'rgba(203, 213, 225, 0.15)' },
 ];
 
 const CATEGORY_COLORS = {
     'Job Log': 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
     'Drafting WL': 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
-    'General': 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+    'General': 'bg-surface-2 text-ink-2',
 };
 
 const PRIORITY_DOT = {
@@ -87,14 +87,14 @@ function KanbanCard({ item, isSelected, onClick }) {
                     ? 'bg-accent-50 dark:bg-accent-900/20 border-accent-300 dark:border-accent-600 ring-1 ring-accent-400/50 shadow-md'
                     : cardNew
                         ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700 hover:border-yellow-300 dark:hover:border-yellow-600 hover:shadow-sm'
-                        : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 hover:shadow-sm'
+                        : 'bg-surface border-hairline hover:border-hairline-strong hover:shadow-sm'
                 }`}
         >
             <div className="flex items-start gap-1.5">
                 {hasPriorityDot && (
                     <span className={`mt-1.5 shrink-0 w-2 h-2 rounded-full ${PRIORITY_DOT[item.priority]}`} />
                 )}
-                <h3 className="text-xs font-medium text-gray-900 dark:text-slate-100 leading-snug line-clamp-2">
+                <h3 className="text-xs font-medium text-ink leading-snug line-clamp-2">
                     {item.title}
                 </h3>
             </div>
@@ -102,7 +102,7 @@ function KanbanCard({ item, isSelected, onClick }) {
                 <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${CATEGORY_COLORS[item.category] || CATEGORY_COLORS['General']}`}>
                     {item.category}
                 </span>
-                <span className="ml-auto flex items-center gap-1 text-[10px] text-gray-400 dark:text-slate-500">
+                <span className="ml-auto flex items-center gap-1 text-[10px] text-ink-3">
                     {item.activity_count > 0 && (
                         <span className="flex items-center gap-0.5">
                             <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -139,8 +139,8 @@ function KanbanColumn({ status, items, selectedId, onCardClick, isOver }) {
         <div className="flex flex-col min-w-0 flex-1">
             <div className={`flex items-center gap-2 px-2.5 py-2 rounded-t-lg border ${status.border} ${status.bg}`}>
                 <span className={`w-2 h-2 rounded-full ${status.dot}`} />
-                <span className="text-xs font-semibold text-gray-700 dark:text-slate-200">{status.label}</span>
-                <span className="text-[10px] text-gray-400 dark:text-slate-500 font-medium">{items.length}</span>
+                <span className="text-xs font-semibold text-ink-2">{status.label}</span>
+                <span className="text-[10px] text-ink-3 font-medium">{items.length}</span>
             </div>
             <div
                 ref={setNodeRef}
@@ -148,11 +148,11 @@ function KanbanColumn({ status, items, selectedId, onCardClick, isOver }) {
                 className={`flex-1 overflow-y-auto p-1.5 space-y-1.5 border-x border-b rounded-b-lg transition-colors ${status.border}
                     ${isOver
                         ? 'bg-accent-50/50 dark:bg-accent-900/10 ring-2 ring-inset ring-accent-300 dark:ring-accent-600'
-                        : 'bg-gray-50/50 dark:bg-slate-900/30'
+                        : 'bg-surface-2/50'
                     }`}
             >
                 {items.length === 0 && (
-                    <div className={`py-6 text-center text-[10px] ${isOver ? 'text-accent-500' : 'text-gray-400 dark:text-slate-600'}`}>
+                    <div className={`py-6 text-center text-[10px] ${isOver ? 'text-accent-500' : 'text-ink-3'}`}>
                         {isOver ? 'Drop here' : 'Nothing to complain about'}
                     </div>
                 )}
@@ -253,8 +253,8 @@ export default function Board() {
         return () => window.removeEventListener('keydown', onKey);
     }, []);
 
-    if (loading) return <div className="flex-1 flex items-center justify-center"><span className="text-gray-500 dark:text-slate-400">Loading...</span></div>;
-    if (!isAdmin) return <div className="flex-1 flex items-center justify-center"><span className="text-gray-500 dark:text-slate-400">Admin access required.</span></div>;
+    if (loading) return <div className="flex-1 flex items-center justify-center bg-canvas"><span className="text-ink-3">Loading...</span></div>;
+    if (!isAdmin) return <div className="flex-1 flex items-center justify-center bg-canvas"><span className="text-ink-3">Admin access required.</span></div>;
 
     const columns = {};
     for (const s of STATUSES) columns[s.value] = [];
@@ -328,14 +328,14 @@ export default function Board() {
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh_-_var(--app-chrome-h))] overflow-hidden">
+        <div className="flex flex-col h-[calc(100vh_-_var(--app-chrome-h))] overflow-hidden bg-canvas">
             {/* Header bar */}
-            <div className="shrink-0 px-5 py-2.5 flex items-center gap-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+            <div className="shrink-0 px-5 py-2.5 flex items-center gap-3 border-b border-hairline bg-surface">
                 <div className="min-w-0">
                     <h1 className="text-lg font-bold text-accent-600 dark:text-accent-300 tracking-tight leading-tight">
                         Ongoing Complaints
                     </h1>
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-ink-3">
                         Bug Tracker
                     </p>
                 </div>
@@ -346,17 +346,17 @@ export default function Board() {
                             className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
                                 categoryFilter === c
                                     ? 'bg-accent-500 text-white dark:bg-accent-400 dark:text-slate-900'
-                                    : 'text-gray-500 dark:text-slate-400 hover:bg-accent-50 dark:hover:bg-slate-700'
+                                    : 'text-ink-3 hover:bg-brand-soft'
                             }`}>{c}</button>
                     ))}
                 </div>
 
                 <div className="relative ml-2">
-                    <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                     <input type="text" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Search complaints..."
-                        className="pl-8 pr-3 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent w-44 placeholder:text-gray-400 dark:placeholder:text-slate-500" />
+                        className="pl-8 pr-3 py-1.5 text-xs border border-hairline rounded-lg bg-surface-2 text-ink-2 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent w-44 placeholder:text-ink-3" />
                 </div>
 
                 <button onClick={() => setShowNewModal(true)}
@@ -402,18 +402,18 @@ export default function Board() {
 
                 {/* Right detail panel */}
                 {selectedItem && (
-                    <div className="w-[40%] border-l border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 overflow-hidden">
+                    <div className="w-[40%] border-l border-hairline bg-surface p-4 overflow-hidden">
                         <BoardDetail key={selectedItem.id} item={selectedItem} onUpdate={handleItemUpdate} onClose={() => setSelectedItem(null)} />
                     </div>
                 )}
 
                 {/* Loading skeleton */}
                 {detailLoading && !selectedItem && (
-                    <div className="w-[40%] border-l border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
+                    <div className="w-[40%] border-l border-hairline bg-surface p-4">
                         <div className="animate-pulse space-y-3">
-                            <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-3/4"></div>
-                            <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-1/2"></div>
-                            <div className="h-20 bg-gray-200 dark:bg-slate-700 rounded"></div>
+                            <div className="h-4 bg-surface-2 rounded w-3/4"></div>
+                            <div className="h-3 bg-surface-2 rounded w-1/2"></div>
+                            <div className="h-20 bg-surface-2 rounded"></div>
                         </div>
                     </div>
                 )}

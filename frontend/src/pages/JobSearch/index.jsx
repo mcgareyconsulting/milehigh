@@ -64,11 +64,11 @@ export default function JobSearch() {
 
   return (
     <div
-      className="w-full h-full flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900"
+      className="w-full h-[calc(100vh_-_var(--app-chrome-h))] flex flex-col bg-canvas"
       style={{ width: '100%', minWidth: '100%' }}
     >
       <div className="flex-1 min-h-0 max-w-full mx-auto w-full py-2 px-2 flex flex-col" style={{ width: '100%' }}>
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col flex-1 min-h-0">
+        <div className="bg-surface rounded-2xl shadow-xl border border-hairline overflow-hidden flex flex-col flex-1 min-h-0">
           <header className="flex-shrink-0 px-4 py-3 bg-gradient-to-r from-accent-500 to-accent-600">
             <div className="flex items-center justify-between">
               <h1 className="text-3xl font-bold text-white">Job Search</h1>
@@ -85,13 +85,13 @@ export default function JobSearch() {
                   value={jobInput}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
-                  className="w-24 px-3 py-2 border border-gray-200 dark:border-slate-500 rounded-lg font-mono text-lg no-spin bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-400 focus:ring-2 focus:ring-accent-400 focus:border-accent-400"
+                  className="w-24 px-3 py-2 border border-hairline rounded-lg font-mono text-lg no-spin bg-input-bg text-ink placeholder:text-ink-3 focus:ring-2 focus:ring-accent-400 focus:border-accent-400"
                 />
                 <button
                   type="button"
                   onClick={handleSearch}
                   disabled={loading}
-                  className="px-4 py-2 bg-white dark:bg-slate-700 text-accent-600 dark:text-accent-300 font-medium rounded-lg hover:bg-accent-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
+                  className="px-4 py-2 bg-surface text-accent-600 dark:text-accent-300 font-medium rounded-lg hover:bg-brand-soft disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
                 >
                   {loading ? 'Searching…' : 'Search'}
                 </button>
@@ -109,7 +109,7 @@ export default function JobSearch() {
             {searchedJob != null && !error && (
               <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-4 overflow-hidden">
                 <section className="flex flex-col min-h-0">
-                  <h2 className="flex-shrink-0 text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
+                  <h2 className="flex-shrink-0 text-sm font-semibold text-ink-2 mb-2">
                     Releases (Job {searchedJob})
                   </h2>
                   <div className="flex-1 min-h-0 overflow-hidden">
@@ -122,7 +122,7 @@ export default function JobSearch() {
                   </div>
                 </section>
                 <section className="flex flex-col min-h-0">
-                  <h2 className="flex-shrink-0 text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
+                  <h2 className="flex-shrink-0 text-sm font-semibold text-ink-2 mb-2">
                     Submittals (Job {searchedJob})
                   </h2>
                   <div className="flex-1 min-h-0 overflow-hidden">

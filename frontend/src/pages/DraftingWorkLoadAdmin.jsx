@@ -157,10 +157,10 @@ function DraftingWorkLoadAdmin() {
 
     if (!authenticated) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-                <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full">
-                    <h1 className="text-3xl font-bold text-gray-800 mb-2">Admin Access</h1>
-                    <p className="text-gray-600 mb-6">Enter PIN to access health scan</p>
+            <div className="min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas flex items-center justify-center p-4">
+                <div className="bg-surface rounded-lg shadow-xl border border-hairline p-8 max-w-md w-full">
+                    <h1 className="text-3xl font-bold text-ink mb-2">Admin Access</h1>
+                    <p className="text-ink-2 mb-6">Enter PIN to access health scan</p>
 
                     <form onSubmit={handlePinSubmit}>
                         <div className="mb-4">
@@ -169,7 +169,7 @@ function DraftingWorkLoadAdmin() {
                                 value={pin}
                                 onChange={(e) => setPin(e.target.value)}
                                 placeholder="Enter PIN"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-4 py-3 border border-hairline-strong bg-input-bg text-ink rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 required
                                 autoFocus
                             />
@@ -191,11 +191,11 @@ function DraftingWorkLoadAdmin() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
+        <div className="min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas p-6">
             <div className="max-w-7xl mx-auto">
-                <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <div className="bg-surface rounded-lg shadow-lg border border-hairline p-6 mb-6">
                     <div className="flex justify-between items-center mb-4">
-                        <h1 className="text-3xl font-bold text-gray-800">Health Scan Admin</h1>
+                        <h1 className="text-3xl font-bold text-ink">Health Scan Admin</h1>
                         <div className="flex gap-3">
                             <button
                                 onClick={runHealthScan}
@@ -210,7 +210,7 @@ function DraftingWorkLoadAdmin() {
                                     setScanResults(null);
                                     setPin('');
                                 }}
-                                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                                className="px-4 py-2 bg-ink-3 text-white rounded-lg hover:bg-ink-2 transition-colors"
                             >
                                 Logout
                             </button>
@@ -232,23 +232,23 @@ function DraftingWorkLoadAdmin() {
                     {scanResults && (
                         <div className="space-y-6">
                             {/* Summary */}
-                            <div className="bg-gray-50 rounded-lg p-4">
-                                <h2 className="text-xl font-semibold text-gray-800 mb-3">Summary</h2>
+                            <div className="bg-surface-2 rounded-lg p-4">
+                                <h2 className="text-xl font-semibold text-ink mb-3">Summary</h2>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                     <div>
-                                        <p className="text-sm text-gray-600">Total Orphaned</p>
-                                        <p className="text-2xl font-bold text-gray-800">{scanResults.summary.total_orphaned}</p>
+                                        <p className="text-sm text-ink-2">Total Orphaned</p>
+                                        <p className="text-2xl font-bold text-ink">{scanResults.summary.total_orphaned}</p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-gray-600">Sync Issues</p>
+                                        <p className="text-sm text-ink-2">Sync Issues</p>
                                         <p className="text-2xl font-bold text-orange-600">{scanResults.summary.sync_issues}</p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-gray-600">Deleted/Archived</p>
+                                        <p className="text-sm text-ink-2">Deleted/Archived</p>
                                         <p className="text-2xl font-bold text-yellow-600">{scanResults.summary.deleted_submittals}</p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-gray-600">Missing Webhooks</p>
+                                        <p className="text-sm text-ink-2">Missing Webhooks</p>
                                         <p className="text-2xl font-bold text-red-600">{scanResults.summary.projects_missing_webhooks}</p>
                                     </div>
                                 </div>
@@ -258,7 +258,7 @@ function DraftingWorkLoadAdmin() {
                             {scanResults.differences.sync_issues.length > 0 && (
                                 <div className="bg-white border border-orange-200 rounded-lg p-4">
                                     <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-xl font-semibold text-gray-800">
+                                        <h2 className="text-xl font-semibold text-ink">
                                             Sync Issues ({scanResults.differences.sync_issues.length})
                                         </h2>
                                         <button
@@ -271,11 +271,11 @@ function DraftingWorkLoadAdmin() {
                                     </div>
                                     <div className="space-y-4 max-h-96 overflow-y-auto">
                                         {scanResults.differences.sync_issues.map((issue, index) => (
-                                            <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                            <div key={index} className="border border-hairline rounded-lg p-4 bg-surface-2">
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div>
-                                                        <p className="font-semibold text-gray-800">{issue.title || 'N/A'}</p>
-                                                        <p className="text-sm text-gray-600">
+                                                        <p className="font-semibold text-ink">{issue.title || 'N/A'}</p>
+                                                        <p className="text-sm text-ink-2">
                                                             Submittal ID: {issue.submittal_id} | Project: {issue.project_name} ({issue.project_id})
                                                         </p>
                                                     </div>
@@ -284,7 +284,7 @@ function DraftingWorkLoadAdmin() {
                                                     {issue.ball_in_court.mismatch && (
                                                         <div className="bg-orange-50 border-l-4 border-orange-400 p-3 rounded">
                                                             <p className="text-sm font-semibold text-orange-800">ball_in_court Mismatch:</p>
-                                                            <p className="text-sm text-gray-700">
+                                                            <p className="text-sm text-ink-2">
                                                                 DB: <span className="font-mono">{issue.ball_in_court.db || 'null'}</span> →
                                                                 API: <span className="font-mono font-semibold">{issue.ball_in_court.api || 'null'}</span>
                                                             </p>
@@ -293,7 +293,7 @@ function DraftingWorkLoadAdmin() {
                                                     {issue.status.mismatch && (
                                                         <div className="bg-orange-50 border-l-4 border-orange-400 p-3 rounded">
                                                             <p className="text-sm font-semibold text-orange-800">status Mismatch:</p>
-                                                            <p className="text-sm text-gray-700">
+                                                            <p className="text-sm text-ink-2">
                                                                 DB: <span className="font-mono">{issue.status.db || 'null'}</span> →
                                                                 API: <span className="font-mono font-semibold">{issue.status.api || 'null'}</span>
                                                             </p>
@@ -309,17 +309,17 @@ function DraftingWorkLoadAdmin() {
                             {/* Deleted Submittals */}
                             {scanResults.differences.deleted_submittals.length > 0 && (
                                 <div className="bg-white border border-yellow-200 rounded-lg p-4">
-                                    <h2 className="text-xl font-semibold text-gray-800 mb-4">
+                                    <h2 className="text-xl font-semibold text-ink mb-4">
                                         Deleted/Archived Submittals ({scanResults.differences.deleted_submittals.length})
                                     </h2>
                                     <div className="space-y-2 max-h-64 overflow-y-auto">
                                         {scanResults.differences.deleted_submittals.map((deleted, index) => (
-                                            <div key={index} className="border border-gray-200 rounded-lg p-3 bg-yellow-50">
-                                                <p className="font-semibold text-gray-800">{deleted.title || 'N/A'}</p>
-                                                <p className="text-sm text-gray-600">
+                                            <div key={index} className="border border-hairline rounded-lg p-3 bg-yellow-50">
+                                                <p className="font-semibold text-ink">{deleted.title || 'N/A'}</p>
+                                                <p className="text-sm text-ink-2">
                                                     Submittal ID: {deleted.submittal_id} | Project: {deleted.project_name} ({deleted.project_id})
                                                 </p>
-                                                <p className="text-sm text-gray-500 mt-1">
+                                                <p className="text-sm text-ink-3 mt-1">
                                                     Last known: status={deleted.db_status}, ball_in_court={deleted.db_ball_in_court}
                                                 </p>
                                             </div>
@@ -331,14 +331,14 @@ function DraftingWorkLoadAdmin() {
                             {/* API Fetch Errors */}
                             {scanResults.differences.api_fetch_errors.length > 0 && (
                                 <div className="bg-white border border-red-200 rounded-lg p-4">
-                                    <h2 className="text-xl font-semibold text-gray-800 mb-4">
+                                    <h2 className="text-xl font-semibold text-ink mb-4">
                                         API Fetch Errors ({scanResults.differences.api_fetch_errors.length})
                                     </h2>
                                     <div className="space-y-2 max-h-64 overflow-y-auto">
                                         {scanResults.differences.api_fetch_errors.map((error, index) => (
-                                            <div key={index} className="border border-gray-200 rounded-lg p-3 bg-red-50">
-                                                <p className="font-semibold text-gray-800">{error.title || 'N/A'}</p>
-                                                <p className="text-sm text-gray-600">
+                                            <div key={index} className="border border-hairline rounded-lg p-3 bg-red-50">
+                                                <p className="font-semibold text-ink">{error.title || 'N/A'}</p>
+                                                <p className="text-sm text-ink-2">
                                                     Submittal ID: {error.submittal_id} | Project: {error.project_name} ({error.project_id})
                                                 </p>
                                                 <p className="text-sm text-red-600 mt-1">Error: {error.error}</p>
@@ -351,12 +351,12 @@ function DraftingWorkLoadAdmin() {
                             {/* Webhook Status */}
                             {scanResults.webhook_status && scanResults.webhook_status.projects_without_webhooks.length > 0 && (
                                 <div className="bg-white border border-red-200 rounded-lg p-4">
-                                    <h2 className="text-xl font-semibold text-gray-800 mb-4">
+                                    <h2 className="text-xl font-semibold text-ink mb-4">
                                         Projects Missing Webhooks ({scanResults.webhook_status.projects_without_webhooks.length})
                                     </h2>
                                     <div className="space-y-1">
                                         {scanResults.webhook_status.projects_without_webhooks.map((projectId, index) => (
-                                            <p key={index} className="text-sm text-gray-700">Project {projectId}</p>
+                                            <p key={index} className="text-sm text-ink-2">Project {projectId}</p>
                                         ))}
                                     </div>
                                 </div>
@@ -372,7 +372,7 @@ function DraftingWorkLoadAdmin() {
                     )}
 
                     {!scanResults && !loading && (
-                        <div className="text-center py-8 text-gray-500">
+                        <div className="text-center py-8 text-ink-3">
                             Click "Run Scan" to start the health scan
                         </div>
                     )}

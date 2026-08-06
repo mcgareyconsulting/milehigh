@@ -16,7 +16,7 @@ import { toneClasses, bandClasses, STATE_LABEL } from './projectsFormat';
 const STATUS_TONE = {
   green: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 ring-green-600/20',
   amber: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 ring-amber-600/20',
-  slate: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300 ring-slate-500/20',
+  slate: 'bg-surface-2 text-ink-2 ring-hairline',
   red:   'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 ring-red-600/20',
 };
 
@@ -32,8 +32,8 @@ export function StatusPill({ status }) {
 export function HealthTile({ label, value, tone = 'neutral' }) {
   const t = toneClasses[tone] || toneClasses.neutral;
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5">
-      <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-slate-400">
+    <div className="rounded-lg border border-hairline bg-surface px-3 py-2.5">
+      <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-3">
         <span className={`inline-block w-1.5 h-1.5 rounded-full ${t.dot}`} />
         {label}
       </div>
@@ -63,7 +63,7 @@ export function HealthScore({ data, className = '' }) {
           <span className={`text-4xl font-bold tabular-nums ${band.text}`}>
             {scored ? data.score : '—'}
           </span>
-          {scored && <span className="text-sm text-gray-400 dark:text-slate-500">/100</span>}
+          {scored && <span className="text-sm text-ink-3">/100</span>}
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
@@ -72,24 +72,24 @@ export function HealthScore({ data, className = '' }) {
               {scored ? band.label : (STATE_LABEL[data?.state] || '—')}
             </span>
           </div>
-          <div className="text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 mt-0.5">
+          <div className="text-[11px] uppercase tracking-wide text-ink-3 mt-0.5">
             Project Health
           </div>
         </div>
       </div>
 
       {scored && deductions.length > 0 && (
-        <ul className="mt-3 pt-3 border-t border-gray-200/70 dark:border-slate-600/50 space-y-1.5">
+        <ul className="mt-3 pt-3 border-t border-hairline space-y-1.5">
           {deductions.map(d => (
             <li key={d.key} className="flex items-start gap-2 text-xs">
               <span className={`font-bold tabular-nums w-7 shrink-0 text-right ${band.text}`}>{d.points}</span>
-              <span className="text-gray-600 dark:text-slate-300 leading-snug">{d.reason}</span>
+              <span className="text-ink-2 leading-snug">{d.reason}</span>
             </li>
           ))}
         </ul>
       )}
       {scored && deductions.length === 0 && (
-        <p className="mt-3 pt-3 border-t border-gray-200/70 dark:border-slate-600/50 text-xs text-green-600 dark:text-green-400">
+        <p className="mt-3 pt-3 border-t border-hairline text-xs text-green-600 dark:text-green-400">
           No open risk signals — full marks.
         </p>
       )}
@@ -99,10 +99,10 @@ export function HealthScore({ data, className = '' }) {
 
 export function SectionCard({ title, action, children, className = '' }) {
   return (
-    <section className={`rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 ${className}`}>
+    <section className={`rounded-xl border border-hairline bg-surface ${className}`}>
       {title && (
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">{title}</h3>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-hairline">
+          <h3 className="text-sm font-semibold text-ink">{title}</h3>
           {action}
         </div>
       )}
@@ -115,7 +115,7 @@ export function ProgressBar({ pct, className = '' }) {
   const clamped = Math.max(0, Math.min(100, pct || 0));
   const color = clamped >= 100 ? 'bg-green-500' : 'bg-accent-500';
   return (
-    <div className={`h-1.5 w-full rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden ${className}`}>
+    <div className={`h-1.5 w-full rounded-full bg-surface-2 overflow-hidden ${className}`}>
       <div className={`h-full rounded-full ${color}`} style={{ width: `${clamped}%` }} />
     </div>
   );
@@ -124,8 +124,8 @@ export function ProgressBar({ pct, className = '' }) {
 export function MetaRow({ label, value }) {
   return (
     <div className="flex justify-between gap-4 py-1.5 text-sm">
-      <span className="text-gray-500 dark:text-slate-400 shrink-0">{label}</span>
-      <span className="text-gray-900 dark:text-slate-100 text-right font-medium">{value ?? '—'}</span>
+      <span className="text-ink-3 shrink-0">{label}</span>
+      <span className="text-ink text-right font-medium">{value ?? '—'}</span>
     </div>
   );
 }

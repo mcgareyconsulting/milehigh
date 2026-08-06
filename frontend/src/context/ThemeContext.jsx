@@ -1,21 +1,23 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Manages independent dark-mode and old-man-mode state, persists to localStorage, applies classes to document root.
+ * purpose: Manages independent dark-mode, old-man-mode, and left-sidebar-mode state; persists to localStorage; applies theme classes to document root.
  * exports:
- *   ThemeProvider: Context provider that syncs both theme flags to DOM and localStorage
- *   useTheme: Hook returning { isDark, isOldMan, toggleDark, toggleOldMan }
+ *   ThemeProvider: Context provider that syncs theme flags to DOM and localStorage
+ *   useTheme: Hook returning { isDark, isOldMan, isSidebarMode, toggleDark, toggleOldMan, toggleSidebarMode }
  * imports_from: [react]
- * imported_by: [main.jsx, components/AppShell.jsx, components/JobsTableRow.jsx]
+ * imported_by: [main.jsx, components/AppShell.jsx, components/JobsTableRow.jsx, components/Rail.jsx]
  * invariants:
- *   - isDark and isOldMan are fully independent — any combination is valid
+ *   - isDark, isOldMan, and isSidebarMode are fully independent — any combination is valid
  *   - Falls back to OS prefers-color-scheme for dark mode when no localStorage value exists
+ *   - isSidebarMode defaults to false (top header is the default chrome layout)
  *   - useTheme throws if called outside ThemeProvider
  */
 import { createContext, useContext, useEffect, useState } from 'react';
 
 const THEME_KEY = 'mhmw-theme';
 const OLD_MAN_KEY = 'mhmw-old-man';
+const SIDEBAR_MODE_KEY = 'mhmw-sidebar-mode';
 
 const ThemeContext = createContext(null);
 
@@ -39,9 +41,16 @@ function getInitialOldMan() {
   return theme === 'old-man';
 }
 
+function getInitialSidebarMode() {
+  if (typeof window === 'undefined') return false;
+  // Default off: top header is the default layout. Only explicit 'true' enables the rail.
+  return localStorage.getItem(SIDEBAR_MODE_KEY) === 'true';
+}
+
 export function ThemeProvider({ children }) {
   const [isDark, setIsDark] = useState(getInitialDark);
   const [isOldMan, setIsOldMan] = useState(getInitialOldMan);
+  const [isSidebarMode, setIsSidebarMode] = useState(getInitialSidebarMode);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -55,11 +64,16 @@ export function ThemeProvider({ children }) {
     localStorage.setItem(OLD_MAN_KEY, String(isOldMan));
   }, [isOldMan]);
 
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_MODE_KEY, String(isSidebarMode));
+  }, [isSidebarMode]);
+
   const toggleDark = () => setIsDark((prev) => !prev);
   const toggleOldMan = () => setIsOldMan((prev) => !prev);
+  const toggleSidebarMode = () => setIsSidebarMode((prev) => !prev);
 
   return (
-    <ThemeContext.Provider value={{ isDark, isOldMan, toggleDark, toggleOldMan }}>
+    <ThemeContext.Provider value={{ isDark, isOldMan, isSidebarMode, toggleDark, toggleOldMan, toggleSidebarMode }}>
       {children}
     </ThemeContext.Provider>
   );

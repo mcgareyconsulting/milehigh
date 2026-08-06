@@ -42,7 +42,7 @@ const projectLabel = (p) => {
 function Chevron({ open }) {
     return (
         <span
-            className={`inline-block text-lg text-gray-400 dark:text-slate-500 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
+            className={`inline-block text-lg text-ink-3 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
             aria-hidden="true"
         >
             ▸
@@ -65,7 +65,7 @@ function ToggleRow({ open, onToggle, depthClass, children }) {
             aria-expanded={open}
             onClick={onToggle}
             onKeyDown={handleKey}
-            className={`flex items-center gap-2 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/40 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent-400/60 ${depthClass}`}
+            className={`flex items-center gap-2 cursor-pointer transition-colors hover:bg-surface-2 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent-400/60 ${depthClass}`}
         >
             {children}
         </div>
@@ -80,7 +80,7 @@ function TimelineCell({ event, kind }) {
     if (!event) {
         return (
             <td className="px-4 py-4 align-top">
-                <span className="text-xl text-gray-300 dark:text-slate-600 select-none">—</span>
+                <span className="text-xl text-ink-3 select-none">—</span>
             </td>
         );
     }
@@ -91,7 +91,7 @@ function TimelineCell({ event, kind }) {
                 <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
                 {prettyDate(event.created_at)}
             </span>
-            <div className="mt-1 pl-1 text-xs text-gray-400 dark:text-slate-500">{prettyTime(event.created_at)}</div>
+            <div className="mt-1 pl-1 text-xs text-ink-3">{prettyTime(event.created_at)}</div>
         </td>
     );
 }
@@ -100,7 +100,7 @@ function TimelineCell({ event, kind }) {
 function SubmittalTimeline({ submittals }) {
     if (submittals.length === 0) {
         return (
-            <div className="px-8 py-4 text-sm text-gray-400 dark:text-slate-500 italic">
+            <div className="px-8 py-4 text-sm text-ink-3 italic">
                 No DRR submittal activity this month.
             </div>
         );
@@ -109,7 +109,7 @@ function SubmittalTimeline({ submittals }) {
         <div className="overflow-x-auto">
             <table className="w-full text-base">
                 <thead>
-                    <tr className="text-left text-xs uppercase tracking-wide text-gray-600 dark:text-slate-300">
+                    <tr className="text-left text-xs uppercase tracking-wide text-ink-2">
                         <th className="pl-14 pr-4 py-2.5 font-semibold">DRR Submittal</th>
                         {['create', 'close'].map((k) => (
                             <th key={k} className="px-4 py-2.5 font-semibold w-52">
@@ -125,11 +125,11 @@ function SubmittalTimeline({ submittals }) {
                     {submittals.map((s) => {
                         const label = `${s.submittal_id}${s.title ? ` — ${s.title}` : ''}`;
                         return (
-                            <tr key={s.submittal_id} className="border-t border-gray-300 dark:border-slate-600 hover:bg-gray-50/70 dark:hover:bg-slate-700/30">
+                            <tr key={s.submittal_id} className="border-t border-hairline-strong hover:bg-surface-2">
                                 <td className="pl-14 pr-4 py-4 align-top">
-                                    <span className="block truncate max-w-xl text-gray-800 dark:text-slate-100" title={label}>{label}</span>
+                                    <span className="block truncate max-w-xl text-ink" title={label}>{label}</span>
                                     {s.submittal_manager && (
-                                        <span className="text-sm text-gray-400 dark:text-slate-500">{s.submittal_manager}</span>
+                                        <span className="text-sm text-ink-3">{s.submittal_manager}</span>
                                     )}
                                 </td>
                                 {['create', 'close'].map((k) => (
@@ -149,9 +149,9 @@ function ReleaseRow({ release, onOpenHistory }) {
     const r = release;
     const label = `${r.release}${r.description ? ` — ${r.description}` : ''}`;
     return (
-        <div className="flex items-center gap-2 border-t border-gray-300 dark:border-slate-600 pl-14 pr-4 py-3.5">
+        <div className="flex items-center gap-2 border-t border-hairline-strong pl-14 pr-4 py-3.5">
             {/* Left: release identity */}
-            <span className="flex-1 min-w-0 text-base text-gray-800 dark:text-slate-100 truncate" title={label}>
+            <span className="flex-1 min-w-0 text-base text-ink truncate" title={label}>
                 {label}
             </span>
             {/* Center: current stage + when it entered that stage */}
@@ -159,32 +159,32 @@ function ReleaseRow({ release, onOpenHistory }) {
                 <span className="w-40 flex justify-center">
                     {r.stage
                         ? <Badge tint={stageTint(r.stage)} className="w-40 justify-center whitespace-nowrap">{r.stage}</Badge>
-                        : <span className="text-gray-400 dark:text-slate-500">—</span>}
+                        : <span className="text-ink-3">—</span>}
                 </span>
-                <span className="w-32 text-gray-500 dark:text-slate-400 whitespace-nowrap">
-                    Since <span className="font-semibold text-gray-700 dark:text-slate-200">
-                        {r.stage_entered_at ? prettyDate(r.stage_entered_at) : <span className="text-gray-400 dark:text-slate-500 font-normal">—</span>}
+                <span className="w-32 text-ink-3 whitespace-nowrap">
+                    Since <span className="font-semibold text-ink-2">
+                        {r.stage_entered_at ? prettyDate(r.stage_entered_at) : <span className="text-ink-3 font-normal">—</span>}
                     </span>
                 </span>
             </span>
             {/* Right: install / invoiced + history (flex-1 mirrors the left zone so the center stays centered) */}
             <span className="flex-1 flex items-center justify-end gap-4 text-sm">
                 <span className="hidden md:flex items-center gap-4">
-                    <span className="w-28 text-gray-500 dark:text-slate-400 whitespace-nowrap">
-                        Install <span className="font-semibold text-gray-700 dark:text-slate-200">
-                            {r.install_prog || <span className="text-gray-400 dark:text-slate-500 font-normal">—</span>}
+                    <span className="w-28 text-ink-3 whitespace-nowrap">
+                        Install <span className="font-semibold text-ink-2">
+                            {r.install_prog || <span className="text-ink-3 font-normal">—</span>}
                         </span>
                     </span>
-                    <span className="w-36 text-gray-500 dark:text-slate-400 whitespace-nowrap">
-                        Invoiced <span className="font-semibold text-gray-700 dark:text-slate-200">
-                            {r.invoiced || <span className="text-gray-400 dark:text-slate-500 font-normal">—</span>}
+                    <span className="w-36 text-ink-3 whitespace-nowrap">
+                        Invoiced <span className="font-semibold text-ink-2">
+                            {r.invoiced || <span className="text-ink-3 font-normal">—</span>}
                         </span>
                     </span>
                 </span>
                 <button
                     type="button"
                     onClick={() => onOpenHistory(r)}
-                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-accent-400/60 transition-colors"
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-hairline-strong text-ink-2 bg-surface hover:bg-surface-2 focus:outline-none focus:ring-2 focus:ring-accent-400/60 transition-colors"
                 >
                     <span aria-hidden="true">🕑</span> History
                 </button>
@@ -198,9 +198,9 @@ function SummaryStat({ value, label, tint }) {
         <div className="flex flex-col px-5">
             <div className="flex items-center gap-2 leading-none">
                 <span className={`w-2.5 h-2.5 rounded-full ${tint}`} />
-                <span className="text-3xl font-bold text-gray-900 dark:text-slate-50 tabular-nums">{value}</span>
+                <span className="text-3xl font-bold text-ink tabular-nums">{value}</span>
             </div>
-            <span className="text-xs uppercase tracking-widest text-gray-400 dark:text-slate-500 mt-1.5 pl-[18px]">{label}</span>
+            <span className="text-xs uppercase tracking-widest text-ink-3 mt-1.5 pl-[18px]">{label}</span>
         </div>
     );
 }
@@ -306,7 +306,7 @@ function InvoicingReport() {
 
     if (authorized === null) {
         return (
-            <div className="flex-1 flex items-center justify-center text-gray-600 dark:text-slate-400">
+            <div className="flex-1 flex items-center justify-center text-ink-3">
                 Loading…
             </div>
         );
@@ -315,7 +315,7 @@ function InvoicingReport() {
     if (!authorized) {
         return (
             <div className="flex-1 flex items-center justify-center p-6 text-center">
-                <div className="text-gray-600 dark:text-slate-400">
+                <div className="text-ink-3">
                     You don’t have access to the invoicing report.
                 </div>
             </div>
@@ -325,28 +325,29 @@ function InvoicingReport() {
     const years = [];
     for (let y = now.getFullYear(); y >= now.getFullYear() - 5; y -= 1) years.push(y);
     const hasData = !loading && !error && visibleProjects.length > 0;
-    const selectClass = 'mt-1.5 px-3 py-2 text-base rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-400/60';
+    const selectClass = 'mt-1.5 px-3 py-2 text-base rounded-lg border border-hairline-strong bg-input-bg text-ink focus:outline-none focus:ring-2 focus:ring-accent-400/60';
 
     return (
+        <div className="w-full min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas">
         <div className="flex-1 w-full max-w-[1600px] mx-auto p-6 sm:p-8">
             {/* Header: title + month/year picker */}
             <div className="flex flex-wrap items-end gap-3 mb-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-50">
+                    <h1 className="text-3xl font-bold text-ink">
                         Invoicing <span className="text-accent-500 dark:text-accent-300">— {report?.month_label || `${MONTHS[month - 1]} ${year}`}</span>
                     </h1>
-                    <p className="text-base text-gray-500 dark:text-slate-400 mt-1">
+                    <p className="text-base text-ink-3 mt-1">
                         DRR submittal lifecycle and release progress, grouped by project.
                     </p>
                 </div>
                 <div className="ml-auto flex items-end gap-3">
-                    <label className="flex flex-col text-sm font-medium text-gray-600 dark:text-slate-400">
+                    <label className="flex flex-col text-sm font-medium text-ink-3">
                         Month
                         <select value={month} onChange={(e) => setMonth(parseInt(e.target.value, 10))} className={selectClass}>
                             {MONTHS.map((m, i) => (<option key={m} value={i + 1}>{m}</option>))}
                         </select>
                     </label>
-                    <label className="flex flex-col text-sm font-medium text-gray-600 dark:text-slate-400">
+                    <label className="flex flex-col text-sm font-medium text-ink-3">
                         Year
                         <select value={year} onChange={(e) => setYear(parseInt(e.target.value, 10))} className={selectClass}>
                             {years.map((y) => (<option key={y} value={y}>{y}</option>))}
@@ -357,14 +358,14 @@ function InvoicingReport() {
 
             {/* Summary bar: totals + filter + export */}
             {hasData && (
-                <div className="flex flex-wrap items-center gap-4 mb-6 p-5 rounded-2xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
-                    <div className="flex items-center divide-x divide-gray-200 dark:divide-slate-700">
+                <div className="flex flex-wrap items-center gap-4 mb-6 p-5 rounded-2xl border border-hairline-strong bg-surface shadow-sm">
+                    <div className="flex items-center divide-x divide-[var(--border)]">
                         <SummaryStat value={visibleProjects.length} label="Projects" tint="bg-accent-500" />
                         <SummaryStat value={totals.submittals} label="DRR" tint="bg-emerald-500" />
                         <SummaryStat value={totals.releases} label="Releases" tint="bg-blue-500" />
                     </div>
                     <div className="ml-auto flex items-center gap-3">
-                        <span className="px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-base">
+                        <span className="px-3 py-2 rounded-lg border border-hairline-strong bg-surface text-base">
                             <ColumnHeaderFilter
                                 column="project"
                                 values={projectValues}
@@ -391,7 +392,7 @@ function InvoicingReport() {
             )}
 
             {loading && (
-                <div className="py-20 text-center text-lg text-gray-500 dark:text-slate-400">Loading report…</div>
+                <div className="py-20 text-center text-lg text-ink-3">Loading report…</div>
             )}
 
             {error && !loading && (
@@ -401,31 +402,31 @@ function InvoicingReport() {
             )}
 
             {!loading && !error && projects.length === 0 && (
-                <div className="py-20 text-center text-lg text-gray-500 dark:text-slate-400">
+                <div className="py-20 text-center text-lg text-ink-3">
                     No project activity for {report?.month_label || `${MONTHS[month - 1]} ${year}`}.
                 </div>
             )}
 
             {!loading && !error && projects.length > 0 && visibleProjects.length === 0 && (
-                <div className="py-20 text-center text-lg text-gray-500 dark:text-slate-400">
+                <div className="py-20 text-center text-lg text-ink-3">
                     No projects match the current filters.
                 </div>
             )}
 
             {hasData && (
-                <div className="rounded-2xl border border-gray-300 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-800 shadow-sm divide-y divide-gray-300 dark:divide-slate-600">
+                <div className="rounded-2xl border border-hairline-strong overflow-hidden bg-surface shadow-sm divide-y divide-[var(--border-strong)]">
                     {visibleProjects.map((proj) => {
                         const pKey = proj.project_number;
                         const pOpen = expandedProjects.has(pKey);
                         return (
-                            <div key={pKey} className={pOpen ? 'bg-gray-50/40 dark:bg-slate-800/60' : ''}>
+                            <div key={pKey} className={pOpen ? 'bg-surface-2/40' : ''}>
                                 {/* Level 1 — Project */}
                                 <ToggleRow open={pOpen} onToggle={() => toggleProject(pKey)} depthClass="px-4 py-3.5">
                                     <Chevron open={pOpen} />
                                     <span className="px-2.5 py-1 rounded-md text-base font-bold font-mono bg-accent-50 text-accent-700 dark:bg-accent-400/10 dark:text-accent-200 ring-1 ring-inset ring-accent-200/60 dark:ring-accent-400/20">
                                         {proj.project_number}
                                     </span>
-                                    <span className="text-base text-gray-700 dark:text-slate-200 font-medium truncate">
+                                    <span className="text-base text-ink-2 font-medium truncate">
                                         {proj.project_name || '—'}
                                     </span>
                                     <span className="ml-auto flex items-center gap-3 shrink-0">
@@ -439,22 +440,22 @@ function InvoicingReport() {
                                 </ToggleRow>
 
                                 {pOpen && (
-                                    <div className="border-t border-gray-300 dark:border-slate-600">
+                                    <div className="border-t border-hairline-strong">
                                         {/* DRR Submittals — lifecycle timeline */}
                                         <div className="py-3">
-                                            <div className="pl-10 pr-4 pb-1.5 text-xs font-bold uppercase tracking-widest text-gray-600 dark:text-slate-300">
+                                            <div className="pl-10 pr-4 pb-1.5 text-xs font-bold uppercase tracking-widest text-ink-2">
                                                 DRR Submittals
                                             </div>
                                             <SubmittalTimeline submittals={proj.submittals} />
                                         </div>
 
                                         {/* Releases — expandable event rows */}
-                                        <div className="py-3 border-t border-gray-300 dark:border-slate-600">
-                                            <div className="pl-10 pr-4 pb-1.5 text-xs font-bold uppercase tracking-widest text-gray-600 dark:text-slate-300">
+                                        <div className="py-3 border-t border-hairline-strong">
+                                            <div className="pl-10 pr-4 pb-1.5 text-xs font-bold uppercase tracking-widest text-ink-2">
                                                 Releases
                                             </div>
                                             {proj.releases.length === 0 && (
-                                                <div className="px-8 py-3 text-sm text-gray-400 dark:text-slate-500 italic">
+                                                <div className="px-8 py-3 text-sm text-ink-3 italic">
                                                     No release activity this month.
                                                 </div>
                                             )}
@@ -478,6 +479,7 @@ function InvoicingReport() {
                 release={historyRelease}
                 onClose={() => setHistoryRelease(null)}
             />
+        </div>
         </div>
     );
 }

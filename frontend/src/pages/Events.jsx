@@ -89,15 +89,15 @@ function Events() {
     };
 
     // Compact toolbar controls, matching the Job Log filter chrome (CURRENT_STYLING_PIN §5).
-    const selectClass = "px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100";
-    const labelClass = "text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap";
+    const selectClass = "px-2 py-0.5 text-xs border border-hairline-strong rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-input-bg text-ink";
+    const labelClass = "text-xs font-semibold text-ink whitespace-nowrap";
 
     return (
-        <div className="w-full h-full flex flex-col bg-canvas dark:bg-slate-900" style={{ width: '100%', minWidth: '100%' }}>
+        <div className="w-full h-full flex flex-col bg-canvas" style={{ width: '100%', minWidth: '100%' }}>
             <div className="flex-1 min-h-0 max-w-full mx-auto w-full flex flex-col" style={{ width: '100%' }}>
                 {/* Subtle outer pad + gap between filter and table — no heavy white card (Job Log shell). */}
                 <div className="bg-surface overflow-hidden flex flex-col flex-1 min-h-0 p-1.5 gap-1.5">
-                    <div className="bg-gray-100 dark:bg-slate-700 p-1.5 rounded-md border border-gray-200/80 dark:border-slate-600 flex-shrink-0 space-y-1.5">
+                    <div className="bg-surface-2 p-1.5 rounded-md border border-hairline flex-shrink-0 space-y-1.5">
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
                             <h1 className="text-sm font-bold text-ink whitespace-nowrap pr-1">Job Events</h1>
                             <div className="flex items-center gap-1.5">
@@ -162,15 +162,15 @@ function Events() {
                             </div>
                             <button
                                 onClick={resetFilters}
-                                className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
+                                className="text-xs text-brand underline hover:no-underline whitespace-nowrap"
                                 title="Clear date, source, user, limit, and any submittal/job filters."
                             >
                                 Reset
                             </button>
                         </div>
                         {(submittalId || jobFilter || releaseFilter) && (
-                            <div className="flex items-center gap-1.5 flex-wrap border-t border-gray-200 dark:border-slate-600 pt-1.5">
-                                <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 whitespace-nowrap">Active filters:</span>
+                            <div className="flex items-center gap-1.5 flex-wrap border-t border-hairline pt-1.5">
+                                <span className="text-xs font-semibold text-ink-3 whitespace-nowrap">Active filters:</span>
                                 {submittalId && (
                                     <span className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-xs font-medium">
                                         <span className="whitespace-nowrap">Submittal: <span className="font-mono">{submittalId}</span></span>

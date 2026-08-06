@@ -64,33 +64,33 @@ const RISK_TONE = {
   Low: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
   Medium: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
   High: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
-  'On Hold': 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
-  Complete: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+  'On Hold': 'bg-surface-2 text-ink-2',
+  Complete: 'bg-surface-2 text-ink-2',
 };
 
 const STAGE_TONE = {
   complete: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
   active: 'bg-accent-100 text-accent-700 dark:bg-accent-900/50 dark:text-accent-300',
-  upcoming: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+  upcoming: 'bg-surface-2 text-ink-2',
   blocked: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
 };
 
 const SUBMITTAL_TONE = {
   Approved: 'text-green-600 dark:text-green-400',
   'In Review': 'text-accent-600 dark:text-accent-300',
-  Draft: 'text-slate-500 dark:text-slate-400',
+  Draft: 'text-ink-3',
   Overdue: 'text-red-600 dark:text-red-400',
-  'On Hold': 'text-slate-500 dark:text-slate-400',
+  'On Hold': 'text-ink-3',
 };
 
 function BriefBullets({ items, empty }) {
   if (!items || items.length === 0) {
-    return <p className="text-sm text-gray-400 dark:text-slate-500 italic">{empty}</p>;
+    return <p className="text-sm text-ink-3 italic">{empty}</p>;
   }
   return (
     <ul className="space-y-1.5">
       {items.map((t, i) => (
-        <li key={i} className="flex gap-2 text-sm text-gray-700 dark:text-slate-300">
+        <li key={i} className="flex gap-2 text-sm text-ink-2">
           <span className="text-accent-400 mt-0.5 shrink-0">•</span>
           <span>{t}</span>
         </li>
@@ -117,11 +117,11 @@ function ProjectBrief({ brief }) {
       </div>
 
       <div className="pt-4">
-        <p className="text-[15px] leading-relaxed text-gray-800 dark:text-slate-200">{brief.status_line}</p>
+        <p className="text-[15px] leading-relaxed text-ink-2">{brief.status_line}</p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 mt-5">
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-2">Upcoming Deadlines</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wide text-ink-3 mb-2">Upcoming Deadlines</h4>
             <BriefBullets items={brief.upcoming} empty="No upcoming deadlines" />
           </div>
           <div>
@@ -129,21 +129,21 @@ function ProjectBrief({ brief }) {
             <BriefBullets items={brief.risks} empty="No open risks flagged" />
           </div>
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-2">Pending Approvals</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wide text-ink-3 mb-2">Pending Approvals</h4>
             <BriefBullets items={brief.approvals} empty="Nothing awaiting approval" />
           </div>
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-2">Forecast</h4>
-            <p className="text-sm text-gray-700 dark:text-slate-300">{brief.forecast}</p>
+            <h4 className="text-xs font-bold uppercase tracking-wide text-ink-3 mb-2">Forecast</h4>
+            <p className="text-sm text-ink-2">{brief.forecast}</p>
           </div>
         </div>
 
-        <div className="mt-5 pt-4 border-t border-gray-100 dark:border-slate-700">
+        <div className="mt-5 pt-4 border-t border-hairline">
           <h4 className="text-xs font-bold uppercase tracking-wide text-accent-500 dark:text-accent-300 mb-2">Required Next Actions</h4>
           <BriefBullets items={brief.next_actions} empty="No actions required" />
         </div>
 
-        <p className="mt-4 text-[11px] text-gray-400 dark:text-slate-500">
+        <p className="mt-4 text-[11px] text-ink-3">
           Generated {brief.generated_at} · computed from releases, submittals, contract & schedule
         </p>
       </div>
@@ -204,28 +204,28 @@ function GcLookaheadPanel({ data }) {
         </div>
       </div>
       <div className="pt-4">
-        <p className="text-xs text-gray-400 dark:text-slate-500 mb-3">
+        <p className="text-xs text-ink-3 mb-3">
           From the forwarded email “{data.subject}” — GC need dates cross-checked live against our releases.
         </p>
         <div className="overflow-x-auto -mx-4 -mb-4">
           <table className="w-full text-sm min-w-[680px]">
-            <thead className="border-b border-gray-100 dark:border-slate-700">
+            <thead className="border-b border-hairline">
               <tr><Th>Scope</Th><Th>Building</Th><Th>GC Need</Th><Th>Our Record</Th><Th>Our Date</Th><Th>Status</Th></tr>
             </thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
+            <tbody className="divide-y divide-[var(--border)]">
               {rows.map((a, i) => {
                 const st = LA_STATUS[a.status] || LA_STATUS.on_track;
                 return (
                   <tr key={`${a.wbs_id}-${i}`}>
                     <Td className="font-medium">{LA_SCOPE[a.scope] || a.scope}</Td>
-                    <Td className="text-gray-500 dark:text-slate-400">{a.building}</Td>
+                    <Td className="text-ink-3">{a.building}</Td>
                     <Td className="tabular-nums">{a.gc_need}</Td>
                     <Td className="font-mono text-xs">
                       {a.matched_ref
                         ? <span className="text-accent-600 dark:text-accent-300 font-semibold">{a.matched_kind === 'submittal' ? `DRR ${a.matched_ref}` : a.matched_ref}</span>
                         : <span className="text-red-500">none</span>}
                     </Td>
-                    <Td className="tabular-nums text-gray-500 dark:text-slate-400">
+                    <Td className="tabular-nums text-ink-3">
                       {a.our_date || '—'}
                       {a.slip_days > 0 && <span className="text-amber-600 dark:text-amber-400"> +{a.slip_days}d late</span>}
                       {a.slip_days < 0 && <span className="text-green-600 dark:text-green-400"> {-a.slip_days}d early</span>}
@@ -243,10 +243,10 @@ function GcLookaheadPanel({ data }) {
 }
 
 function Th({ children, className = '' }) {
-  return <th className={`text-left font-medium text-gray-500 dark:text-slate-400 px-3 py-2 ${className}`}>{children}</th>;
+  return <th className={`text-left font-medium text-ink-3 px-3 py-2 ${className}`}>{children}</th>;
 }
 function Td({ children, className = '' }) {
-  return <td className={`px-3 py-2.5 text-gray-800 dark:text-slate-200 ${className}`}>{children}</td>;
+  return <td className={`px-3 py-2.5 text-ink-2 ${className}`}>{children}</td>;
 }
 
 function TabPanel({ tab, project }) {
@@ -266,7 +266,7 @@ function TabPanel({ tab, project }) {
             <MetaRow label="Production" value={`${project.percent_complete}% complete`} />
           </SectionCard>
           <SectionCard title="Team, Contract & Dates" className="lg:col-span-2">
-            <p className="text-sm text-gray-500 dark:text-slate-400">
+            <p className="text-sm text-ink-3">
               Owner, architect, internal team, contract terms, and key dates aren’t in the job log —
               they land here with the ingestion pipeline. Everything on this page now (releases,
               submittals, activity, health, GC lookahead) is live.
@@ -328,18 +328,18 @@ function TabPanel({ tab, project }) {
       <SectionCard title={`Releases (${project.releases.length})`}>
         <div className="overflow-x-auto -mx-4 -mb-4">
           <table className="w-full text-sm min-w-[640px]">
-            <thead className="border-b border-gray-100 dark:border-slate-700">
+            <thead className="border-b border-hairline">
               <tr><Th>Release</Th><Th>Description</Th><Th>Stage</Th><Th className="text-right">Hrs</Th><Th>Install</Th><Th className="w-32">Progress</Th></tr>
             </thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
+            <tbody className="divide-y divide-[var(--border)]">
               {project.releases.map((r, i) => (
                 <tr key={r.release ?? i}>
                   <Td className="font-mono text-xs font-semibold text-accent-600 dark:text-accent-300">{r.release}</Td>
                   <Td>{r.description}</Td>
-                  <Td><span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">{r.stage}</span></Td>
+                  <Td><span className="px-2 py-0.5 rounded-full text-xs font-medium bg-surface-2 text-ink-2">{r.stage}</span></Td>
                   <Td className="text-right tabular-nums">{r.hours || '—'}</Td>
-                  <Td className="tabular-nums text-gray-500 dark:text-slate-400">{r.start_install}</Td>
-                  <Td><div className="flex items-center gap-2"><ProgressBar pct={r.pct} className="flex-1" /><span className="text-xs tabular-nums text-gray-500 dark:text-slate-400 w-8 text-right">{r.pct}%</span></div></Td>
+                  <Td className="tabular-nums text-ink-3">{r.start_install}</Td>
+                  <Td><div className="flex items-center gap-2"><ProgressBar pct={r.pct} className="flex-1" /><span className="text-xs tabular-nums text-ink-3 w-8 text-right">{r.pct}%</span></div></Td>
                 </tr>
               ))}
             </tbody>
@@ -354,18 +354,18 @@ function TabPanel({ tab, project }) {
       <SectionCard title={`Submittals (${project.submittals.length})`}>
         <div className="overflow-x-auto -mx-4 -mb-4">
           <table className="w-full text-sm min-w-[640px]">
-            <thead className="border-b border-gray-100 dark:border-slate-700">
+            <thead className="border-b border-hairline">
               <tr><Th>Rel</Th><Th>Title</Th><Th>Type</Th><Th>Status</Th><Th>Ball in Court</Th><Th>Due</Th></tr>
             </thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
+            <tbody className="divide-y divide-[var(--border)]">
               {project.submittals.map((s, i) => (
                 <tr key={s.rel ?? i}>
                   <Td className="font-mono text-xs font-semibold text-accent-600 dark:text-accent-300">{s.rel ?? '—'}</Td>
                   <Td>{s.title}</Td>
-                  <Td className="text-gray-500 dark:text-slate-400">{s.type}</Td>
-                  <Td><span className={`font-medium ${SUBMITTAL_TONE[s.status] || 'text-gray-600'}`}>{s.status}</span></Td>
+                  <Td className="text-ink-3">{s.type}</Td>
+                  <Td><span className={`font-medium ${SUBMITTAL_TONE[s.status] || 'text-ink-2'}`}>{s.status}</span></Td>
                   <Td>{s.ball_in_court}</Td>
-                  <Td className="tabular-nums text-gray-500 dark:text-slate-400">{s.due_date}</Td>
+                  <Td className="tabular-nums text-ink-3">{s.due_date}</Td>
                 </tr>
               ))}
             </tbody>
@@ -383,7 +383,7 @@ function TabPanel({ tab, project }) {
           <ScheduleList items={project.schedule.customer} />
         </SectionCard>
         <SectionCard title="Internal Schedule">
-          <p className="text-xs text-gray-400 dark:text-slate-500 mb-3 -mt-1">Derived from the customer schedule + contract deadlines.</p>
+          <p className="text-xs text-ink-3 mb-3 -mt-1">Derived from the customer schedule + contract deadlines.</p>
           <ScheduleList items={project.schedule.internal} />
         </SectionCard>
       </div>
@@ -399,7 +399,7 @@ function TabPanel({ tab, project }) {
           <MetaRow label="Original Contract" value={fmtMoney(money.original_contract_value)} />
           <MetaRow label="Approved COs" value={fmtMoney(money.approved_change_orders)} />
           <MetaRow label="Pending COs" value={fmtMoney(money.pending_change_orders)} />
-          <div className="my-2 border-t border-gray-100 dark:border-slate-700" />
+          <div className="my-2 border-t border-hairline" />
           <MetaRow label="Forecast Invoice" value={<span className="text-accent-600 dark:text-accent-300 font-semibold">{fmtMoney(money.forecast_invoice_value)}</span>} />
         </SectionCard>
         <SectionCard title="Billing & Cash" className="lg:col-span-1">
@@ -407,7 +407,7 @@ function TabPanel({ tab, project }) {
           <MetaRow label="Payments Received" value={fmtMoney(money.payments_received)} />
           <MetaRow label="Retainage Held" value={fmtMoney(money.retainage)} />
           <div className="mt-3">
-            <div className="flex justify-between text-xs mb-1"><span className="text-gray-500 dark:text-slate-400">Billed vs forecast</span><span className="font-medium">{billedPct}%</span></div>
+            <div className="flex justify-between text-xs mb-1"><span className="text-ink-3">Billed vs forecast</span><span className="font-medium">{billedPct}%</span></div>
             <ProgressBar pct={billedPct} />
           </div>
         </SectionCard>
@@ -417,11 +417,11 @@ function TabPanel({ tab, project }) {
               Coming soon
             </span>
           </div>
-          <p className="text-sm text-gray-500 dark:text-slate-400">
+          <p className="text-sm text-ink-3">
             Open change orders and T&amp;M tickets will land here — computed from the
-            <span className="font-medium text-gray-700 dark:text-slate-300"> T&amp;M ingestion pipeline</span> (in progress),
+            <span className="font-medium text-ink-2"> T&amp;M ingestion pipeline</span> (in progress),
             not hand-entered. Until then contract value and retainage % are the only inputs; everything else is a
-            <span className="font-medium text-gray-700 dark:text-slate-300"> computed rollup</span>.
+            <span className="font-medium text-ink-2"> computed rollup</span>.
           </p>
         </SectionCard>
       </div>
@@ -432,38 +432,38 @@ function TabPanel({ tab, project }) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <SectionCard title={`Contacts (${project.contacts.length})`}>
-          <ul className="divide-y divide-gray-50 dark:divide-slate-700/50 -my-1">
+          <ul className="divide-y divide-[var(--border)] -my-1">
             {project.contacts.map((c, i) => (
               <li key={i} className="py-2.5">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-gray-900 dark:text-slate-100">{c.name}</span>
-                  <span className="text-xs text-gray-400 dark:text-slate-500">{c.company}</span>
+                  <span className="font-medium text-ink">{c.name}</span>
+                  <span className="text-xs text-ink-3">{c.company}</span>
                 </div>
-                <div className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{c.role} · {c.email} · {c.phone}</div>
+                <div className="text-xs text-ink-3 mt-0.5">{c.role} · {c.email} · {c.phone}</div>
               </li>
             ))}
           </ul>
         </SectionCard>
         <div className="space-y-4">
           <SectionCard title={`Documents (${project.documents.length})`}>
-            <ul className="divide-y divide-gray-50 dark:divide-slate-700/50 -my-1">
+            <ul className="divide-y divide-[var(--border)] -my-1">
               {project.documents.map((d, i) => (
                 <li key={i} className="py-2.5 flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="text-sm text-gray-800 dark:text-slate-200 truncate">📄 {d.name}</div>
-                    <div className="text-xs text-gray-400 dark:text-slate-500">{d.doc_type}</div>
+                    <div className="text-sm text-ink-2 truncate">📄 {d.name}</div>
+                    <div className="text-xs text-ink-3">{d.doc_type}</div>
                   </div>
-                  <span className="text-xs text-gray-400 dark:text-slate-500 shrink-0 tabular-nums">{d.date}</span>
+                  <span className="text-xs text-ink-3 shrink-0 tabular-nums">{d.date}</span>
                 </li>
               ))}
             </ul>
           </SectionCard>
           {project.vendors.length > 0 && (
             <SectionCard title={`Vendors (${project.vendors.length})`}>
-              <ul className="divide-y divide-gray-50 dark:divide-slate-700/50 -my-1">
+              <ul className="divide-y divide-[var(--border)] -my-1">
                 {project.vendors.map((v, i) => (
                   <li key={i} className="py-2.5 flex items-center justify-between gap-2 text-sm">
-                    <span className="text-gray-800 dark:text-slate-200">{v.vendor}</span>
+                    <span className="text-ink-2">{v.vendor}</span>
                     <span className={`text-xs font-medium ${v.material_ordered ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
                       {v.material_ordered ? `Ordered · ETA ${v.expected_delivery}` : `Not ordered · need by ${v.expected_delivery}`}
                     </span>
@@ -480,12 +480,12 @@ function TabPanel({ tab, project }) {
   if (tab === 'Activity') {
     return (
       <SectionCard title="Activity Feed">
-        <p className="text-xs text-gray-400 dark:text-slate-500 mb-3 -mt-1">A union view over release events, submittal events, and comments.</p>
+        <p className="text-xs text-ink-3 mb-3 -mt-1">A union view over release events, submittal events, and comments.</p>
         <ul className="space-y-0">
           {project.activity.map((a, i) => (
-            <li key={i} className="flex gap-3 py-2.5 border-b border-gray-50 dark:border-slate-700/50 last:border-0">
-              <span className="text-xs tabular-nums text-gray-400 dark:text-slate-500 w-24 shrink-0">{a.at}</span>
-              <span className="text-sm text-gray-700 dark:text-slate-300"><span className="font-medium text-gray-900 dark:text-slate-100">{a.who}</span> — {a.text}</span>
+            <li key={i} className="flex gap-3 py-2.5 border-b border-hairline last:border-0">
+              <span className="text-xs tabular-nums text-ink-3 w-24 shrink-0">{a.at}</span>
+              <span className="text-sm text-ink-2"><span className="font-medium text-ink">{a.who}</span> — {a.text}</span>
             </li>
           ))}
         </ul>
@@ -501,10 +501,10 @@ function UnavailablePanel({ label }) {
   return (
     <SectionCard>
       <div className="py-8 text-center">
-        <p className="text-sm text-gray-500 dark:text-slate-400">
+        <p className="text-sm text-ink-3">
           {label} isn’t wired for live jobs yet.
         </p>
-        <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">
+        <p className="mt-1 text-xs text-ink-3">
           This job is pulled from the job log (releases, submittals, activity). {label} lands with the ingestion pipeline.
         </p>
       </div>
@@ -514,9 +514,9 @@ function UnavailablePanel({ label }) {
 
 function Metric({ label, value }) {
   return (
-    <div className="rounded-lg bg-gray-50 dark:bg-slate-700/40 px-3 py-2">
-      <div className="text-lg font-bold text-gray-900 dark:text-slate-100 tabular-nums">{value}</div>
-      <div className="text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500">{label}</div>
+    <div className="rounded-lg bg-surface-2 px-3 py-2">
+      <div className="text-lg font-bold text-ink tabular-nums">{value}</div>
+      <div className="text-[11px] uppercase tracking-wide text-ink-3">{label}</div>
     </div>
   );
 }
@@ -525,10 +525,10 @@ function ScheduleList({ items }) {
   return (
     <ul className="space-y-0 -my-1">
       {items.map((m, i) => (
-        <li key={i} className="flex items-center justify-between gap-3 py-2.5 border-b border-gray-50 dark:border-slate-700/50 last:border-0">
-          <span className="text-sm text-gray-800 dark:text-slate-200">{m.milestone}</span>
+        <li key={i} className="flex items-center justify-between gap-3 py-2.5 border-b border-hairline last:border-0">
+          <span className="text-sm text-ink-2">{m.milestone}</span>
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs tabular-nums text-gray-500 dark:text-slate-400">{m.date}</span>
+            <span className="text-xs tabular-nums text-ink-3">{m.date}</span>
             <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium capitalize ${STAGE_TONE[m.status] || STAGE_TONE.upcoming}`}>{m.status}</span>
           </div>
         </li>
@@ -541,8 +541,8 @@ function ScheduleList({ items }) {
 function DataSourceBanner({ status, jobNumber, health }) {
   if (status === 'loading') {
     return (
-      <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-gray-500 dark:text-slate-400 flex items-center gap-2">
-        <span className="inline-block w-2 h-2 rounded-full bg-gray-300 dark:bg-slate-500 animate-pulse" />
+      <div className="rounded-lg border border-hairline bg-surface px-3 py-2 text-xs text-ink-3 flex items-center gap-2">
+        <span className="inline-block w-2 h-2 rounded-full bg-ink-3 animate-pulse" />
         Checking the live database for job {jobNumber}…
       </div>
     );
@@ -569,8 +569,8 @@ function DataSourceBanner({ status, jobNumber, health }) {
     );
   }
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-gray-500 dark:text-slate-400 flex items-center gap-2">
-      <span className="inline-block w-2 h-2 rounded-full bg-gray-300 dark:bg-slate-500" />
+    <div className="rounded-lg border border-hairline bg-surface px-3 py-2 text-xs text-ink-3 flex items-center gap-2">
+      <span className="inline-block w-2 h-2 rounded-full bg-ink-3" />
       No live project matches job {jobNumber} yet — showing demo data.
     </div>
   );
@@ -636,8 +636,8 @@ export default function ProjectDetail() {
   if (!project) {
     const loading = status === 'loading';
     return (
-      <div className="flex-1 w-full bg-[#f8fafc] dark:bg-slate-900 flex flex-col items-center justify-center gap-3 py-20">
-        <p className="text-gray-500 dark:text-slate-400">
+      <div className="flex-1 w-full bg-canvas flex flex-col items-center justify-center gap-3 py-20">
+        <p className="text-ink-3">
           {loading ? `Loading job ${id}…` : 'Project not found.'}
         </p>
         {!loading && (
@@ -650,11 +650,11 @@ export default function ProjectDetail() {
   }
 
   return (
-    <div className="flex-1 w-full bg-[#f8fafc] dark:bg-slate-900">
+    <div className="flex-1 w-full bg-canvas">
       <div className="max-w-7xl mx-auto px-4 lg:px-6 py-6 space-y-5">
         {/* Breadcrumb + hero */}
         <div>
-          <button onClick={() => navigate('/projects')} className="text-sm text-gray-500 dark:text-slate-400 hover:text-accent-600 dark:hover:text-accent-300 transition-colors">
+          <button onClick={() => navigate('/projects')} className="text-sm text-ink-3 hover:text-accent-600 dark:hover:text-accent-300 transition-colors">
             ← Projects
           </button>
           <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
@@ -669,8 +669,8 @@ export default function ProjectDetail() {
                   </span>
                 )}
               </div>
-              <h1 className="mt-2 text-2xl font-bold text-gray-900 dark:text-slate-100">{project.project_name}</h1>
-              <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+              <h1 className="mt-2 text-2xl font-bold text-ink">{project.project_name}</h1>
+              <p className="mt-1 text-sm text-ink-3">
                 {project.customer.general_contractor}
                 {project.team.project_manager && project.team.project_manager !== '—' && <> · PM {project.team.project_manager}</>}
                 {project.estimated_completion_date && <> · Est. completion {project.estimated_completion_date}</>}
@@ -679,12 +679,12 @@ export default function ProjectDetail() {
             <div className="text-right">
               {project.financials && (
                 <>
-                  <div className="text-2xl font-bold text-gray-900 dark:text-slate-100 tabular-nums">{fmtMoney(project.financials.forecast_invoice_value)}</div>
-                  <div className="text-xs text-gray-400 dark:text-slate-500">forecast invoice value</div>
+                  <div className="text-2xl font-bold text-ink tabular-nums">{fmtMoney(project.financials.forecast_invoice_value)}</div>
+                  <div className="text-xs text-ink-3">forecast invoice value</div>
                 </>
               )}
               <div className="mt-2 w-40 ml-auto">
-                <div className="flex justify-between text-xs mb-1"><span className="text-gray-500 dark:text-slate-400">{project.percent_complete}% complete</span></div>
+                <div className="flex justify-between text-xs mb-1"><span className="text-ink-3">{project.percent_complete}% complete</span></div>
                 <ProgressBar pct={project.percent_complete} />
               </div>
             </div>
@@ -699,7 +699,7 @@ export default function ProjectDetail() {
 
         {/* Health dashboard — composite score (the rating) + its tile breakdown */}
         <div>
-          <h2 className="text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-2">Project Health</h2>
+          <h2 className="text-xs font-bold uppercase tracking-wide text-ink-3 mb-2">Project Health</h2>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <HealthScore data={healthScore} className="lg:col-span-1" />
             <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-2.5 content-start">
@@ -713,7 +713,7 @@ export default function ProjectDetail() {
 
         {/* Tabs */}
         <div>
-          <div className="flex gap-1 overflow-x-auto border-b border-gray-200 dark:border-slate-700 mb-4">
+          <div className="flex gap-1 overflow-x-auto border-b border-hairline mb-4">
             {TABS.map(t => {
               const isLive = status === 'live' && LIVE_TABS.has(t);
               return (
@@ -724,7 +724,7 @@ export default function ProjectDetail() {
                   className={`px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${
                     tab === t
                       ? 'border-accent-500 text-accent-600 dark:text-accent-300'
-                      : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'
+                      : 'border-transparent text-ink-3 hover:text-ink-2'
                   }`}
                 >
                   {t}

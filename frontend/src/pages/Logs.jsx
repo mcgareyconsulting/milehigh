@@ -52,9 +52,9 @@ function Logs() {
             'ERROR': 'bg-red-100 text-red-800 border-red-300',
             'WARNING': 'bg-yellow-100 text-yellow-800 border-yellow-300',
             'INFO': 'bg-blue-100 text-blue-800 border-blue-300',
-            'DEBUG': 'bg-gray-100 text-gray-800 border-gray-300',
+            'DEBUG': 'bg-surface-2 text-ink border-hairline-strong',
         };
-        return colors[level] || 'bg-gray-100 text-gray-800 border-gray-300';
+        return colors[level] || 'bg-surface-2 text-ink border-hairline-strong';
     };
 
     const formatJsonData = (data) => {
@@ -74,17 +74,17 @@ function Logs() {
     };
 
     return (
-        <div className="min-h-screen p-8 bg-gray-50">
-            <div className="max-w-7xl mx-auto bg-white p-8 rounded-lg shadow-md">
+        <div className="min-h-[calc(100vh_-_var(--app-chrome-h))] p-8 bg-canvas">
+            <div className="max-w-7xl mx-auto bg-surface border border-hairline p-8 rounded-lg shadow-md">
                 <div className="flex justify-between items-center mb-8">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                        <h1 className="text-3xl font-bold text-ink mb-2">
                             Operation Logs
                         </h1>
-                        <p className="text-gray-600 font-mono text-sm">Operation ID: {operationId}</p>
+                        <p className="text-ink-2 font-mono text-sm">Operation ID: {operationId}</p>
                     </div>
                     <button
-                        className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm transition-colors"
+                        className="px-4 py-2 bg-ink-3 hover:bg-ink-2 text-white rounded text-sm transition-colors"
                         onClick={() => navigate('/operations')}
                     >
                         ← Back to Operations
@@ -94,7 +94,7 @@ function Logs() {
                 {loading && (
                     <div className="text-center py-12">
                         <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500 mb-4"></div>
-                        <p className="text-gray-600 font-medium">Loading logs...</p>
+                        <p className="text-ink-2 font-medium">Loading logs...</p>
                     </div>
                 )}
 
@@ -106,12 +106,12 @@ function Logs() {
 
                 {!loading && !error && (
                     <>
-                        <div className="mb-4 text-sm text-gray-600">
+                        <div className="mb-4 text-sm text-ink-2">
                             Total logs: {logs.length}
                         </div>
 
                         {logs.length === 0 ? (
-                            <div className="text-center py-12 text-gray-500">
+                            <div className="text-center py-12 text-ink-3">
                                 No logs found for this operation
                             </div>
                         ) : (
@@ -119,19 +119,19 @@ function Logs() {
                                 {logs.map((log, index) => (
                                     <div
                                         key={index}
-                                        className="border-l-4 border-gray-200 pl-4 py-3 bg-gray-50 rounded-r-lg hover:bg-gray-100 transition-colors"
+                                        className="border-l-4 border-hairline pl-4 py-3 bg-surface-2 rounded-r-lg hover:bg-surface-2 transition-colors"
                                     >
                                         <div className="flex items-start justify-between mb-2">
                                             <div className="flex items-center gap-2">
                                                 <span className={`px-2 py-1 rounded text-xs font-semibold border ${getLevelColor(log.level)}`}>
                                                     {log.level}
                                                 </span>
-                                                <span className="text-xs text-gray-500 font-mono">
+                                                <span className="text-xs text-ink-3 font-mono">
                                                     {formatDateTime(log.timestamp)}
                                                 </span>
                                             </div>
                                         </div>
-                                        <div className="text-sm font-medium text-gray-800 mb-2">
+                                        <div className="text-sm font-medium text-ink mb-2">
                                             {log.message}
                                         </div>
                                         {(() => {

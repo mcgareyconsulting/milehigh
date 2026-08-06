@@ -61,29 +61,29 @@ function RentalRow({ r, today }) {
 
     const cell = 'px-2 py-2 whitespace-nowrap';
     return (
-        <tr className={`border-b border-gray-100 dark:border-slate-700/60 border-l-2 ${change.border} ${unmatched ? 'bg-slate-50/70 dark:bg-slate-800/40' : 'hover:bg-gray-50 dark:hover:bg-slate-800/40'}`}>
-            <td className={`${cell} font-semibold text-gray-900 dark:text-slate-100`}>
-                {r.matched_job_number ?? <span className="text-gray-400">—</span>}
+        <tr className={`border-b border-hairline border-l-2 ${change.border} ${unmatched ? 'bg-surface-2/70' : 'hover:bg-surface-2'}`}>
+            <td className={`${cell} font-semibold text-ink`}>
+                {r.matched_job_number ?? <span className="text-ink-3">—</span>}
                 {byAddress && <span title="Matched by site address (PO mismatch)" className="ml-0.5 text-amber-500 cursor-help">≈</span>}
             </td>
-            <td className={`px-2 py-2 max-w-[16rem] truncate ${r.matched_project_name ? 'text-gray-800 dark:text-slate-200' : 'text-gray-400 dark:text-slate-500 italic'}`}
+            <td className={`px-2 py-2 max-w-[16rem] truncate ${r.matched_project_name ? 'text-ink-2' : 'text-ink-3 italic'}`}
                 title={r.matched_project_name || r.sunbelt_job_label || ''}>
                 {r.matched_project_name || r.sunbelt_job_label || 'Unmatched'}
             </td>
-            <td className={`px-2 py-2 max-w-[18rem] truncate text-gray-700 dark:text-slate-300`} title={r.equipment_type || ''}>
+            <td className={`px-2 py-2 max-w-[18rem] truncate text-ink-2`} title={r.equipment_type || ''}>
                 {r.equipment_type || '—'}
             </td>
-            <td className={`${cell} text-gray-500 dark:text-slate-400 text-xs`}>{[r.make, r.model].filter(Boolean).join(' ') || '—'}</td>
-            <td className={`${cell} text-gray-400 dark:text-slate-500 text-xs`}>{r.equipment_number || '—'}</td>
-            <td className={`${cell} text-center text-gray-600 dark:text-slate-400`}>{r.quantity ?? 1}</td>
-            <td className={`${cell} text-right tabular-nums text-gray-700 dark:text-slate-300`}>{money0(r.week_rate)}</td>
-            <td className={`${cell} text-right tabular-nums font-medium text-gray-800 dark:text-slate-200`}>{money0(accrued)}</td>
-            <td className={`${cell} text-right tabular-nums text-gray-500 dark:text-slate-400`}>{onRent != null ? `${onRent}d` : '—'}</td>
-            <td className={`${cell} text-gray-600 dark:text-slate-400`}>{shortDate(r.date_rented)}</td>
-            <td className={`${cell} ${overdueDays != null && overdueDays > 0 ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-600 dark:text-slate-400'}`}>
+            <td className={`${cell} text-ink-3 text-xs`}>{[r.make, r.model].filter(Boolean).join(' ') || '—'}</td>
+            <td className={`${cell} text-ink-3 text-xs`}>{r.equipment_number || '—'}</td>
+            <td className={`${cell} text-center text-ink-3`}>{r.quantity ?? 1}</td>
+            <td className={`${cell} text-right tabular-nums text-ink-2`}>{money0(r.week_rate)}</td>
+            <td className={`${cell} text-right tabular-nums font-medium text-ink-2`}>{money0(accrued)}</td>
+            <td className={`${cell} text-right tabular-nums text-ink-3`}>{onRent != null ? `${onRent}d` : '—'}</td>
+            <td className={`${cell} text-ink-3`}>{shortDate(r.date_rented)}</td>
+            <td className={`${cell} ${overdueDays != null && overdueDays > 0 ? 'text-red-600 dark:text-red-400 font-medium' : 'text-ink-3'}`}>
                 {shortDate(r.est_return_date)}
             </td>
-            <td className={`${cell} text-gray-500 dark:text-slate-400`}>{shortDate(r.billed_through)}</td>
+            <td className={`${cell} text-ink-3`}>{shortDate(r.billed_through)}</td>
         </tr>
     );
 }
@@ -169,26 +169,27 @@ function RentalReports() {
     }, [rentals, query, flaggedOnly]);
 
     if (authorized === null) {
-        return <div className="flex-1 flex items-center justify-center text-gray-600 dark:text-slate-400">Loading…</div>;
+        return <div className="flex-1 flex items-center justify-center text-ink-3">Loading…</div>;
     }
     if (!authorized) {
         return (
             <div className="flex-1 flex items-center justify-center p-6 text-center">
-                <div className="text-gray-600 dark:text-slate-400">You don’t have access to rental reports.</div>
+                <div className="text-ink-3">You don’t have access to rental reports.</div>
             </div>
         );
     }
 
-    const selectClass = 'px-2.5 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-400/60';
+    const selectClass = 'px-2.5 py-1.5 text-sm rounded-lg border border-hairline-strong bg-input-bg text-ink focus:outline-none focus:ring-2 focus:ring-accent-400/60';
     const th = 'px-2 py-1.5 font-semibold text-left whitespace-nowrap';
 
     return (
+        <div className="w-full min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas">
         <div className="flex-1 w-full overflow-auto px-3 lg:px-5 py-3">
             {/* Header */}
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <div>
-                    <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">Sunbelt Rentals</h1>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">
+                    <h1 className="text-xl font-bold text-ink">Sunbelt Rentals</h1>
+                    <p className="text-xs text-ink-3">
                         Equipment on rent, reconciled to our jobs.
                         {report?.snapshot && <> · Report dated <span className="font-medium">{shortDate(report.snapshot.snapshot_date)}</span></>}
                         {report?.snapshot?.created_by && <> · by {report.snapshot.created_by}</>}
@@ -230,24 +231,24 @@ function RentalReports() {
                     placeholder="Filter by job, project, equipment…"
                     className={`${selectClass} w-64`}
                 />
-                <label className="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-slate-300 cursor-pointer select-none">
-                    <input type="checkbox" checked={flaggedOnly} onChange={(e) => setFlaggedOnly(e.target.checked)} className="rounded border-gray-300 dark:border-slate-600" />
+                <label className="inline-flex items-center gap-1.5 text-sm text-ink-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={flaggedOnly} onChange={(e) => setFlaggedOnly(e.target.checked)} className="rounded border-hairline-strong" />
                     Flagged only
                 </label>
-                <span className="text-xs text-gray-400 dark:text-slate-500">{visible.length} of {rentals.length} shown</span>
+                <span className="text-xs text-ink-3">{visible.length} of {rentals.length} shown</span>
                 {uploadMsg && <span className="text-xs text-emerald-600 dark:text-emerald-400 ml-auto">{uploadMsg}</span>}
                 {error && <span className="text-xs text-red-600 dark:text-red-400 ml-auto">{error}</span>}
             </div>
 
             {/* Table */}
             {loading ? (
-                <div className="py-12 text-center text-gray-500 dark:text-slate-400">Loading…</div>
+                <div className="py-12 text-center text-ink-3">Loading…</div>
             ) : rentals.length === 0 ? (
-                <div className="py-12 text-center text-gray-500 dark:text-slate-400">No rentals yet. Upload a weekly Sunbelt CSV to get started.</div>
+                <div className="py-12 text-center text-ink-3">No rentals yet. Upload a weekly Sunbelt CSV to get started.</div>
             ) : (
-                <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-slate-700">
+                <div className="overflow-x-auto rounded-lg border border-hairline">
                     <table className="w-full text-xs">
-                        <thead className="bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-slate-400 sticky top-0 z-10">
+                        <thead className="bg-head-bg text-ink-3 sticky top-0 z-10">
                             <tr>
                                 <th className={th}>Job #</th>
                                 <th className={th}>Project</th>
@@ -263,7 +264,7 @@ function RentalReports() {
                                 <th className={th}>Billed thru</th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white dark:bg-slate-900">
+                        <tbody className="bg-surface">
                             {visible.map((r) => <RentalRow key={r.id} r={r} today={today} />)}
                         </tbody>
                     </table>
@@ -273,16 +274,17 @@ function RentalReports() {
             {/* Returned since previous snapshot */}
             {returned.length > 0 && (
                 <div className="mt-4">
-                    <h2 className="text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Returned since previous report ({returned.length})</h2>
+                    <h2 className="text-xs font-semibold text-ink-2 mb-1.5">Returned since previous report ({returned.length})</h2>
                     <div className="flex flex-wrap gap-1.5">
                         {returned.map((r, i) => (
-                            <span key={i} className="inline-block px-2 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                            <span key={i} className="inline-block px-2 py-0.5 rounded text-[11px] bg-surface-2 text-ink-2">
                                 {(r.matched_project_name || r.matched_job_number || 'Unmatched')} · {r.equipment_type}
                             </span>
                         ))}
                     </div>
                 </div>
             )}
+        </div>
         </div>
     );
 }

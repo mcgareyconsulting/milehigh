@@ -235,7 +235,7 @@ function DraftingWorkLoad() {
                 <span
                     className={`inline-flex items-center gap-1 px-2.5 py-1 rounded border text-xs font-semibold whitespace-nowrap ${colSelected.length > 0
                         ? (isDraftTab ? 'bg-green-700 text-white border-green-700' : 'bg-blue-700 text-white border-blue-700')
-                        : 'bg-white dark:bg-slate-600 border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200'}`}
+                        : 'bg-surface border-hairline-strong text-ink-2'}`}
                 >
                     {label}{colSelected.length > 0 ? ` (${colSelected.length})` : ''}
                     <span className="text-[0.65rem] leading-none">▾</span>
@@ -283,7 +283,7 @@ function DraftingWorkLoad() {
         <>
             <style>{columnWidthStyles}</style>
             <div
-                className="w-full h-[calc(100vh_-_var(--app-chrome-h))] flex flex-col bg-canvas dark:bg-slate-900"
+                className="w-full h-[calc(100vh_-_var(--app-chrome-h))] flex flex-col bg-canvas"
                 style={{
                     width: '100%',
                     minWidth: '100%',
@@ -307,7 +307,7 @@ function DraftingWorkLoad() {
                                     {/* Centered primary filters — share state with the spreadsheet column filters.
                                         Open/Draft is the rightmost element of this centered group. */}
                                     <div className="flex items-center gap-1.5 flex-wrap justify-center">
-                                        <span className="text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Filter:</span>
+                                        <span className="text-xs font-semibold text-ink-2 whitespace-nowrap">Filter:</span>
                                         {renderToolbarFilter('NAME', 'Project', projectFilterLabels)}
                                         {renderToolbarFilter('BIC', 'BIC')}
                                         {renderToolbarFilter('SUB MANAGER', 'Sub Mgr')}
@@ -317,7 +317,7 @@ function DraftingWorkLoad() {
                                                 onClick={() => setSelectedTab('open')}
                                                 className={`px-3 py-1 text-xs font-semibold transition-all whitespace-nowrap ${selectedTab === 'open'
                                                     ? 'bg-blue-700 text-white'
-                                                    : 'bg-white dark:bg-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                    : 'bg-surface text-ink-2 hover:bg-surface-2'
                                                     }`}
                                             >
                                                 Open
@@ -326,7 +326,7 @@ function DraftingWorkLoad() {
                                                 onClick={() => setSelectedTab('draft')}
                                                 className={`px-3 py-1 text-xs font-semibold transition-all whitespace-nowrap border-l border-gray-400 dark:border-slate-500 ${selectedTab === 'draft'
                                                     ? 'bg-green-700 text-white'
-                                                    : 'bg-white dark:bg-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                    : 'bg-surface text-ink-2 hover:bg-surface-2'
                                                     }`}
                                             >
                                                 Draft
@@ -361,7 +361,7 @@ function DraftingWorkLoad() {
                                                 title={!singleSelectedBallInCourt
                                                     ? 'Filter the BIC column to a single drafter to enable resort'
                                                     : `Compress ${singleSelectedBallInCourt}'s ordered submittals to sequential numbers`}
-                                                className="px-3 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="px-3 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-surface border border-hairline-strong text-ink-2 hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 {resorting ? 'Resorting\u2026' : '\u2195 Resort'}
                                             </button>
@@ -369,7 +369,7 @@ function DraftingWorkLoad() {
                                                 onClick={handleGeneratePDF}
                                                 disabled={!hasData || loading}
                                                 title="Generate PDF"
-                                                className="px-3 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="px-3 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-surface border border-hairline-strong text-ink-2 hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 🖨️ Print/PDF
                                             </button>
@@ -381,13 +381,13 @@ function DraftingWorkLoad() {
                                 <div className="flex items-center justify-between gap-1.5 flex-wrap">
                                     <div className="flex items-center gap-1.5 flex-wrap">
                                         <div className="flex items-center gap-1.5">
-                                            <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">Search:</label>
+                                            <label className="text-xs font-semibold text-ink whitespace-nowrap">Search:</label>
                                             <input
                                                 type="text"
                                                 value={search}
                                                 onChange={(e) => setSearch(e.target.value)}
                                                 placeholder="Project, title, BIC, manager…"
-                                                className="w-48 sm:w-64 px-2 py-2 md:py-0.5 text-sm md:text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                                className="w-48 sm:w-64 px-2 py-2 md:py-0.5 text-sm md:text-xs border border-hairline-strong rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-input-bg text-ink"
                                             />
                                         </div>
                                         <button
@@ -397,7 +397,7 @@ function DraftingWorkLoad() {
                                             Reset Filters
                                         </button>
                                     </div>
-                                    <div className="flex items-center gap-3 text-sm font-semibold text-gray-700 dark:text-slate-200">
+                                    <div className="flex items-center gap-3 text-sm font-semibold text-ink-2">
                                         <span>
                                             Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{displayRows.length}</span> records
                                         </span>
@@ -407,14 +407,14 @@ function DraftingWorkLoad() {
                                         </span>
                                         <span className="text-gray-300 dark:text-slate-500">|</span>
                                         <span className="text-gray-500 dark:text-slate-400 font-normal">
-                                            Last updated: <span className="font-semibold text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
+                                            Last updated: <span className="font-semibold text-ink-2">{formattedLastUpdated}</span>
                                         </span>
                                     </div>
                                 </div>
 
                                 {/* Active filter chips */}
                                 {activeFilterChips.length > 0 && (
-                                    <div className="flex items-center gap-1.5 flex-wrap border-t border-gray-200 dark:border-slate-600 pt-2">
+                                    <div className="flex items-center gap-1.5 flex-wrap border-t border-hairline pt-2">
                                         <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 whitespace-nowrap">Active filters:</span>
                                         {activeFilterChips.map((chip) => (
                                             <span
@@ -466,7 +466,7 @@ function DraftingWorkLoad() {
                         )}
 
                         {!loading && !fetchError && effectiveView === 'cards' && (
-                            <div className="flex-1 min-h-0 flex flex-col border border-gray-200 dark:border-slate-600 rounded-xl overflow-hidden bg-white dark:bg-slate-800 min-w-0">
+                            <div className="flex-1 min-h-0 flex flex-col border border-hairline rounded-xl overflow-hidden bg-surface min-w-0">
                                 <SubmittalRowList
                                     rows={displayRows}
                                     jumpToTarget={jumpToTarget}
@@ -633,7 +633,7 @@ function DraftingWorkLoad() {
                                                 <tr>
                                                     <td
                                                         colSpan={tableColumnCount}
-                                                        className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-surface"
+                                                        className="px-6 py-12 text-center text-ink-3 font-medium bg-surface"
                                                     >
                                                         No records match the selected filters.
                                                     </td>

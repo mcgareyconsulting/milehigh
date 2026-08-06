@@ -44,7 +44,7 @@ export default function SubsLayout() {
 
     if (authorized === null) {
         return (
-            <div className="flex-1 flex items-center justify-center text-gray-600 dark:text-slate-400">
+            <div className="flex-1 flex items-center justify-center text-ink-3">
                 Loading…
             </div>
         );
@@ -52,7 +52,7 @@ export default function SubsLayout() {
 
     if (!authorized) {
         return (
-            <div className="flex-1 flex items-center justify-center p-6 text-center text-gray-600 dark:text-slate-400">
+            <div className="flex-1 flex items-center justify-center p-6 text-center text-ink-3">
                 Subs is available to admins only.
             </div>
         );
@@ -68,8 +68,8 @@ export default function SubsLayout() {
     }
 
     return (
-        <div className="flex-1 min-h-0 flex flex-col">
-            <div className="shrink-0 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+        <div className="flex-1 min-h-0 flex flex-col bg-canvas">
+            <div className="shrink-0 border-b border-hairline bg-surface">
                 <div className="max-w-[1600px] mx-auto px-4 sm:px-6 flex items-center gap-1">
                     <nav className="flex gap-1" role="tablist" aria-label="Subs sections">
                         {TABS.map((tab) => (
@@ -82,7 +82,7 @@ export default function SubsLayout() {
                                     `px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
                                         isActive
                                             ? 'border-accent-500 text-accent-600 dark:text-accent-300'
-                                            : 'border-transparent text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:border-gray-300 dark:hover:border-slate-500'
+                                            : 'border-transparent text-ink-2 hover:text-ink hover:border-hairline-strong'
                                     }`
                                 }
                             >

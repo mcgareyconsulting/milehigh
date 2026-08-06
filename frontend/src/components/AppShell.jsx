@@ -1,15 +1,17 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Wraps all authenticated pages with the top navigation bar, theme toggle, location controls, and notification bell. Collapses nav into a slide-in drawer below the nav (1440px) breakpoint for iPad (incl. iPad Pro) and phone.
+ * purpose: Wraps all authenticated pages with nav chrome (top header by default; optional left rail at ≥1440px via Left Sidebar Mode), theme toggle, location controls, and notification bell. Collapses nav into a slide-in drawer below the 1440px breakpoint for iPad (incl. iPad Pro) and phone.
  * exports:
  *   AppShell: Layout shell with nav chrome, renders child routes via Outlet
- * imports_from: [react, react-router-dom, ../utils/auth, ../context/ThemeContext, ../context/LocationContext, ../context/ReleasesContext, ./QuickSearch, ./NotificationBell, ./MobileNavDrawer]
+ * imports_from: [react, react-router-dom, ../utils/auth, ../context/ThemeContext, ../context/LocationContext, ../context/ReleasesContext, ./QuickSearch, ./NotificationBell, ./MobileNavDrawer, ./Rail]
  * imported_by: [frontend/src/App.jsx]
  * invariants:
  *   - Admin-only nav items are gated on checkAuth result
  *   - LocationProvider wraps the inner shell so all children can access geolocation context
  *   - Header height: 3.5rem (h-14) up to 3xl, then 4rem to give 27"+ / TV more room.
+ *   - Left rail only when isSidebarMode is on AND width ≥1440px; top header is the default.
+ *   - Under 1440px always uses top bar + drawer regardless of isSidebarMode.
  */
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
@@ -28,8 +30,10 @@ import { CURRENT_VERSION } from '../data/patchNotes';
 function AppShellInner({ isAuthenticated, subcontractor }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isDark, isOldMan, toggleDark, toggleOldMan } = useTheme();
+  const { isDark, isOldMan, isSidebarMode, toggleDark, toggleOldMan, toggleSidebarMode } = useTheme();
   const [showThemeMenu, setShowThemeMenu] = useState(false);
+  // Rail only for staff who opted into Left Sidebar Mode; preference is ignored under 1440px.
+  const useRail = !subcontractor && isSidebarMode;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { locationEnabled, locationRequesting, handleLocationToggle } = useLocationContext();
   const [isAdmin, setIsAdmin] = useState(false);
@@ -93,14 +97,13 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
   );
 
   return (
-    // `app-shell-topbar` keeps --app-chrome-h reserved at every width for
-    // subcontractors, who never get the rail and so always have the top bar.
-    <div className={`app-shell ${subcontractor ? 'app-shell-topbar' : ''} flex w-full min-h-screen bg-canvas`}>
-      {/* Left rail — the desktop nav (Aug 2026 redesign). Below 1440px it gives
-          way to the top bar + slide-in drawer, which is still the only nav that
-          has been tuned against a real iPad. Subcontractors get neither: none of
-          these destinations are theirs. */}
-      {!subcontractor && (
+    // `app-shell-topbar` keeps --app-chrome-h reserved whenever the top bar is
+    // present at ≥1440px (default layout, subcontractors, or sidebar mode off).
+    // Only sidebar mode on wide screens drops the bar and zeros chrome height.
+    <div className={`app-shell ${useRail ? '' : 'app-shell-topbar'} flex w-full min-h-screen bg-canvas`}>
+      {/* Left rail — optional desktop nav (Left Sidebar Mode). Only mounts when
+          the user opts in; still hidden under 1440px so iPad keeps the drawer. */}
+      {useRail && (
         <div className="hidden min-[1440px]:flex sticky top-0 h-screen">
           <Rail
             isAuthenticated={isAuthenticated}
@@ -113,10 +116,10 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
       )}
 
       <div className="flex flex-col flex-1 min-w-0 min-h-screen">
-      {/* Top bar — hidden once the rail takes over at 1440px. */}
+      {/* Top bar — default chrome. Hidden only when the rail is active at ≥1440px. */}
       <header
-        className={`relative items-center h-14 3xl:h-16 px-3 lg:px-4 gap-2 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-600 sticky top-0 z-40 shrink-0 ${
-          subcontractor ? 'flex' : 'flex min-[1440px]:hidden'
+        className={`relative items-center h-14 3xl:h-16 px-3 lg:px-4 gap-2 bg-surface border-b border-hairline sticky top-0 z-40 shrink-0 ${
+          useRail ? 'flex min-[1440px]:hidden' : 'flex'
         }`}
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
@@ -224,7 +227,7 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
               )}
             </button>
             {showThemeMenu && (
-              <div className="absolute right-0 mt-1 w-52 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg z-50 p-3 space-y-3">
+              <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg z-50 p-3 space-y-3">
                 {/* Dark mode toggle */}
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm font-medium text-gray-700 dark:text-slate-200">Dark Mode</span>
@@ -247,6 +250,20 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
                     aria-pressed={isOldMan}
                   >
                     <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isOldMan ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+                {/* Left Sidebar Mode — opt-in rail at ≥1440px; default is top header */}
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-gray-700 dark:text-slate-200">Left Sidebar Mode</span>
+                  <button
+                    type="button"
+                    onClick={toggleSidebarMode}
+                    className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-accent-500 ${isSidebarMode ? 'bg-accent-500' : 'bg-gray-200 dark:bg-slate-600'}`}
+                    aria-pressed={isSidebarMode}
+                    aria-label="Left Sidebar Mode"
+                    title="Use the left nav rail on wide screens (default is the top header)"
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isSidebarMode ? 'translate-x-5' : 'translate-x-0'}`} />
                   </button>
                 </div>
               </div>
