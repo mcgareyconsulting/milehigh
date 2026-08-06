@@ -1,5 +1,25 @@
 # Procore Decommission — Path Forward
 
+> ### 📌 Superseded on four points — 2026-08-06, later the same day
+>
+> **[`roadmap.md`](roadmap.md) §1b and §3 are now the authority.** Written the
+> same morning, this document predates the afternoon's decisions and disagrees
+> with the roadmap on:
+>
+> 1. **No new `BrainSubmittal` table** — `Submittals` *is* the native record and
+>    gets extended. §1.4's proposed table is retired.
+> 2. **§4's migration mostly dissolved** — legacy rows need a backfill, not a
+>    migration; cut-over gates at the *project*, not the submittal. **But §4's
+>    warning about attachments survives as roadmap P11**: the documents
+>    themselves are not in our DB and vanish at lapse.
+> 3. **Five workflow responses, not six** — Rejected dropped, Void kept.
+> 4. **The slice plan here is the full scope, which does not fit the window** —
+>    see roadmap §1b for the arithmetic and the reduced October scope.
+>
+> The model (§1), the intelligent-workflow rules (§2), and the per-slice detail
+> remain the deepest write-up of *how* each piece works. Read them with the four
+> corrections above in mind.
+
 **Written 2026-08-06.** Synthesis of three inputs:
 
 1. Bill's written spec — `MHMW_Brain_Procore_Decommission_Submittal_System_Developer_Handoff.md`

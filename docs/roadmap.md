@@ -57,9 +57,10 @@ Every open item in one place. Detail lives in the workstream sections below.
 | ID | Item | Effort | Depends on | Status |
 |---|---|---|---|---|
 | **K4** | Backups — Postgres + binary disk | S–M | — | 🔴 **Not started.** Tier 0 since 7/22; runbook unmerged |
-| **K3** | Object storage migration + cost numbers for Bill | L | — | Not started. Size generously |
+| **K3** | Object storage migration + cost numbers for Bill | L | — | Not started. Size generously. **Blocks P7, C3, P11** — every submittal binary lands wherever this decides |
 | **N4** | Two-calendar business-day fix + 26-call-site audit | M | — | Not started. Gates E1–E3 |
-| | | **~12.5 d** | | |
+| **MIG** | Run the outstanding migration backlog per environment | S–M | — | Standing item. Several shipped features carry unrun migrations (A1 alone shipped five); Workstream 1 adds more. Scripts handed over per the usual split |
+| | | **~14.5 d** | | |
 
 ### Workstream 1 — Procore exit (October)
 
@@ -75,9 +76,17 @@ Every open item in one place. Detail lives in the workstream sections below.
 | **P7** | Returned submittal ingestion via Carmen mailbox | M | P2 | Not started. Mail path already exists |
 | **P8** | Aging / outstanding view — status + timer | S–M | P2, D1 | Not started |
 | **P10** | Backfill `phase` + `source` on 3,892 legacy rows | S | P1 | Not started. **Shrank from "unscopeable"** |
+| **P11** | **Procore document export** — PDFs, drawing sets, returned markups, correspondence. `Submittals` holds metadata only; the files live on Procore's servers and vanish at lapse | S + ? | K3 | 🔴 Not started. **Read-only delta inventory (~1d) in week 1** sizes the pull; the only item with a cliff rather than a deadline, and no second attempt |
 | **C3** | Universal PDF tool — absorbs the revision stack (P9) | L | — | Not started. **Promoted onto the critical path** |
 | **D1** | Projects page — container for P8 + the submittal section | L | K2 | In progress (`feature/updated-projects`) |
-| | | **~48 d** | | |
+| | | **~48 d + P11 (unknown until inventory)** | | |
+
+> **Document handling is one thread, not four items.** K3 decides where binaries
+> live · P11 pulls what must survive October · C3-narrow is how they're viewed
+> and marked · the archival policy is what we keep long-term. A decision in any
+> one moves the other three — schedule them as a cluster. *(Procore integration
+> teardown — webhooks, outbox, `fc_retry_worker` — is tracked on a separate map,
+> not in this roadmap.)*
 
 ### Workstream 2 — Money
 
@@ -96,7 +105,7 @@ Every open item in one place. Detail lives in the workstream sections below.
 
 | ID | Item | Effort | Depends on | Status |
 |---|---|---|---|---|
-| **BUG-1** | FC / Procore link graying on the job log | ? | — | **Colton's top complaint.** Start at `fc_retry_worker.py` |
+| **BUG-1** | FC / Procore link graying on the job log | ? | — | **Colton's top complaint.** Start at `fc_retry_worker.py`. **Patch, don't rebuild** — this subsystem retires with the Procore teardown (tracked on a separate map) |
 | **BUG-2** | Ball-in-court uncheck 1 → 0 does nothing | S | — | Bill self-noted live |
 | **BUG-3** | Release-number duplicate — confirm with David/Dalton | S | — | Rollover otherwise verified |
 | **BUG-4** | Monday-morning drag-and-drop drop | S | — | David's annoyance |
@@ -133,9 +142,9 @@ cutting — it has a compliance failure behind it)*
 
 | | Working days | Weeks @ 5d |
 |---|---|---|
-| Workstream 0 | ~12.5 | 2.5 |
-| Workstream 1 | ~48 | 9.6 |
-| **October-critical total** | **~60.5** | **~12** |
+| Workstream 0 | ~14.5 | 2.9 |
+| Workstream 1 | ~48 + P11 | 9.6+ |
+| **October-critical total** | **~62.5+** | **~12.5** |
 | **Window available** | **40** | **8** |
 | Workstreams 2–4 (not October) | ~35 | 7 |
 
@@ -149,12 +158,15 @@ come out of Workstream 1**, or the date moves.
 | Keep | Why |
 |---|---|
 | P1, P0, P2, P4, P7, P10 | The record, the workflow, DRR creation, and a way for returns to land. Without any one of these there is no system |
+| **P11** — the document export | The one unrecoverable item. Inventory in week 1; the pull paced by rate limits and **verified complete before the lapse** |
 | **C3 narrow** — revision viewer only, not the universal tool | Meets the need; the universal-tool brainstorm moves after October |
 | **D1 minimal** — submittal tab only | Bill named "brain projects," but a container is enough |
 | FC conversion + release into the job log | The hand-off to everything that already works |
 
-**≈ 29 days ≈ 6 weeks.** With Workstream 0 that is ~8.5 weeks — still tight, but
-real rather than aspirational.
+**≈ 32 days ≈ 6.5 weeks.** With Workstream 0 (now ~14.5 d) that is **~9.3 weeks
+against the 8-week window — the reduced scope no longer fits either.** Something
+gets thinner still: the keep list, the alongside work (bugs, N-items), or the
+date. That is exactly the conversation §9 row 1 hands to Bill.
 
 **Deferred past October, each because a manual process exists and works today:**
 
@@ -297,10 +309,24 @@ All Procore material/order statuses are **dead** — the job log and email order
 cover that now [L206–216].
 
 **Surface:** the Drafting Work Load's **"Procore Status" dropdown becomes the
-intelligent-workflow actions dropdown** [L1141–1161]. That is the drafter's daily
-surface. Touchpoints: `DraftingWorkLoad.jsx`, `SubmittalRow.jsx`,
-`SubmittalCard.jsx`, `useFilters.js`, `transformers.js`, over
+intelligent-workflow actions dropdown** [L1141–1161] — and the DWL is where
+**reviewers respond too**, not just drafters (confirmed 2026-08-06). PMs, Bill,
+ops act from the same dropdown; D1-minimal's submittal tab is the secondary
+surface for the project-scoped view. Touchpoints: `DraftingWorkLoad.jsx`,
+`SubmittalRow.jsx`, `SubmittalCard.jsx`, `useFilters.js`, `transformers.js`, over
 `app/brain/drafting_work_load/`.
+
+**Turn notifications ride the shipped G1 system** — workflow assignment emits a
+`Notification` row and surfaces through the existing bell + desktop
+notifications. No new build; one emit call in the step-advance path. Known limit,
+inherited from G1: notifications are **foreground-only** (a tab must be open) —
+fine for office reviewers, and the Web Push follow-up in the catalog remains the
+fix for field PMs.
+
+**Tests are named scope, not absorbed scope.** A state machine that mutates
+itself off reviewer responses is the highest-test-value code in this plan — the
+response matrix (5 responses × loop/skip/manual-insert) gets service-level tests
+per the repo's layering before any UI work sits on it.
 
 ### P5 — FC Separator
 
@@ -697,15 +723,19 @@ actual compliance failure behind it.
 
 ## 8. Sequencing
 
+**Cut against the §1b reduced scope** — the full-scope sequence this table used
+to show did not fit the window and is retired.
+
 | When | What |
 |---|---|
-| **This week** | K4 backups · K3 storage numbers for Bill · the bug pile · drafter permissions · N6 |
-| **Weeks 1–3** | P0/P1/P2 the spine — **extending `Submittals`, no new table** · N4 |
-| **Weeks 3–4** | C3 + P9 revisions and Carmen review · N5 · N9 |
-| **Weeks 4–6** | P6 distribution · P7 returned ingestion · P8 aging |
-| **Weeks 6–7** | P4 Tree of Life · FC conversion · **P5 Separator**, designed against 500-998 |
-| **Weeks 7–8, slippable** | N1 → N2 → billing stages → invoicing tab |
-| **Alongside** | N7 modal merge · N8 Carmen reporting |
+| **This week** | K4 backups · K3 decision + storage numbers for Bill · **P11 delta inventory** · the bug pile · drafter permissions · N6 · MIG backlog |
+| **Weeks 1–3** | P1 extend `Submittals` · P0 origination · P2 workflow engine + tests — **blocked start on Bill's template export** · N4 |
+| **Weeks 3–4** | C3 **narrow** (revision viewer) · **P11 document pull begins** — paced by rate limits, runs in the background from here |
+| **Weeks 4–5** | P7 returned ingestion · D1 **minimal** (submittal tab) |
+| **Weeks 5–6** | P4 Tree of Life · FC conversion → release into the job log · P10 backfill |
+| **Weeks 6–8** | **660 Fox Hill parallel-run hardening** · P11 verified complete · the buffer this plan currently does not have |
+| **Post-October lane** | P3 Carmen step · P5 Separator (design vs 500-998) · P6 distribution · P8 aging · C3 full · D1 full · then Workstream 2: N1 → N10 → N2 → billing stages → invoicing tab |
+| **Alongside, as capacity allows** | N5 · N9 · N7 modal merge · N8 Carmen reporting |
 
 **Pilot discipline matters more than the schedule.** **660 Fox Hill** runs in
 parallel with Procore from the first slice [L1041–1049], so that when the contract
@@ -742,6 +772,7 @@ rather than discovered late.
 
 | Owed | Blocks | Since |
 |---|---|---|
+| **The October cut-list decision** — §1b: even the reduced scope runs ~9.3 weeks vs 8. Which of P3 / P5 / P6 / P8 he loses, what gets thinner, or the date moves — **his pick, made early, not discovered in week seven** | The scope contract for everything above | new |
 | **Procore workflow template export / screenshots** (the 8-step, per-PM list) | P2 — we are replicating them | 8/6 |
 | **Trigger on 500-998 going to FC** | P5 design | 8/6, committed |
 | **Sample release Excel (billing sheet)** | N2 | 8/6 |
