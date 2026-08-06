@@ -58,11 +58,22 @@ class TestNextReleaseNumber:
         assert json.loads(resp.data)["next_release"] == str(REL_MIN + 1)
 
 
+def _release_csv_named(job, release, job_name, description="Desc"):
+    return (
+        f"{_RELEASE_HEADER}\n"
+        f"{job},{release},{job_name},{description},40,8,Black,PM1,BY1,,10"
+    )
+
+
 class TestVerbalReleaseDuplicateGuard:
     """The form always submits a concrete Release # (the prefilled suggestion or a
     user-edited value) through the same endpoint "+ Release" uses -- so a collision
     on submit is blocked exactly the way a duplicate paste already is, with a
-    suggested_next the user can accept instead of silently reassigning anything."""
+    suggested_next the user can accept instead of silently reassigning anything.
+
+    Hard uniqueness is (job #, release #, project name). Job numbers wrap; the same
+    digits under a different project name are allowed.
+    """
 
     def test_colliding_release_is_blocked_not_overwritten(self, app, non_admin_client):
         with app.app_context():
@@ -84,6 +95,85 @@ class TestVerbalReleaseDuplicateGuard:
         assert collision["suggested_next"] == "501"
         # Only the original row exists -- the collision did not create a second one.
         assert Releases.query.filter_by(job=910).count() == 1
+
+    def test_archived_same_project_name_still_blocks(self, app, non_admin_client):
+        """Long-running project must not re-issue a Rel even after archive."""
+        with app.app_context():
+            db.session.add(Releases(
+                job=410, release="108",
+                job_name="Lennar - Columbine Square",
+                is_active=True, is_archived=True,
+            ))
+            db.session.commit()
+
+        resp = non_admin_client.post(
+            "/brain/job-log/release",
+            json={"csv_data": _release_csv_named(
+                410, 108, "Lennar - Columbine Square"
+            )},
+        )
+
+        assert resp.status_code == 200
+        body = json.loads(resp.data)
+        assert body["created_count"] == 0
+        assert body["collision_count"] == 1
+        assert body["collisions"][0]["suggested_next"] == "109"
+        assert Releases.query.filter_by(job=410, release="108").count() == 1
+
+    def test_same_job_release_different_project_name_is_allowed(self, app, non_admin_client):
+        """Job # wrap: archived 410-108 Columbine must not block 410-108 Alta."""
+        with app.app_context():
+            db.session.add(Releases(
+                job=410, release="108",
+                job_name="Lennar - Columbine Square",
+                is_active=True, is_archived=True,
+            ))
+            db.session.commit()
+
+        resp = non_admin_client.post(
+            "/brain/job-log/release",
+            json={"csv_data": _release_csv_named(410, 108, "Alta Metro")},
+        )
+
+        assert resp.status_code == 200
+        body = json.loads(resp.data)
+        assert body["created_count"] == 1
+        assert body.get("collision_count", 0) == 0
+        rows = Releases.query.filter_by(job=410, release="108").all()
+        assert len(rows) == 2
+        names = {r.job_name for r in rows}
+        assert "Lennar - Columbine Square" in names
+        assert "Alta Metro" in names
+
+    def test_suggested_next_ignores_other_projects_on_same_job_number(
+        self, app, non_admin_client
+    ):
+        """When Columbine collides on 108, do not skip numbers only Alta used."""
+        with app.app_context():
+            db.session.add(Releases(
+                job=410, release="108",
+                job_name="Lennar - Columbine Square",
+                is_active=True, is_archived=False,
+            ))
+            # Alta already has 109 under the reused job number — irrelevant to Columbine.
+            db.session.add(Releases(
+                job=410, release="109",
+                job_name="Alta Metro",
+                is_active=True, is_archived=False,
+            ))
+            db.session.commit()
+
+        resp = non_admin_client.post(
+            "/brain/job-log/release",
+            json={"csv_data": _release_csv_named(
+                410, 108, "Lennar - Columbine Square"
+            )},
+        )
+
+        body = json.loads(resp.data)
+        assert body["collision_count"] == 1
+        # Columbine's next free is 109 even though Alta already has 410-109.
+        assert body["collisions"][0]["suggested_next"] == "109"
 
     def test_non_colliding_release_is_created(self, non_admin_client):
         resp = non_admin_client.post(

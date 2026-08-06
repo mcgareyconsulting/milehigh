@@ -311,6 +311,49 @@ def _validate_row(row_values, row_idx, row):
     
     return True, None
 
+def _norm_job_name(value):
+    """Normalize project/job name for identity compares (strip + casefold)."""
+    return str(value or '').strip().casefold()
+
+
+def _find_job_release_name_collision(job_number, release_number, job_name):
+    """Hard uniqueness key is (job #, release #, project name).
+
+    Job numbers wrap/reuse over time, so the same 410-108 may legitimately
+    belong to a different project (archived 410-108 Columbine must not block
+    a new 410-108 Alta Metro). Same job # + release # + same project name
+    collides even when the existing row is archived — long-running projects
+    must not re-issue a release number within themselves.
+    """
+    target_name = _norm_job_name(job_name)
+    candidates = Releases.query.filter_by(
+        job=job_number, release=str(release_number).strip()
+    ).all()
+    for row in candidates:
+        if _norm_job_name(row.job_name) == target_name:
+            return row
+    return None
+
+
+def _release_numbers_for_job_name(job_number, job_name):
+    """Numeric release #s already used under this job # + project name.
+
+    Includes archived rows (same project must not re-issue a Rel). Scoped to
+    project name so another project's use of job # 410 does not force Alta to
+    skip numbers Columbine already consumed.
+    """
+    target_name = _norm_job_name(job_name)
+    taken = set()
+    for r in Releases.query.filter_by(job=job_number).all():
+        if _norm_job_name(r.job_name) != target_name:
+            continue
+        try:
+            taken.add(int(r.release))
+        except (ValueError, TypeError):
+            pass
+    return taken
+
+
 def _find_near_duplicate(job_number, release_number, row_values):
     """Find an existing active release for the same job that looks like the
     same content under a different release number (e.g. a verbal release
@@ -320,7 +363,7 @@ def _find_near_duplicate(job_number, release_number, row_values):
     after normalization -- avoids flagging two rows that both simply have
     blank descriptions. Returns the matched Releases row, or None.
     """
-    job_name = str(row_values.get('job_name') or '').strip().casefold()
+    job_name = _norm_job_name(row_values.get('job_name'))
     description = str(row_values.get('description') or '').strip().casefold()
     if not job_name or not description:
         return None
@@ -332,7 +375,7 @@ def _find_near_duplicate(job_number, release_number, row_values):
     ).all()
 
     for candidate in candidates:
-        candidate_job_name = str(candidate.job_name or '').strip().casefold()
+        candidate_job_name = _norm_job_name(candidate.job_name)
         candidate_description = str(candidate.description or '').strip().casefold()
         if candidate_job_name == job_name and candidate_description == description:
             return candidate
@@ -2131,24 +2174,22 @@ def release_job_data():
                 # Parse validated values
                 job_number = int(row_values['job'])
                 release_number = str(row_values['release']).strip()
+                job_name_value = str(row_values['job_name']).strip()
 
-                # Check if job-release already exists
-                existing_job = Releases.query.filter_by(job=job_number, release=release_number).first()
+                # Hard uniqueness: (job #, release #, project name). Job numbers
+                # wrap; same digits on a different project name is allowed
+                # (archived 410-108 Columbine must not block 410-108 Alta Metro).
+                existing_job = _find_job_release_name_collision(
+                    job_number, release_number, job_name_value
+                )
                 if existing_job:
-                    job_name_value = str(row_values['job_name']).strip()
-
-                    # Suggest the next free release for this job, starting from
-                    # the colliding number + 1 (matches client's "rolling release" workflow).
+                    # Suggest next free release under this job # + project name.
                     suggested = None
                     try:
                         attempted_int = int(release_number)
-                        # Get all numeric releases for this job to check availability
-                        taken = set()
-                        for r in Releases.query.filter_by(job=job_number).all():
-                            try:
-                                taken.add(int(r.release))
-                            except (ValueError, TypeError):
-                                pass
+                        taken = _release_numbers_for_job_name(
+                            job_number, job_name_value
+                        )
                         candidate = attempted_int + 1
                         while candidate in taken:
                             candidate += 1
@@ -2161,7 +2202,7 @@ def release_job_data():
                         'row': row_idx,
                         'job': job_number,
                         'release': release_number,
-                        'job_name': job_name_value,
+                        'job_name': job_name_value or (existing_job.job_name or ''),
                         'suggested_next': suggested
                     })
                     continue

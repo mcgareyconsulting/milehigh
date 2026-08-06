@@ -91,6 +91,27 @@ class TestUpdateSubmittalOrder:
         assert response.status_code == 400
         data = json.loads(response.data)
         assert 'error' in data
+
+    @patch('app.brain.drafting_work_load.routes.db')
+    @patch('app.brain.drafting_work_load.routes.Submittals')
+    def test_update_order_zero_clears_to_null(self, mock_submittal_model, mock_db, client, mock_submittal):
+        """BUG-2: order_number 0 unchecks / clears to unordered (NULL), not 400."""
+        mock_submittal.order_number = 1.0
+        mock_submittal.ball_in_court = "Drafter A"
+        mock_submittal_model.query.filter_by.return_value.first.return_value = mock_submittal
+        mock_submittal_model.query.filter_by.return_value.all.return_value = [mock_submittal]
+
+        response = client.put(
+            '/brain/drafting-work-load/order',
+            json={'submittal_id': 'test_submittal_123', 'order_number': 0},
+            content_type='application/json'
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data['success'] is True
+        assert data['order_number'] is None
+        assert mock_submittal.order_number is None
     
     @patch('app.brain.drafting_work_load.routes.Submittals')
     def test_update_order_submittal_not_found(self, mock_submittal_model, client):
