@@ -88,10 +88,10 @@ function JobLogContent() {
         return { tableColumns: cols, tableWidthPercents: widths };
     }, [isDesktop, columnHeaders, columnWidthPercents]);
 
-    // The admin row-actions column (⚙ edit/delete) is desktop-only (14"+ screens) — no
-    // exposure on tablet/mobile. Gates the header cell, the per-row actions, and the
-    // empty/divider colSpan math so the table stays aligned. Admin cell-editing is unaffected.
-    const showAdminActions = isAdmin && isDesktop;
+    // Row-actions column (⋯ menu) is desktop-only (14"+ screens). Admins get
+    // Edit + Delete; drafters get Edit only (DP: job→released fields via modal).
+    // Gates the header cell, per-row actions, and colSpan math so the table stays aligned.
+    const showRowActions = (isAdmin || isDrafter) && isDesktop;
 
     // Drag-and-drop reorder is disabled — keep no-op handlers so JobsTableRow's props stay satisfied.
     const draggedIndex = null;
@@ -171,7 +171,7 @@ function JobLogContent() {
                                         // border-collapse is centered on the shared boundary and drifts a sub-pixel
                                         // from a non-collapsed element) — and box-shadow is also immune to Safari's
                                         // bug where collapsed borders on sticky <th> cells fail to paint.
-                                        const isLastHeaderColumn = tableColumns[tableColumns.length - 1] === column && !showAdminActions;
+                                        const isLastHeaderColumn = tableColumns[tableColumns.length - 1] === column && !showRowActions;
                                         // Same translucent ink as the body cells (JobsTableRow — keep in sync):
                                         // black 18% / white 12%. The bottom rule is the one place the ink doubles
                                         // (~2× alpha) so the header reads as an anchored band without introducing
@@ -207,7 +207,7 @@ function JobLogContent() {
                                             </th>
                                         );
                                     })}
-                                    {showAdminActions && (
+                                    {showRowActions && (
                                         <th className="px-1 py-0.5 text-center text-xl font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider bg-gray-100 dark:bg-slate-900 w-8 shadow-[inset_0_-1px_0_0_#0000005c] dark:shadow-[inset_0_-1px_0_0_#ffffff3d]">
                                             ⚙
                                         </th>
@@ -220,7 +220,7 @@ function JobLogContent() {
                                         <>
                                             <tr>
                                                 <td
-                                                    colSpan={tableColumnCount + (showAdminActions ? 1 : 0)}
+                                                    colSpan={tableColumnCount + (showRowActions ? 1 : 0)}
                                                     className="px-6 py-6 text-center text-amber-800 dark:text-amber-200 font-medium bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800"
                                                 >
                                                     <span className="mr-2">⚠️</span>
@@ -248,7 +248,7 @@ function JobLogContent() {
                                                     stageGroupColors={stageGroupColors}
                                                     stageGroupDupColors={stageGroupDupColors}
                                                     isAdmin={isAdmin}
-                                                    showActions={showAdminActions}
+                                                    showActions={showRowActions}
                                                     isDrafter={isDrafter}
                                                     onDelete={handleDeleteJob}
                                                     tableScrollRef={tableScrollRef}
@@ -259,7 +259,7 @@ function JobLogContent() {
                                     ) : (
                                         <tr>
                                             <td
-                                                colSpan={tableColumnCount + (showAdminActions ? 1 : 0)}
+                                                colSpan={tableColumnCount + (showRowActions ? 1 : 0)}
                                                 className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-white dark:bg-slate-800 rounded-md"
                                             >
                                                 {hasJobsData
@@ -274,7 +274,7 @@ function JobLogContent() {
                                         row._asapDivider ? (
                                             <tr key={row.id}>
                                                 <td
-                                                    colSpan={tableColumnCount + (showAdminActions ? 1 : 0)}
+                                                    colSpan={tableColumnCount + (showRowActions ? 1 : 0)}
                                                     className={`${ASAP_DIVIDER_BOX_CLASS} border-y`}
                                                 >
                                                     <AsapDividerLabel count={row._asapCount} />
@@ -301,7 +301,7 @@ function JobLogContent() {
                                             stageGroupColors={stageGroupColors}
                                             stageGroupDupColors={stageGroupDupColors}
                                             isAdmin={isAdmin}
-                                            showActions={showAdminActions}
+                                            showActions={showRowActions}
                                             isDrafter={isDrafter}
                                             onDelete={handleDeleteJob}
                                             tableScrollRef={tableScrollRef}

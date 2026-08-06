@@ -69,7 +69,8 @@ class TestUpdateJobFields:
             assert r.fab_hrs == 10
             assert r.install_hrs == 5
 
-    def test_non_admin_forbidden(self, app, non_admin_client):
+    def test_plain_user_forbidden(self, app, non_admin_client):
+        """Neither admin nor drafter → 403."""
         with app.app_context():
             make_release(4, "A")
             db.session.commit()
@@ -79,6 +80,63 @@ class TestUpdateJobFields:
                 json={"fields": {"pm": "New PM"}},
             )
             assert resp.status_code == 403
+
+    def test_drafter_can_edit_job_through_released_fields(self, app, drafter_client):
+        """DP: drafters may PATCH the job→released block via the gear modal."""
+        with app.app_context():
+            make_release(
+                40, "A",
+                job_name="Old Name",
+                description="Old desc",
+                fab_hrs=10,
+                install_hrs=5,
+                paint_color="Red",
+                pm="Old PM",
+                by="Old BY",
+            )
+            db.session.commit()
+
+            resp = drafter_client.patch(
+                "/brain/jobs/40/A",
+                json={
+                    "fields": {
+                        "job_name": "Columbine Square",
+                        "description": "RFI angles",
+                        "fab_hrs": 12,
+                        "install_hrs": 8,
+                        "paint_color": "Prime",
+                        "pm": "RL",
+                        "by": "DCR",
+                        "released": "2026-08-05",
+                    }
+                },
+            )
+            assert resp.status_code == 200
+
+            db.session.expire_all()
+            r = Releases.query.filter_by(job=40, release="A").first()
+            assert r.job_name == "Columbine Square"
+            assert r.description == "RFI angles"
+            assert r.fab_hrs == 12
+            assert r.install_hrs == 8
+            assert r.paint_color == "Prime"
+            assert r.pm == "RL"
+            assert r.by == "DCR"
+            assert str(r.released) == "2026-08-05"
+            assert r.source_of_update == "Brain"
+
+            ev = ReleaseEvents.query.filter_by(job=40, release="A", action="updated").first()
+            assert ev is not None
+
+    def test_drafter_cannot_delete_row(self, app, drafter_client):
+        """Delete stays admin-only; drafters only get field edit."""
+        with app.app_context():
+            make_release(41, "A")
+            db.session.commit()
+
+            resp = drafter_client.delete("/brain/jobs/41/A")
+            assert resp.status_code == 403
+            assert Releases.query.filter_by(job=41, release="A").first().is_active is not False
 
     def test_queues_trello_sync_when_card_linked(self, app, admin_client):
         with app.app_context():

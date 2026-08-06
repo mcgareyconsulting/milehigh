@@ -8,9 +8,9 @@
  * imported_by: [frontend/src/pages/JobLog.jsx, frontend/src/pages/Archive.jsx]
  * invariants:
  *   - Stage dropdown options must stay in sync with constants/stages.js definitions
- *   - Admin-only actions (delete, unarchive, field edit) are gated on the isAdmin prop
+ *   - Delete / unarchive stay admin-only; row-field edit (job→released) is admin or drafter (DP)
  *   - Duplicate fab order detection relies on the duplicateFabOrders set passed from parent
- * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ * updated_by_agent: 2026-08-06T00:00:00Z
  */
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { jobsApi } from '../services/jobsApi';
@@ -270,7 +270,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const [updatingJobComp, setUpdatingJobComp] = useState(false);
     const [updatingInvoiced, setUpdatingInvoiced] = useState(false);
 
-    // Editable columns for admin edit modal
+    // Editable columns for the gear/⋯ edit modal (job → released).
+    // Admins and drafters (DP); not inline — accidental delete risk per Bill.
+    const canEditRowFields = isAdmin || isDrafter;
     const EDITABLE_COLUMNS = [
         { label: 'Job #', field: 'job', type: 'number' },
         { label: 'Release #', field: 'release', type: 'text' },
@@ -908,7 +910,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     // vertical divider — nothing to its right to separate from. Without this,
                     // the last column's divider bleeds past the table's edge next to the
                     // scrollbar.
-                    const isTrueLastColumn = columns[columns.length - 1] === column && !(isAdmin && showActions);
+                    const isTrueLastColumn = columns[columns.length - 1] === column && !showActions;
                     const vDividerClass = isTrueLastColumn ? '' : cellVDividerShadow;
 
 
@@ -1421,7 +1423,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         </td>
                     );
                 })}
-                {isAdmin && showActions && (
+                {showActions && (canEditRowFields || isAdmin) && (
                     <td
                         className={`px-1 ${cellPy} text-center align-middle bg-white dark:bg-slate-800 w-8 relative`}
                         style={{ width: '32px' }}
@@ -1441,26 +1443,32 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                 />
                                 <ul className="absolute right-0 z-20 bg-white dark:bg-slate-700 shadow-lg rounded border border-gray-200 dark:border-slate-600">
                                     {onUnarchive ? (
-                                        <li
-                                            onClick={handleUnarchiveRow}
-                                            className="px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer whitespace-nowrap"
-                                        >
-                                            Unarchive
-                                        </li>
+                                        isAdmin ? (
+                                            <li
+                                                onClick={handleUnarchiveRow}
+                                                className="px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer whitespace-nowrap"
+                                            >
+                                                Unarchive
+                                            </li>
+                                        ) : null
                                     ) : (
                                         <>
-                                            <li
-                                                onClick={handleOpenRowEdit}
-                                                className="px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer whitespace-nowrap"
-                                            >
-                                                Edit row
-                                            </li>
-                                            <li
-                                                onClick={handleDeleteRow}
-                                                className="px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer whitespace-nowrap"
-                                            >
-                                                Delete row
-                                            </li>
+                                            {canEditRowFields && (
+                                                <li
+                                                    onClick={handleOpenRowEdit}
+                                                    className="px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer whitespace-nowrap"
+                                                >
+                                                    Edit row
+                                                </li>
+                                            )}
+                                            {isAdmin && (
+                                                <li
+                                                    onClick={handleDeleteRow}
+                                                    className="px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer whitespace-nowrap"
+                                                >
+                                                    Delete row
+                                                </li>
+                                            )}
                                         </>
                                     )}
                                 </ul>

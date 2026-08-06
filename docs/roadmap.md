@@ -102,7 +102,7 @@ Every open item in one place. Detail lives in the workstream sections below.
 | **BUG-4** | Monday-morning drag-and-drop drop | S | — | **Dropped** 2026-08-06 |
 | **BUG-5** | Stage-change hours reaching the fab side — verify only | S | — | **Verified + fixed** 2026-08-06 — pipeline OK; KPI modifiers incomplete vs Banana Code (Weld Complete etc. stayed 100%); aligned FE+BE+hours_summary to `STAGE_HOUR_PERCENTAGES` |
 | **BUG-6** | Row 164 — Nov 2025 outlier still in the DWL | S | — | **Dropped** 2026-08-06 (data, not code) |
-| **DP** | Drafter edit permissions, `job` → `released` | S | — | Agreed and widened by Bill |
+| **DP** | Drafter edit permissions, `job` → `released` | S | — | **Fixed** 2026-08-06 — drafters get gear “Edit row” (job→released); PATCH via `drafter_or_admin`; delete stays admin |
 | **N6** | Ship ↔ Install 'Break' button | S | — | Clean and small |
 | **N5** | Ship-complete date cascade re-anchor | S | — | Extract date logic from the complete-zone cascade |
 | **N7** | Job log modal merge + redesign | M | — | **In flight, uncommitted** |
@@ -476,7 +476,7 @@ out of it at any point.
 | **N10** | **Bulk edit on the job log** — see Workstream 2 | M |
 | **N5** | **Ship-complete date cascade** | S |
 | **N6** | **Ship ↔ Install 'Break' button** | S |
-| **DP** | **Drafter edit permissions**, `job` → `released` columns | S |
+| **DP** | **Drafter edit permissions**, `job` → `released` columns — **Fixed** 2026-08-06: gear modal + API, not inline | S |
 | **H1** | Polish sweep — rolling calendar, full-screen modals, metrics load times | M |
 
 ### N9 — photo watermark

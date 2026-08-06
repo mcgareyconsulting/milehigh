@@ -27,7 +27,12 @@ from app.services.outbox_service import OutboxService
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
 from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, ReleasePhoto, Submittals, User, PendingStartInstall
-from app.auth.utils import login_required, get_current_user, admin_required
+from app.auth.utils import (
+    login_required,
+    get_current_user,
+    admin_required,
+    drafter_or_admin_required,
+)
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER, active_releases_filter
 from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
@@ -3575,8 +3580,10 @@ def trello_scan_create():
 
 
 # ==============================================================================
-# Admin Job Log Editing Endpoints
+# Job Log row editing (admin + drafter)
 # ==============================================================================
+# Drafters may PATCH these fields (DP / Bill 8-6: job → released block via gear
+# menu, not inline). Delete stays admin-only.
 
 # Editable field mapping: display name -> (db_field, type_converter)
 EDITABLE_FIELDS = {
@@ -3649,12 +3656,15 @@ def _coerce_editable_field(field, value):
 
 @brain_bp.route("/jobs/<int:job>/<release>", methods=["PATCH"])
 @login_required
-@admin_required
+@drafter_or_admin_required
 @handle_errors("update job fields", raw_error=True)
 @require_json("fields")
 def update_job_fields(job, release):
     """
     Update one or more columns for a job record in a single commit.
+
+    Allowed for **admins and drafters** (DP). Field set is the job→released
+    block only (see EDITABLE_FIELDS). Soft-delete remains admin-only.
 
     Parameters:
         job: int - Job number
@@ -3697,8 +3707,9 @@ def update_job_fields(job, release):
         setattr(job_record, db_field, converted_value)
         payload[field] = {'old_value': old_value, 'new_value': serialize_value(converted_value)}
 
+    user = get_current_user()
     job_record.last_updated_at = datetime.utcnow()
-    job_record.source_of_update = 'Admin'
+    job_record.source_of_update = 'Admin' if (user and user.is_admin) else 'Brain'
 
     # Key the event on the record's post-edit job/release, not the pre-edit
     # URL params — if this request renamed job/release, every later lookup by
