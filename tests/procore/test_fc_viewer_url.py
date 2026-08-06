@@ -123,7 +123,8 @@ class TestGetFinalPdfViewers:
                 ]
             },
         }
-        # Approver ids don't match — fall back to final-named PDF attachment.
+        # Approver ids don't match and detail refetch doesn't help — fall
+        # back to the final-named PDF attachment.
         wf = {
             "attachments": [
                 {
@@ -133,10 +134,58 @@ class TestGetFinalPdfViewers:
                 },
             ]
         }
-        with patch("app.procore.procore.get_workflow_data", return_value=wf):
+        with patch("app.procore.procore.get_submittal_by_id", return_value=None), \
+             patch("app.procore.procore.get_workflow_data", return_value=wf):
             results = get_final_pdf_viewers(55, [sub])
         assert len(results) >= 1
         assert results[0]["viewer_url"] == "https://app.procore.com/fallback/1"
+
+    def test_detail_refetch_when_list_approver_ids_stale(self):
+        """After an FC re-distribute the list payload can carry the OLD
+        approver ids; the detail has the fresh ones that match workflow."""
+        stale = {
+            "id": 4004,
+            "title": "410-111",
+            "last_distributed_submittal": {
+                "distributed_responses": [
+                    {"response_name": "Final PDF Pack", "submittal_approver_id": 5},
+                ]
+            },
+        }
+        detail = {
+            "id": 4004,
+            "title": "410-111",
+            "last_distributed_submittal": {
+                "distributed_responses": [
+                    {"response_name": "Final PDF Pack", "submittal_approver_id": 21},
+                ]
+            },
+        }
+        wf = {
+            "attachments": [
+                {"approver_id": 21, "name": "fc set.pdf", "viewer_url": "/v/21"},
+            ]
+        }
+        with patch("app.procore.procore.get_submittal_by_id", return_value=detail) as detail_fn, \
+             patch("app.procore.procore.get_workflow_data", return_value=wf):
+            results = get_final_pdf_viewers(55, [stale])
+        detail_fn.assert_called_once_with(55, 4004)
+        assert len(results) == 1
+        assert results[0]["viewer_url"] == "https://app.procore.com/v/21"
+        assert results[0]["approver_id"] == 21
+
+    def test_fallback_refuses_non_pdf_attachments(self):
+        """Fallback must never link arbitrary attachments (photos, markups)."""
+        thin = {"id": 5005, "title": "410-112"}
+        wf = {
+            "attachments": [
+                {"approver_id": 1, "name": "site photo.jpg", "viewer_url": "/v/photo"},
+            ]
+        }
+        with patch("app.procore.procore.get_submittal_by_id", return_value=None), \
+             patch("app.procore.procore.get_workflow_data", return_value=wf):
+            results = get_final_pdf_viewers(55, [thin])
+        assert results == []
 
 
 class TestSubmittalsForRelease:

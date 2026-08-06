@@ -335,6 +335,14 @@ def fetch_all_submittals(project_id):
                         "fetch_all_submittals_fallback_failed", project_id=project_id
                     )
                     return []
+            # Mid-pagination failure: return what we have, but say so — a
+            # silently truncated list reads as "no matching FC submittal".
+            logger.warning(
+                "fetch_all_submittals_page_error",
+                project_id=project_id,
+                page=page,
+                count=len(all_rows),
+            )
             break
         all_rows.extend(batch)
         if len(batch) < per_page:
@@ -540,11 +548,9 @@ def _normalize_viewer_url(viewer_url):
     return f"https://app.procore.com/{viewer_url}"
 
 
-def _viewer_results_from_workflow(project_id, submittal_id, title, approver_ids):
+def _viewer_results_from_workflow(attachments, submittal_id, title, approver_ids):
     """Match workflow_data attachments to Final PDF Pack approver ids."""
     results = []
-    workflow_data = get_workflow_data(project_id, submittal_id)
-    attachments = workflow_data.get("attachments") if isinstance(workflow_data, dict) else []
     approver_set = set(approver_ids)
     for att in attachments or []:
         if not isinstance(att, dict):
@@ -563,12 +569,11 @@ def _viewer_results_from_workflow(project_id, submittal_id, title, approver_ids)
     return results
 
 
-def _viewer_results_from_workflow_fallback(project_id, submittal_id, title):
-    """When distribution metadata is missing after an FC update, take any
-    workflow attachment that looks like a Final PDF / has a viewer_url on a
-    PDF-ish name. Prefer names containing 'final'."""
-    workflow_data = get_workflow_data(project_id, submittal_id)
-    attachments = workflow_data.get("attachments") if isinstance(workflow_data, dict) else []
+def _viewer_results_from_workflow_fallback(attachments, submittal_id, title):
+    """When distribution metadata is missing after an FC update, take a
+    workflow attachment that looks like a Final PDF. Prefer names containing
+    'final'; accept other PDF-ish names. Never link attachments that are
+    neither (photos, markups) — a wrong link is worse than a gray one."""
     scored = []
     for att in attachments or []:
         if not isinstance(att, dict):
@@ -577,13 +582,12 @@ def _viewer_results_from_workflow_fallback(project_id, submittal_id, title):
         if not full:
             continue
         name = (att.get("name") or "").lower()
-        # Prefer final-pack-ish names; accept other PDFs as last resort.
         if "final" in name:
             score = 0
         elif name.endswith(".pdf") or "pdf" in name:
             score = 1
         else:
-            score = 2
+            continue
         scored.append((score, {
             "title": title,
             "submittal_id": submittal_id,
@@ -602,9 +606,10 @@ def get_final_pdf_viewers(project_id, submittals):
     List endpoints often omit or stale ``last_distributed_submittal`` after an
     FC set update (BUG-1 graying). For each match we:
       1. Read Final PDF Pack approver ids from the list payload
-      2. If missing, re-fetch the full submittal by id
-      3. Match workflow_data attachments by approver_id
-      4. If still empty, fall back to workflow PDF attachments with a viewer_url
+      2. Fetch workflow_data once; match attachments by approver_id
+      3. If unmatched (ids missing OR stale after a re-distribute), re-fetch
+         the full submittal by id and match again with the fresh ids
+      4. If still empty, fall back to final/PDF-named workflow attachments
     """
     final_results = []
 
@@ -614,10 +619,21 @@ def get_final_pdf_viewers(project_id, submittals):
         submittal_id = sub["id"]
         title = sub.get("title")
 
+        workflow_data = get_workflow_data(project_id, submittal_id)
+        attachments = (
+            workflow_data.get("attachments") if isinstance(workflow_data, dict) else []
+        )
+
         approver_ids = _final_pdf_approver_ids(sub)
-        detail = None
-        if not approver_ids:
-            # List payload incomplete / FC just re-distributed — get the detail.
+        matched = (
+            _viewer_results_from_workflow(attachments, submittal_id, title, approver_ids)
+            if approver_ids
+            else []
+        )
+
+        if not matched:
+            # List payload thin OR its approver ids are stale after an FC
+            # re-distribute — get the detail and retry with fresh ids.
             try:
                 detail = get_submittal_by_id(project_id, submittal_id)
             except Exception:
@@ -628,22 +644,22 @@ def get_final_pdf_viewers(project_id, submittals):
                 )
                 detail = None
             if isinstance(detail, dict):
-                approver_ids = _final_pdf_approver_ids(detail)
                 if detail.get("title"):
                     title = detail.get("title")
+                detail_ids = _final_pdf_approver_ids(detail)
+                if detail_ids:
+                    matched = _viewer_results_from_workflow(
+                        attachments, submittal_id, title, detail_ids
+                    )
 
-        if approver_ids:
-            matched = _viewer_results_from_workflow(
-                project_id, submittal_id, title, approver_ids
-            )
-            if matched:
-                final_results.extend(matched)
-                continue
+        if matched:
+            final_results.extend(matched)
+            continue
 
         # FC update left distribution metadata empty but attachments still have
         # viewer_urls — better a best-effort link than a permanent gray button.
         fallback = _viewer_results_from_workflow_fallback(
-            project_id, submittal_id, title
+            attachments, submittal_id, title
         )
         if fallback:
             logger.info(
