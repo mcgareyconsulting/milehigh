@@ -114,12 +114,12 @@ export default function JobLogQuickFilters({
     if (!compact) {
         // Linear button row (desktop) — tight inline group so the whole toolbar stays on one line.
         return (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
                 {visibleFilters.map(({ key, label, activeClass, title }) => (
                     <button
                         key={key}
                         onClick={() => toggle(key)}
-                        className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${activeKey === key ? activeClass : INACTIVE_CLASS}`}
+                        className={`px-2 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap shrink-0 ${activeKey === key ? activeClass : INACTIVE_CLASS}`}
                         title={title}
                     >
                         {label}

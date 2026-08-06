@@ -48,10 +48,25 @@ function getActionText(message, boardItemTitle) {
     return message.replace(/ in ".*"$/, '');
 }
 
-export default function NotificationBell() {
+/**
+ * @param variant 'topbar' (default) renders the round icon button the top bar
+ *   has always used. 'rail' renders a full-width left-rail row and portals the
+ *   dropdown to a fixed position beside the rail — the rail clips its children,
+ *   so an in-tree `absolute right-0` panel would be both cut off and pointed
+ *   the wrong way off the left edge of the screen.
+ */
+export default function NotificationBell({
+    variant = 'topbar',
+    expanded = false,
+    itemHeight = 37,
+    railWidth = 52,
+    onHoverLabel = null,
+    onLeaveLabel = null,
+}) {
     const [unreadCount, setUnreadCount] = useState(0);
     const [notifications, setNotifications] = useState([]);
     const [open, setOpen] = useState(false);
+    const [panelTop, setPanelTop] = useState(0);
     const [loading, setLoading] = useState(false);
     const [toasts, setToasts] = useState([]);
     // Desktop opt-in UI state (re-read after enable/disable clicks)
@@ -197,6 +212,11 @@ export default function NotificationBell() {
 
     const handleOpen = async () => {
         if (open) { setOpen(false); return; }
+        // Rail variant pins the panel beside the rail rather than under the
+        // trigger, so it needs the row's viewport position at open time.
+        if (variant === 'rail' && ref.current) {
+            setPanelTop(ref.current.getBoundingClientRect().top);
+        }
         setOpen(true);
         refreshDesktopState();
         setLoading(true);
@@ -284,26 +304,89 @@ export default function NotificationBell() {
     const desktopSupported = isSupported();
     const desktopOn = desktopPref === 'on' && desktopPerm === 'granted';
 
+    const isRail = variant === 'rail';
+
+    // `position: fixed` (not a portal) is enough to escape the rail's overflow
+    // clipping — no ancestor establishes a containing block via transform.
+    const panelPositionClass = isRail
+        ? 'fixed w-96 max-h-96 overflow-y-auto'
+        : 'absolute right-0 mt-2 w-96 max-h-96 overflow-y-auto';
+    const panelPositionStyle = isRail ? { left: railWidth + 6, top: panelTop } : undefined;
+
     return (
-        <div ref={ref} className="relative">
-            <button
-                type="button"
-                onClick={handleOpen}
-                className="relative p-2 rounded-lg text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-accent-500"
-                aria-label="Notifications"
-            >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={BELL_ICON_PATH} />
-                </svg>
-                {unreadCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-4.5 h-4.5 min-w-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full">
-                        {unreadCount > 99 ? '99+' : unreadCount}
+        <div ref={ref} className={isRail ? 'relative w-full shrink-0' : 'relative'}>
+            {isRail ? (
+                <button
+                    type="button"
+                    onClick={handleOpen}
+                    onMouseEnter={(e) => {
+                        onHoverLabel?.(e, 'Notifications');
+                        if (!open) e.currentTarget.style.background = 'var(--rail-hover)';
+                    }}
+                    onMouseLeave={(e) => {
+                        onLeaveLabel?.();
+                        if (!open) e.currentTarget.style.background = 'transparent';
+                    }}
+                    aria-label="Notifications"
+                    className="relative w-full flex items-center rounded-lg transition-colors"
+                    style={{
+                        height: itemHeight,
+                        justifyContent: expanded ? 'flex-start' : 'center',
+                        padding: expanded ? '0 10px' : 0,
+                        gap: expanded ? 12 : 0,
+                        background: open ? 'var(--rail-active)' : 'transparent',
+                        color: open ? 'var(--rail-fg-active)' : 'var(--rail-fg)',
+                    }}
+                >
+                    <span className="shrink-0 grid place-items-center" style={{ width: 19, height: 19 }}>
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                            <path d="M6 9a6 6 0 1 1 12 0v5l2 3H4l2-3z M10 20a2 2 0 0 0 4 0" />
+                        </svg>
                     </span>
-                )}
-            </button>
+                    {expanded && (
+                        <span className="truncate" style={{ fontSize: 12.5, fontWeight: 600 }}>Notifications</span>
+                    )}
+                    {expanded && <span className="flex-1" />}
+                    {unreadCount > 0 && (
+                        <span
+                            className="grid place-items-center font-bold text-white"
+                            style={{
+                                background: '#e0483c', borderRadius: 999, fontSize: 10,
+                                minWidth: 17, height: 17, padding: '0 5px',
+                                position: expanded ? 'static' : 'absolute',
+                                top: expanded ? undefined : 4,
+                                right: expanded ? undefined : 9,
+                                boxShadow: expanded ? 'none' : '0 0 0 2px var(--rail-bg)',
+                            }}
+                        >
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                    )}
+                </button>
+            ) : (
+                <button
+                    type="button"
+                    onClick={handleOpen}
+                    className="relative p-2 rounded-lg text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-accent-500"
+                    aria-label="Notifications"
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={BELL_ICON_PATH} />
+                    </svg>
+                    {unreadCount > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-4.5 h-4.5 min-w-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                    )}
+                </button>
+            )}
 
             {open && (
-                <div className="absolute right-0 mt-2 w-96 max-h-96 overflow-y-auto bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-lg z-50">
+                <div
+                    className={`${panelPositionClass} bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-lg z-50`}
+                    style={panelPositionStyle}
+                >
                     <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 dark:border-slate-700">
                         <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">Notifications</span>
                         {unreadCount > 0 && (

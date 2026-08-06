@@ -20,6 +20,7 @@ import { ReleasesProvider } from '../context/ReleasesContext';
 import QuickSearch from './QuickSearch';
 import NotificationBell from './NotificationBell';
 import MobileNavDrawer from './MobileNavDrawer';
+import Rail from './Rail';
 import BBChatWidget from './BBChatWidget';
 import PatchNotesModal from './PatchNotesModal';
 import { CURRENT_VERSION } from '../data/patchNotes';
@@ -92,10 +93,31 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
   );
 
   return (
-    <div className="flex flex-col w-full min-h-screen bg-[#f8fafc] dark:bg-slate-900">
-      {/* Top bar */}
+    // `app-shell-topbar` keeps --app-chrome-h reserved at every width for
+    // subcontractors, who never get the rail and so always have the top bar.
+    <div className={`app-shell ${subcontractor ? 'app-shell-topbar' : ''} flex w-full min-h-screen bg-canvas`}>
+      {/* Left rail — the desktop nav (Aug 2026 redesign). Below 1440px it gives
+          way to the top bar + slide-in drawer, which is still the only nav that
+          has been tuned against a real iPad. Subcontractors get neither: none of
+          these destinations are theirs. */}
+      {!subcontractor && (
+        <div className="hidden min-[1440px]:flex sticky top-0 h-screen">
+          <Rail
+            isAuthenticated={isAuthenticated}
+            isAdmin={isAdmin}
+            canSeeReport={canSeeReport}
+            onLogout={handleLogout}
+            onOpenPatchNotes={() => setShowPatchNotes(true)}
+          />
+        </div>
+      )}
+
+      <div className="flex flex-col flex-1 min-w-0 min-h-screen">
+      {/* Top bar — hidden once the rail takes over at 1440px. */}
       <header
-        className="relative flex items-center h-14 3xl:h-16 px-3 lg:px-4 gap-2 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-600 sticky top-0 z-40 shrink-0"
+        className={`relative items-center h-14 3xl:h-16 px-3 lg:px-4 gap-2 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-600 sticky top-0 z-40 shrink-0 ${
+          subcontractor ? 'flex' : 'flex min-[1440px]:hidden'
+        }`}
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
         {/* Brand — pinned far left */}
@@ -292,6 +314,7 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
       <main className="flex-1 w-full min-h-0 flex flex-col">
         <Outlet />
       </main>
+      </div>
 
       {/* Floating read-only data assistant — flag-gated per user */}
       {isAuthenticated && <BBChatWidget enabled={canUseBBChat} isAdmin={isAdmin} />}

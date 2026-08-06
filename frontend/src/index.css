@@ -1,3 +1,16 @@
+/* IBM Plex — self-hosted via @fontsource so the bundle makes no external font
+   request (works offline and under a strict CSP). Sans carries the UI; Mono
+   carries numbers, dates, ids and version strings per the design handoff. */
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-sans/700.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/600.css';
+@import '@fontsource/ibm-plex-mono/700.css';
+@import './styles/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -22,8 +35,11 @@ html {
   /* Ensure consistent base font size */
 }
 
+/* IBM Plex Sans is app-wide, not Job-Log-only: the redesigned rail is chrome on
+   every page, so scoping the typeface to three surfaces would leave the app
+   visibly half-converted. System stack stays as the fallback. */
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -78,6 +94,46 @@ body>#root>div>div {
   flex-direction: column !important;
 }
 
+/* The Aug 2026 redesign makes the authenticated shell a ROW — rail | content.
+   The blanket `width: 100% !important` rules above predate it and would stretch
+   the collapsed rail to full width and force the shell back into a column, so the
+   shell opts out. Class beats element in specificity, which is what lets these
+   win against the !important rules above. */
+#root>.app-shell {
+  flex-direction: row !important;
+}
+
+#root>.app-shell>div {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+
+/* Height of the app chrome a full-height page has to subtract from the viewport.
+   Pages that fill the window (Job Log, Archive, Drafting WL, Board, the map) size
+   themselves with calc(100vh - var(--app-chrome-h)); before this was a variable
+   they each hardcoded the top bar's 3.5rem.
+
+   At 1440px the rail takes over and the top bar is gone (see AppShell), so there
+   is nothing left to subtract — without this those pages left a bar-sized strip
+   of dead space along the bottom of the window. Subcontractors keep the top bar
+   at every width and opt out via .app-shell-topbar. */
+:root {
+  --app-chrome-h: 3.5rem;
+}
+
+@media (min-width: 1920px) {
+  :root {
+    --app-chrome-h: 4rem;
+  }
+}
+
+@media (min-width: 1440px) {
+  .app-shell:not(.app-shell-topbar) {
+    --app-chrome-h: 0px;
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
@@ -109,42 +165,92 @@ body>#root>div>div {
   background: #64748b;
 }
 
+/* Horizontal strips in the Job Log filter chrome — thin scrollbar, no layout bump. */
+.jl-toolbar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 transparent;
+  -webkit-overflow-scrolling: touch;
+}
+.jl-toolbar-scroll::-webkit-scrollbar {
+  height: 4px;
+  width: 4px;
+}
+.jl-toolbar-scroll::-webkit-scrollbar-thumb {
+  background-color: #94a3b8;
+  border-radius: 9999px;
+}
+.jl-toolbar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 /* Scroll container for job log / archive tables */
 .job-log-table-scroll {
   overflow-anchor: none; /* Don't auto-scroll to follow rows when sort order changes */
   -webkit-overflow-scrolling: touch; /* Momentum scroll on iOS Safari */
+  /* Narrower than the OS default (~15px) so the right edge steals less table width. */
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: #94a3b8 transparent;
+}
+.job-log-table-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.job-log-table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.job-log-table-scroll::-webkit-scrollbar-thumb {
+  background-color: #94a3b8;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.job-log-table-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #64748b;
+}
+.dark .job-log-table-scroll {
+  scrollbar-color: #64748b transparent;
+}
+.dark .job-log-table-scroll::-webkit-scrollbar-thumb {
+  background-color: #64748b;
+}
+.dark .job-log-table-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
 }
 
-/* Job Log completed rows (Complete stage / install-complete) recede: dim text and
-   embedded editors. `tr.jl-done td` (0,1,2) out-specifies Tailwind text utilities
-   (0,1,0), so per-cell text colors dim without touching every cell class; elements
-   with inline styles (e.g. the Stage pill) keep their own colors. */
+/* Job Log completed rows: print uses black text on gray-400 (#9ca3af). Primary
+   ink stays readable on that slab; muted --text-2 fails contrast there.
+   Inline-styled Stage cells keep their own group colors. */
 tr.jl-done td,
 tr.jl-done td input,
 tr.jl-done td textarea {
-  color: rgb(75 85 99); /* gray-600 — receded but clearly legible */
+  color: var(--text);
 }
+/* Description links on grayed rows: opacity washed the brand blue on
+   #9ca3af — use a deeper navy so links stay readable and clearly blue. */
 tr.jl-done td a,
-tr.jl-done td .text-blue-600 {
-  color: rgb(78 116 176); /* muted link blue */
+tr.jl-done td .text-brand {
+  opacity: 1;
+  color: #1e3a8a; /* blue-900 — darker than --accent (#2f5fd0) */
 }
-.dark tr.jl-done td,
-.dark tr.jl-done td input,
-.dark tr.jl-done td textarea {
-  color: rgb(148 163 184); /* slate-400 — receded but clearly legible */
+tr.jl-done td a:hover,
+tr.jl-done td .text-brand:hover {
+  color: #172554; /* blue-950 */
 }
 .dark tr.jl-done td a,
-.dark tr.jl-done td .text-blue-600 {
-  color: rgb(110 145 200);
+.dark tr.jl-done td .text-brand {
+  color: #93c5fd; /* blue-300 — readable on dark gray done band */
 }
-/* The white editor boxes glow against the muted slab — soften them on done rows. */
+.dark tr.jl-done td a:hover,
+.dark tr.jl-done td .text-brand:hover {
+  color: #bfdbfe;
+}
+/* Editors are transparent at rest everywhere now (see `quietInput` in
+   JobsTableRow), so done rows need no special treatment — the old translucent
+   white fill here predates that and would draw a visible box on the grey band,
+   which is exactly what the redesign removes. */
 tr.jl-done td input,
 tr.jl-done td textarea {
-  background-color: rgb(255 255 255 / 0.7);
-}
-.dark tr.jl-done td input,
-.dark tr.jl-done td textarea {
-  background-color: rgb(51 65 85 / 0.55); /* slate-700 @ 55% */
+  background-color: transparent;
 }
 
 /* Board slide-over animation */

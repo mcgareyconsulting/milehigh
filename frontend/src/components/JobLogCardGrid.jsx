@@ -4,10 +4,10 @@
  * purpose: Responsive card grid for Job Log and Archive — renders JobLogCard tiles, the secondary-search amber banner, and an empty state.
  * exports:
  *   default JobLogCardGrid: Props — jobs, secondaryResults (optional), search, jumpToTarget, stageToGroup, stageGroupColors, stageGroupDupColors, duplicateFabOrders, isHighlightedRow, hasJobsData, onUpdate (refetch after a card edit), layout ('grid' | 'column'), isAdmin, isDrafter (drawing-hub markup access on cards).
- * imports_from: [react, ./JobLogCard, ./JobDetailsModal]
+ * imports_from: [react, ./JobLogCard, ./ReleaseHubModal]
  * imported_by: [frontend/src/pages/JobLogContent.jsx, frontend/src/pages/Archive.jsx]
  * invariants:
- *   - Tap on a card opens JobDetailsModal locally (no parent state required).
+ *   - Tap on a card opens ReleaseHubModal locally (no parent state required); the release number opens the same modal on its Drawings tab.
  *   - layout='grid' (Archive): 1 col on phone, 2 col on iPad, 3 col on 27", 4 col on 3xl.
  *   - layout='column' (Job Log Cards view): ONE centered column — deliberate Kanban-feed look
  *     with no left/right position ambiguity (top-to-bottom = the sorted list order), cards
@@ -16,7 +16,8 @@
  */
 import React, { useState } from 'react';
 import JobLogCard from './JobLogCard';
-import { JobDetailsModal } from './JobDetailsModal';
+import { ReleaseHubModal } from './ReleaseHubModal';
+import { PdfMarkupModal } from './PdfMarkupModal';
 import { AsapDividerLabel, ASAP_DIVIDER_BOX_CLASS } from './AsapPropagationTag';
 
 export default function JobLogCardGrid({
@@ -35,6 +36,14 @@ export default function JobLogCardGrid({
     isDrafter = false,
 }) {
     const [selectedJob, setSelectedJob] = useState(null);
+    const [hubTab, setHubTab] = useState('details');
+    // Markup opens over the hub: the hub closes first, so only one dialog is live.
+    const [markup, setMarkup] = useState(null); // { releaseId, versionId, mode }
+
+    const openHub = (job, tab = 'details') => {
+        setHubTab(tab);
+        setSelectedJob(job);
+    };
 
     const showSecondary = jobs.length === 0 && hasJobsData && search.trim() !== '' && secondaryResults.length > 0;
     const isEmpty = jobs.length === 0 && !showSecondary;
@@ -73,7 +82,8 @@ export default function JobLogCardGrid({
                         <JobLogCard
                             key={row.id}
                             job={row}
-                            onOpen={setSelectedJob}
+                            onOpen={(job) => openHub(job, 'details')}
+                            onOpenDrawings={(job) => openHub(job, 'drawings')}
                             onUpdate={onUpdate}
                             stageToGroup={stageToGroup}
                             stageGroupColors={stageGroupColors}
@@ -90,10 +100,29 @@ export default function JobLogCardGrid({
                 </div>
             )}
 
-            <JobDetailsModal
+            <ReleaseHubModal
                 isOpen={selectedJob != null}
                 onClose={() => setSelectedJob(null)}
                 job={selectedJob}
+                releaseId={selectedJob?.id}
+                viewerUrl={selectedJob?.viewer_url}
+                initialTab={hubTab}
+                onOrdersChanged={onUpdate}
+                onOpenVersion={(vid, mode) => {
+                    setMarkup({
+                        releaseId: selectedJob?.id,
+                        versionId: vid,
+                        mode: (isAdmin || isDrafter) ? mode : 'view',
+                    });
+                    setSelectedJob(null);
+                }}
+            />
+            <PdfMarkupModal
+                isOpen={markup != null}
+                releaseId={markup?.releaseId}
+                versionId={markup?.versionId}
+                mode={markup?.mode || 'view'}
+                onClose={() => setMarkup(null)}
             />
         </div>
     );

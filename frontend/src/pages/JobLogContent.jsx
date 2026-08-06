@@ -79,6 +79,23 @@ function JobLogContent() {
     // lowest-frequency columns (BY, Released) and re-normalize the remaining widths to
     // 100% (fixed-layout table). Desktop keeps every column; CSV/PDF export are
     // unaffected (they read the full columnHeaders from ReleasesLayout).
+    // Zebra band index per row, counting only rows that aren't install-complete.
+    // Computed here rather than in the row because a row can't know how many
+    // grey rows preceded it. Mirrors JobsTableRow's own `isGrayed` test.
+    const bandIndexById = useMemo(() => {
+        const map = new Map();
+        let band = 0;
+        for (const row of renderRows) {
+            if (row._asapDivider) continue;
+            const stage = (row['Stage'] || '').toString().trim().toLowerCase();
+            const done = stage === 'complete'
+                || (row['Job Comp'] || '').toString().trim().toUpperCase() === 'X';
+            map.set(row.id, done ? -1 : band);
+            if (!done) band += 1;
+        }
+        return map;
+    }, [renderRows]);
+
     const { tableColumns, tableWidthPercents } = useMemo(() => {
         if (isDesktop) return { tableColumns: columnHeaders, tableWidthPercents: columnWidthPercents };
         const NARROW_HIDDEN = new Set(['BY', 'Released']);
@@ -147,14 +164,14 @@ function JobLogContent() {
             )}
 
             {!loading && !fetchError && effectiveView === 'table' && (
-                // Outer frame uses the same translucent ink as the grid dividers so the
-                // table edge reads as part of the lattice, not a separate lighter band.
-                <div className="bg-white dark:bg-slate-800 border border-black/[0.18] dark:border-white/[0.12] rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
+                // Lattice CSS: tokens.css .job-log-table-frame / .job-log-table
+                // (separate borders — collapse caused the left-edge hairline gap).
+                <div className="job-log-table-frame flex-1 min-h-0 flex flex-col">
                     <div
                         ref={tableScrollRef}
                         className="job-log-table-scroll overflow-auto flex-1"
                     >
-                        <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
+                        <table className="job-log-table">
                             <thead className="sticky top-0 z-10">
                                 <tr>
                                     {tableColumns.map((column) => {
@@ -164,25 +181,10 @@ function JobLogContent() {
                                         const isFilterable = FILTERABLE_COLUMNS.has(column);
                                         const colInfo = isFilterable ? uniqueValuesByColumn[column] : null;
                                         const colSelected = columnFilters[column] ?? [];
-                                        // Last visible column (no trailing gear column) gets no vertical divider,
-                                        // just the thin bottom rule shared by every header cell. Both dividers use
-                                        // box-shadow, not a real border, so the vertical one lines up pixel-for-pixel
-                                        // with the body cells' own box-shadow dividers (a real border under
-                                        // border-collapse is centered on the shared boundary and drifts a sub-pixel
-                                        // from a non-collapsed element) — and box-shadow is also immune to Safari's
-                                        // bug where collapsed borders on sticky <th> cells fail to paint.
-                                        const isLastHeaderColumn = tableColumns[tableColumns.length - 1] === column && !showAdminActions;
-                                        // Same translucent ink as the body cells (JobsTableRow — keep in sync):
-                                        // black 18% / white 12%. The bottom rule is the one place the ink doubles
-                                        // (~2× alpha) so the header reads as an anchored band without introducing
-                                        // a second line style.
-                                        const headerDividerShadow = isLastHeaderColumn
-                                            ? 'shadow-[inset_0_-1px_0_0_#0000005c] dark:shadow-[inset_0_-1px_0_0_#ffffff3d]'
-                                            : 'shadow-[inset_-1px_0_0_0_#0000002e,inset_0_-1px_0_0_#0000005c] dark:shadow-[inset_-1px_0_0_0_#ffffff1f,inset_0_-1px_0_0_#ffffff3d]';
                                         return (
                                             <th
                                                 key={column}
-                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-[13px]' : 'py-0.5 text-[11px]'} align-middle text-center font-bold tracking-wide text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-900 ${headerDividerShadow}`}
+                                                className={`${isReleaseNumber ? 'px-0.5' : 'px-1'} ${isOldMan ? 'py-2 text-[13px]' : 'py-1.5 text-jl-head'} align-middle text-center font-bold text-ink bg-head-bg leading-tight`}
                                                 style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                             >
                                                 {isFilterable ? (
@@ -202,19 +204,23 @@ function JobLogContent() {
                                                         {displayHeader}
                                                     </ColumnHeaderFilter>
                                                 ) : (
-                                                    displayHeader
+                                                    <span className="block w-full text-center leading-tight">{displayHeader}</span>
                                                 )}
                                             </th>
                                         );
                                     })}
                                     {showAdminActions && (
-                                        <th className="px-1 py-0.5 text-center text-xl font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider bg-gray-100 dark:bg-slate-900 w-8 shadow-[inset_0_-1px_0_0_#0000005c] dark:shadow-[inset_0_-1px_0_0_#ffffff3d]">
+                                        <th className="px-1 py-0.5 text-center text-xl font-bold text-ink uppercase tracking-wider bg-head-bg w-8">
                                             ⚙
                                         </th>
                                     )}
                                 </tr>
                             </thead>
                             <tbody>
+                                {/* Zebra counts only rows that aren't install-complete
+                                    (handoff §3 banding rule): a grey row must not consume
+                                    an alternation step, or the bands either side of it
+                                    come out the same shade. */}
                                 {renderRows.length === 0 ? (
                                     hasJobsData && search.trim() !== '' && secondarySearchResults.length > 0 ? (
                                         <>
@@ -289,6 +295,7 @@ function JobLogContent() {
                                             formatCellValue={formatCellValue}
                                             formatDate={formatDateShort}
                                             rowIndex={index}
+                                            bandIndex={bandIndexById.get(row.id) ?? index}
                                             onDragStart={handleDragStart}
                                             onDragOver={handleDragOver}
                                             onDragLeave={handleDragLeave}

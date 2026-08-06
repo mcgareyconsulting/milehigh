@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; background: #eef1f6; font-family: "IBM Plex Sans", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  a { color: #2f5fd0; text-decoration: none; }
+  a:hover { color: #1b3f9b; text-decoration: underline; }
+  [data-theme="light"] {
+    --bg:#eef1f6; --surface:#ffffff; --surface-2:#f7f9fc; --head-bg:#e9edf4;
+    --border:#dde3ec; --border-strong:#c3ccd9;
+    --text:#182231; --text-2:#5d6b7f; --text-3:#93a0b1;
+    --rail-bg:#16203a; --rail-fg:#8e9db9; --rail-fg-active:#ffffff; --rail-active:#2f5fd0; --rail-hover:rgba(255,255,255,.08); --rail-border:#22304f;
+    --accent:#2f5fd0; --accent-soft:#e7eefc; --accent-ink:#ffffff;
+    --band-b:#dcebfc; --band-done:#dde2ea; --grid:#b6bfcd; --row-hover:rgba(30,90,200,.07);
+    --st-green-fg:#0f6b46; --st-green-bg:#e6f5ec;
+    --st-blue-fg:#1a4fbd; --st-blue-bg:#e8effc;
+    --st-purple-fg:#5b3bbd; --st-purple-bg:#f0ebfc;
+    --fl-red-fg:#9e2b25; --fl-red-bg:#f6d3d0;
+    --fl-green-fg:#0c5f3e; --fl-green-bg:#c6ead2;
+    --fl-amber-fg:#8a5208; --fl-amber-bg:#f7e3ba;
+    --shadow:0 24px 60px rgba(15,26,48,.22);
+    --input-bg:#ffffff;
+  }
+  [data-theme="dark"] {
+    --bg:#0d131f; --surface:#141b29; --surface-2:#192130; --head-bg:#1b2434;
+    --border:#27324a; --border-strong:#3a4761;
+    --text:#e5ebf5; --text-2:#93a1b8; --text-3:#6c7b93;
+    --rail-bg:#080d17; --rail-fg:#7b8ba7; --rail-fg-active:#ffffff; --rail-active:#3a6ae0; --rail-hover:rgba(255,255,255,.07); --rail-border:#172034;
+    --accent:#5b8cff; --accent-soft:#1c2b4d; --accent-ink:#0b1220;
+    --band-b:#1a2740; --band-done:#1b212d; --grid:#3a4763; --row-hover:rgba(255,255,255,.05);
+    --st-green-fg:#5cd0a0; --st-green-bg:#122c22;
+    --st-blue-fg:#7fa8ff; --st-blue-bg:#16233d;
+    --st-purple-fg:#b39cf7; --st-purple-bg:#221c3b;
+    --fl-red-fg:#ff9d94; --fl-red-bg:#46201d;
+    --fl-green-fg:#6fdcab; --fl-green-bg:#16402a;
+    --fl-amber-fg:#f4bd6b; --fl-amber-bg:#443015;
+    --shadow:0 24px 60px rgba(0,0,0,.55);
+    --input-bg:#101725;
+  }
+  @keyframes dcFade { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes dcPop { from { opacity: 0; transform: translateY(10px) scale(.985) } to { opacity: 1; transform: none } }
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="height: 100vh; min-height: 900px; display: flex; background: var(--bg); color: var(--text); font-size: 13px; overflow: hidden;">
+
+  <nav style="width: {{ railW }}; transition: width .18s ease; flex: none; background: var(--rail-bg); border-right: 1px solid var(--rail-border); display: flex; flex-direction: column; padding: 10px 9px 8px; position: relative; z-index: 20; overflow: hidden;">
+    <button type="button" onClick="{{ openPatchNotes }}" onMouseEnter="{{ onLogoEnter }}" onMouseLeave="{{ onNavLeave }}" style="display: flex; align-items: center; gap: 9px; width: 100%; border: 0; background: transparent; cursor: pointer; padding: 0; border-radius: 9px; text-align: left;" style-hover="background: var(--rail-hover);">
+      <div style="width: 38px; height: 38px; flex: none; border-radius: 9px; background: linear-gradient(180deg,#3a6ae0,#22409a); display: grid; place-items: center;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="#f7d154"><path d="M7.2 3.1c-.9-.2-1.7.7-1.4 1.6 1.7 5.8 5.8 9.9 12 10.9.9.1 1.4 1.3.7 2-2 1.9-5 2.9-8.1 2.3C5.3 18.9 2.4 14.2 3.3 9.2c.5-2.6 1.9-4.7 3.9-6.1z"></path><path d="M7.6 2.6L9 1.4l1 1.2-1.5 1.3z"></path></svg>
+      </div>
+      <sc-if value="{{ railOpen }}" hint-placeholder-val="{{ false }}">
+        <span style="min-width: 0;">
+          <span style="display: block; color: #fff; font-weight: 700; font-size: 13px; letter-spacing: -.2px; white-space: nowrap;">MHMW Brain</span>
+          <span style="display: block; color: var(--rail-fg); font-size: 10.5px; font-family: 'IBM Plex Mono', monospace; white-space: nowrap;">v2.0.322 · patch notes</span>
+        </span>
+      </sc-if>
+    </button>
+    <div style="width: 100%; height: 1px; background: var(--rail-border); margin: 10px 0 8px; flex: none;"></div>
+
+    <div style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-height: 0; overflow: hidden;">
+      <sc-for list="{{ navItems }}" as="it" hint-placeholder-count="15">
+        <button type="button" onClick="{{ it.onClick }}" onMouseEnter="{{ it.onEnter }}" onMouseLeave="{{ it.onLeave }}" style="width: 100%; height: 37px; flex: none; border: 0; border-radius: 8px; display: flex; align-items: center; justify-content: {{ navJustify }}; gap: 10px; padding: {{ navPad }}; cursor: pointer; position: relative; background: {{ it.bg }}; color: {{ it.fg }};" style-hover="background: var(--rail-hover); color: #fff;">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex: none;"><path d="{{ it.d }}"></path></svg>
+          <sc-if value="{{ railOpen }}" hint-placeholder-val="{{ false }}">
+            <span style="font-size: 12.5px; font-weight: 600; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis;">{{ it.label }}</span>
+          </sc-if>
+          <sc-if value="{{ it.badgeInline }}" hint-placeholder-val="{{ false }}">
+            <span style="margin-left: auto; min-width: 16px; height: 16px; padding: 0 5px; border-radius: 8px; background: #e0483c; color: #fff; font-size: 10px; font-weight: 700; display: grid; place-items: center;">{{ it.badge }}</span>
+          </sc-if>
+          <sc-if value="{{ it.badgeAbs }}" hint-placeholder-val="{{ false }}">
+            <span style="position: absolute; top: 3px; right: 3px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; background: #e0483c; color: #fff; font-size: 9.5px; font-weight: 700; display: grid; place-items: center; border: 2px solid var(--rail-bg);">{{ it.badge }}</span>
+          </sc-if>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="width: 100%; height: 1px; background: var(--rail-border); margin: 8px 0; flex: none;"></div>
+    <div style="display: flex; flex-direction: column; gap: 1px; flex: none;">
+      <button type="button" onClick="{{ toggleRail }}" style="width: 100%; height: 36px; border: 0; border-radius: 8px; background: transparent; color: var(--rail-fg); display: flex; align-items: center; justify-content: {{ navJustify }}; gap: 10px; padding: {{ navPad }}; cursor: pointer;" style-hover="background: var(--rail-hover); color: #fff;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex: none;"><path d="{{ railIcon }}"></path></svg>
+        <sc-if value="{{ railOpen }}" hint-placeholder-val="{{ false }}"><span style="font-size: 12.5px; font-weight: 600; white-space: nowrap;">Collapse</span></sc-if>
+      </button>
+      <button type="button" onClick="{{ toggleTheme }}" onMouseEnter="{{ onThemeEnter }}" onMouseLeave="{{ onNavLeave }}" style="width: 100%; height: 36px; border: 0; border-radius: 8px; background: transparent; color: var(--rail-fg); display: flex; align-items: center; justify-content: {{ navJustify }}; gap: 10px; padding: {{ navPad }}; cursor: pointer;" style-hover="background: var(--rail-hover); color: #fff;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex: none;"><path d="{{ themeIcon }}"></path></svg>
+        <sc-if value="{{ railOpen }}" hint-placeholder-val="{{ false }}"><span style="font-size: 12.5px; font-weight: 600; white-space: nowrap;">{{ themeLabel }}</span></sc-if>
+      </button>
+      <button type="button" onMouseEnter="{{ onLogoutEnter }}" onMouseLeave="{{ onNavLeave }}" style="width: 100%; height: 36px; border: 0; border-radius: 8px; background: transparent; color: var(--rail-fg); display: flex; align-items: center; justify-content: {{ navJustify }}; gap: 10px; padding: {{ navPad }}; cursor: pointer;" style-hover="background: var(--rail-hover); color: #ff9b91;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex: none;"><path d="M15 4h4v16h-4 M11 8l-4 4 4 4 M7 12h9"></path></svg>
+        <sc-if value="{{ railOpen }}" hint-placeholder-val="{{ false }}"><span style="font-size: 12.5px; font-weight: 600; white-space: nowrap;">Logout</span></sc-if>
+      </button>
+    </div>
+
+    <sc-if value="{{ tipLabel }}" hint-placeholder-val="{{ false }}">
+      <div style="position: fixed; left: 66px; top: {{ tipTop }}; transform: translateY(-50%); background: #0b1220; color: #fff; border: 1px solid #2a3550; border-radius: 7px; padding: 6px 10px; font-size: 12px; font-weight: 500; white-space: nowrap; pointer-events: none; box-shadow: 0 8px 22px rgba(0,0,0,.35); animation: dcFade .12s ease both; z-index: 40;">{{ tipLabel }}</div>
+    </sc-if>
+  </nav>
+
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden;">
+
+    <header style="flex: none; height: 52px; display: flex; align-items: center; gap: 14px; padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--border);">
+      <div style="display: flex; align-items: baseline; gap: 9px;">
+        <span style="font-size: 16px; font-weight: 700; letter-spacing: -.35px;">Job Log</span>
+        <span style="font-size: 11px; color: var(--text-3); font-family: 'IBM Plex Mono', monospace;">MHMW Brain · v2.0.322</span>
+      </div>
+      <div style="width: 1px; height: 22px; background: var(--border);"></div>
+      <div style="position: relative; width: 300px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="position: absolute; left: 9px; top: 8px; color: var(--text-3);"><path d="M11 11m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0 M20 20l-3.6-3.6"></path></svg>
+        <input value="{{ query }}" onChange="{{ onQuery }}" placeholder="Search job #, release, name, description…" style="width: 100%; height: 31px; border: 1px solid var(--border-strong); background: var(--input-bg); color: var(--text); border-radius: 7px; padding: 0 10px 0 29px; font-family: inherit; font-size: 12.5px; outline: none;" style-focus="border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);" />
+      </div>
+      <div style="flex: 1;"></div>
+      <div style="display: flex; align-items: center; gap: 16px; font-size: 12px; color: var(--text-2);">
+        <span>Total <strong style="color: var(--text); font-family: 'IBM Plex Mono', monospace;">{{ totalRecords }}</strong></span>
+        <span>Fab HRS <strong style="color: var(--text); font-family: 'IBM Plex Mono', monospace;">463.34</strong></span>
+        <span>Install HRS <strong style="color: var(--text); font-family: 'IBM Plex Mono', monospace;">5,579.72</strong></span>
+        <span style="color: var(--text-3);">Updated 10:40 AM</span>
+      </div>
+      <div style="width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-size: 11.5px; font-weight: 700;">CM</div>
+    </header>
+
+    <div style="flex: none; padding: 9px 16px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+      <div style="display: flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 2px; gap: 2px;">
+        <sc-for list="{{ viewModes }}" as="v" hint-placeholder-count="3">
+          <button type="button" onClick="{{ v.onClick }}" style="border: 0; border-radius: 6px; height: 26px; padding: 0 11px; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; background: {{ v.bg }}; color: {{ v.fg }};">{{ v.label }}</button>
+        </sc-for>
+      </div>
+      <button type="button" style="height: 30px; padding: 0 13px; border: 0; border-radius: 7px; background: var(--accent); color: var(--accent-ink); font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;" style-hover="filter: brightness(1.08);">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14 M5 12h14"></path></svg>New Release</button>
+      <button type="button" style="height: 30px; padding: 0 13px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--text); font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;" style-hover="background: var(--surface-2);">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14 M5 12h14"></path></svg>Verbal</button>
+      <div style="width: 1px; height: 22px; background: var(--border); margin: 0 3px;"></div>
+      <button type="button" style="height: 30px; padding: 0 11px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--text-2); font-family: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer;" style-hover="background: var(--surface-2); color: var(--text);">Actions ▾</button>
+      <button type="button" style="height: 30px; padding: 0 11px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--text-2); font-family: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer;" style-hover="background: var(--surface-2); color: var(--text);">Projects ▾</button>
+      <div style="width: 1px; height: 22px; background: var(--border); margin: 0 3px;"></div>
+      <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+        <sc-for list="{{ chips }}" as="c" hint-placeholder-count="7">
+          <button type="button" onClick="{{ c.onClick }}" style="height: 28px; padding: 0 11px; border-radius: 14px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid {{ c.bd }}; background: {{ c.bg }}; color: {{ c.fg }};">{{ c.label }}</button>
+        </sc-for>
+      </div>
+      <div style="flex: 1;"></div>
+      <sc-if value="{{ filtersActive }}" hint-placeholder-val="{{ false }}">
+        <button type="button" onClick="{{ resetFilters }}" style="height: 28px; padding: 0 10px; border: 0; background: transparent; color: var(--accent); font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;">Reset filters</button>
+      </sc-if>
+      <div style="display: flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 2px; gap: 2px;">
+        <sc-for list="{{ layouts }}" as="v" hint-placeholder-count="2">
+          <button type="button" onClick="{{ v.onClick }}" style="border: 0; border-radius: 6px; height: 26px; padding: 0 11px; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; background: {{ v.bg }}; color: {{ v.fg }};">{{ v.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="flex: 1; min-height: 0; overflow: auto; background: var(--surface);">
+      <table style="border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: var(--fs); --fs: {{ fontSize }}; --rowh: {{ rowHeight }};">
+        <thead>
+          <tr>
+            <sc-for list="{{ columns }}" as="col" hint-placeholder-count="19">
+              <th style="position: sticky; top: 0; z-index: 5; background: var(--head-bg); color: var(--text); font-size: 12px; font-weight: 700; text-align: center; padding: 8px 6px; line-height: 1.15; border-bottom: 1.5px solid var(--grid); border-right: 1px solid var(--grid); border-top: 1px solid var(--grid); white-space: normal; width: {{ col.w }};">{{ col.label }}</th>
+            </sc-for>
+          </tr>
+        </thead>
+        <tbody>
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="14">
+            <tr onClick="{{ r.onOpen }}" style="cursor: pointer; background: {{ r.bg }}; box-shadow: {{ r.groupTop }};" style-hover="box-shadow: inset 0 0 0 9999px var(--row-hover);">
+              <td style="height: var(--rowh); padding: 3px 6px; text-align: center; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); font-family: 'IBM Plex Mono', monospace; font-weight: 600; color: var(--text-2);">{{ r.job }}</td>
+              <td style="height: var(--rowh); padding: 3px 6px; text-align: center; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); font-family: 'IBM Plex Mono', monospace; font-weight: 600;">{{ r.rel }}</td>
+              <td style="height: var(--rowh); padding: 3px 8px; text-align: center; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); line-height: 1.2; color: var(--text-2); font-size: 11.5px;">{{ r.name }}</td>
+              <td style="height: var(--rowh); padding: 3px 8px; text-align: center; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); line-height: 1.2; font-weight: 600; color: var(--text);">{{ r.desc }}</td>
+              <td style="height: var(--rowh); padding: 3px 6px; text-align: right; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); font-family: 'IBM Plex Mono', monospace;">{{ r.fab }}</td>
+              <td style="height: var(--rowh); padding: 3px 6px; text-align: right; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); font-family: 'IBM Plex Mono', monospace;">{{ r.inst }}</td>
+              <td style="height: var(--rowh); padding: 3px 8px; text-align: center; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); line-height: 1.2; color: var(--text-2); font-size: 11.5px;">{{ r.paint }}</td>
+              <td style="height: var(--rowh); padding: 3px 4px; text-align: center; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); color: var(--text-2); font-size: 11.5px;">{{ r.pm }}</td>
+              <td style="height: var(--rowh); padding: 3px 4px; text-align: center; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); color: var(--text-2); font-size: 11.5px;">{{ r.by }}</td>
+              <td style="height: var(--rowh); padding: 3px 6px; text-align: center; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); font-family: 'IBM Plex Mono', monospace; color: var(--text-2);">{{ r.released }}</td>
+              <td style="height: var(--rowh); padding: 3px 6px; text-align: center; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); font-family: 'IBM Plex Mono', monospace; color: var(--text-2);">{{ r.fabOrder }}</td>
+              <td style="height: var(--rowh); padding: 3px 6px; text-align: center; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid);">
+                <span style="display: inline-block; padding: 3px 8px; border-radius: 5px; font-size: 11.5px; font-weight: 600; line-height: 1.15; background: {{ r.stageBg }}; color: {{ r.stageFg }};">{{ r.stage }}</span>
+              </td>
+              <td style="height: var(--rowh); padding: 3px 6px; text-align: center; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); font-family: 'IBM Plex Mono', monospace; font-weight: {{ r.shipWeight }}; background: {{ r.shipBg }}; color: {{ r.shipFg }};">{{ r.ship }}</td>
+              <td style="height: var(--rowh); padding: 3px 6px; text-align: center; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); font-family: 'IBM Plex Mono', monospace; font-weight: {{ r.startWeight }}; background: {{ r.startBg }}; color: {{ r.startFg }}; line-height: 1.15;">
+                {{ r.start }}
+                <sc-if value="{{ r.startSub }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size: 10.5px; font-weight: 500; opacity: .78;">{{ r.startSub }}</div>
+                </sc-if>
+              </td>
+              <td style="height: var(--rowh); padding: 3px 6px; text-align: center; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); font-family: 'IBM Plex Mono', monospace; color: var(--text-2);">{{ r.eta }}</td>
+              <td style="height: var(--rowh); padding: 3px 6px; text-align: center; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); font-family: 'IBM Plex Mono', monospace; font-weight: 600; color: var(--text-2);">{{ r.prog }}</td>
+              <td style="height: var(--rowh); padding: 3px 6px; text-align: center; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); font-family: 'IBM Plex Mono', monospace; font-weight: 600; color: var(--text-2);">{{ r.inv }}</td>
+              <td style="height: var(--rowh); padding: 3px 6px; text-align: center; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); color: var(--text-3);">{{ r.mats }}</td>
+              <td style="height: var(--rowh); padding: 3px 8px; text-align: center; border-bottom: 1px solid var(--grid); line-height: 1.2; color: var(--text-2); font-size: 11.5px;">{{ r.notes }}</td>
+            </tr>
+          </sc-for>
+        </tbody>
+      </table>
+      <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 56px; text-align: center; color: var(--text-3); font-size: 13px;">No releases match “{{ query }}”.</div>
+      </sc-if>
+    </div>
+  </main>
+
+  <sc-if value="{{ patchOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closePatch }}" style="position: fixed; inset: 0; background: rgba(10,16,28,.55); backdrop-filter: blur(2px); display: grid; place-items: center; z-index: 110; animation: dcFade .14s ease both;">
+      <div onClick="{{ stop }}" style="width: min(520px, 92vw); max-height: 80vh; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 14px; box-shadow: var(--shadow); overflow: auto; animation: dcPop .18s cubic-bezier(.2,.8,.3,1) both;">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border); background: var(--surface-2); position: sticky; top: 0;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#d9a80f"><path d="M7.2 3.1c-.9-.2-1.7.7-1.4 1.6 1.7 5.8 5.8 9.9 12 10.9.9.1 1.4 1.3.7 2-2 1.9-5 2.9-8.1 2.3C5.3 18.9 2.4 14.2 3.3 9.2c.5-2.6 1.9-4.7 3.9-6.1z"></path></svg>
+          <span style="font-size: 15px; font-weight: 700;">Patch notes</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 5px;">v2.0.322</span>
+          <div style="flex: 1;"></div>
+          <button type="button" onClick="{{ closePatch }}" style="width: 26px; height: 26px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--text-2); cursor: pointer; display: grid; place-items: center;" style-hover="background: var(--fl-red-bg); color: var(--fl-red-fg);">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12 M18 6L6 18"></path></svg>
+          </button>
+        </div>
+        <div style="padding: 14px 18px 6px;">
+          <sc-for list="{{ patchNotes }}" as="p" hint-placeholder-count="3">
+            <div style="padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--border);">
+              <div style="display: flex; align-items: baseline; gap: 9px;">
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; font-weight: 600;">{{ p.version }}</span>
+                <span style="font-size: 11.5px; color: var(--text-3);">{{ p.date }}</span>
+              </div>
+              <div style="margin-top: 5px; font-size: 12.5px; line-height: 1.5; color: var(--text-2); text-wrap: pretty;">{{ p.text }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin: 0 18px 16px; padding: 10px 12px; border: 1px dashed var(--border-strong); border-radius: 8px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; line-height: 1.6; color: var(--text-3);">
+          TODO · logo asset: /assets/banana.svg<br />TODO · fetch entries: GET /api/v2/patch-notes<br />TODO · unread dot when latest version &gt; last-seen (localStorage)
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ sel }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position: fixed; inset: 0; background: rgba(10,16,28,.55); backdrop-filter: blur(2px); display: grid; place-items: center; z-index: 100; animation: dcFade .14s ease both;">
+      <div onClick="{{ stop }}" style="width: min(1180px, 94vw); height: min(760px, 92vh); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 14px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; animation: dcPop .18s cubic-bezier(.2,.8,.3,1) both;">
+
+        <div style="flex: none; padding: 14px 18px 0; border-bottom: 1px solid var(--border); background: var(--surface-2);">
+          <div style="display: flex; align-items: flex-start; gap: 14px;">
+            <div style="min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 3px 8px; border-radius: 5px;">{{ sel.id }}</span>
+                <span style="font-size: 17px; font-weight: 700; letter-spacing: -.3px;">{{ sel.desc }}</span>
+                <span style="display: inline-block; padding: 3px 9px; border-radius: 5px; font-size: 11.5px; font-weight: 600; background: {{ sel.stageBg }}; color: {{ sel.stageFg }};">{{ sel.stage }}</span>
+              </div>
+              <div style="margin-top: 3px; font-size: 12.5px; color: var(--text-2);">{{ sel.name }} · PM {{ sel.pm }} · Detailed by {{ sel.by }}</div>
+            </div>
+            <div style="flex: 1;"></div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <sc-for list="{{ links }}" as="l" hint-placeholder-count="3">
+                <a href="#" style="height: 28px; display: inline-flex; align-items: center; padding: 0 11px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--text-2); font-size: 12px; font-weight: 600;" style-hover="color: var(--text); background: var(--surface-2); text-decoration: none;">{{ l.label }}</a>
+              </sc-for>
+              <button type="button" onClick="{{ closeModal }}" style="width: 28px; height: 28px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--text-2); cursor: pointer; display: grid; place-items: center; margin-left: 4px;" style-hover="background: var(--fl-red-bg); color: var(--fl-red-fg); border-color: var(--fl-red-fg);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12 M18 6L6 18"></path></svg>
+              </button>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 18px; margin-top: 12px;">
+            <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+              <button type="button" onClick="{{ t.onClick }}" style="border: 0; background: transparent; padding: 8px 0 9px; font-family: inherit; font-size: 13px; cursor: pointer; font-weight: {{ t.weight }}; color: {{ t.fg }}; box-shadow: {{ t.underline }};">{{ t.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="flex: none; display: flex; align-items: center; gap: 7px; padding: 10px 18px; border-bottom: 1px solid var(--border);">
+          <span style="font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-3); margin-right: 3px;">Quick actions</span>
+          <sc-if value="{{ sel.canAdvance }}" hint-placeholder-val="{{ false }}">
+            <button type="button" onClick="{{ advanceStage }}" style="height: 29px; padding: 0 12px; border: 0; border-radius: 7px; background: var(--accent); color: var(--accent-ink); font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;" style-hover="filter: brightness(1.08);">
+              Advance to {{ sel.nextStage }}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h13 M13 7l5 5-5 5"></path></svg>
+            </button>
+          </sc-if>
+          <sc-if value="{{ sel.isFinal }}" hint-placeholder-val="{{ false }}">
+            <span style="height: 29px; padding: 0 12px; border-radius: 7px; background: var(--st-purple-bg); color: var(--st-purple-fg); font-size: 12.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4 10-11"></path></svg>Complete
+            </span>
+          </sc-if>
+          <sc-for list="{{ quickActions }}" as="q" hint-placeholder-count="4">
+            <button type="button" onClick="{{ q.onClick }}" style="height: 29px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--text-2); font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;" style-hover="background: var(--surface-2); color: var(--text);">{{ q.label }}</button>
+          </sc-for>
+          <div style="flex: 1;"></div>
+          <span style="font-size: 12px; color: var(--text-3);">Updated {{ sel.updated }} · {{ sel.updatedAgo }} · Source Brain</span>
+        </div>
+
+        <div style="flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 372px;">
+
+          <div style="overflow: auto; padding: 16px 18px 22px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px;">
+
+              <div>
+                <div style="font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); padding-bottom: 6px; border-bottom: 1px solid var(--border-strong);">Schedule</div>
+                <sc-for list="{{ scheduleFields }}" as="f" hint-placeholder-count="4">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 2px; border-bottom: 1px solid var(--border);">
+                    <span style="font-size: 12.5px; color: var(--text-2);">{{ f.label }}</span>
+                    <span style="display: flex; align-items: center; gap: 7px;">
+                      <sc-if value="{{ f.flag }}" hint-placeholder-val="{{ false }}">
+                        <span style="font-size: 10px; font-weight: 700; letter-spacing: .05em; padding: 2px 6px; border-radius: 4px; background: {{ f.flagBg }}; color: {{ f.flagFg }};">{{ f.flag }}</span>
+                      </sc-if>
+                      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600;">{{ f.value }}</span>
+                    </span>
+                  </div>
+                </sc-for>
+
+                <div style="font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); padding: 20px 0 6px; border-bottom: 1px solid var(--border-strong);">Assignment</div>
+                <sc-for list="{{ assignFields }}" as="f" hint-placeholder-count="6">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 2px; border-bottom: 1px solid var(--border);">
+                    <span style="font-size: 12.5px; color: var(--text-2);">{{ f.label }}</span>
+                    <span style="font-size: 13px; font-weight: 600;">{{ f.value }}</span>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div>
+                <div style="font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); padding-bottom: 6px; border-bottom: 1px solid var(--border-strong);">Production</div>
+                <sc-for list="{{ prodFields }}" as="f" hint-placeholder-count="6">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 2px; border-bottom: 1px solid var(--border);">
+                    <span style="font-size: 12.5px; color: var(--text-2);">{{ f.label }}</span>
+                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600;">{{ f.value }}</span>
+                  </div>
+                </sc-for>
+
+                <div style="font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); padding: 20px 0 6px; border-bottom: 1px solid var(--border-strong);">Materials ordered</div>
+                <sc-for list="{{ materials }}" as="m" hint-placeholder-count="3">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 2px; border-bottom: 1px solid var(--border);">
+                    <span style="font-size: 12.5px; color: var(--text-2);">{{ m.label }}</span>
+                    <span style="display: inline-block; padding: 2px 8px; border-radius: 5px; font-size: 11.5px; font-weight: 600; background: {{ m.bg }}; color: {{ m.fg }};">{{ m.status }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="margin-top: 22px;">
+              <div style="font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); padding-bottom: 6px; border-bottom: 1px solid var(--border-strong);">Stage progress</div>
+              <div style="display: flex; align-items: stretch; gap: 4px; margin-top: 12px;">
+                <sc-for list="{{ stageSteps }}" as="s" hint-placeholder-count="7">
+                  <div style="flex: 1; min-width: 0;">
+                    <div style="height: 5px; border-radius: 3px; background: {{ s.bar }};"></div>
+                    <div style="margin-top: 6px; font-size: 11px; font-weight: {{ s.weight }}; color: {{ s.fg }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ s.label }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+
+          <div style="border-left: 1px solid var(--border); background: var(--surface-2); display: flex; flex-direction: column; min-height: 0;">
+            <div style="flex: none; padding: 12px 16px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3);">Notes &amp; activity</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-3);">{{ noteCount }}</span>
+            </div>
+
+            <div style="flex: 1; min-height: 0; overflow: auto; padding: 12px 16px;">
+              <sc-for list="{{ thread }}" as="n" hint-placeholder-count="4">
+                <div style="margin-bottom: 14px; padding-left: {{ n.indent }};">
+                  <div style="display: flex; align-items: flex-start; gap: 9px;">
+                    <div style="width: 26px; height: 26px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 10.5px; font-weight: 700; background: {{ n.avatarBg }}; color: {{ n.avatarFg }};">{{ n.initials }}</div>
+                    <div style="min-width: 0; flex: 1;">
+                      <div style="display: flex; align-items: baseline; gap: 7px;">
+                        <span style="font-size: 12.5px; font-weight: 700;">{{ n.author }}</span>
+                        <span style="font-size: 11px; color: var(--text-3); font-family: 'IBM Plex Mono', monospace;">{{ n.time }}</span>
+                      </div>
+                      <div style="margin-top: 3px; font-size: 12.5px; line-height: 1.45; color: var(--text); text-wrap: pretty; padding: {{ n.pad }}; background: {{ n.bg }}; border-left: {{ n.accentBar }}; border-radius: 6px;">{{ n.text }}</div>
+                      <sc-if value="{{ n.isReplyTarget }}" hint-placeholder-val="{{ false }}">
+                        <button type="button" onClick="{{ n.onReply }}" style="margin-top: 4px; border: 0; background: transparent; padding: 0; font-family: inherit; font-size: 11.5px; font-weight: 600; color: var(--text-3); cursor: pointer;" style-hover="color: var(--accent);">Reply</button>
+                      </sc-if>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="flex: none; padding: 10px 14px 12px; border-top: 1px solid var(--border); background: var(--surface);">
+              <sc-if value="{{ replyingTo }}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 11.5px; color: var(--text-2);">
+                  Replying to <strong>{{ replyingTo }}</strong>
+                  <button type="button" onClick="{{ cancelReply }}" style="border: 0; background: transparent; color: var(--text-3); cursor: pointer; font-family: inherit; font-size: 11.5px;">cancel</button>
+                </div>
+              </sc-if>
+              <textarea value="{{ draft }}" onChange="{{ onDraft }}" placeholder="Add a note… @mention a teammate" style="width: 100%; height: 58px; resize: none; border: 1px solid var(--border-strong); background: var(--input-bg); color: var(--text); border-radius: 8px; padding: 8px 10px; font-family: inherit; font-size: 12.5px; line-height: 1.4; outline: none;" style-focus="border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);"></textarea>
+              <div style="display: flex; align-items: center; gap: 8px; margin-top: 7px;">
+                <span style="font-size: 11px; color: var(--text-3);">Posts to the release &amp; Brain feed</span>
+                <div style="flex: 1;"></div>
+                <button type="button" onClick="{{ postNote }}" style="height: 28px; padding: 0 14px; border: 0; border-radius: 7px; background: var(--accent); color: var(--accent-ink); font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; opacity: {{ postOpacity }};">Post note</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1720,&quot;height&quot;:1000},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;comfortable&quot;,&quot;compact&quot;],&quot;default&quot;:&quot;comfortable&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;groupBands&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Appearance&quot;}}">
+class Component extends DCLogic {
+  nav = [
+    { label: 'Search', d: 'M11 11m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0 M20 20l-3.6-3.6' },
+    { label: 'Map', d: 'M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z M9 3v15 M15 6v15' },
+    { label: 'Locations', d: 'M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z M12 10m-2.2 0a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0' },
+    { label: 'Projects', d: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' },
+    { label: 'Job Log', d: 'M3 5h18v14H3z M3 10h18 M9 5v14', active: true },
+    { label: 'Drafting WL', d: 'M4 20l4-1 10-10-3-3L5 16z M14 6l3 3' },
+    { label: 'Events', d: 'M4 6h16v14H4z M4 10h16 M8 3v4 M16 3v4' },
+    { label: 'To-Dos', d: 'M4 5h16v14H4z M8 12l3 3 5-6' },
+    { label: 'Install Schedule', d: 'M3 7h11v8H3z M14 10h4l3 3v2h-7z M7 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0 M17 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0' },
+    { label: 'Invoicing', d: 'M6 3h12v18l-3-2-3 2-3-2-3 2z M9 8h6 M9 12h6' },
+    { label: 'Subs', d: 'M9 11m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M3 20c0-3.3 2.7-5 6-5s6 1.7 6 5 M17 7.6a3.4 3.4 0 0 1 0 6.8 M18 20c0-2.4-.9-3.9-2.4-4.6' },
+    { label: 'Meetings', d: 'M3 7h11v10H3z M14 11l6-3v8l-6-3z' },
+    { label: 'Bug Reports', d: 'M9 6a3 3 0 0 1 6 0 M6 10h12v4a6 6 0 0 1-12 0z M3 11h3 M18 11h3 M4 6l2.5 2 M20 6l-2.5 2 M4 18l2.5-2 M20 18l-2.5-2' },
+    { label: 'T&M', d: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M12 7v5l3 2' },
+    { label: 'Matching', d: 'M4 7h4l8 10h4 M4 17h4l8-10h4 M18 4l3 3-3 3 M18 14l3 3-3 3' },
+    { label: 'Notifications', d: 'M6 9a6 6 0 1 1 12 0v5l2 3H4l2-3z M10 20a2 2 0 0 0 4 0', badge: 6 }
+  ];
+
+  cols = [
+    ['Job', '46px'], ['Rel', '54px'], ['Job Name', '150px'], ['Description', '186px'],
+    ['Fab Hrs', '62px'], ['Install Hrs', '62px'], ['Paint Color', '94px'], ['PM', '40px'], ['By', '44px'],
+    ['Released', '76px'], ['Fab Order', '58px'], ['Stage', '112px'], ['Ship Date', '82px'],
+    ['Start Install', '92px'], ['Comp ETA', '80px'], ['Install Prog', '68px'], ['Invoiced', '68px'],
+    ['Mats', '48px'], ['Notes', '200px']
+  ];
+
+  ladder = ['Released', 'Fitup Start', 'Weld Start', 'Welded QC', 'Paint Start', 'Paint Complete', 'Ship Planning', 'Ship Complete', 'Install Start', 'Install Complete'];
+
+  data = [
+    { job: 320, rel: '953', name: 'Thompson Thrift - Landing at Lemay', desc: 'Sunshade Posts', fab: '6.00', inst: '8.00', paint: 'Powder Coated', pm: 'DR', by: 'RJA', released: '07/23/26', fabOrder: '2', stage: 'Ship Planning', ship: '08/06/26', start: '08/07/26', startFlag: 'green', eta: '08/07/26', prog: '—', inv: '—', mats: '—', notes: 'MHMW CO #7 — need executed (7/26)' },
+    { job: 320, rel: '956', name: 'Thompson Thrift - Landing at Lemay', desc: 'Additional Site Rail and Cane Detection', fab: '8.00', inst: '7.00', paint: 'Railing Black', pm: 'DR', by: 'DCR', released: '07/31/26', fabOrder: '11', stage: 'Fitup Start', ship: '—', start: '08/12/26', eta: '08/12/26', prog: '—', inv: '—', mats: '—', notes: 'Fab has pack' },
+    { job: 340, rel: '327', name: 'AMLI - Littleton Village II', desc: 'RFI 240 Missing Beam', fab: '1.30', inst: '0.80', paint: 'Red Oxide Prime', pm: 'DR', by: 'DTS', released: '02/04/26', fabOrder: '—', stage: 'Install Complete', ship: '—', start: '02/26/26', eta: '02/26/26', prog: 'X', inv: '—', mats: '—', notes: 'Need CO or no charge?' },
+    { job: 340, rel: '942', name: 'AMLI - Littleton Village II', desc: 'Stair Core C Top Remainder', fab: '12.98', inst: '11.60', paint: 'Red Oxide Primed', pm: 'DR', by: 'CBA', released: '07/10/26', fabOrder: '—', stage: 'Install Complete', ship: '—', start: '08/03/26', eta: '—', prog: 'X', inv: '—', mats: '—', notes: 'Fab has pack' },
+    { job: 340, rel: '147', name: 'AMLI - Littleton Village II', desc: 'Fitness Stair', fab: '13.90', inst: '15.30', paint: 'Red Oxide Primed', pm: 'DR', by: 'CBA', released: '12/02/26', fabOrder: '—', stage: 'Install Start', ship: '—', start: '01/20/26', eta: '01/20/26', prog: '90%', inv: 'MFP', mats: '—', notes: '—' },
+    { job: 340, rel: '157', name: 'AMLI - Littleton Village II', desc: 'Amenity Stair', fab: '20.30', inst: '30.20', paint: 'Red Oxide Primed', pm: 'DR', by: 'CBA', released: '12/02/26', fabOrder: '—', stage: 'Install Start', ship: '—', start: '01/20/26', eta: '—', prog: '50%', inv: 'MFP', mats: '—', notes: '—' },
+    { job: 340, rel: '607', name: 'AMLI - Littleton Village II', desc: 'Stair Core C Part 1', fab: '53.23', inst: '51.00', paint: 'Red Oxide Primed', pm: 'DR', by: 'CBA', released: '05/12/26', fabOrder: '2', stage: 'Install Start', ship: '—', start: '05/27/26', eta: '06/02/26', prog: '90%', inv: 'MFP', mats: '—', notes: '—' },
+    { job: 340, rel: '907', name: 'AMLI - Littleton Village II', desc: 'North Bld 1 Balcony Rails P1 of 2', fab: '89.26', inst: '53.17', paint: 'Ultralox Black', pm: 'DR', by: 'CBA', released: '06/25/26', fabOrder: '2', stage: 'Install Start', ship: '—', start: '07/13/26', eta: '—', prog: '90%', inv: 'MF', mats: '—', notes: 'Do not assemble' },
+    { job: 340, rel: '419', name: 'AMLI - Littleton Village II', desc: 'Garage Bollards', fab: '18.00', inst: '18.00', paint: 'Safety Yellow', pm: 'DR', by: 'DCR', released: '05/14/26', fabOrder: '1', stage: 'Ship Complete', ship: '—', start: '04/23/26', eta: '04/27/26', prog: 'O', inv: 'MFP', mats: '—', notes: 'Waiting on concrete' },
+    { job: 340, rel: '975', name: 'AMLI - Littleton Village II', desc: 'Bld 1 North Face Balcony Add. Parts', fab: '10.00', inst: '10.00', paint: 'Ultralox Black', pm: 'DR', by: 'CBA', released: '07/29/26', fabOrder: '2', stage: 'Ship Complete', ship: '08/05/26', start: '08/06/26', startFlag: 'green', eta: '08/06/26', prog: '—', inv: '—', mats: '—', notes: 'Fab has pack' },
+    { job: 340, rel: '641', name: 'AMLI - Littleton Village II', desc: 'South Knee Wall Balcony Rail w/ Dividers', fab: '9.07', inst: '39.38', paint: 'Ultralox Black', pm: 'DR', by: 'CBA', released: '06/03/26', fabOrder: '2', stage: 'Paint Complete', ship: '—', start: '07/13/26', eta: '07/15/26', prog: '—', inv: '—', mats: '—', notes: 'Did this ship?' },
+    { job: 340, rel: '667', name: 'AMLI - Littleton Village II', desc: 'Bld 1 West Face Ultralox Balcony Rails', fab: '8.10', inst: '32.38', paint: 'Ultralox Black', pm: 'DR', by: 'CBA', released: '08/03/26', fabOrder: '30', stage: 'Paint Start', ship: '08/07/26', start: 'ASAP', startFlag: 'red', eta: '08/13/26', prog: '—', inv: '—', mats: '—', notes: 'Build on site — fab has pack' },
+    { job: 340, rel: '666', name: 'AMLI - Littleton Village II', desc: 'Stair Core D', fab: '81.29', inst: '65.04', paint: 'Red Oxide Primed', pm: 'DR', by: 'CBA', released: '07/29/26', fabOrder: '6', stage: 'Weld Start', ship: '08/11/26', start: '08/12/26', startFlag: 'green', eta: '08/18/26', prog: '—', inv: '—', mats: '—', notes: 'Fab has pack' },
+    { job: 340, rel: '164', name: 'AMLI - Littleton Village II', desc: 'Superior Decks Steel Hung Balconies', fab: '27.00', inst: '108.00', paint: 'Black Sup Decks', pm: 'DR', by: 'DR', released: '11/26/26', fabOrder: '80.5', stage: 'Released', ship: '—', start: '08/17/26', eta: '08/25/26', prog: '—', inv: 'M', mats: '—', notes: 'On site — need to release rails' },
+    { job: 420, rel: '423', name: 'Thompson Thrift - The Stacks at Wheat Ridge', desc: 'Bld 1 Stair 1', fab: '60.70', inst: '57.70', paint: 'Red Oxide Primed', pm: 'DR', by: 'CBA', released: '03/09/26', fabOrder: '—', stage: 'Install Complete', ship: '—', start: '04/23/26', eta: '04/29/26', prog: 'X', inv: '90%', mats: '—', notes: 'All but WHR' },
+    { job: 420, rel: '466', name: 'Thompson Thrift - The Stacks at Wheat Ridge', desc: 'Bld 2 Stairs 1 & 2', fab: '121.50', inst: '115.00', paint: 'Red Oxide Primed', pm: 'DR', by: 'CBA', released: '03/23/26', fabOrder: '—', stage: 'Install Complete', ship: '—', start: '04/23/26', eta: '05/05/26', prog: 'X', inv: '90%', mats: '—', notes: 'All but WHR' },
+    { job: 420, rel: '597', name: 'Thompson Thrift - The Stacks at Wheat Ridge', desc: 'Bld 1 Ultralox Balcony Rails P1 of 3', fab: '163.99', inst: '30.18', paint: 'Ultralox Black', pm: 'DR', by: 'CBA', released: '05/11/26', fabOrder: '—', stage: 'Install Complete', ship: '—', start: '06/16/26', eta: '—', prog: 'X', inv: '90%', mats: '—', notes: 'Job site ready' },
+    { job: 420, rel: '626', name: 'Thompson Thrift - The Stacks at Wheat Ridge', desc: 'Bld 3 Stair 1', fab: '70.03', inst: '57.65', paint: 'Red Oxide Primed', pm: 'DR', by: 'CBA', released: '05/20/26', fabOrder: '2', stage: 'Install Start', ship: '—', start: '06/05/26', eta: '06/11/26', prog: '90%', inv: '90%', mats: '—', notes: 'All but WHR' },
+    { job: 420, rel: '627', name: 'Thompson Thrift - The Stacks at Wheat Ridge', desc: 'Bld 3 Stair 2', fab: '70.03', inst: '57.65', paint: 'Red Oxide Primed', pm: 'DR', by: 'CBA', released: '05/20/26', fabOrder: '2', stage: 'Install Start', ship: '—', start: '06/08/26', eta: '06/12/26', prog: '90%', inv: '90%', mats: '—', notes: 'All but WHR' },
+    { job: 450, rel: '761', name: 'Marrow - Sandstone Ranch', desc: 'Fitness Stair Spacer Plates', fab: '4.00', inst: '4.00', paint: 'Railing Black', pm: 'DR', by: 'DR', released: '06/25/26', fabOrder: '—', stage: 'Install Complete', ship: '07/01/26', start: '07/02/26', eta: '07/02/26', prog: 'X', inv: '—', mats: '—', notes: '—' },
+    { job: 450, rel: '313', name: 'Marrow - Sandstone Ranch', desc: 'Upper Canopies Bld C', fab: '18.00', inst: '36.00', paint: 'Charcoal Grey', pm: 'DR', by: 'DCR', released: '01/22/26', fabOrder: '1', stage: 'Install Start', ship: '—', start: '04/29/26', eta: '05/04/26', prog: '20%', inv: 'MFP', mats: '—', notes: 'Knife plates, stand offs are done' },
+    { job: 450, rel: '530', name: 'Marrow - Sandstone Ranch', desc: 'Roof Access Ladder Building B', fab: '3.00', inst: '3.00', paint: 'Powder Coat', pm: 'DR', by: 'DEP', released: '04/23/26', fabOrder: '1', stage: 'Ship Complete', ship: '—', start: '07/24/26', eta: '—', prog: '—', inv: 'MFP', mats: '—', notes: 'Need installed ASAP with ladder' },
+    { job: 450, rel: '318', name: 'Marrow - Sandstone Ranch', desc: 'Lower Canopies Bld D', fab: '9.00', inst: '18.00', paint: 'Charcoal Grey', pm: 'DR', by: 'DCR', released: '01/22/26', fabOrder: '2.5', stage: 'Paint Start', ship: '—', start: '05/20/26', eta: '05/22/26', prog: '—', inv: 'MFP', mats: '—', notes: '—' },
+    { job: 450, rel: '993', name: 'Marrow - Sandstone Ranch', desc: 'Bld D Balcony Rails', fab: '96.75', inst: '100.80', paint: 'Red Oxide Prime', pm: 'DR', by: 'CBA', released: '08/04/26', fabOrder: '17', stage: 'Released', ship: '—', start: '08/13/26', startFlag: 'amber', eta: '08/20/26', prog: '—', inv: '—', mats: '—', notes: 'Fab has pack' },
+    { job: 170, rel: '350', name: 'Garrett - Banyan High Point', desc: 'Bld 1 Westside Exterior Rail', fab: '6.60', inst: '6.40', paint: 'Railing Black', pm: 'RL', by: 'DCR', released: '02/05/26', fabOrder: '—', stage: 'Install Complete', ship: '—', start: 'ASAP', startFlag: 'red', eta: '04/29/26', prog: 'X', inv: 'O', mats: '—', notes: '—' },
+    { job: 170, rel: '412', name: 'Garrett - Banyan High Point', desc: 'Bld 2 Garage Rails', fab: '151.40', inst: '140.10', paint: 'Railing Black', pm: 'RL', by: 'DCR', released: '03/04/26', fabOrder: '10', stage: 'Paint Start', ship: '07/06/26', shipFlag: 'amber', start: '07/07/26', startSub: 'Oscar', startFlag: 'amber', eta: '07/17/26', prog: '—', inv: 'MF', mats: '—', notes: 'Rework required, new drawings swapped out.' },
+    { job: 170, rel: '425', name: 'Garrett - Banyan High Point', desc: 'Bld 2 North Ramp Rail', fab: '23.30', inst: '22.90', paint: 'Railing Black', pm: 'RL', by: 'DCR', released: '03/06/26', fabOrder: '11', stage: 'Welded QC', ship: '07/24/26', start: '07/27/26', eta: '—', prog: '—', inv: 'M', mats: '—', notes: '—' },
+    { job: 170, rel: '451', name: 'Garrett - Banyan High Point', desc: 'Trellis B', fab: '45.60', inst: '46.60', paint: 'Red Oxide Primed', pm: 'RL', by: 'FMW', released: '06/03/26', fabOrder: '2', stage: 'Welded QC', ship: '—', start: '04/23/26', eta: '04/28/26', prog: '—', inv: 'MFP', mats: '—', notes: 'Embeds on site' }
+  ];
+
+  chipDefs = ['Job Order', 'Ready to Ship', 'Paint', 'Paint+Fab', 'Fab', 'Katie', 'Review'];
+
+  state = {
+    theme: null, view: 'Table', layout: 'Table', query: '', chips: [],
+    selRel: null, tab: 'details', draft: '', replyTo: null, hover: null, railOpen: false, patchOpen: false,
+    stageOverride: {}, threads: {}
+  };
+
+  baseThread = [
+    { id: 1, initials: 'RL', author: 'Ryan L.', time: 'Aug 4 · 8:12 AM', text: 'Field confirmed the west landing is poured. We can release install as soon as paint clears QC.' },
+    { id: 2, initials: 'DCR', author: 'Dave C.', time: 'Aug 4 · 9:40 AM', text: 'Paint booth has it queued behind 412. Realistically Thursday.', reply: true },
+    { id: 3, initials: 'KB', author: 'Katie B.', time: 'Aug 5 · 2:05 PM', text: 'Invoiced through the fab line. Install hours still open on this release.' },
+    { id: 4, initials: 'CM', author: 'You', time: 'Today · 6:33 AM', text: 'Pulled into the review print for the 8/6 production meeting.' }
+  ];
+
+  theme() { return this.state.theme || this.props.theme || 'light'; }
+
+  railTip(e, label) {
+    if (this.state.railOpen) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    this.setState({ hover: { label, top: r.top + r.height / 2 } });
+  }
+
+  stageTone(stage) {
+    if (/Complete$/.test(stage) && /Install|Ship/.test(stage)) return 'purple';
+    if (/Paint|Welded|Store/.test(stage)) return 'green';
+    return 'blue';
+  }
+
+  flagStyle(flag) {
+    if (flag === 'red') return { bg: 'var(--fl-red-bg)', fg: 'var(--fl-red-fg)', w: '700' };
+    if (flag === 'green') return { bg: 'var(--fl-green-bg)', fg: 'var(--fl-green-fg)', w: '700' };
+    if (flag === 'amber') return { bg: 'var(--fl-amber-bg)', fg: 'var(--fl-amber-fg)', w: '700' };
+    return { bg: 'transparent', fg: 'var(--text-2)', w: '500' };
+  }
+
+  visible() {
+    const q = this.state.query.trim().toLowerCase();
+    if (!q) return this.data;
+    return this.data.filter(r => (r.job + ' ' + r.rel + ' ' + r.name + ' ' + r.desc + ' ' + r.notes).toLowerCase().includes(q));
+  }
+
+  stageOf(r) { return this.state.stageOverride[r.rel] || r.stage; }
+
+  threadOf(rel) { return this.state.threads[rel] || this.baseThread; }
+
+  renderVals() {
+    const s = this.state;
+    const compact = (this.props.density || 'comfortable') === 'compact';
+    const bands = this.props.groupBands !== false;
+
+    const open = s.railOpen;
+    const navItems = this.nav.map((n, i) => ({
+      ...n,
+      badge: n.badge || false,
+      badgeInline: open && n.badge ? true : false,
+      badgeAbs: !open && n.badge ? true : false,
+      bg: n.active ? 'var(--rail-active)' : 'transparent',
+      fg: n.active ? 'var(--rail-fg-active)' : 'var(--rail-fg)',
+      onEnter: e => { if (!this.state.railOpen) { const r = e.currentTarget.getBoundingClientRect(); this.setState({ hover: { label: n.label, top: r.top + r.height / 2 } }); } },
+      onLeave: () => this.setState({ hover: null }),
+      onClick: () => {}
+    }));
+
+    let zebra = 0;
+    const rows = this.visible().map(r => {
+      const stage = this.stageOf(r);
+      const done = stage === 'Install Complete';
+      if (!done) zebra ^= 1;
+      const tone = this.stageTone(stage);
+      const sf = this.flagStyle(r.shipFlag);
+      const stf = this.flagStyle(r.startFlag);
+      return {
+        ...r, stage,
+        bg: done && bands ? 'var(--band-done)' : (bands && zebra ? 'var(--band-b)' : 'var(--surface)'),
+        groupTop: 'none',
+        stageBg: 'var(--st-' + tone + '-bg)', stageFg: 'var(--st-' + tone + '-fg)',
+        shipBg: sf.bg, shipFg: sf.fg, shipWeight: sf.w,
+        startBg: stf.bg, startFg: stf.fg, startWeight: stf.w,
+        startSub: r.startSub || false,
+        onOpen: () => this.setState({ selRel: r.rel, tab: 'details', draft: '', replyTo: null })
+      };
+    });
+
+    const mk = (list, active, key) => list.map(label => ({
+      label,
+      bg: label === active ? 'var(--surface)' : 'transparent',
+      fg: label === active ? 'var(--text)' : 'var(--text-2)',
+      onClick: () => this.setState({ [key]: label })
+    }));
+
+    const chips = this.chipDefs.map(label => {
+      const on = s.chips.includes(label);
+      return {
+        label,
+        bg: on ? 'var(--accent-soft)' : 'transparent',
+        fg: on ? 'var(--accent)' : 'var(--text-2)',
+        bd: on ? 'var(--accent)' : 'var(--border-strong)',
+        onClick: () => this.setState({ chips: on ? s.chips.filter(c => c !== label) : s.chips.concat(label) })
+      };
+    });
+
+    const base = {
+      theme: this.theme(),
+      navItems,
+      tipLabel: s.hover ? s.hover.label : false,
+      tipTop: s.hover ? s.hover.top + 'px' : '0px',
+      themeIcon: this.theme() === 'dark'
+        ? 'M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M12 2v2 M12 20v2 M2 12h2 M20 12h2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M19.1 4.9l-1.4 1.4 M6.3 17.7l-1.4 1.4'
+        : 'M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z',
+      toggleTheme: () => this.setState({ theme: this.theme() === 'dark' ? 'light' : 'dark' }),
+      themeLabel: this.theme() === 'dark' ? 'Light mode' : 'Dark mode',
+      railOpen: open,
+      railW: open ? '212px' : '60px',
+      navJustify: open ? 'flex-start' : 'center',
+      navPad: open ? '0 10px' : '0',
+      railIcon: open ? 'M11 6l-6 6 6 6 M19 6l-6 6 6 6' : 'M5 6l6 6-6 6 M13 6l6 6-6 6',
+      toggleRail: () => this.setState({ railOpen: !this.state.railOpen, hover: null }),
+      openPatchNotes: () => this.setState({ patchOpen: true }),
+      closePatch: () => this.setState({ patchOpen: false }),
+      patchOpen: s.patchOpen,
+      patchNotes: [
+        { version: 'v2.0.322', date: 'Aug 6, 2026', text: 'Job Log restyled to match the review print: hairline grid, project banding, tinted stage & date flags. New collapsible left rail with patch notes.' },
+        { version: 'v2.0.321', date: 'Jul 30, 2026', text: 'Release detail modal: quick actions, stage ladder, threaded notes with timestamps.' },
+        { version: 'v2.0.320', date: 'Jul 22, 2026', text: 'Dark mode across Job Log, Install Schedule, and Invoicing.' }
+      ],
+      onLogoEnter: e => this.railTip(e, 'Patch notes'),
+      onThemeEnter: e => this.railTip(e, this.theme() === 'dark' ? 'Light mode' : 'Dark mode'),
+      onLogoutEnter: e => this.railTip(e, 'Logout'),
+      onNavLeave: () => this.setState({ hover: null }),
+      columns: this.cols.map(c => ({ label: c[0], w: c[1] })),
+      rows,
+      noResults: rows.length === 0,
+      query: s.query,
+      onQuery: e => this.setState({ query: e.target.value }),
+      totalRecords: s.query ? rows.length : 345,
+      viewModes: mk(['Table', 'Cards', 'Auto'], s.view, 'view'),
+      layouts: mk(['Table', 'Timeline'], s.layout, 'layout'),
+      chips,
+      filtersActive: s.chips.length > 0 || s.query.length > 0,
+      resetFilters: () => this.setState({ chips: [], query: '' }),
+      rowHeight: compact ? '28px' : '36px',
+      fontSize: compact ? '12px' : '12.5px',
+      sel: false
+    };
+
+    const rec = this.data.find(r => r.rel === s.selRel);
+    if (!rec) return base;
+
+    const stage = this.stageOf(rec);
+    const tone = this.stageTone(stage);
+    const idx = this.ladder.indexOf(stage);
+    const next = this.ladder[Math.min(idx + 1, this.ladder.length - 1)] || 'Complete';
+    const stf = this.flagStyle(rec.startFlag);
+    const thread = this.threadOf(rec.rel);
+
+    return {
+      ...base,
+      sel: {
+        id: rec.job + '-' + rec.rel, desc: rec.desc, name: rec.name, pm: rec.pm, by: rec.by,
+        stage, stageBg: 'var(--st-' + tone + '-bg)', stageFg: 'var(--st-' + tone + '-fg)',
+        nextStage: next, canAdvance: idx < this.ladder.length - 1, isFinal: idx >= this.ladder.length - 1,
+        updated: 'May 23, 2026 12:05 PM', updatedAgo: '74 days ago'
+      },
+      links: [{ label: 'Events' }, { label: 'Procore' }, { label: 'Trello' }],
+      tabs: ['Details', 'Drawings & Photos (4)', 'Change Log'].map((label, i) => {
+        const key = ['details', 'drawings', 'log'][i];
+        const on = s.tab === key;
+        return {
+          label, weight: on ? '700' : '500',
+          fg: on ? 'var(--text)' : 'var(--text-2)',
+          underline: on ? 'inset 0 -2px 0 0 var(--accent)' : 'none',
+          onClick: () => this.setState({ tab: key })
+        };
+      }),
+      quickActions: [
+        { label: 'Set ship date', onClick: () => {} },
+        { label: 'Add note', onClick: () => this.setState({ replyTo: null }) },
+        { label: 'Mark invoiced', onClick: () => {} },
+        { label: 'Duplicate release', onClick: () => {} }
+      ],
+      advanceStage: () => this.setState({ stageOverride: { ...s.stageOverride, [rec.rel]: next } }),
+      scheduleFields: [
+        { label: 'Released', value: rec.released, flag: false },
+        { label: 'Ship Date', value: rec.ship, flag: rec.shipFlag ? 'HARD' : false, flagBg: 'var(--fl-amber-bg)', flagFg: 'var(--fl-amber-fg)' },
+        { label: 'Start Install', value: rec.start, flag: rec.startFlag === 'red' ? 'ASAP' : false, flagBg: stf.bg, flagFg: stf.fg },
+        { label: 'Comp ETA', value: rec.eta, flag: false }
+      ],
+      prodFields: [
+        { label: 'Fab Order', value: rec.fabOrder },
+        { label: 'Fab Hrs', value: rec.fab },
+        { label: 'Install Hrs', value: rec.inst },
+        { label: 'Install Prog', value: rec.prog },
+        { label: 'Invoiced', value: rec.inv },
+        { label: 'Paint Color', value: rec.paint }
+      ],
+      assignFields: [
+        { label: 'Project Manager', value: rec.pm },
+        { label: 'Detailed by', value: rec.by },
+        { label: 'Installer', value: rec.startSub || 'Unassigned' },
+        { label: 'Crew size', value: '2' },
+        { label: 'Job', value: rec.job + ' · ' + rec.name },
+        { label: 'Stage group', value: stage.split(' ')[0].toUpperCase() }
+      ],
+      materials: [
+        { label: 'Tube steel 2×2', status: 'Received', bg: 'var(--st-green-bg)', fg: 'var(--st-green-fg)' },
+        { label: 'Ultralox panels', status: 'On order', bg: 'var(--st-blue-bg)', fg: 'var(--st-blue-fg)' },
+        { label: 'Anchors / embeds', status: 'Not ordered', bg: 'var(--fl-amber-bg)', fg: 'var(--fl-amber-fg)' }
+      ],
+      stageSteps: this.ladder.filter((_, i) => i % 1 === 0).slice(0, 10).map((label, i) => ({
+        label: label.replace(' Complete', ' ✓').replace(' Start', ''),
+        bar: i < idx ? 'var(--accent)' : i === idx ? 'var(--st-' + tone + '-fg)' : 'var(--border)',
+        fg: i <= idx ? 'var(--text)' : 'var(--text-3)',
+        weight: i === idx ? '700' : '500'
+      })),
+      noteCount: thread.length + ' entries',
+      thread: thread.map(n => ({
+        ...n,
+        indent: n.reply ? '34px' : '0px',
+        pad: n.reply ? '7px 10px' : '0px',
+        bg: n.reply ? 'var(--surface)' : 'transparent',
+        accentBar: n.reply ? '2px solid var(--border-strong)' : '0',
+        avatarBg: n.author === 'You' ? 'var(--accent)' : 'var(--accent-soft)',
+        avatarFg: n.author === 'You' ? 'var(--accent-ink)' : 'var(--accent)',
+        isReplyTarget: !n.reply,
+        onReply: () => this.setState({ replyTo: n.author })
+      })),
+      replyingTo: s.replyTo || false,
+      cancelReply: () => this.setState({ replyTo: null }),
+      draft: s.draft,
+      onDraft: e => this.setState({ draft: e.target.value }),
+      postOpacity: s.draft.trim() ? '1' : '.45',
+      postNote: () => {
+        if (!s.draft.trim()) return;
+        const entry = { id: Date.now(), initials: 'CM', author: 'You', time: 'Just now', text: s.draft.trim(), reply: !!s.replyTo };
+        this.setState({ threads: { ...s.threads, [rec.rel]: thread.concat(entry) }, draft: '', replyTo: null });
+      },
+      closeModal: () => this.setState({ selRel: null }),
+      stop: e => e.stopPropagation()
+    };
+  }
+}
+</script>
+</body>
+</html>

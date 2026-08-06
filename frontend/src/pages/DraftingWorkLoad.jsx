@@ -282,7 +282,7 @@ function DraftingWorkLoad() {
         <>
             <style>{columnWidthStyles}</style>
             <div
-                className="w-full h-[calc(100vh-3.5rem)] 3xl:h-[calc(100vh-4rem)] flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900"
+                className="w-full h-[calc(100vh_-_var(--app-chrome-h))] flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900"
                 style={{
                     width: '100%',
                     minWidth: '100%',

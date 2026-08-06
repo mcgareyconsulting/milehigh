@@ -1,0 +1,199 @@
+/**
+ * MHMW Brain — Job Log redesign design tokens.
+ *
+ * Source: docs/design/job-log-redesign/design-tokens.css (Aug 2026 handoff).
+ *
+ * The handoff ships these keyed on `data-theme="light|dark"`. This app already
+ * themes off a `dark` class on <html> (see context/ThemeContext.jsx), so the
+ * tokens are keyed on that instead — one theme mechanism, not two. The values
+ * are verbatim from the handoff.
+ *
+ * These are consumed two ways:
+ *   1. Tailwind utilities registered in tailwind.config.js (`bg-surface`,
+ *      `border-grid`, `text-muted`, …). Those need no `dark:` twin — the var
+ *      re-resolves when the class flips, so one class covers both themes.
+ *   2. Raw `var(--…)` in inline styles, where a value is computed at runtime
+ *      (stage tints, date-flag fills).
+ *
+ * Adding a token means adding it to BOTH blocks. A token that exists only in
+ * :root silently renders light-mode color on a dark surface.
+ */
+
+:root {
+  --bg: #eef1f6;
+  --surface: #ffffff;
+  --surface-2: #f7f9fc;
+  --head-bg: #e9edf4;
+  --border: #dde3ec;
+  --border-strong: #c3ccd9;
+  --grid: #b6bfcd;
+  /* Print body/header ink is pure black (jobLogPdf textColor: 0). Primary sits
+     at near-black; secondary/tertiary stay hierarchical but not washed out. */
+  --text: #0a0a0a;
+  --text-2: #1f2937;
+  --text-3: #4b5563;
+  --rail-bg: #16203a;
+  --rail-fg: #8e9db9;
+  --rail-fg-active: #ffffff;
+  --rail-active: #2f5fd0;
+  --rail-hover: rgba(255, 255, 255, .08);
+  --rail-border: #22304f;
+  --accent: #2f5fd0;
+  --accent-soft: #e7eefc;
+  --accent-ink: #ffffff;
+  /* Row bands + stage fills track jobLogPdf.js (print is source of truth):
+     even zebra = COLOR_EVEN_ROW [219,234,254]; done = COLOR_GRAYED [156,163,175];
+     stage groups = STAGE_GROUP_COLORS (Tailwind blue/emerald/violet-100 + -800). */
+  --band-b: #dbeafe;
+  --band-done: #9ca3af;
+  --row-hover: rgba(30, 90, 200, .07);
+  --st-green-fg: #065f46;
+  --st-green-bg: #d1fae5;
+  --st-blue-fg: #1e40af;
+  --st-blue-bg: #dbeafe;
+  --st-purple-fg: #5b21b6;
+  --st-purple-bg: #ede9fe;
+  /* Date flags = jobLogPdf.js COLOR_ASAP / COLOR_HARD_FUTURE / COLOR_HARD_PAST
+     (Tailwind red-500 / green-500 / yellow-400). White ink on red+green; gray-900 on amber. */
+  --fl-red-fg: #ffffff;
+  --fl-red-bg: #ef4444;
+  --fl-green-fg: #ffffff;
+  --fl-green-bg: #22c55e;
+  --fl-amber-fg: #111827;
+  --fl-amber-bg: #facc15;
+  --input-bg: #ffffff;
+  --shadow: 0 24px 60px rgba(15, 26, 48, .22);
+}
+
+.dark {
+  --bg: #0d131f;
+  --surface: #141b29;
+  --surface-2: #192130;
+  --head-bg: #1b2434;
+  --border: #27324a;
+  --border-strong: #3a4761;
+  --grid: #3a4763;
+  --text: #e5ebf5;
+  --text-2: #93a1b8;
+  --text-3: #6c7b93;
+  --rail-bg: #080d17;
+  --rail-fg: #7b8ba7;
+  --rail-fg-active: #ffffff;
+  --rail-active: #3a6ae0;
+  --rail-hover: rgba(255, 255, 255, .07);
+  --rail-border: #172034;
+  --accent: #5b8cff;
+  --accent-soft: #1c2b4d;
+  --accent-ink: #0b1220;
+  --band-b: #1a2740;
+  /* Dark analogue of print gray-400: mid slate so done rows recede without
+     glowing brighter than active zebra bands. Print itself is light-only. */
+  --band-done: #4b5563;
+  --row-hover: rgba(255, 255, 255, .05);
+  --st-green-fg: #6ee7b7;
+  --st-green-bg: #064e3b;
+  --st-blue-fg: #93c5fd;
+  --st-blue-bg: #1e3a5f;
+  --st-purple-fg: #c4b5fd;
+  --st-purple-bg: #3b0764;
+  /* Same saturated fills as light (print has no dark mode); keep white/dark ink. */
+  --fl-red-fg: #ffffff;
+  --fl-red-bg: #ef4444;
+  --fl-green-fg: #ffffff;
+  --fl-green-bg: #22c55e;
+  --fl-amber-fg: #111827;
+  --fl-amber-bg: #facc15;
+  --input-bg: #101725;
+  --shadow: 0 24px 60px rgba(0, 0, 0, .55);
+}
+
+/* Amber remains for date-flag past-due hard dates and any non-PDF stage cue.
+   Print stage groups are only blue / green / purple (no amber stage). */
+:root {
+  --st-amber-fg: #8a5208;
+  --st-amber-bg: #f7e3ba;
+}
+
+.dark {
+  --st-amber-fg: #f4bd6b;
+  --st-amber-bg: #443015;
+}
+
+/* Modal + rail motion, lifted from the handoff prototype. */
+@keyframes dcFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dcPop {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+
+.dc-fade { animation: dcFade .14s ease both; }
+.dc-pop { animation: dcPop .18s cubic-bezier(.2, .8, .3, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-fade,
+  .dc-pop {
+    animation: none;
+  }
+}
+
+/* Row bands. These are classes rather than Tailwind `bg-*` utilities because
+   every cell in a row re-applies the row's background (the table paints per
+   cell, not per row), so one token class per band swaps ~19 cells at once and
+   themes both ways without a `dark:` twin. */
+.jl-band-a { background-color: var(--surface); }
+.jl-band-b { background-color: var(--band-b); }
+.jl-band-done { background-color: var(--band-done); }
+
+/* Date-flag cells: full-cell slab matching print (red-500 ASAP, green-500 hard
+   future, yellow-400 hard past). `jl-flag` keeps row-hover off these cells. */
+.jl-flag-red { background-color: var(--fl-red-bg); color: var(--fl-red-fg); font-weight: 700; }
+.jl-flag-green { background-color: var(--fl-green-bg); color: var(--fl-green-fg); font-weight: 700; }
+.jl-flag-amber { background-color: var(--fl-amber-bg); color: var(--fl-amber-fg); font-weight: 700; }
+
+.jl-flag-red:hover { filter: brightness(0.95); }
+.jl-flag-green:hover { filter: brightness(0.95); }
+.jl-flag-amber:hover { filter: brightness(0.97); }
+
+/* Job Log lattice.
+   border-collapse: collapse is a known source of 1px hairline gaps between
+   cell backgrounds and the outer frame (WebKit/Blink paint the collapsed
+   edge model short of the box). separate + 0 spacing paints fills edge-to-
+   edge; cells only own right+bottom so shared edges stay 1px (no double).
+   Outer top/left/right/bottom live on .job-log-table-frame. */
+.job-log-table-frame {
+  border: 1px solid var(--grid);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: var(--surface);
+}
+.job-log-table {
+  width: 100%;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+.job-log-table thead th {
+  border-right: 1px solid var(--grid);
+  border-bottom: 1.5px solid var(--grid);
+}
+.job-log-table thead th:last-child {
+  border-right: none;
+}
+.job-log-table tbody td {
+  border-right: 1px solid var(--grid);
+  border-bottom: 1px solid var(--grid);
+}
+.job-log-table tbody td:last-child {
+  border-right: none;
+}
+
+/* Row hover as an inset overlay — does not touch borders, so the lattice
+   stays put. Scoped off flag cells so ASAP/hard-date fills stay solid. */
+tr.jl-row:hover > td:not(.jl-flag) {
+  box-shadow: inset 0 0 0 9999px var(--row-hover);
+}

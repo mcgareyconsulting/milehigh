@@ -77,7 +77,7 @@ export default function ReleasesViewSwitcher() {
                     onClick={() => {
                         if (active !== view.key) navigate(view.to);
                     }}
-                    className={`px-2.5 py-1 text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 ${
+                    className={`px-2 py-1 text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 ${
                         i > 0 ? 'border-l border-gray-300 dark:border-slate-500' : ''
                     } ${
                         active === view.key

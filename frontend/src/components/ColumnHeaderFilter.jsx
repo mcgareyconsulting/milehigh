@@ -32,7 +32,9 @@ const LARGE_POPOVER_MAX_HEIGHT = 680; // positioning clamp matching the taller `
 const VIEWPORT_PAD = 8;
 // Chrome around a value label: checkbox + gap + label padding + list padding + scrollbar slack.
 const AUTOWIDTH_CHROME = 76;
-const AUTOWIDTH_FONT = '12px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
+// Measure with the same face as the table (IBM Plex Sans) so autoWidth popovers
+// match live header/cell metrics instead of a system UI stack.
+const AUTOWIDTH_FONT = '12px "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
 // Lazily reused canvas for measuring label widths (only used when autoWidth is on).
 let _measureCanvas = null;
@@ -232,7 +234,7 @@ export default function ColumnHeaderFilter({
                     e.stopPropagation();
                     setOpen((v) => !v);
                 }}
-                className={`inline-flex items-center justify-center gap-1 cursor-pointer px-1 py-0.5 rounded hover:bg-gray-200 dark:hover:bg-slate-600 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-inherit'}`}
+                className={`w-full inline-flex items-center justify-center gap-0.5 cursor-pointer px-0.5 py-0.5 rounded text-center leading-tight hover:bg-gray-200 dark:hover:bg-slate-600 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-inherit'}`}
                 aria-haspopup="true"
                 aria-expanded={open}
             >
