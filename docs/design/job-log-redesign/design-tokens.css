@@ -1,0 +1,37 @@
+/* MHMW Brain — Job Log redesign tokens. Apply data-theme="light|dark" on the app root. */
+[data-theme="light"] {
+  --bg:#eef1f6; --surface:#ffffff; --surface-2:#f7f9fc; --head-bg:#e9edf4;
+  --border:#dde3ec; --border-strong:#c3ccd9; --grid:#b6bfcd;
+  --text:#182231; --text-2:#5d6b7f; --text-3:#93a0b1;
+  --rail-bg:#16203a; --rail-fg:#8e9db9; --rail-fg-active:#ffffff; --rail-active:#2f5fd0;
+  --rail-hover:rgba(255,255,255,.08); --rail-border:#22304f;
+  --accent:#2f5fd0; --accent-soft:#e7eefc; --accent-ink:#ffffff;
+  --band-b:#dcebfc; --band-done:#dde2ea; --row-hover:rgba(30,90,200,.07);
+  --st-green-fg:#0f6b46; --st-green-bg:#e6f5ec;
+  --st-blue-fg:#1a4fbd; --st-blue-bg:#e8effc;
+  --st-purple-fg:#5b3bbd; --st-purple-bg:#f0ebfc;
+  --fl-red-fg:#9e2b25; --fl-red-bg:#f6d3d0;
+  --fl-green-fg:#0c5f3e; --fl-green-bg:#c6ead2;
+  --fl-amber-fg:#8a5208; --fl-amber-bg:#f7e3ba;
+  --input-bg:#ffffff; --shadow:0 24px 60px rgba(15,26,48,.22);
+}
+[data-theme="dark"] {
+  --bg:#0d131f; --surface:#141b29; --surface-2:#192130; --head-bg:#1b2434;
+  --border:#27324a; --border-strong:#3a4761; --grid:#3a4763;
+  --text:#e5ebf5; --text-2:#93a1b8; --text-3:#6c7b93;
+  --rail-bg:#080d17; --rail-fg:#7b8ba7; --rail-fg-active:#ffffff; --rail-active:#3a6ae0;
+  --rail-hover:rgba(255,255,255,.07); --rail-border:#172034;
+  --accent:#5b8cff; --accent-soft:#1c2b4d; --accent-ink:#0b1220;
+  --band-b:#1a2740; --band-done:#1b212d; --row-hover:rgba(255,255,255,.05);
+  --st-green-fg:#5cd0a0; --st-green-bg:#122c22;
+  --st-blue-fg:#7fa8ff; --st-blue-bg:#16233d;
+  --st-purple-fg:#b39cf7; --st-purple-bg:#221c3b;
+  --fl-red-fg:#ff9d94; --fl-red-bg:#46201d;
+  --fl-green-fg:#6fdcab; --fl-green-bg:#16402a;
+  --fl-amber-fg:#f4bd6b; --fl-amber-bg:#443015;
+  --input-bg:#101725; --shadow:0 24px 60px rgba(0,0,0,.55);
+}
+/* Type: "IBM Plex Sans" UI · "IBM Plex Mono" numbers/dates/ids.
+   Scale: table body 12.5px (compact 12px) · secondary 11.5px · header 12px/700 ·
+   section labels 11px/700 uppercase .06em · row height 36px (compact 28px).
+   Radii: controls 7-8px · pills 5px · cards/modals 14px. */

@@ -4,7 +4,7 @@
  * purpose: Renders a single job-log table row with inline stage editing, urgency indicators, action menus, and detail/date modals.
  * exports:
  *   JobsTableRow: Feature-rich table row for the Job Log with inline editing and admin actions
- * imports_from: [react, ../services/jobsApi, ../constants/jumpToHighlight, ./JobDetailsModal, ./StartInstallDateModal, ./StageIconRow]
+ * imports_from: [react, ../services/jobsApi, ../constants/jumpToHighlight, ./ReleaseHubModal, ./StartInstallDateModal, ./StageIconRow]
  * imported_by: [frontend/src/pages/JobLog.jsx, frontend/src/pages/Archive.jsx]
  * invariants:
  *   - Stage dropdown options must stay in sync with constants/stages.js definitions
@@ -17,9 +17,8 @@ import { jobsApi } from '../services/jobsApi';
 import { setAsapAndAssign } from '../utils/asap';
 import { localTodayStr, toYmd } from '../utils/formatters';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
-import { JobDetailsModal } from './JobDetailsModal';
+import { ReleaseHubModal } from './ReleaseHubModal';
 import { MaterialOrderBadge } from './MaterialOrderBadge';
-import { NotesHistoryModal } from './NotesHistoryModal';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { StageIconRow } from './StageIconRow';
 import { ASAP_PROPAGATED_ROW_CLASS } from './AsapPropagationTag';
@@ -38,13 +37,15 @@ const STAGE_PHOTO_GATE_ENABLED = false;
 // the stage immediately. The backend enforces the same gate (422 photo_required).
 const STAGE_PHOTO_GATES = ['Welded QC', 'Paint Complete'];
 
-export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, compact = false, showActions = true }) {
+export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, bandIndex = null, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, compact = false, showActions = true }) {
     const { refreshMaterialSummary } = useReleases();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    // Which tab the release hub opens on. The Description cell lands on Details;
+    // nothing else in the row opens it directly today.
+    const [hubTab, setHubTab] = useState('details');
     // When the modal is opened from the Mat. Ord. cell, jump straight to the
     // Materials Ordered section instead of the top of the modal.
     const [modalScrollToMaterials, setModalScrollToMaterials] = useState(false);
-    const [isNotesHistoryOpen, setIsNotesHistoryOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
     const [pdfMarkupOpen, setPdfMarkupOpen] = useState(false);
     const [pdfMarkupVersionId, setPdfMarkupVersionId] = useState(null);
@@ -53,19 +54,28 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // When set, the attachment modal is opened in stage-gate mode for this stage:
     // a photo tagged with it must be uploaded before the stage change applies.
     const [gateStage, setGateStage] = useState(null);
-    const [hasDrawingLocal, setHasDrawingLocal] = useState(Boolean(row.has_drawing));
     const [showActionMenu, setShowActionMenu] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [fieldValues, setFieldValues] = useState({});
     const [saving, setSaving] = useState(false);
 
-    // Keep local has_drawing flag in sync if parent re-renders the row
-    useEffect(() => { setHasDrawingLocal(Boolean(row.has_drawing)); }, [row.has_drawing]);
+    // has_drawing used to decide whether the Release # cell opened the drawing
+    // hub or linked to Procore. Both live on the release hub now, so the row no
+    // longer branches on it.
 
     // Uploading, viewing, and marking up drawings/photos is open to every
     // logged-in user (deleting a drawing version stays admin-only on the
     // backend). The attachment hub therefore opens in edit mode for everyone.
     const canMarkup = true;
+
+    // Single entry point for the release hub. The Description cell is the row's
+    // only hyperlink — Job and Release # are plain text — so anything else that
+    // needs the hub (the Mat. Ord. glyph) routes through here with a tab.
+    const openHub = (tab = 'details', { scrollToMaterials = false } = {}) => {
+        setHubTab(tab);
+        setModalScrollToMaterials(scrollToMaterials);
+        setIsModalOpen(true);
+    };
 
     // Check if row should be grayed (Complete status or both Job Comp and Invoiced are X).
     // Tolerates whitespace + case drift on the stage value.
@@ -426,20 +436,29 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // rule in index.css). Light mode: paler than the old gray-400 slab so it falls back
     // instead of competing with the blue banding. Dark mode: DARKER than the active rows
     // (slate-900 vs 800/700) — finished work recedes; it must never glow brighter.
-    const rowBgClass = isGrayed ? 'bg-gray-200 dark:bg-slate-950' : (rowIndex % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-blue-300 dark:bg-slate-600');
-    // ONE translucent divider ink for the entire table — same values as the header in
-    // JobLogContent.jsx (keep in sync): black @ 18% in light, white @ 12% in dark.
-    // Translucent ink self-adjusts over white, blue, and gray rows, so the grid reads as a
-    // single continuous lattice instead of changing color per row type.
-    const cellDividerClass = 'border-black/[0.18] dark:border-white/[0.12]';
+    // Row bands (redesign handoff §3): install-complete rows take the grey band;
+    // everything else zebras. `bandIndex` counts only non-complete rows, so a
+    // grey row doesn't consume an alternation step and leave two white rows
+    // adjacent. Falls back to rowIndex when the parent hasn't supplied one.
+    const bandParity = (bandIndex ?? rowIndex) % 2;
+    const rowBgClass = isGrayed ? 'jl-band-done' : (bandParity === 0 ? 'jl-band-a' : 'jl-band-b');
+    // ONE divider ink for the entire table — the `--grid` token, matched by the
+    // header in JobLogContent.jsx (keep in sync).
+    const cellDividerClass = 'border-grid';
     // Vertical cell dividers use box-shadow, not a real border — under `border-collapse` a
     // border is centered on the shared boundary between two cells, while the header's divider
     // (a non-collapsed overlay) sits flush at its own edge; mixing the two causes a visible
     // sub-pixel drift between the header and body dividers. box-shadow isn't subject to
     // border-collapse, so using it in both places guarantees identical positioning.
-    const cellVDividerShadow = 'shadow-[inset_-1px_0_0_0_#0000002e] dark:shadow-[inset_-1px_0_0_0_#ffffff1f]';
+    const cellVDividerShadow = 'shadow-[inset_-1px_0_0_0_var(--grid)]';
     const cellPy = isOldMan ? 'py-2' : 'py-0.5';
-    const cellText = isOldMan ? 'text-[13px]' : 'text-[11px]';
+    const cellText = isOldMan ? 'text-[13px]' : 'text-jl';
+    // Numbers, dates and ids ride IBM Plex Mono per the handoff's type spec.
+    const cellMono = 'font-mono';
+    // Editors read as plain text at rest and only show their box on hover/focus.
+    // This is styling only — every input keeps the exact behavior it had, which
+    // is why the border is revealed rather than removed.
+    const quietInput = 'bg-transparent border border-transparent hover:border-hairline-strong focus:bg-input-bg focus:border-brand';
 
     // Handle stage change. Gated stages (Welded QC / Paint Complete) require a
     // tagged photo first: open the attachment modal in gate mode and defer the
@@ -874,7 +893,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 </tr>
             )}
             <tr
-                className={`group ${isGrayed ? 'jl-done' : ''} ${rowBgClass} hover:bg-gray-100 dark:hover:bg-slate-500 transition-all duration-200 border-b ${cellDividerClass} ${row._asapPropagated ? ASAP_PROPAGATED_ROW_CLASS : ''} ${isDragOver ? 'bg-blue-50 dark:bg-blue-900/30' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
+                className={`group jl-row ${isGrayed ? 'jl-done' : ''} ${rowBgClass} transition-all duration-200 border-b ${cellDividerClass} ${row._asapPropagated ? ASAP_PROPAGATED_ROW_CLASS : ''} ${isDragOver ? 'bg-blue-50 dark:bg-blue-900/30' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
                 draggable={isDraggable}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
@@ -899,6 +918,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     // Determine if this column should allow text wrapping
                     const shouldWrap = column === 'Notes' || column === 'Paint color';
                     const whitespaceClass = shouldWrap ? 'whitespace-normal' : 'whitespace-nowrap';
+
+                    // Prose columns keep the UI face; everything reaching the generic
+                    // cell below is a number, date or code and takes IBM Plex Mono.
+                    const isTextColumn = column === 'Paint color' || column === 'PM' || column === 'BY';
 
                     // Reduce padding for Release # column
                     const isReleaseNumber = column === 'Release #';
@@ -1064,7 +1087,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         }
                                     }}
                                     disabled={updatingFabOrder || isGrayed}
-                                    className={`w-full px-1 py-0.5 ${cellText} border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${isDuplicateFabOrder ? 'text-white font-bold' : 'bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100'} text-center ${updatingFabOrder ? 'opacity-50 cursor-wait' : ''} ${isGrayed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    className={`w-full px-1 py-0.5 ${cellText} ${cellMono} rounded focus:outline-none ${isDuplicateFabOrder ? 'text-white font-bold bg-transparent border border-transparent' : `${quietInput} text-ink`} text-center ${updatingFabOrder ? 'opacity-50 cursor-wait' : ''} ${isGrayed ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     placeholder="—"
                                     style={(() => {
                                         const mw = compact ? '28px' : '48px';
@@ -1105,28 +1128,14 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         }
                                     }}
                                     disabled={updatingNotes}
-                                    className={`w-full px-1 py-0.5 ${cellText} border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 resize-none ${updatingNotes ? 'opacity-50 cursor-wait' : ''}`}
+                                    className={`w-full px-1 py-0.5 ${cellText} ${quietInput} rounded focus:outline-none text-ink resize-none ${updatingNotes ? 'opacity-50 cursor-wait' : ''}`}
                                     placeholder="—"
                                     rows={2}
                                 />
-                                <button
-                                    type="button"
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setIsNotesHistoryOpen(true);
-                                    }}
-                                    className="absolute top-0.5 right-0.5 p-0.5 rounded text-gray-400 hover:text-accent-600 dark:text-slate-400 dark:hover:text-accent-400 hover:bg-white dark:hover:bg-slate-800 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                                    title="View notes history"
-                                    aria-label="View notes history"
-                                    tabIndex={-1}
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
-                                        <path d="M3 3v5h5" />
-                                        <path d="M12 7v5l3 2" />
-                                    </svg>
-                                </button>
+                                {/* The notes-history glyph that used to sit here is gone: the
+                                    history is the release hub's Notes rail now, reached from
+                                    Description like everything else. The cell keeps showing —
+                                    and editing — the current note. */}
                             </td>
                         );
                     }
@@ -1160,7 +1169,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         }
                                     }}
                                     disabled={updatingJobComp}
-                                    className={`w-full min-w-0 px-1 py-0.5 ${cellText} border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-center ${updatingJobComp ? 'opacity-50 cursor-wait' : ''}`}
+                                    className={`w-full min-w-0 px-1 py-0.5 ${cellText} ${cellMono} font-semibold ${quietInput} rounded focus:outline-none text-ink text-center ${updatingJobComp ? 'opacity-50 cursor-wait' : ''}`}
                                     placeholder="—"
                                 />
                             </td>
@@ -1196,7 +1205,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         }
                                     }}
                                     disabled={updatingInvoiced}
-                                    className={`w-full min-w-0 px-1 py-0.5 ${cellText} border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-center ${updatingInvoiced ? 'opacity-50 cursor-wait' : ''}`}
+                                    className={`w-full min-w-0 px-1 py-0.5 ${cellText} ${cellMono} font-semibold ${quietInput} rounded focus:outline-none text-ink text-center ${updatingInvoiced ? 'opacity-50 cursor-wait' : ''}`}
                                     placeholder="—"
                                 />
                             </td>
@@ -1224,13 +1233,13 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         const isHardDatePast = isHardDate && installDay < todayStr;
                         let startInstallBgClass;
                         if (isAsap) {
-                            startInstallBgClass = 'bg-red-500 text-white hover:bg-red-600 font-semibold';
+                            startInstallBgClass = 'jl-flag jl-flag-red';
                         } else if (isHardDatePast) {
-                            startInstallBgClass = 'bg-yellow-400 text-gray-900 hover:bg-yellow-500 font-semibold';
+                            startInstallBgClass = 'jl-flag jl-flag-amber';
                         } else if (isHardDate) {
-                            startInstallBgClass = 'bg-green-400 text-gray-900 hover:bg-green-500 font-semibold';
+                            startInstallBgClass = 'jl-flag jl-flag-green';
                         } else {
-                            startInstallBgClass = `${rowBgClass} text-gray-900 dark:text-slate-100 hover:bg-accent-50 dark:hover:bg-slate-600`;
+                            startInstallBgClass = `${rowBgClass} text-ink`;
                         }
 
                         const titleText = isAsap
@@ -1242,12 +1251,12 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${startInstallBgClass} ${vDividerClass} text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''}`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} ${cellMono} align-middle font-medium ${startInstallBgClass} ${vDividerClass} text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''}`}
                                 onClick={() => !updatingStartInstall && setIsStartInstallModalOpen(true)}
                                 title={titleText}
                             >
                                 <div className="leading-tight">{displayValue}</div>
-                                <div className={`text-[10px] leading-tight ${isAsap || isHardDate || isHardDatePast ? 'opacity-80' : 'text-gray-500 dark:text-slate-400'}`}>
+                                <div className={`text-jl-3 leading-tight ${isAsap || isHardDate || isHardDatePast ? 'opacity-[.78] font-medium' : 'text-ink-3'}`}>
                                     {row['installer'] || '—'}
                                 </div>
                             </td>
@@ -1273,18 +1282,18 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         const isHardDatePast = isHardDate && toYmd(localStartInstall) < localTodayStr();
                         let shipBgClass;
                         if (isAsap) {
-                            shipBgClass = 'bg-red-500 text-white hover:bg-red-600 font-semibold';
+                            shipBgClass = 'jl-flag jl-flag-red';
                         } else if (!hasDate || isNoColor || !isHardDate) {
-                            shipBgClass = `${rowBgClass} text-gray-900 dark:text-slate-100 hover:bg-accent-50 dark:hover:bg-slate-600`;
+                            shipBgClass = `${rowBgClass} text-ink`;
                         } else if (isHardDatePast) {
-                            shipBgClass = 'bg-yellow-400 text-gray-900 hover:bg-yellow-500 font-semibold';
+                            shipBgClass = 'jl-flag jl-flag-amber';
                         } else {
-                            shipBgClass = 'bg-green-400 text-gray-900 hover:bg-green-500 font-semibold';
+                            shipBgClass = 'jl-flag jl-flag-green';
                         }
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${shipBgClass} ${vDividerClass} text-center cursor-pointer transition-colors`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} ${cellMono} align-middle font-medium ${shipBgClass} ${vDividerClass} text-center cursor-pointer transition-colors`}
                                 onClick={() => setIsStartInstallModalOpen(true)}
                                 title={`${displayValue} — Click to edit`}
                             >
@@ -1302,7 +1311,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`${paddingClass} ${cellPy} ${cellText} align-middle ${rowBgClass} ${vDividerClass} text-center ${matStatus ? 'cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors' : ''}`}
-                                onClick={matStatus ? () => { setModalScrollToMaterials(true); setIsModalOpen(true); } : undefined}
+                                onClick={matStatus ? () => openHub('details', { scrollToMaterials: true }) : undefined}
                             >
                                 <div className="flex items-center justify-center">
                                     <MaterialOrderBadge status={matStatus} />
@@ -1314,14 +1323,14 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     // For Job and Description, show full value in tooltip
                     const tooltipValue = shouldWrapAndTruncate ? rawValue : rawValue;
 
-                    // Handle Job column - make it clickable to open modal
+                    // Job column — plain text. It used to be a second way into the
+                    // detail modal; Description is now the row's single link.
                     if (column === 'Job') {
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
-                                title={`${tooltipValue} - Click to view details`}
-                                onClick={() => setIsModalOpen(true)}
+                                className={`px-1 ${cellPy} text-jl-2 align-middle ${rowBgClass} ${vDividerClass} text-center text-ink-2`}
+                                title={tooltipValue}
                                 style={{
                                     maxWidth: '170px',
                                     width: '170px'
@@ -1338,51 +1347,62 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         textAlign: 'center'
                                     }}
                                 >
-                                    <span className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline">
-                                        {rawValue}
+                                    {rawValue}
+                                </div>
+                            </td>
+                        );
+                    }
+
+                    // Description column — the row's one hyperlink. Opens the release
+                    // hub, which carries both the job details and the drawings/photos
+                    // hub the Release # cell used to reach on its own.
+                    if (column === 'Description') {
+                        const hasText = rawValue != null && String(rawValue).trim() !== '';
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`px-1 ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
+                                title={hasText ? `${tooltipValue} — click to open` : 'Click to open'}
+                                onClick={() => openHub('details')}
+                                style={{
+                                    maxWidth: '170px',
+                                    width: '170px'
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: 'vertical',
+                                        overflow: 'hidden',
+                                        textOverflow: 'clip',
+                                        lineHeight: '1.2',
+                                        textAlign: 'center'
+                                    }}
+                                >
+                                    {/* The handoff renders Description as bold dark text
+                                        because there the whole row is clickable. Here it
+                                        is the row's ONLY way into the release, so it keeps
+                                        a link's affordance — token accent, not raw blue. */}
+                                    <span className="font-semibold text-brand hover:underline">
+                                        {hasText ? rawValue : '—'}
                                     </span>
                                 </div>
                             </td>
                         );
                     }
 
-                    // Handle Release # column — the number opens the version-history
-                    // hub (pick a version to view/edit, upload a new one, or jump to
-                    // Procore from the top). Drafters/admins and any release with an
-                    // uploaded drawing route there; a Procore-only release links
-                    // straight to Procore.
+                    // Release # column — plain text. The drawing-version hub it used
+                    // to open now lives on the release hub's Drawings & Photos tab,
+                    // reached from Description along with everything else.
                     if (column === 'Release #') {
-                        const viewerUrl = row.viewer_url;
-                        const opensHub = canMarkup || hasDrawingLocal;
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-center`}
+                                className={`${paddingClass} ${cellPy} ${cellText} ${cellMono} align-middle font-semibold ${rowBgClass} ${vDividerClass} text-center text-ink`}
                             >
                                 <div className="flex items-center justify-center">
-                                    {opensHub ? (
-                                        <button
-                                            type="button"
-                                            onClick={(e) => { e.stopPropagation(); setGateStage(null); setPdfHistoryOpen(true); }}
-                                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer bg-transparent border-0 p-0 font-medium"
-                                            title="Drawing versions — view, edit, upload, or open in Procore"
-                                        >
-                                            {rawValue}
-                                        </button>
-                                    ) : viewerUrl && viewerUrl.trim() !== '' ? (
-                                        <a
-                                            href={viewerUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer"
-                                            onClick={(e) => e.stopPropagation()}
-                                            title="Open Procore viewer"
-                                        >
-                                            {rawValue}
-                                        </a>
-                                    ) : (
-                                        <span>{rawValue}</span>
-                                    )}
+                                    {rawValue}
                                 </div>
                             </td>
                         );
@@ -1391,7 +1411,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-gray-900 dark:text-slate-100 text-center ${shouldWrapAndTruncate
+                            // Numbers and dates ride mono; free text (Job Name, Paint
+                            // color, Notes) stays in the UI face at the secondary size.
+                            className={`${paddingClass} ${cellPy} ${isTextColumn ? 'text-jl-2 text-ink-2' : `${cellText} ${cellMono} text-ink-2`} align-middle ${rowBgClass} ${vDividerClass} text-center ${shouldWrapAndTruncate
                                 ? ''
                                 : whitespaceClass
                                 }`}
@@ -1469,19 +1491,21 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     </td>
                 )}
             </tr>
-            <JobDetailsModal
+            <ReleaseHubModal
                 isOpen={isModalOpen}
                 onClose={() => { setIsModalOpen(false); setModalScrollToMaterials(false); }}
                 job={row}
+                releaseId={row.id}
+                viewerUrl={row.viewer_url}
+                initialTab={hubTab}
                 scrollToMaterials={modalScrollToMaterials}
                 onOrdersChanged={refreshMaterialSummary}
-            />
-            <NotesHistoryModal
-                isOpen={isNotesHistoryOpen}
-                onClose={() => setIsNotesHistoryOpen(false)}
-                job={row['Job #']}
-                release={row['Release #']}
-                currentNotes={localNotes}
+                onOpenVersion={(vid, mode) => {
+                    setIsModalOpen(false);
+                    setPdfMarkupVersionId(vid);
+                    setPdfMarkupMode(canMarkup ? mode : 'view');
+                    setPdfMarkupOpen(true);
+                }}
             />
             <StartInstallDateModal
                 isOpen={isStartInstallModalOpen}
@@ -1505,8 +1529,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 versionId={pdfMarkupVersionId}
                 mode={pdfMarkupMode}
                 onClose={() => setPdfMarkupOpen(false)}
-                onSaved={() => { setHasDrawingLocal(true); }}
             />
+            {/* Stage-photo gate only. Browsing drawings goes through the release
+                hub's Drawings & Photos tab; this stays a focused confirm dialog. */}
             <PdfVersionHistoryModal
                 isOpen={pdfHistoryOpen}
                 releaseId={row.id}

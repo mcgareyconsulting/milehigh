@@ -13,12 +13,12 @@
  * exports:
  *   GanttChart: Day/week-bucket board with zoom that scales column granularity (day↔week), width,
  *     card size, per-cell cap, and card detail; whole-column zoom snapping, week-snap nav, jump-to-date.
- * imports_from: [react, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters, ./ReleaseDetailModal, ./JobDetailsModal]
+ * imports_from: [react, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters, ./ReleaseDetailModal, ./ReleaseHubModal]
  * imported_by: [frontend/src/pages/PMBoardContent.jsx]
  * invariants:
  *   - READ-ONLY: clicking a card opens a read-only detail modal — admins get ReleaseCockpitModal
  *     (a what-if schedule sandbox that still never writes), everyone else ReleaseDetailModal; clicking
- *     a material-order chip on the Shipping Planning lane opens JobDetailsModal scrolled to that
+ *     a material-order chip on the Shipping Planning lane opens ReleaseHubModal scrolled to that
  *     release's Materials Ordered section. The timeline never writes. (The Phase-5 drag interactions —
  *     installer-day reschedule and shipping-lane stage change — were REMOVED 2026-07-12 for the
  *     prod-stability release: native HTML5 drag was dead on iPad anyway. Edits happen in the Job Log.)
@@ -57,7 +57,7 @@ import { localTodayStr as todayIso, subtractBusinessDays } from '../utils/format
 import { API_BASE_URL } from '../utils/api';
 import ReleaseDetailModal from './ReleaseDetailModal';
 import ReleaseCockpitModal from './ReleaseCockpitModal';
-import { JobDetailsModal } from './JobDetailsModal';
+import { ReleaseHubModal } from './ReleaseHubModal';
 import { checkAuth } from '../utils/auth';
 
 const addDays = (isoDate, days) => {
@@ -1028,9 +1028,12 @@ function GanttChart({ filterComplete = false }) {
                     onClose={() => setSelectedRelease(null)}
                 />
             )}
-            <JobDetailsModal
+            <ReleaseHubModal
                 isOpen={!!orderJob}
                 job={orderJob}
+                releaseId={orderJob?.id}
+                viewerUrl={orderJob?.viewer_url}
+                initialTab="details"
                 scrollToMaterials
                 onClose={() => setOrderJob(null)}
             />

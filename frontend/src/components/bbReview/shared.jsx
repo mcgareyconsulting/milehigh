@@ -12,15 +12,15 @@ import React, { useRef, useState } from 'react';
 import { jobsApi } from '../../services/jobsApi';
 
 const VERDICT_STYLES = {
-    violation: { label: 'Violation', box: 'border-red-300 bg-red-50', text: 'text-red-700' },
-    needs_field_verification: { label: 'Verify in field', box: 'border-amber-300 bg-amber-50', text: 'text-amber-700' },
-    ok: { label: 'OK', box: 'border-green-200 bg-green-50', text: 'text-green-700' },
+    violation: { label: 'Violation', box: 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-300' },
+    needs_field_verification: { label: 'Verify in field', box: 'border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-300' },
+    ok: { label: 'OK', box: 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-300' },
 };
 
 const SEVERITY_CHIP = {
-    high: 'bg-red-100 text-red-700',
-    medium: 'bg-amber-100 text-amber-700',
-    low: 'bg-gray-100 text-gray-600',
+    high: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300',
+    medium: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300',
+    low: 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300',
 };
 
 export function Finding({ f }) {
@@ -34,17 +34,17 @@ export function Finding({ f }) {
                         {f.severity}
                     </span>
                 )}
-                {f.location && <span className="text-xs text-gray-500">{f.location}</span>}
+                {f.location && <span className="text-xs text-gray-500 dark:text-slate-400">{f.location}</span>}
             </div>
-            {f.issue && <p className="text-gray-800 mt-1">{f.issue}</p>}
+            {f.issue && <p className="text-gray-800 dark:text-slate-100 mt-1">{f.issue}</p>}
             {f.computation && (
-                <p className="text-xs text-gray-600 mt-1 font-mono whitespace-pre-wrap break-words">{f.computation}</p>
+                <p className="text-xs text-gray-600 dark:text-slate-300 mt-1 font-mono whitespace-pre-wrap break-words">{f.computation}</p>
             )}
             {Array.isArray(f.values_used) && f.values_used.length > 0 && (
                 <ul className="mt-1 flex flex-wrap gap-1">
                     {f.values_used.map((val, i) => (
-                        <li key={i} className="text-[11px] bg-white border border-gray-200 rounded px-1.5 py-0.5 text-gray-600">
-                            {val.sheet ? <span className="font-semibold text-gray-800">{val.sheet}</span> : null}
+                        <li key={i} className="text-[11px] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded px-1.5 py-0.5 text-gray-600 dark:text-slate-300">
+                            {val.sheet ? <span className="font-semibold text-gray-800 dark:text-slate-100">{val.sheet}</span> : null}
                             {val.sheet ? ' · ' : ''}{val.name}: {val.value}
                         </li>
                     ))}
@@ -119,7 +119,7 @@ export function FindingFeedbackForm({
                     className={`${btnBase} ${
                         decision === 'accepted'
                             ? 'bg-green-600 text-white border-green-600'
-                            : 'bg-white dark:bg-slate-700 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700 hover:bg-green-50 dark:hover:bg-green-900/30'
+                            : 'bg-white dark:bg-slate-800 dark:bg-slate-700 text-green-700 dark:text-green-300 dark:text-green-300 border-green-300 dark:border-green-700 hover:bg-green-50 dark:hover:bg-green-900/30'
                     }`}
                 >
                     ✓ Accept
@@ -131,22 +131,22 @@ export function FindingFeedbackForm({
                     className={`${btnBase} ${
                         decision === 'rejected'
                             ? 'bg-red-600 text-white border-red-600'
-                            : 'bg-white dark:bg-slate-700 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/30'
+                            : 'bg-white dark:bg-slate-800 dark:bg-slate-700 text-red-700 dark:text-red-300 dark:text-red-300 border-red-300 dark:border-red-800 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/30'
                     }`}
                 >
                     ✕ {denyLabel}
                 </button>
                 {busy && (
-                    <span className="text-[11px] text-gray-400 dark:text-slate-500">Saving…</span>
+                    <span className="text-[11px] text-gray-400 dark:text-slate-500 dark:text-slate-500">Saving…</span>
                 )}
                 {!busy && dirty && decision && (
                     <span className="text-[11px] text-amber-600 dark:text-amber-400">Unsaved</span>
                 )}
                 {!busy && !dirty && saved.decision && (
-                    <span className="text-[11px] text-green-600 dark:text-green-400">Saved</span>
+                    <span className="text-[11px] text-green-600 dark:text-green-400 dark:text-green-400">Saved</span>
                 )}
                 {error && (
-                    <span className="text-[11px] text-red-600 dark:text-red-400">{error}</span>
+                    <span className="text-[11px] text-red-600 dark:text-red-400 dark:text-red-400">{error}</span>
                 )}
             </div>
 
@@ -166,7 +166,7 @@ export function FindingFeedbackForm({
                         ? 'Add a note about this finding (optional)…'
                         : 'Accept or reject first, then add an optional note…'
                 }
-                className="w-full min-h-[4.5rem] text-sm px-3 py-2 rounded-md border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-800 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-accent-400/40 focus:border-accent-400 resize-y"
+                className="w-full min-h-[4.5rem] text-sm px-3 py-2 rounded-md border border-gray-200 dark:border-slate-600 dark:border-slate-600 bg-white dark:bg-slate-800 dark:bg-slate-700 text-gray-800 dark:text-slate-100 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-accent-400/40 focus:border-accent-400 resize-y"
             />
 
             <div className="flex items-center gap-2 flex-wrap">
@@ -178,7 +178,7 @@ export function FindingFeedbackForm({
                 >
                     {busy ? 'Saving…' : 'Save feedback'}
                 </button>
-                <span className="text-[11px] text-gray-400 dark:text-slate-500">
+                <span className="text-[11px] text-gray-400 dark:text-slate-500 dark:text-slate-500">
                     {decision
                         ? '⌘/Ctrl+Enter to save'
                         : 'Pick Accept or Reject, then Save'}

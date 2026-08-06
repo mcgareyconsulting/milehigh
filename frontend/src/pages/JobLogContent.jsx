@@ -79,6 +79,23 @@ function JobLogContent() {
     // lowest-frequency columns (BY, Released) and re-normalize the remaining widths to
     // 100% (fixed-layout table). Desktop keeps every column; CSV/PDF export are
     // unaffected (they read the full columnHeaders from ReleasesLayout).
+    // Zebra band index per row, counting only rows that aren't install-complete.
+    // Computed here rather than in the row because a row can't know how many
+    // grey rows preceded it. Mirrors JobsTableRow's own `isGrayed` test.
+    const bandIndexById = useMemo(() => {
+        const map = new Map();
+        let band = 0;
+        for (const row of renderRows) {
+            if (row._asapDivider) continue;
+            const stage = (row['Stage'] || '').toString().trim().toLowerCase();
+            const done = stage === 'complete'
+                || (row['Job Comp'] || '').toString().trim().toUpperCase() === 'X';
+            map.set(row.id, done ? -1 : band);
+            if (!done) band += 1;
+        }
+        return map;
+    }, [renderRows]);
+
     const { tableColumns, tableWidthPercents } = useMemo(() => {
         if (isDesktop) return { tableColumns: columnHeaders, tableWidthPercents: columnWidthPercents };
         const NARROW_HIDDEN = new Set(['BY', 'Released']);
@@ -172,17 +189,16 @@ function JobLogContent() {
                                         // from a non-collapsed element) — and box-shadow is also immune to Safari's
                                         // bug where collapsed borders on sticky <th> cells fail to paint.
                                         const isLastHeaderColumn = tableColumns[tableColumns.length - 1] === column && !showAdminActions;
-                                        // Same translucent ink as the body cells (JobsTableRow — keep in sync):
-                                        // black 18% / white 12%. The bottom rule is the one place the ink doubles
-                                        // (~2× alpha) so the header reads as an anchored band without introducing
-                                        // a second line style.
+                                        // Same `--grid` ink as the body cells (JobsTableRow — keep in sync).
+                                        // The bottom rule is 1.5px where the body's is 1px, which is what
+                                        // anchors the header band without introducing a second line style.
                                         const headerDividerShadow = isLastHeaderColumn
-                                            ? 'shadow-[inset_0_-1px_0_0_#0000005c] dark:shadow-[inset_0_-1px_0_0_#ffffff3d]'
-                                            : 'shadow-[inset_-1px_0_0_0_#0000002e,inset_0_-1px_0_0_#0000005c] dark:shadow-[inset_-1px_0_0_0_#ffffff1f,inset_0_-1px_0_0_#ffffff3d]';
+                                            ? 'shadow-[inset_0_-1.5px_0_0_var(--grid)]'
+                                            : 'shadow-[inset_-1px_0_0_0_var(--grid),inset_0_-1.5px_0_0_var(--grid)]';
                                         return (
                                             <th
                                                 key={column}
-                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-[13px]' : 'py-0.5 text-[11px]'} align-middle text-center font-bold tracking-wide text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-900 ${headerDividerShadow}`}
+                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-[13px]' : 'py-2 text-jl-head'} align-middle text-center font-bold text-ink bg-head-bg ${headerDividerShadow}`}
                                                 style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                             >
                                                 {isFilterable ? (
@@ -208,13 +224,17 @@ function JobLogContent() {
                                         );
                                     })}
                                     {showAdminActions && (
-                                        <th className="px-1 py-0.5 text-center text-xl font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider bg-gray-100 dark:bg-slate-900 w-8 shadow-[inset_0_-1px_0_0_#0000005c] dark:shadow-[inset_0_-1px_0_0_#ffffff3d]">
+                                        <th className="px-1 py-0.5 text-center text-xl font-bold text-ink uppercase tracking-wider bg-head-bg w-8 shadow-[inset_0_-1.5px_0_0_var(--grid)]">
                                             ⚙
                                         </th>
                                     )}
                                 </tr>
                             </thead>
                             <tbody>
+                                {/* Zebra counts only rows that aren't install-complete
+                                    (handoff §3 banding rule): a grey row must not consume
+                                    an alternation step, or the bands either side of it
+                                    come out the same shade. */}
                                 {renderRows.length === 0 ? (
                                     hasJobsData && search.trim() !== '' && secondarySearchResults.length > 0 ? (
                                         <>
@@ -289,6 +309,7 @@ function JobLogContent() {
                                             formatCellValue={formatCellValue}
                                             formatDate={formatDateShort}
                                             rowIndex={index}
+                                            bandIndex={bandIndexById.get(row.id) ?? index}
                                             onDragStart={handleDragStart}
                                             onDragOver={handleDragOver}
                                             onDragLeave={handleDragLeave}

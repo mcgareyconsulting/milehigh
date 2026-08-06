@@ -754,7 +754,7 @@ function ReleasesLayout() {
     return (
         <>
             <div
-                className="w-full h-[calc(100vh-3.5rem)] 3xl:h-[calc(100vh-4rem)] bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-2 px-2 3xl:py-4 3xl:px-6 flex flex-col"
+                className="w-full h-[calc(100vh_-_var(--app-chrome-h))] bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-2 px-2 3xl:py-4 3xl:px-6 flex flex-col"
                 style={{
                     width: '100%',
                     minWidth: '100%',

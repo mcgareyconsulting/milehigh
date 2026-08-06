@@ -5,7 +5,7 @@
  * exports:
  *   EventsModal: Portal modal wrapping EventsList with filter props baked in (submittalId or job+release)
  * imports_from: [react, react-dom, ./EventsList]
- * imported_by: [frontend/src/components/JobDetailsModal.jsx, frontend/src/components/SubmittalDetailsModal.jsx]
+ * imported_by: [frontend/src/components/JobDetailsBody.jsx, frontend/src/components/SubmittalDetailsModal.jsx]
  * invariants:
  *   - Renders via createPortal so stacking on top of parent detail modal works regardless of DOM nesting
  *   - Escape key and backdrop click close only this modal, not the parent

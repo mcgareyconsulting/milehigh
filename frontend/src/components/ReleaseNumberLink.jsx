@@ -9,6 +9,7 @@
  * invariants:
  *   - Typography matches the Job # span in JobLogRow (font-mono, text-sm, font-semibold); only the color signals interactivity.
  *   - canMarkup || hasDrawing → version-history hub (read-only users open versions in view mode); else Procore link; else plain text.
+ *   - onOpenHub, when given, replaces the local modals entirely: the host owns the dialog (the card view routes to the release hub's Drawings tab).
  *   - Click handlers stopPropagation so tapping never toggles the card row.
  */
 import React, { useEffect, useState } from 'react';
@@ -25,6 +26,9 @@ export default function ReleaseNumberLink({
     hasDrawing = false,
     viewerUrl = '',
     canMarkup = false,
+    // When set, the host opens its own dialog (the release hub) instead of this
+    // component mounting a second copy of the attachment/markup modals.
+    onOpenHub = null,
 }) {
     const [historyOpen, setHistoryOpen] = useState(false);
     const [markupOpen, setMarkupOpen] = useState(false);
@@ -40,6 +44,18 @@ export default function ReleaseNumberLink({
     // upload/manage) and any release with an uploaded drawing (to pick a version
     // to view) route here. The hub surfaces the Procore link at the top.
     if (canMarkup || hasDrawingLocal) {
+        if (onOpenHub) {
+            return (
+                <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onOpenHub(); }}
+                    className={linkCls}
+                    title="Drawing versions — view, edit, upload, or open in Procore"
+                >
+                    {value}
+                </button>
+            );
+        }
         return (
             <>
                 <button

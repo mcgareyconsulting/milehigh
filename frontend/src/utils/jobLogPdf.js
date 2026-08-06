@@ -4,15 +4,18 @@
  * purpose: Builds a paginated, per-PM tabloid-landscape PDF of the Job Log Review tab. Each PM block starts on a fresh page and non-final PMs are padded to even page count so subsequent PMs land on the recto when printed double-sided.
  * exports:
  *   generateJobLogReviewPdf: async ({ jobs, columnHeaders, columnWidthPercent }) → triggers PDF download
- * imports_from: [jspdf, jspdf-autotable, ./formatters, ./stageProgress]
+ * imports_from: [jspdf, jspdf-autotable, ./formatters, ./stageProgress, ./pdfFonts]
  * imported_by: [pages/JobLog.jsx]
  * invariants:
  *   - Page format is tabloid landscape (17in x 11in = 1224pt x 792pt)
  *   - Each PM section starts on a fresh page; non-final PMs are padded to even page count
  *   - Urgency cells render a rasterized 7-icon Banana Code row keyed by stage name
+ *   - Type mirrors the screen: IBM Plex Sans body, IBM Plex Mono on MONO_COLUMNS,
+ *     sans header throughout. MONO_COLUMNS must track JobsTableRow.jsx.
  */
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { ensurePlexFonts } from './pdfFonts';
 import { formatDateShort, formatCellValue } from './formatters';
 import {
     isCompleteStage,
@@ -60,6 +63,26 @@ const TWO_LINE_MIN_HEIGHT_PT =
 const PRINT_HEADER_OVERRIDES = {
     'Urgency': 'Banana Code',
 };
+
+// Columns the screen table sets in IBM Plex Mono — every numeric, id and date
+// cell. Mirrors JobsTableRow.jsx, where mono is applied per-column (Fab Order,
+// Job Comp, Invoiced, Start install, Ship Date, Release #) and by the default
+// branch to anything that isn't Paint color / PM / BY. Free text (Job,
+// Description, Stage, Notes, Paint color, PM, BY) stays in the sans face, as
+// does the whole header row.
+const MONO_COLUMNS = new Set([
+    'Job #',
+    'Release #',
+    'Fab Hrs',
+    'Install HRS',
+    'Released',
+    'Fab Order',
+    'Ship Date',
+    'Start install',
+    'Comp. ETA',
+    'Job Comp',
+    'Invoiced',
+]);
 
 const PRINT_WIDTH_OVERRIDES = {
     'Urgency': 6,
@@ -310,9 +333,14 @@ function startInstallState(job) {
 // didParseCell / didDrawCell hooks read for coloring + Urgency rendering.
 // innerWidths[i] is the usable text width (pt) of column i, used to pre-cap
 // cell text to two lines so all rows share the same height.
-function buildRows(jobs, columnHeaders, doc, innerWidths) {
-    doc.setFont('helvetica', 'normal');
+//
+// `fonts` is the { sans, mono } pair from ensurePlexFonts. The measurement font
+// has to match the font the cell will actually be drawn in — mono is much wider
+// than sans at the same size, so measuring everything in one face would let
+// mono columns overflow and sans columns truncate early.
+function buildRows(jobs, columnHeaders, doc, innerWidths, fonts) {
     doc.setFontSize(BODY_FONT_SIZE);
+    const cellFonts = columnHeaders.map((col) => (MONO_COLUMNS.has(col) ? fonts.mono : fonts.sans));
     const body = [];
     const meta = [];
     for (const job of jobs) {
@@ -323,9 +351,10 @@ function buildRows(jobs, columnHeaders, doc, innerWidths) {
             stage: job['Stage'] || 'Released',
             startInstallState: startInstallState(job),
         });
-        body.push(columnHeaders.map(
-            (col, i) => truncateToTwoLines(doc, formatCell(job, col), innerWidths[i]),
-        ));
+        body.push(columnHeaders.map((col, i) => {
+            doc.setFont(cellFonts[i], 'normal');
+            return truncateToTwoLines(doc, formatCell(job, col), innerWidths[i]);
+        }));
     }
     return { body, meta };
 }
@@ -365,6 +394,10 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
         format: [PAGE_WIDTH_PT, PAGE_HEIGHT_PT],
     });
 
+    // Match the screen's faces. Falls back to Helvetica/Courier rather than
+    // failing the export if the .ttf files aren't reachable.
+    const fonts = await ensurePlexFonts(doc);
+
     const tableTopY = MARGIN_PT;
     const startInstallIdx = columnHeaders.indexOf('Start install');
     const urgencyIdx = columnHeaders.indexOf('Urgency');
@@ -373,7 +406,7 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
     pmGroups.forEach(({ rows: pmRows }, groupIdx) => {
         if (groupIdx > 0) doc.addPage();
         const startPage = doc.internal.getNumberOfPages();
-        const { body, meta } = buildRows(pmRows, columnHeaders, doc, innerWidths);
+        const { body, meta } = buildRows(pmRows, columnHeaders, doc, innerWidths, fonts);
 
         autoTable(doc, {
             head,
@@ -384,7 +417,7 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
             showHead: 'everyPage',
             rowPageBreak: 'avoid',
             styles: {
-                font: 'helvetica',
+                font: fonts.sans,
                 fontSize: 9,
                 cellPadding: { top: 1.5, bottom: 1.5, left: 3, right: 3 },
                 textColor: 0,
@@ -409,6 +442,13 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
             columnStyles,
             didParseCell: (data) => {
                 if (data.section !== 'body') return;
+
+                // Numeric / id / date columns ride mono, as on screen. Set here
+                // rather than in columnStyles because columnStyles also apply to
+                // the header, and the header row is sans across every column.
+                if (MONO_COLUMNS.has(columnHeaders[data.column.index])) {
+                    data.cell.styles.font = fonts.mono;
+                }
 
                 // Cap wrap at MAX_LINES_PER_CELL; ellipsize the last kept line
                 // when the original wrap produced more than that.

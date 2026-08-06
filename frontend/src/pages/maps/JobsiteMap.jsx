@@ -140,7 +140,7 @@ export default function JobsiteMap() {
     }, [geojson]);
 
     return (
-        <div className="relative" style={{ height: 'calc(100vh - 3.5rem)' }}>
+        <div className="relative" style={{ height: 'calc(100vh - var(--app-chrome-h))' }}>
             {loading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
                     <span className="text-gray-600">Loading jobsites...</span>

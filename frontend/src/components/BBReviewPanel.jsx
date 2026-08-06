@@ -79,44 +79,44 @@ export function BBReviewPanel({ releaseId, versionId, enabled }) {
     const canRun = !isPending && !busy;
 
     return (
-        <div className="mt-2 pt-2 border-t border-gray-100">
+        <div className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700">
             <button
                 type="button"
                 onClick={() => setOpen((o) => !o)}
-                className="text-xs font-medium text-yellow-700 hover:text-yellow-800 flex items-center gap-1"
+                className="text-xs font-medium text-yellow-700 dark:text-yellow-400 hover:text-yellow-800 dark:hover:text-yellow-300 flex items-center gap-1"
             >
                 <span>{open ? '▾' : '▸'}</span>
                 <span>🍌 Carmen review</span>
                 {review?.status === 'complete' && (
-                    <span className={flags ? 'text-red-600 font-semibold' : 'text-green-600'}>
+                    <span className={flags ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-green-600 dark:text-green-400'}>
                         {flags ? `${flags} flag${flags > 1 ? 's' : ''}` : 'clear'}
                     </span>
                 )}
-                {isPending && <span className="text-gray-400 italic">running…</span>}
+                {isPending && <span className="text-gray-400 dark:text-slate-500 italic">running…</span>}
             </button>
 
             {open && (
                 <div className="mt-2 space-y-2">
-                    {review === undefined && <p className="text-xs text-gray-400 italic">Loading…</p>}
+                    {review === undefined && <p className="text-xs text-gray-400 dark:text-slate-500 italic">Loading…</p>}
 
                     {review === null && (
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 dark:text-slate-400">
                             Submit this set to Carmen for a code-compliance check.
                         </p>
                     )}
 
                     {isPending && (
-                        <p className="text-xs text-gray-500 italic">
+                        <p className="text-xs text-gray-500 dark:text-slate-400 italic">
                             Carmen is reviewing the full set — this takes a couple of minutes.
                         </p>
                     )}
 
                     {review?.status === 'error' && (
-                        <p className="text-xs text-red-600">Review failed: {review.error || 'unknown error'}</p>
+                        <p className="text-xs text-red-600 dark:text-red-400">Review failed: {review.error || 'unknown error'}</p>
                     )}
 
                     {review?.status === 'complete' && findings.length === 0 && (
-                        <p className="text-xs text-green-700">No issues found against Carmen's known failure modes.</p>
+                        <p className="text-xs text-green-700 dark:text-green-300">No issues found against Carmen's known failure modes.</p>
                     )}
 
                     {review?.status === 'complete' && findings.map((f, i) => (
@@ -133,7 +133,7 @@ export function BBReviewPanel({ releaseId, versionId, enabled }) {
                         </div>
                     ))}
 
-                    {error && <p className="text-xs text-red-600">{error}</p>}
+                    {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
 
                     <div className="flex items-center gap-2 pt-1">
                         <button
@@ -145,7 +145,7 @@ export function BBReviewPanel({ releaseId, versionId, enabled }) {
                             {review ? 'Re-run Carmen review' : 'Submit to Carmen for review'}
                         </button>
                         {review?.status === 'complete' && review.model && (
-                            <span className="text-[11px] text-gray-400">
+                            <span className="text-[11px] text-gray-400 dark:text-slate-500">
                                 {review.model}
                                 {review.output_tokens ? ` · ${review.output_tokens} tok` : ''}
                             </span>
