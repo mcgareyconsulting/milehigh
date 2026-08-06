@@ -1,5 +1,16 @@
 # MHMW Feature Catalog — 2026-07-22 Meeting
 
+> ### 📌 Superseded as the working roadmap — 2026-08-06
+>
+> **[`roadmap.md`](roadmap.md) is now what we are building and in what order.** It
+> folds in the 2026-08-06 Bill session, Daniel's 8/4 and 8/6 notes, and this
+> catalog — adding new items and collapsing overlapping ones (see roadmap §7 for
+> what happened to each entry here).
+>
+> **This catalog remains the historical record** of what was discussed, ranked,
+> shipped, and why. Item sections here carry detail the roadmap does not repeat.
+> Where they disagree, the roadmap wins.
+
 Every feature discussed in the 2026-07-22 Bill review and the Lexi conversation,
 with current codebase state, a plan, dependencies, and effort. Ranked summary at
 the end.
@@ -10,6 +21,22 @@ taken from PR titles.
 
 Source findings: `~/Desktop/Transcripts/MHMW/processed/`. Meeting rollup:
 [`ops-planning.md`](ops-planning.md).
+
+> ### 📌 Superseded for the Procore exit — 2026-08-06
+>
+> The **2026-08-06 working session with Bill happened**, which was B2's stated
+> blocker. Planning for the whole Procore decommission has moved to
+> [`procore-decommission-plan.md`](procore-decommission-plan.md) — read that
+> first for anything in section **B**.
+>
+> Two things changed for this catalog. **Bill resolved the open priority call**
+> ("does B2 outrank A1?") in the affirmative and unprompted: *"the ball in the
+> court workflows?" — "Yeah." — "Priority one?" — "Yeah."* So **B2 now outranks
+> every unshipped item below.** And **K2 → D1 → D2 is no longer the critical
+> path** — D1 becomes a dependency of the submittal work rather than a peer.
+>
+> This catalog remains the source of truth for everything *outside* the Procore
+> exit.
 
 **Effort:** S = under a day · M = 2–4 days · L = 1–2 weeks · XL = 3+ weeks.
 
@@ -455,13 +482,33 @@ exists.
 
 ---
 
-### B2. Submittal workflows + PM-based templates — **DEFERRED pending working session**
+### B2. Submittal workflows + PM-based templates — **✅ UNBLOCKED 2026-08-06. Now PRIORITY ONE. Planning moved to [`procore-decommission-plan.md`](procore-decommission-plan.md).**
 
-> **Deferred by Daniel 2026-07-22.** Not planned from the transcript — the
-> meeting itself ended on *"we need to sit down and go through that workflow"*
-> [L783], and Bill has already sent a document containing the full lifecycle
-> flowchart. Planning around both would be guessing at something that exists on
-> paper.
+> **Status 2026-08-06.** The working session this item was waiting on
+> **happened**, and Bill's written spec
+> (`MHMW_Brain_Procore_Decommission_Submittal_System_Developer_Handoff.md`)
+> arrived alongside it. Both blockers are cleared.
+>
+> **Bill ranked it priority one, twice** — once directly [L30–35] and once as a
+> scope boundary: *"brain projects, brain submittal handling, and ball-in-court
+> workflow is the absolute core need to have before October"* [L802–808], with
+> *"the rest of it is great accessories but not terribly important"* [L810–811].
+>
+> **The full plan lives in
+> [`procore-decommission-plan.md`](procore-decommission-plan.md)** — data model,
+> the intelligent-workflow rules, five slices across eight weeks, the unscoped
+> migration risk, and what got cut from Bill's own Phase-1 list. The notes below
+> are retained as the 2026-07-22 record; where they conflict with the plan doc,
+> the plan doc wins.
+>
+> **Three things the session changed that are easy to miss:**
+> - **Mission Brief is out of October scope** — *"easily phase three"* [L1019] —
+>   despite Bill's written spec listing it as a Phase 1 deliverable. Needs his
+>   explicit confirmation.
+> - **Intelligent workflow building** replaces the static ball-in-court sequence:
+>   the reviewer's response mutates the workflow itself.
+> - **DRR→FC is 1:1, enforced**, with an **FC Separator** as the only sanctioned
+>   fan-out into multiple releases.
 
 **State:** Nothing built. `Submittals` + `SubmittalEvents` + the Procore sync
 exist; there is no internal workflow engine.
@@ -494,11 +541,25 @@ That conflict is still unresolved.
 
 ---
 
-### B3. Soft-link sub / DRR / FC — **DEFERRED**
+### B3. Soft-link sub / DRR / FC — **DISSOLVED 2026-08-06. Absorbed by B2's native model.**
 
-> **Deferred by Daniel 2026-07-22.** But see the open correctness question
-> below — it should not be deferred silently, because it may not be a feature
-> at all.
+> **Resolved 2026-08-06, and the answer is "neither a feature nor a bug we have
+> to fix."** The correctness question below asked which of two worlds we're in.
+> `docs/submittal-id-coherence-audit.md` answered it: **three separate Procore
+> records** — Procore does not mutate type in place, it closes the old submittal
+> and creates a new one with a new id for the next phase. So the frozen-`type`
+> reading was wrong, and there is no live data-correctness issue.
+>
+> **And the feature goes away too.** In the Brain-native model a DRR is a *child
+> record* of its sub-GC (`parent_id`), so the link is a foreign key rather than
+> something to soft-link after the fact. See
+> [`procore-decommission-plan.md`](procore-decommission-plan.md) §1.2.
+>
+> **What survives is the migration**, not the feature: 3,892 legacy Procore
+> submittals whose trees have to be reconstructed at cut-over. Tracked in the
+> plan doc §4, which is the largest unscoped risk in the October window.
+>
+> Original 2026-07-22 notes retained below.
 
 **State:** Partial infrastructure — `SubmittalReconcile`,
 `add_submittal_release_link`, `app/brain/submittal_matching/` with a matcher,
@@ -2032,10 +2093,18 @@ Eight items, none of which Daniel can unblock. **One shrank on 2026-07-25.**
 
 ## Still needing Bill's call
 
-1. **Does B2 (submittal workflows) outrank A1 (T&M)?** He named both as "the
-   next thing," 300 lines apart, neither referencing the other. B2 is now
-   deferred, which defers the question rather than answering it — and October
-   does not move.
+1. ~~**Does B2 (submittal workflows) outrank A1 (T&M)?**~~ **✅ ANSWERED
+   2026-08-06 — yes, and unprompted.** *"the ball in the court workflows?" —
+   "Yeah." — "Priority one?" — "Yeah."* [Bill-8-6 L30–35]. A1 shipped
+   2026-07-26, so nothing was lost to the ambiguity. From 8/6, **B2 outranks
+   every unshipped item in this catalog.**
+
+2. **Is Mission Brief really out of October scope?** *New 2026-08-06.* Bill's
+   written spec lists it as a Phase 1 deliverable; in the session he called it
+   *"easily phase three"* [L1019–1020]. The transcript is later and more
+   specific, so the plan cuts it — but it is the most visible thing being
+   removed from his own document, and he should confirm it rather than discover
+   it. See [`procore-decommission-plan.md`](procore-decommission-plan.md) §5.
 
 *(Resolved during the walkthrough: B1 ownership → Bill. D2 vs the DWL → the DWL
 becomes one box on the personal page rather than being retired.)*
