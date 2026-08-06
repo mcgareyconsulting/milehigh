@@ -596,12 +596,13 @@ export function useJobsFilters(jobs = []) {
     };
 
     /**
-     * Colors per stage subset for the job log stage dropdown (custom dropdown only).
+     * Colors per stage subset — same RGB as jobLogPdf.js STAGE_GROUP_COLORS
+     * (print source of truth) and tokens.css --st-blue/green/purple.
      */
     const stageGroupColors = {
-        FABRICATION: { light: 'rgb(219 234 254)', text: 'rgb(30 64 175)', border: 'rgb(147 197 253)' },
-        READY_TO_SHIP: { light: 'rgb(209 250 229)', text: 'rgb(6 95 70)', border: 'rgb(110 231 183)' },
-        COMPLETE: { light: 'rgb(237 233 254)', text: 'rgb(91 33 182)', border: 'rgb(196 181 253)' },
+        FABRICATION: { light: 'rgb(219 234 254)', text: 'rgb(30 64 175)', border: 'rgb(147 197 253)' },   // blue-100 / blue-800
+        READY_TO_SHIP: { light: 'rgb(209 250 229)', text: 'rgb(6 95 70)', border: 'rgb(110 231 183)' }, // emerald-100 / emerald-800
+        COMPLETE: { light: 'rgb(237 233 254)', text: 'rgb(91 33 182)', border: 'rgb(196 181 253)' },      // violet-100 / violet-800
     };
 
     // Background color applied to a Fab Order cell when its value duplicates another

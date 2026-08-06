@@ -328,7 +328,7 @@ export default function Board() {
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
+        <div className="flex flex-col h-[calc(100vh_-_var(--app-chrome-h))] overflow-hidden">
             {/* Header bar */}
             <div className="shrink-0 px-5 py-2.5 flex items-center gap-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
                 <div className="min-w-0">

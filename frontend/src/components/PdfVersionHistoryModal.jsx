@@ -51,6 +51,10 @@ export function PdfVersionHistoryModal({
     // can be confirmed. Photo uploads are auto-tagged with this stage.
     gateStage = null,
     onConfirmStage,
+    // Embedded mode drops this component's own dialog chrome (backdrop, panel,
+    // header, Close button) so the hub modal can host the body inside a tab.
+    // The host owns closing; only the gate-confirm action survives in the footer.
+    embedded = false,
 }) {
     const [versions, setVersions] = useState([]);
     const [photos, setPhotos] = useState([]);
@@ -174,11 +178,12 @@ export function PdfVersionHistoryModal({
     };
 
     useEffect(() => {
-        if (!isOpen) return;
+        // Embedded: the host modal owns Escape, so binding here would close both.
+        if (!isOpen || embedded) return;
         const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [isOpen, onClose]);
+    }, [isOpen, embedded, onClose]);
 
     const uploadDrawing = async (file) => {
         setUploading(true);
@@ -315,49 +320,12 @@ export function PdfVersionHistoryModal({
         return `${(kb / 1024).toFixed(1)} MB`;
     };
 
-    return createPortal(
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
-            onClick={onClose}
-        >
-            <div
-                className="bg-white rounded-xl shadow-2xl w-full max-w-5xl mx-4 max-h-[85vh] flex flex-col"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-6 py-4 rounded-t-xl flex items-center justify-between gap-3">
-                    <h2 className="text-xl font-bold text-white">{title ? `${title} Attachments` : 'Attachments'}</h2>
-                    <div className="flex items-center gap-3">
-                        {viewerUrl && viewerUrl.trim() !== '' ? (
-                            <a
-                                href={viewerUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-white/90 text-accent-700 hover:bg-white whitespace-nowrap"
-                                title="Open this drawing in Procore"
-                            >
-                                ↗ View in Procore
-                            </a>
-                        ) : (
-                            <span
-                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-white/30 text-white/60 cursor-help select-none whitespace-nowrap"
-                                title="No FC link found"
-                                aria-disabled="true"
-                            >
-                                ↗ View in Procore
-                            </span>
-                        )}
-                        <button
-                            onClick={onClose}
-                            className="text-white hover:text-gray-200 text-2xl font-bold leading-none"
-                            aria-label="Close"
-                        >
-                            ×
-                        </button>
-                    </div>
-                </div>
+    const hasViewerUrl = Boolean(viewerUrl && viewerUrl.trim() !== '');
 
+    const body = (
+        <>
                 {/* Choose file — lives outside the two columns; routes by file type. */}
-                <div className="px-6 py-4 border-b border-gray-200 flex flex-wrap items-center gap-3">
+                <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-600 flex flex-wrap items-center gap-3">
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -366,14 +334,41 @@ export function PdfVersionHistoryModal({
                         disabled={uploading || photoBusy}
                         className="text-sm"
                     />
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-gray-500 dark:text-slate-400">
                         PDFs go to Drawings; images go to Photos.
                     </span>
-                    {(uploading || photoBusy) && <span className="text-sm text-gray-500">Uploading…</span>}
+                    {(uploading || photoBusy) && <span className="text-sm text-gray-500 dark:text-slate-400">Uploading…</span>}
+                    {/* Embedded: the Procore link has no header to live in, so it
+                        rides at the end of the toolbar instead. */}
+                    {embedded && (
+                        <span className="ml-auto">
+                            {hasViewerUrl ? (
+                                <a
+                                    href={viewerUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-accent-600 text-white hover:bg-accent-700 whitespace-nowrap"
+                                    title="Open this drawing in Procore"
+                                >
+                                    ↗ View in Procore
+                                </a>
+                            ) : (
+                                <span
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-gray-200 dark:bg-slate-600 text-gray-500 dark:text-slate-400 cursor-help select-none whitespace-nowrap"
+                                    title="No FC link found"
+                                    aria-disabled="true"
+                                >
+                                    ↗ View in Procore
+                                </span>
+                            )}
+                        </span>
+                    )}
                 </div>
 
                 {gateStage && (
-                    <div className={`px-6 py-3 border-b text-sm flex items-center gap-2 ${gateSatisfied ? 'bg-green-50 border-green-200 text-green-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                    <div className={`px-6 py-3 border-b text-sm flex items-center gap-2 ${gateSatisfied
+                        ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-200'
+                        : 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-200'}`}>
                         {gateSatisfied ? (
                             <span>✓ Photo for <strong>{gateStage}</strong> attached — confirm below to move the stage.</span>
                         ) : (
@@ -384,19 +379,19 @@ export function PdfVersionHistoryModal({
 
                 {error && (
                     <div className="px-6 pt-3">
-                        <p className="text-sm text-red-600">{error}</p>
+                        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
                     </div>
                 )}
 
                 <div className="px-6 py-4 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* ── Drawings column ───────────────────────────────────── */}
                     <section className="min-w-0">
-                        <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide mb-3 pb-2 border-b border-gray-200">
+                        <h3 className="text-sm font-bold text-gray-800 dark:text-slate-100 uppercase tracking-wide mb-3 pb-2 border-b border-gray-200 dark:border-slate-600">
                             Drawings
                         </h3>
-                        {loading && <p className="text-sm text-gray-500 italic">Loading…</p>}
+                        {loading && <p className="text-sm text-gray-500 dark:text-slate-400 italic">Loading…</p>}
                         {!loading && versions.length === 0 && (
-                            <p className="text-sm text-gray-500 italic">
+                            <p className="text-sm text-gray-500 dark:text-slate-400 italic">
                                 No drawings yet — choose a PDF above to create v1.
                             </p>
                         )}
@@ -408,29 +403,29 @@ export function PdfVersionHistoryModal({
                                     return (
                                     <li
                                         key={v.id}
-                                        className="border border-gray-200 rounded-lg p-3"
+                                        className="border border-gray-200 dark:border-slate-600 rounded-lg p-3"
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-baseline gap-2 flex-wrap">
-                                                    <span className="font-semibold text-gray-900">v{v.version_number}</span>
-                                                    <span className="text-xs text-gray-500">{fmtDate(v.uploaded_at)}</span>
-                                                    <span className="text-xs text-gray-500">
+                                                    <span className="font-semibold text-gray-900 dark:text-slate-100">v{v.version_number}</span>
+                                                    <span className="text-xs text-gray-500 dark:text-slate-400">{fmtDate(v.uploaded_at)}</span>
+                                                    <span className="text-xs text-gray-500 dark:text-slate-400">
                                                         {v.uploaded_by?.name || '—'}
                                                     </span>
-                                                    <span className="text-xs text-gray-400 ml-auto">{fmtSize(v.file_size_bytes)}</span>
+                                                    <span className="text-xs text-gray-400 dark:text-slate-500 ml-auto">{fmtSize(v.file_size_bytes)}</span>
                                                 </div>
                                                 {v.note && (
-                                                    <p className="text-sm text-gray-700 mt-1 break-words">{v.note}</p>
+                                                    <p className="text-sm text-gray-700 dark:text-slate-200 mt-1 break-words">{v.note}</p>
                                                 )}
                                                 {v.source_version_id != null && (
-                                                    <p className="text-xs text-gray-400 mt-1">from v-id {v.source_version_id}</p>
+                                                    <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">from v-id {v.source_version_id}</p>
                                                 )}
                                             </div>
                                             <button
                                                 type="button"
                                                 onClick={() => onOpenVersion?.(v.id, 'view')}
-                                                className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                                                className="px-3 py-2 text-sm border border-gray-300 dark:border-slate-500 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600"
                                             >
                                                 View
                                             </button>
@@ -444,7 +439,7 @@ export function PdfVersionHistoryModal({
                                         </div>
 
                                         {/* Comments / @mentions thread for this version */}
-                                        <div className="mt-2 pt-2 border-t border-gray-100">
+                                        <div className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700">
                                             <button
                                                 type="button"
                                                 onClick={() => toggleComments(v.id)}
@@ -459,18 +454,18 @@ export function PdfVersionHistoryModal({
                                             {expanded && (
                                                 <div className="mt-2 space-y-2">
                                                     {comments === undefined && (
-                                                        <p className="text-xs text-gray-400 italic">Loading…</p>
+                                                        <p className="text-xs text-gray-400 dark:text-slate-500 italic">Loading…</p>
                                                     )}
                                                     {comments?.length === 0 && (
-                                                        <p className="text-xs text-gray-400 italic">No comments yet.</p>
+                                                        <p className="text-xs text-gray-400 dark:text-slate-500 italic">No comments yet.</p>
                                                     )}
                                                     {comments?.map((c) => (
                                                         <div key={c.id} className="text-sm">
                                                             <div className="flex items-baseline gap-2">
-                                                                <span className="font-semibold text-gray-800">{c.author_name}</span>
-                                                                <span className="text-xs text-gray-400">{fmtDate(c.created_at)}</span>
+                                                                <span className="font-semibold text-gray-800 dark:text-slate-100">{c.author_name}</span>
+                                                                <span className="text-xs text-gray-400 dark:text-slate-500">{fmtDate(c.created_at)}</span>
                                                             </div>
-                                                            <p className="text-gray-700 break-words whitespace-pre-wrap">
+                                                            <p className="text-gray-700 dark:text-slate-200 break-words whitespace-pre-wrap">
                                                                 {renderCommentBody(c.body)}
                                                             </p>
                                                         </div>
@@ -513,8 +508,8 @@ export function PdfVersionHistoryModal({
 
                     {/* ── Photos column ─────────────────────────────────────── */}
                     <section className="min-w-0">
-                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
-                            <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">
+                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200 dark:border-slate-600">
+                            <h3 className="text-sm font-bold text-gray-800 dark:text-slate-100 uppercase tracking-wide">
                                 Photos
                             </h3>
                             <button
@@ -535,9 +530,9 @@ export function PdfVersionHistoryModal({
                                 className="hidden"
                             />
                         </div>
-                        {photosLoading && <p className="text-sm text-gray-500 italic">Loading…</p>}
+                        {photosLoading && <p className="text-sm text-gray-500 dark:text-slate-400 italic">Loading…</p>}
                         {!photosLoading && photos.length === 0 && (
-                            <p className="text-sm text-gray-500 italic">
+                            <p className="text-sm text-gray-500 dark:text-slate-400 italic">
                                 No photos yet — choose an image above or use “Take photo”.
                             </p>
                         )}
@@ -546,7 +541,7 @@ export function PdfVersionHistoryModal({
                                 {photos.map((p) => (
                                     <li
                                         key={p.id}
-                                        className="border border-gray-200 rounded-lg p-3"
+                                        className="border border-gray-200 dark:border-slate-600 rounded-lg p-3"
                                     >
                                         <div className="flex gap-3">
                                             <a
@@ -559,22 +554,22 @@ export function PdfVersionHistoryModal({
                                                 <img
                                                     src={`${API_BASE_URL}/brain/releases/${releaseId}/photos/${p.id}/file`}
                                                     alt={p.original_filename || 'photo'}
-                                                    className="w-24 h-24 object-cover rounded-md border border-gray-200 bg-gray-50"
+                                                    className="w-24 h-24 object-cover rounded-md border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700"
                                                 />
                                             </a>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-baseline gap-2 flex-wrap">
                                                     {p.stage && (
-                                                        <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-accent-100 text-accent-700">
+                                                        <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300">
                                                             {p.stage}
                                                         </span>
                                                     )}
-                                                    <span className="text-xs text-gray-500">{fmtDate(p.uploaded_at)}</span>
-                                                    <span className="text-xs text-gray-500">{p.uploaded_by?.name || '—'}</span>
-                                                    <span className="text-xs text-gray-400 ml-auto">{fmtSize(p.file_size_bytes)}</span>
+                                                    <span className="text-xs text-gray-500 dark:text-slate-400">{fmtDate(p.uploaded_at)}</span>
+                                                    <span className="text-xs text-gray-500 dark:text-slate-400">{p.uploaded_by?.name || '—'}</span>
+                                                    <span className="text-xs text-gray-400 dark:text-slate-500 ml-auto">{fmtSize(p.file_size_bytes)}</span>
                                                 </div>
                                                 {p.last_edited_by && (
-                                                    <p className="text-[11px] text-gray-400 mt-1 italic">
+                                                    <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1 italic">
                                                         Note edited by {p.last_edited_by.name || '—'} · {fmtDate(p.last_edited_at)}
                                                     </p>
                                                 )}
@@ -586,13 +581,13 @@ export function PdfVersionHistoryModal({
                                                     onBlur={() => saveNote(p.id)}
                                                     placeholder="Optional notes…"
                                                     rows={2}
-                                                    className="mt-2 w-full text-sm border border-gray-300 rounded-md px-2 py-1 resize-y focus:outline-none focus:ring-1 focus:ring-accent-500"
+                                                    className="mt-2 w-full text-sm border border-gray-300 dark:border-slate-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 rounded-md px-2 py-1 resize-y focus:outline-none focus:ring-1 focus:ring-accent-500"
                                                 />
                                                 <div className="flex items-center gap-2 mt-2">
                                                     <button
                                                         type="button"
                                                         onClick={() => deletePhoto(p.id)}
-                                                        className="px-3 py-1 text-xs border border-gray-300 text-gray-600 rounded-md hover:bg-gray-50"
+                                                        className="px-3 py-1 text-xs border border-gray-300 dark:border-slate-500 text-gray-600 dark:text-slate-300 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600"
                                                     >
                                                         Delete
                                                     </button>
@@ -606,24 +601,80 @@ export function PdfVersionHistoryModal({
                     </section>
                 </div>
 
-                <div className="bg-gray-50 px-6 py-4 rounded-b-xl border-t border-gray-200 flex justify-end gap-3">
-                    <button
-                        onClick={onClose}
-                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300"
-                    >
-                        {gateStage ? 'Cancel' : 'Close'}
-                    </button>
-                    {gateStage && (
+                {/* Embedded with no gate to confirm, the footer would hold nothing
+                    but a duplicate Close — the host modal already has one. */}
+                {(!embedded || gateStage) && (
+                    <div className="bg-gray-50 dark:bg-slate-700 px-6 py-4 rounded-b-xl border-t border-gray-200 dark:border-slate-600 flex justify-end gap-3">
+                        {!embedded && (
+                            <button
+                                onClick={onClose}
+                                className="px-4 py-2 bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-slate-200 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-slate-500"
+                            >
+                                {gateStage ? 'Cancel' : 'Close'}
+                            </button>
+                        )}
+                        {gateStage && (
+                            <button
+                                onClick={() => onConfirmStage?.()}
+                                disabled={!gateSatisfied}
+                                className="px-4 py-2 bg-accent-600 text-white rounded-lg font-semibold hover:bg-accent-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={gateSatisfied ? `Move to ${gateStage}` : `Upload a ${gateStage} photo first`}
+                            >
+                                Confirm {gateStage}
+                            </button>
+                        )}
+                    </div>
+                )}
+        </>
+    );
+
+    // The hub renders the body directly inside its tab pane; the surface follows
+    // the theme so the tab matches the Details pane beside it.
+    if (embedded) {
+        return <div className="flex flex-col flex-1 min-h-0 bg-white dark:bg-slate-800">{body}</div>;
+    }
+
+    return createPortal(
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+            onClick={onClose}
+        >
+            <div
+                className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-5xl mx-4 max-h-[85vh] flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-6 py-4 rounded-t-xl flex items-center justify-between gap-3">
+                    <h2 className="text-xl font-bold text-white">{title ? `${title} Attachments` : 'Attachments'}</h2>
+                    <div className="flex items-center gap-3">
+                        {hasViewerUrl ? (
+                            <a
+                                href={viewerUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-white/90 text-accent-700 hover:bg-white whitespace-nowrap"
+                                title="Open this drawing in Procore"
+                            >
+                                ↗ View in Procore
+                            </a>
+                        ) : (
+                            <span
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-white/30 text-white/60 cursor-help select-none whitespace-nowrap"
+                                title="No FC link found"
+                                aria-disabled="true"
+                            >
+                                ↗ View in Procore
+                            </span>
+                        )}
                         <button
-                            onClick={() => onConfirmStage?.()}
-                            disabled={!gateSatisfied}
-                            className="px-4 py-2 bg-accent-600 text-white rounded-lg font-semibold hover:bg-accent-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title={gateSatisfied ? `Move to ${gateStage}` : `Upload a ${gateStage} photo first`}
+                            onClick={onClose}
+                            className="text-white hover:text-gray-200 text-2xl font-bold leading-none"
+                            aria-label="Close"
                         >
-                            Confirm {gateStage}
+                            ×
                         </button>
-                    )}
+                    </div>
                 </div>
+                {body}
             </div>
         </div>,
         document.body,

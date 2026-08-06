@@ -36,7 +36,7 @@ export function useViewMode(storageKey, defaultMode = 'auto') {
 }
 
 export default function ViewToggle({ value, onChange, className = '', accent = 'blue' }) {
-    const btnBase = 'px-2.5 py-1 text-xs font-semibold transition-all whitespace-nowrap';
+    const btnBase = 'px-2 py-1 text-xs font-semibold transition-all whitespace-nowrap shrink-0';
     const active = accent === 'green' ? 'bg-green-700 text-white' : 'bg-blue-700 text-white';
     const inactive = 'bg-white dark:bg-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500';
 
@@ -44,7 +44,7 @@ export default function ViewToggle({ value, onChange, className = '', accent = '
         <div
             role="group"
             aria-label="View mode"
-            className={`inline-flex rounded border border-gray-400 dark:border-slate-500 overflow-hidden ${className}`}
+            className={`inline-flex rounded border border-gray-400 dark:border-slate-500 overflow-hidden shrink-0 ${className}`}
         >
             <button
                 type="button"

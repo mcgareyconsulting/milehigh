@@ -82,6 +82,9 @@ function progressValue(value) {
 export default function JobLogCard({
     job,
     onOpen,
+    // Tapping the release number opens the same hub as the card itself, on the
+    // Drawings & Photos tab. Falls back to ReleaseNumberLink's own modals if unset.
+    onOpenDrawings = null,
     onUpdate,
     stageToGroup,
     stageGroupColors,
@@ -172,6 +175,7 @@ export default function JobLogCard({
                             hasDrawing={job.has_drawing}
                             viewerUrl={job.viewer_url}
                             canMarkup={isAdmin || isDrafter}
+                            onOpenHub={onOpenDrawings ? () => onOpenDrawings(job) : null}
                         />
                     </span>
                     <span className="shrink-0">
