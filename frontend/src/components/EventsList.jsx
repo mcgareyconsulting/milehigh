@@ -280,25 +280,27 @@ export function EventsList({
 
     return (
         <>
-            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                    <div className="overflow-auto flex-1 min-h-0">
-                        <table className="w-full">
-                            <thead className="bg-gradient-to-r from-gray-50 to-accent-50 dark:from-slate-700 dark:to-slate-700">
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden gap-1.5">
+                {/* Lattice CSS: tokens.css .job-log-table-frame / .job-log-table (separate
+                    borders + --grid lines, per CURRENT_STYLING_PIN §3). */}
+                <div className="job-log-table-frame flex-1 min-h-0 flex flex-col">
+                    <div className="job-log-table-scroll overflow-auto flex-1 min-h-0">
+                        <table className="job-log-table">
+                            <thead className="sticky top-0 z-10">
                                 <tr>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">Date</th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">Source</th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">User</th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">Identifier</th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">Action</th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">Payload</th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">Undo</th>
+                                    <th style={{ width: '13%' }} className="px-2 py-1.5 text-center text-jl-head font-bold text-ink bg-head-bg leading-tight">Date</th>
+                                    <th style={{ width: '10%' }} className="px-2 py-1.5 text-center text-jl-head font-bold text-ink bg-head-bg leading-tight">Source</th>
+                                    <th style={{ width: '9%' }} className="px-2 py-1.5 text-center text-jl-head font-bold text-ink bg-head-bg leading-tight">User</th>
+                                    <th style={{ width: '9%' }} className="px-2 py-1.5 text-center text-jl-head font-bold text-ink bg-head-bg leading-tight">Identifier</th>
+                                    <th style={{ width: '15%' }} className="px-2 py-1.5 text-center text-jl-head font-bold text-ink bg-head-bg leading-tight">Action</th>
+                                    <th style={{ width: '36%' }} className="px-2 py-1.5 text-center text-jl-head font-bold text-ink bg-head-bg leading-tight">Payload</th>
+                                    <th style={{ width: '8%' }} className="px-2 py-1.5 text-center text-jl-head font-bold text-ink bg-head-bg leading-tight">Undo</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-600">
+                            <tbody>
                                 {events.length === 0 ? (
                                     <tr>
-                                        <td colSpan="7" className="px-6 py-12 text-center">
+                                        <td colSpan="7" className="px-6 py-12 text-center bg-surface">
                                             <div className="text-gray-400 dark:text-slate-500 text-4xl mb-3">📭</div>
                                             <p className="text-gray-500 dark:text-slate-400 font-medium">No events found</p>
                                         </td>
@@ -306,49 +308,50 @@ export function EventsList({
                                 ) : (
                                     events.map((event, index) => {
                                         const uniqueKey = `${event.type}-${event.id}`;
+                                        // White / blue-100 zebra bands, same tokens as the Job Log.
+                                        const bandClass = index % 2 === 0 ? 'jl-band-a' : 'jl-band-b';
                                         return (
                                             <tr
                                                 key={uniqueKey}
-                                                className="hover:bg-accent-50/50 dark:hover:bg-slate-700/50 transition-colors duration-150"
-                                                style={{ animationDelay: `${index * 50}ms` }}
+                                                className={`jl-row ${bandClass}`}
                                             >
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-jl font-mono text-center text-ink-2">
                                                     {formatDateTime(event.created_at)}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getSourceColor(event.source)}`}>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-center">
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-jl-2 font-semibold ${getSourceColor(event.source)}`}>
                                                         {event.source}
                                                     </span>
                                                     {isUndoEvent(event) && (
                                                         <span
-                                                            className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700"
+                                                            className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700"
                                                             title="Undo event"
                                                         >
                                                             ↶ undo
                                                         </span>
                                                     )}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-jl text-center text-ink-2">
                                                     {event.user_name || '—'}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-jl font-mono text-center text-ink">
                                                     {event.type === 'job'
                                                         ? `${event.job}-${event.release || 'N/A'}`
                                                         : event.submittal_id || 'N/A'
                                                     }
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-slate-100">
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-jl font-medium text-center text-ink">
                                                     {event.action}
                                                 </td>
-                                                <td className="px-6 py-4 text-sm">
+                                                <td className="px-2 py-1.5 text-jl">
                                                     {expandedPayload[uniqueKey] ? (
-                                                        <div className="space-y-2">
-                                                            <pre className="bg-gray-50 dark:bg-slate-700 p-3 rounded-lg text-xs overflow-x-auto max-w-md border border-gray-200 dark:border-slate-600 text-gray-900 dark:text-slate-200">
+                                                        <div className="space-y-1.5">
+                                                            <pre className="bg-surface-2 p-2 rounded text-jl-2 font-mono overflow-x-auto max-w-md border border-hairline text-ink">
                                                                 {formatPayload(event.payload)}
                                                             </pre>
                                                             <button
                                                                 onClick={() => togglePayload(uniqueKey)}
-                                                                className="text-xs text-accent-600 dark:text-accent-400 hover:text-accent-700 dark:hover:text-accent-300 font-medium"
+                                                                className="text-jl-2 text-brand hover:underline font-medium"
                                                             >
                                                                 ▲ Collapse
                                                             </button>
@@ -356,13 +359,13 @@ export function EventsList({
                                                     ) : (
                                                         <button
                                                             onClick={() => togglePayload(uniqueKey)}
-                                                            className="text-xs text-accent-600 dark:text-accent-400 hover:text-accent-700 dark:hover:text-accent-300 font-medium"
+                                                            className="text-jl-2 text-brand hover:underline font-medium"
                                                         >
                                                             ▼ View Payload
                                                         </button>
                                                     )}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-jl text-center">
                                                     {(() => {
                                                         const { canUndo, reason } = getUndoEligibility(event);
                                                         return (
@@ -370,7 +373,7 @@ export function EventsList({
                                                                 onClick={() => canUndo && setUndoTarget(event)}
                                                                 disabled={!canUndo}
                                                                 title={canUndo ? 'Revert this change' : reason}
-                                                                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                                                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-jl-2 font-semibold border transition-colors ${
                                                                     canUndo
                                                                         ? 'bg-white dark:bg-slate-700 text-accent-700 dark:text-accent-300 border-accent-300 dark:border-accent-700 hover:bg-accent-50 dark:hover:bg-slate-600 cursor-pointer'
                                                                         : 'bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 border-gray-200 dark:border-slate-700 cursor-not-allowed'
@@ -389,12 +392,10 @@ export function EventsList({
                         </table>
                     </div>
                 </div>
-                <div className="flex items-center justify-between flex-shrink-0 pt-2">
-                    <div className="bg-accent-50 dark:bg-accent-900/30 rounded-lg px-4 py-2 border border-accent-200 dark:border-accent-700">
-                        <p className="text-sm font-semibold text-accent-700 dark:text-accent-300">
-                            Total: <span className="text-accent-900 dark:text-accent-100">{events.length}</span> events
-                        </p>
-                    </div>
+                <div className="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-slate-200 flex-shrink-0">
+                    <span>
+                        Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{events.length}</span> events
+                    </span>
                 </div>
             </div>
 

@@ -29,7 +29,7 @@ const FILL = {
 
 export default function DateCellPill({ value, tone = 'neutral', interactive = false, title, onClick }) {
     const [fill, hover] = FILL[tone] ?? FILL.neutral;
-    const cls = `inline-flex items-center justify-center min-w-[60px] rounded px-2 py-0.5 text-xs font-semibold tabular-nums leading-none transition-colors ${fill} ${interactive ? `${hover} cursor-pointer` : 'cursor-default'}`;
+    const cls = `inline-flex items-center justify-center min-w-[60px] rounded px-2 py-0.5 text-jl-2 font-mono font-semibold tabular-nums leading-none transition-colors ${fill} ${interactive ? `${hover} cursor-pointer` : 'cursor-default'}`;
     const display = value || '—';
     return interactive
         ? <button type="button" onClick={onClick} title={title} className={cls}>{display}</button>

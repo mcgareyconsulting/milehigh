@@ -214,9 +214,20 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
     const currentStatus = row.submittal_drafting_status ?? row['COMP. STATUS'] ?? '';
     const isHoldStatus = currentStatus === 'HOLD';
 
-    // Alternate row background colors, but override with yellow if status is HOLD
-    const baseRowBgClass = rowIndex % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-gray-200 dark:bg-slate-700';
-    const rowBgClass = isHoldStatus ? 'bg-yellow-200 dark:bg-yellow-900/40' : baseRowBgClass;
+    // White / blue-100 zebra bands (tokens.css jl-band-a/b, same as the Job Log),
+    // overridden with yellow if status is HOLD. The lattice uses border-collapse:
+    // separate, where <tr> backgrounds/borders don't paint — so the band class and
+    // the drag-over drop indicator both ride on every cell via rowBgClass.
+    const baseRowBgClass = rowIndex % 2 === 0 ? 'jl-band-a' : 'jl-band-b';
+    const bandClass = isHoldStatus ? 'bg-yellow-200 dark:bg-yellow-900/40' : baseRowBgClass;
+    const dragOverClass = isDragOver
+        ? `bg-blue-100 dark:bg-blue-900/40 ${dragOverHalf === 'top'
+            ? 'shadow-[inset_0_3px_0_0_#60a5fa]'
+            : dragOverHalf === 'bottom'
+                ? 'shadow-[inset_0_-3px_0_0_#60a5fa]'
+                : ''}`
+        : '';
+    const rowBgClass = isDragOver ? dragOverClass : bandClass;
 
     // Prevent drag start from protected cells
     const handleProtectedCellMouseDown = (e) => {
@@ -237,9 +248,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
     return (
         <>
             <tr
-                className={`${rowBgClass} hover:bg-gray-100 dark:hover:bg-slate-600 transition-all duration-200 border-b border-gray-300 dark:border-slate-600 ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''} ${
-                    isDragOver && dragOverHalf === 'top' ? 'border-t-2 border-t-blue-400 dark:border-t-blue-300 bg-blue-50 dark:bg-blue-900/30' : ''
-                } ${isDragOver && dragOverHalf === 'bottom' ? 'border-b-2 border-b-blue-400 dark:border-b-blue-300 bg-blue-50 dark:bg-blue-900/30' : ''}`}
+                className={`jl-row ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
                 data-submittal-id={submittalId}
                 onDragStart={(e) => {
                     // Only allow drag from title cell
@@ -342,7 +351,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 dark:border-slate-600 text-center dwl-col-order-number`}
+                                className={`px-0.5 py-0.5 align-middle ${rowBgClass} text-center dwl-col-order-number`}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
@@ -353,7 +362,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                                     onChange={(e) => setOrderNumberValue(e.target.value)}
                                     onBlur={handleOrderNumberBlur}
                                     onKeyDown={handleOrderNumberKeyDown}
-                                    className="w-full px-0.5 py-0 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white dark:bg-slate-700 font-medium text-gray-900 dark:text-slate-100"
+                                    className="w-full px-0.5 py-0 text-jl font-mono border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white dark:bg-slate-700 font-medium text-gray-900 dark:text-slate-100"
                                     style={{ minWidth: '30px', maxWidth: '50px' }}
                                 />
                             </td>
@@ -398,13 +407,13 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 dark:border-slate-600 text-center dwl-col-order-number`}
+                                className={`px-0.5 py-0.5 align-middle ${rowBgClass} text-center dwl-col-order-number`}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <div className="flex items-center justify-center gap-1">
-                                    <div 
-                                        className={`px-0.5 py-0 text-xs border rounded-sm font-medium min-w-[20px] max-w-[50px] inline-block transition-colors ${isEditable
+                                    <div
+                                        className={`px-0.5 py-0 text-jl font-mono border rounded-sm font-medium min-w-[20px] max-w-[50px] inline-block transition-colors ${isEditable
                                             ? 'border-gray-300 dark:border-slate-500 bg-gray-50 dark:bg-slate-600 hover:bg-white dark:hover:bg-slate-500 hover:border-accent-400 cursor-text text-gray-700 dark:text-slate-200'
                                             : 'border-gray-200 dark:border-slate-600 bg-gray-100 dark:bg-slate-700 cursor-not-allowed text-gray-500 dark:text-slate-400 opacity-75'
                                             }`}
@@ -436,7 +445,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-notes`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} dwl-col-notes`}
                                 style={{ maxWidth: '350px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -451,7 +460,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                                     multiline
                                     rows={1}
                                     placeholder="Add notes... (type @ to mention)"
-                                    className="w-full px-1 py-0.5 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 resize-none shadow-sm transition-all text-center"
+                                    className="w-full px-1 py-0.5 text-jl border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 resize-none shadow-sm transition-all text-center"
                                 />
                             </td>
                         );
@@ -465,14 +474,14 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-notes`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} dwl-col-notes`}
                                 style={{ maxWidth: '350px' }}
                                 draggable={false}
                                 onClick={handleNotesFocus}
                                 onMouseDown={handleProtectedCellMouseDown}
                                 title="Click to edit notes"
                             >
-                                <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all min-h-[10px] text-center ${
+                                <div className={`px-0.5 py-0 text-jl rounded-sm border transition-all min-h-[10px] text-center ${
                                     hasNotes
                                         ? 'border-gray-200 dark:border-slate-500 bg-gray-50 dark:bg-slate-600 hover:bg-white dark:hover:bg-slate-500 hover:border-accent-300 text-gray-800 dark:text-slate-200 cursor-text'
                                         : 'border-gray-200 dark:border-slate-500 bg-gray-50/50 dark:bg-slate-600/50 hover:bg-gray-100 dark:hover:bg-slate-500 hover:border-accent-300 text-gray-500 dark:text-slate-400 cursor-text'
@@ -497,7 +506,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-procore-status`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} dwl-col-procore-status`}
                                 style={{ maxWidth: '96px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -512,7 +521,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                                                 if (!Number.isNaN(statusId)) onProcoreStatusChange(submittalId, statusId);
                                             }
                                         }}
-                                        className="w-full px-0.5 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded text-center bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 cursor-pointer"
+                                        className="w-full px-0.5 py-0.5 text-jl border border-gray-300 dark:border-slate-500 rounded text-center bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 cursor-pointer"
                                         title="Select Procore status (updates submittal in Procore)"
                                     >
                                         <option value="">—</option>
@@ -523,7 +532,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                                         ))}
                                     </select>
                                 ) : (
-                                    <span className="text-xs text-gray-700 dark:text-slate-200">{currentProcoreStatus || '—'}</span>
+                                    <span className="text-jl text-gray-700 dark:text-slate-200">{currentProcoreStatus || '—'}</span>
                                 )}
                             </td>
                         );
@@ -537,7 +546,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-status`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} dwl-col-status`}
                                 style={{ maxWidth: '96px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -549,7 +558,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                                             onStatusChange(submittalId, e.target.value);
                                         }
                                     }}
-                                    className="w-full px-0.5 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded text-center bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 cursor-pointer"
+                                    className="w-full px-0.5 py-0.5 text-jl border border-gray-300 dark:border-slate-500 rounded text-center bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 cursor-pointer"
                                     title="Select drafting status (HOLD / NEED VIF / STARTED)"
                                 >
                                     <option value="">—</option>
@@ -571,7 +580,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-due-date`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} dwl-col-due-date`}
                                 style={{ maxWidth: '120px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -585,7 +594,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                                         onClick={canEditDrafterFields ? () => setDueDateModalOpen(true) : undefined}
                                     />
                                 ) : (
-                                    <span className="text-xs text-gray-300 dark:text-slate-600">—</span>
+                                    <span className="text-jl font-mono text-gray-300 dark:text-slate-600">—</span>
                                 )}
                                 {canEditDrafterFields && (
                                     <DateFieldModal
@@ -626,7 +635,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-start-install`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} dwl-col-start-install`}
                                 style={{ maxWidth: '120px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -640,7 +649,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                                         onClick={canEditStartInstall ? () => setStartInstallModalOpen(true) : undefined}
                                     />
                                 ) : (
-                                    <span className="text-xs text-gray-300 dark:text-slate-600">—</span>
+                                    <span className="text-jl font-mono text-gray-300 dark:text-slate-600">—</span>
                                 )}
                                 {canEditStartInstall && (
                                     <StartInstallDwlModal
@@ -673,7 +682,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-center dwl-col-name`}
+                                className={`px-1 py-0.5 whitespace-nowrap text-jl-2 align-middle font-medium ${cellBgClass} text-center dwl-col-name`}
                                 style={{ maxWidth: '280px' }}
                                 title={fullProjectName ? `${fullProjectName} — Click to view details` : ''}
                             >
@@ -709,7 +718,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100 text-center dwl-col-bic`}
+                                className={`px-1 py-0.5 ${whitespaceClass} text-jl-2 align-middle font-medium ${cellBgClass} text-gray-900 dark:text-slate-100 text-center dwl-col-bic`}
                                 style={{ maxWidth: '180px' }}
                                 title={cellValue}
                             >
@@ -751,7 +760,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 whitespace-normal text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100 ${columnClass}`}
+                                className={`px-1 py-0.5 whitespace-normal text-jl align-middle font-medium ${cellBgClass} text-gray-900 dark:text-slate-100 ${columnClass}`}
                                 style={customStyle}
                                 title={cellValue}
                                 draggable={isDraggable}
@@ -784,7 +793,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100 text-center dwl-col-rel`}
+                                className={`px-0.5 py-0.5 whitespace-nowrap text-jl font-mono align-middle font-medium ${cellBgClass} text-gray-900 dark:text-slate-100 text-center dwl-col-rel`}
                                 style={{ maxWidth: '50px' }}
                                 title={cellValue}
                             >
@@ -799,7 +808,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-center dwl-col-project-number`}
+                                className={`px-0.5 py-0.5 whitespace-nowrap text-jl font-mono align-middle font-medium ${cellBgClass} text-center dwl-col-project-number`}
                                 style={{ maxWidth: '65px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -817,7 +826,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100 ${customWidthClass} ${columnClass} text-center`}
+                            className={`px-1 py-0.5 ${whitespaceClass} text-jl align-middle font-medium ${cellBgClass} text-gray-900 dark:text-slate-100 ${customWidthClass} ${columnClass} text-center`}
                             style={customStyle}
                             title={cellValue}
                         >

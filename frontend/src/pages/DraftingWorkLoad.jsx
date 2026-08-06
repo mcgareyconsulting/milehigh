@@ -282,7 +282,7 @@ function DraftingWorkLoad() {
         <>
             <style>{columnWidthStyles}</style>
             <div
-                className="w-full h-[calc(100vh_-_var(--app-chrome-h))] flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900"
+                className="w-full h-[calc(100vh_-_var(--app-chrome-h))] flex flex-col bg-canvas dark:bg-slate-900"
                 style={{
                     width: '100%',
                     minWidth: '100%',
@@ -291,11 +291,12 @@ function DraftingWorkLoad() {
                     paddingBottom: 'env(safe-area-inset-bottom)',
                 }}
             >
-                <div className="flex-1 min-h-0 max-w-full mx-auto w-full py-2 px-2 flex flex-col" style={{ width: '100%' }}>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col flex-1 min-h-0">
+                <div className="flex-1 min-h-0 max-w-full mx-auto w-full flex flex-col" style={{ width: '100%' }}>
+                    {/* Subtle outer pad + gap between filter and table — no heavy white card (Job Log shell). */}
+                    <div className="bg-surface overflow-hidden flex flex-col flex-1 min-h-0 p-1.5 gap-1.5">
                         {/* Actions + Filters - fixed, do not scroll */}
-                        <div className="flex-shrink-0 p-2">
-                            <div className="bg-gray-100 dark:bg-slate-700 rounded-lg p-1.5 border border-gray-200 dark:border-slate-600 flex-shrink-0 space-y-1.5">
+                        <div className="flex-shrink-0">
+                            <div className="bg-gray-100 dark:bg-slate-700 rounded-md p-1.5 border border-gray-200/80 dark:border-slate-600 flex-shrink-0 space-y-1.5">
                                 {/* Row 2: view mode + primary CTA + Actions + Open/Draft + priority filters */}
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                     <ViewToggle value={viewMode} onChange={setViewMode} accent={isDraftTab ? 'green' : 'blue'} />
@@ -448,7 +449,7 @@ function DraftingWorkLoad() {
                         )}
 
                         {fetchError && !loading && (
-                            <div className="flex-shrink-0 p-2">
+                            <div className="flex-shrink-0">
                                 <AlertMessage
                                     type="error"
                                     title="Unable to load Drafting Work Load data"
@@ -458,7 +459,7 @@ function DraftingWorkLoad() {
                         )}
 
                         {resortError && (
-                            <div className="flex-shrink-0 p-2">
+                            <div className="flex-shrink-0">
                                 <AlertMessage type="error" title="Resort failed" message={resortError} />
                             </div>
                         )}
@@ -475,14 +476,16 @@ function DraftingWorkLoad() {
                         )}
 
                         {!loading && !fetchError && effectiveView === 'table' && (
-                            <div className="flex-1 min-h-0 flex flex-col border border-gray-200 dark:border-slate-600 rounded-xl overflow-hidden bg-white dark:bg-slate-800 min-w-0">
+                            // Lattice CSS: tokens.css .job-log-table-frame / .job-log-table
+                            // (separate borders + --grid lines, per CURRENT_STYLING_PIN §3).
+                            <div className="job-log-table-frame flex-1 min-h-0 flex flex-col min-w-0">
                                 <div
                                     ref={scrollContainerRef}
-                                    className="dwl-table-scroll flex-1 min-h-0 overflow-x-hidden"
+                                    className="dwl-table-scroll job-log-table-scroll flex-1 min-h-0 overflow-x-hidden"
                                     style={{ overflowY: 'auto' }}
                                 >
-                                    <table className="w-full" style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
-                                        <thead className="sticky top-0 z-10 bg-gray-100 dark:bg-slate-700 shadow-sm">
+                                    <table className="job-log-table">
+                                        <thead className="sticky top-0 z-10">
                                             <tr>
                                                 {visibleColumns.map((column) => {
                                                     const isOrderNumber = column === 'ORDER #';
@@ -564,7 +567,7 @@ function DraftingWorkLoad() {
                                                         return (
                                                             <th
                                                                 key={column}
-                                                                className={`${headerPaddingClass} text-center text-xs font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 ${columnClass}`}
+                                                                className={`${headerPaddingClass} text-center text-jl-head font-bold text-ink bg-head-bg leading-tight ${columnClass}`}
                                                                 style={headerStyle}
                                                             >
                                                                 <ColumnHeaderFilter
@@ -590,7 +593,7 @@ function DraftingWorkLoad() {
                                                         return (
                                                             <th
                                                                 key={column}
-                                                                className={`${headerPaddingClass} text-center text-xs font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 ${columnClass}`}
+                                                                className={`${headerPaddingClass} text-center text-jl-head font-bold text-ink bg-head-bg leading-tight ${columnClass}`}
                                                                 style={headerStyle}
                                                             >
                                                                 <button
@@ -615,7 +618,7 @@ function DraftingWorkLoad() {
                                                     return (
                                                         <th
                                                             key={column}
-                                                            className={`${headerPaddingClass} text-center text-xs font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 ${columnClass}`}
+                                                            className={`${headerPaddingClass} text-center text-jl-head font-bold text-ink bg-head-bg leading-tight ${columnClass}`}
                                                             style={headerStyle}
                                                         >
                                                             {column}
@@ -629,7 +632,7 @@ function DraftingWorkLoad() {
                                                 <tr>
                                                     <td
                                                         colSpan={tableColumnCount}
-                                                        className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-white dark:bg-slate-800 rounded-md"
+                                                        className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-surface"
                                                     >
                                                         No records match the selected filters.
                                                     </td>
