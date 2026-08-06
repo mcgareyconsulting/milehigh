@@ -159,6 +159,23 @@ function Archive() {
         return columnOrder.filter(col => columns.includes(col));
     }, [columns]);
 
+    // Zebra band index per row, counting only rows that aren't complete — a grey
+    // (jl-band-done) row must not consume an alternation step (CURRENT_STYLING_PIN
+    // banding rule; mirrors bandIndexById in JobLogContent). On the Archive nearly
+    // every row is complete, but un-archive-eligible stragglers still zebra right.
+    const bandIndexById = useMemo(() => {
+        const map = new Map();
+        let band = 0;
+        for (const row of displayJobs) {
+            const stage = (row['Stage'] || '').toString().trim().toLowerCase();
+            const done = stage === 'complete'
+                || (row['Job Comp'] || '').toString().trim().toUpperCase() === 'X';
+            map.set(row.id, done ? -1 : band);
+            if (!done) band += 1;
+        }
+        return map;
+    }, [displayJobs]);
+
     const tableColumnCount = columnHeaders.length;
 
     const columnWidthPercents = useMemo(() => {
@@ -174,20 +191,21 @@ function Archive() {
 
     return (
         <div
-            className="w-full h-[calc(100vh_-_var(--app-chrome-h))] bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-2 px-2 3xl:py-4 3xl:px-6 flex flex-col"
+            className="w-full h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas dark:bg-slate-900 flex flex-col"
             style={{
                 width: '100%',
                 minWidth: '100%',
-                paddingLeft: 'max(0.5rem, env(safe-area-inset-left))',
-                paddingRight: 'max(0.5rem, env(safe-area-inset-right))',
-                paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))',
+                paddingLeft: 'env(safe-area-inset-left)',
+                paddingRight: 'env(safe-area-inset-right)',
+                paddingBottom: 'env(safe-area-inset-bottom)',
             }}
         >
             <div className="max-w-full mx-auto w-full h-full flex flex-col" style={{ width: '100%' }}>
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col h-full">
+                {/* Subtle outer pad + gap between filter and table — no heavy white card (Job Log shell). */}
+                <div className="bg-surface overflow-hidden flex flex-col h-full min-h-0">
 
-                    <div className="p-2 flex flex-col flex-1 min-h-0 space-y-1.5">
-                        <div className="bg-gray-100 dark:bg-slate-700 rounded-lg p-1.5 border border-gray-200 dark:border-slate-600 flex-shrink-0 space-y-1.5">
+                    <div className="p-1.5 flex flex-col flex-1 min-h-0 gap-1.5">
+                        <div className="bg-gray-100 dark:bg-slate-700 rounded-md p-1.5 border border-gray-200/80 dark:border-slate-600 flex-shrink-0 space-y-1.5">
 
                             {/* Minimized project pills — show selected projects when collapsed */}
                             {isFilterMinimized && selectedProjectNames.length > 0 && (
@@ -324,7 +342,7 @@ function Archive() {
                         )}
 
                         {!loading && !fetchError && effectiveView === 'cards' && (
-                            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
+                            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl overflow-hidden flex-1 min-h-0 flex flex-col">
                                 <JobLogCardGrid
                                     jobs={displayJobs}
                                     search={search}
@@ -337,9 +355,11 @@ function Archive() {
                         )}
 
                         {!loading && !fetchError && effectiveView === 'table' && (
-                            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
+                            // Lattice CSS: tokens.css .job-log-table-frame / .job-log-table
+                            // (separate borders + --grid lines, per CURRENT_STYLING_PIN §3).
+                            <div className="job-log-table-frame flex-1 min-h-0 flex flex-col">
                                 <div className="job-log-table-scroll overflow-auto flex-1">
-                                    <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
+                                    <table className="job-log-table">
                                         <thead className="sticky top-0 z-10">
                                             <tr>
                                                 {columnHeaders.map((column) => {
@@ -349,7 +369,7 @@ function Archive() {
                                                     return (
                                                         <th
                                                             key={column}
-                                                            className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 align-middle text-center text-[11px] font-bold text-gray-900 dark:text-slate-100 bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm`}
+                                                            className={`${isReleaseNumber ? 'px-0.5' : 'px-1'} py-1.5 text-jl-head align-middle text-center font-bold text-ink bg-head-bg leading-tight`}
                                                             style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                         >
                                                             {displayHeader}
@@ -357,7 +377,7 @@ function Archive() {
                                                     );
                                                 })}
                                                 {isAdmin && (
-                                                    <th className="px-1 py-0.5 text-center text-xl font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm w-8">
+                                                    <th className="px-1 py-0.5 text-center text-xl font-bold text-ink uppercase tracking-wider bg-head-bg w-8">
                                                         ⚙
                                                     </th>
                                                 )}
@@ -368,7 +388,7 @@ function Archive() {
                                                 <tr>
                                                     <td
                                                         colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
-                                                        className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-white dark:bg-slate-800 rounded-md"
+                                                        className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-surface"
                                                     >
                                                         {hasJobsData
                                                             ? 'No records match the selected filters.'
@@ -386,6 +406,7 @@ function Archive() {
                                                         formatCellValue={(value, columnName) => formatCellValue(value, columnName)}
                                                         formatDate={formatDate}
                                                         rowIndex={index}
+                                                        bandIndex={bandIndexById.get(row.id) ?? index}
                                                         onDragStart={() => { }}
                                                         onDragOver={() => { }}
                                                         onDragLeave={() => { }}

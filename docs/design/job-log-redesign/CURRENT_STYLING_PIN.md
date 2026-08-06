@@ -255,15 +255,15 @@ Tablet may drop BY + Released and renorm remaining widths.
 
 ## 7b. Surfaces sharing this system
 
-The Events page and the Drafting Work Load table (Aug 2026 follow-up) reuse the
-Job Log styling wholesale rather than defining their own:
+The Events page, the Drafting Work Load table, and the Archive (Aug 2026
+follow-up) reuse the Job Log styling wholesale rather than defining their own:
 
 | Concern | Files |
 |---------|-------|
-| Shell (canvas → `bg-surface` p-1.5 gap-1.5, no card/gradient) | `frontend/src/pages/Events.jsx`, `frontend/src/pages/DraftingWorkLoad.jsx` |
-| Lattice (`job-log-table-frame` / `job-log-table` / `job-log-table-scroll`) | `frontend/src/components/EventsList.jsx`, `DraftingWorkLoad.jsx` |
+| Shell (canvas → `bg-surface` p-1.5 gap-1.5, no card/gradient) | `frontend/src/pages/Events.jsx`, `frontend/src/pages/DraftingWorkLoad.jsx`, `frontend/src/pages/Archive.jsx` |
+| Lattice (`job-log-table-frame` / `job-log-table` / `job-log-table-scroll`) | `frontend/src/components/EventsList.jsx`, `DraftingWorkLoad.jsx`, `Archive.jsx` |
 | Header (`bg-head-bg`, `text-jl-head`, bold `text-ink`, centered, sticky) | same |
-| Bands (`jl-band-a`/`jl-band-b` zebra; DWL HOLD rows stay yellow) | `EventsList.jsx`, `frontend/src/components/TableRow.jsx` |
+| Bands (`jl-band-a`/`jl-band-b` zebra; DWL HOLD rows stay yellow) | `EventsList.jsx`, `frontend/src/components/TableRow.jsx`; Archive rows band via `JobsTableRow` + its own `bandIndexById` (mostly `jl-band-done` grey by nature) |
 | Hover (`jl-row` inset overlay) | same |
 | Type (`text-jl` body, `text-jl-2` secondary, Plex Mono for ids/dates/order #) | `EventsList.jsx`, `TableRow.jsx`, `frontend/src/components/DateCellPill.jsx` |
 | Events-in-modal chrome (surface-2 header, 14px radius, `dc-pop`) | `frontend/src/components/EventsModal.jsx` |
