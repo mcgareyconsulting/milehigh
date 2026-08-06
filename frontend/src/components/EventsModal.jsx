@@ -36,22 +36,22 @@ export function EventsModal({ isOpen, onClose, title = 'Events', submittalId, jo
             onClick={onClose}
         >
             <div
-                className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col"
+                className="bg-surface rounded-[14px] shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col dc-pop"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-6 py-4 rounded-t-xl flex-shrink-0">
+                <div className="bg-surface-2 border-b border-hairline px-4 py-3 rounded-t-[14px] flex-shrink-0">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-bold text-white">{title}</h2>
+                        <h2 className="text-base font-bold text-ink">{title}</h2>
                         <button
                             onClick={onClose}
-                            className="text-white hover:text-gray-200 dark:hover:text-slate-200 transition-colors text-2xl font-bold leading-none"
+                            className="text-ink-3 hover:text-ink transition-colors text-2xl font-bold leading-none"
                             aria-label="Close"
                         >
                             ×
                         </button>
                     </div>
                 </div>
-                <div className="p-4 flex flex-col flex-1 min-h-0">
+                <div className="p-3 flex flex-col flex-1 min-h-0">
                     <EventsList
                         submittalId={submittalId}
                         jobFilter={jobFilter}
