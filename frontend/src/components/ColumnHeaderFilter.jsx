@@ -18,6 +18,8 @@
  *     promptly; Ctrl/Cmd+click keeps it open so several values can be picked.
  *   - large (opt-in): roomier popover (wider min width + taller list) for the DWL toolbar
  *     filters so short lists need no scrolling.
+ *   - fullWidth (default true): trigger uses w-full so table header cells fill the <th>.
+ *     Toolbar chips pass fullWidth={false} so filters stay in one horizontal row.
  *   - Popover is rendered via portal at document.body and positioned with fixed coords so it
  *     escapes the table's overflow:auto clip and stays inside the viewport.
  */
@@ -63,6 +65,8 @@ export default function ColumnHeaderFilter({
     closeOnSelect = false,
     large = false,
     labels = null,
+    // Table headers need the trigger to fill the <th>; toolbar chips must not (w-full would stack them).
+    fullWidth = true,
 }) {
     // Minimum popover width; `large` callers get a roomier default. autoWidth still grows past it.
     const minWidth = large ? LARGE_POPOVER_WIDTH : POPOVER_WIDTH;
@@ -234,7 +238,7 @@ export default function ColumnHeaderFilter({
                     e.stopPropagation();
                     setOpen((v) => !v);
                 }}
-                className={`w-full inline-flex items-center justify-center gap-0.5 cursor-pointer px-0.5 py-0.5 rounded text-center leading-tight hover:bg-gray-200 dark:hover:bg-slate-600 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-inherit'}`}
+                className={`${fullWidth ? 'w-full' : ''} inline-flex items-center justify-center gap-0.5 cursor-pointer px-0.5 py-0.5 rounded text-center leading-tight hover:bg-gray-200 dark:hover:bg-slate-600 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-inherit'}`}
                 aria-haspopup="true"
                 aria-expanded={open}
             >

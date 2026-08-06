@@ -229,6 +229,7 @@ function DraftingWorkLoad() {
                 immediate
                 closeOnSelect
                 large
+                fullWidth={false}
                 labels={labels}
             >
                 <span
