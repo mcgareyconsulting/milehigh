@@ -164,7 +164,9 @@ export function ReleaseHubModal({
                     </div>
 
                     <div className="flex items-center" style={{ gap: 18, marginTop: 12 }}>
-                        {TABS.map((tab) => {
+                        {/* Drawings needs the release row's id to fetch versions/photos;
+                            without it the pane would just render 404s, so drop the tab. */}
+                        {TABS.filter((tab) => tab.key !== 'drawings' || releaseId != null).map((tab) => {
                             const active = tab.key === activeTab;
                             return (
                                 <button
@@ -207,7 +209,7 @@ export function ReleaseHubModal({
                             </div>
                         )}
 
-                        {visited.drawings && (
+                        {visited.drawings && releaseId != null && (
                             <div
                                 className={`absolute inset-0 flex flex-col ${activeTab === 'drawings' ? '' : 'hidden'}`}
                                 role="tabpanel"

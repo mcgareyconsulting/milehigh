@@ -58,6 +58,7 @@ import { API_BASE_URL } from '../utils/api';
 import ReleaseDetailModal from './ReleaseDetailModal';
 import ReleaseCockpitModal from './ReleaseCockpitModal';
 import { ReleaseHubModal } from './ReleaseHubModal';
+import { PdfMarkupModal } from './PdfMarkupModal';
 import { checkAuth } from '../utils/auth';
 
 const addDays = (isoDate, days) => {
@@ -279,7 +280,20 @@ function GanttChart({ filterComplete = false }) {
     const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
     const [selectedRelease, setSelectedRelease] = useState(null);   // full job row for the detail modal
     const [isAdmin, setIsAdmin] = useState(false);                  // admins get the schedule cockpit; others the read-only detail modal
-    const [orderJob, setOrderJob] = useState(null);                 // {job, release} for a clicked material-order chip
+    const [orderJob, setOrderJob] = useState(null);                 // full release row (or {job, release} fallback) for a clicked material-order chip
+    const [orderMarkup, setOrderMarkup] = useState(null);           // {releaseId, versionId, mode} — drawing opened from the order hub
+
+    // A material-order chip only carries job/release digits; the hub's Drawings
+    // tab needs the release row's id (and viewer_url). Look the row up in the
+    // shared dataset, falling back to the bare digits if it isn't loaded.
+    const openOrderHub = (o) => {
+        const row = jobs.find(
+            (j) =>
+                String(j['Job #'] ?? j.job) === String(o.job) &&
+                String(j['Release #'] ?? j.release ?? '') === String(o.release ?? '')
+        );
+        setOrderJob(row || { job: o.job, release: o.release });
+    };
     const [selectedColor, setSelectedColor] = useState(null);       // lane color of the clicked card → modal accent
     const [selectedIsShip, setSelectedIsShip] = useState(false);    // did the clicked card come from a shipping lane? → hide the install-window cockpit
     const [containerW, setContainerW] = useState(0);                // measured scroll-viewport width → derives colPx
@@ -807,11 +821,11 @@ function GanttChart({ filterComplete = false }) {
                                                         key={`ord-${o.id}`}
                                                         role="button"
                                                         tabIndex={0}
-                                                        onClick={() => o.job && setOrderJob({ job: o.job, release: o.release })}
+                                                        onClick={() => o.job && openOrderHub(o)}
                                                         onKeyDown={(e) => {
                                                             if ((e.key === 'Enter' || e.key === ' ') && o.job) {
                                                                 e.preventDefault();
-                                                                setOrderJob({ job: o.job, release: o.release });
+                                                                openOrderHub(o);
                                                             }
                                                         }}
                                                         className="absolute rounded border border-dashed border-amber-500 bg-amber-50/95 hover:bg-amber-100 text-amber-900 text-[11px] leading-none px-1.5 flex items-center gap-1 overflow-hidden whitespace-nowrap shadow-sm cursor-pointer"
@@ -1036,6 +1050,21 @@ function GanttChart({ filterComplete = false }) {
                 initialTab="details"
                 scrollToMaterials
                 onClose={() => setOrderJob(null)}
+                onOpenVersion={(vid, mode) => {
+                    setOrderMarkup({
+                        releaseId: orderJob?.id,
+                        versionId: vid,
+                        mode: isAdmin ? mode : 'view',
+                    });
+                    setOrderJob(null);
+                }}
+            />
+            <PdfMarkupModal
+                isOpen={orderMarkup != null}
+                releaseId={orderMarkup?.releaseId}
+                versionId={orderMarkup?.versionId}
+                mode={orderMarkup?.mode || 'view'}
+                onClose={() => setOrderMarkup(null)}
             />
         </>
     );

@@ -532,7 +532,39 @@ class Releases(db.Model):
 
     def __repr__(self):
         return f"<Job {self.job} - {self.release} - {self.job_name}>"
-    
+
+    @classmethod
+    def resolve(cls, job, release, job_name=None):
+        """Resolve the canonical row for a (job, release) pair.
+
+        Uniqueness is (job, release, job_name): job-number wrap can leave two
+        rows with the same digits (e.g. archived 410-108 Columbine vs active
+        410-108 Alta), so `.filter_by(job=..., release=...).first()` picks an
+        arbitrary one. This returns the row a human means by "410-108":
+        exact job_name match when given (case/whitespace-insensitive), else
+        non-archived over archived, active over soft-deleted (NULL is_active
+        counts as active), newest row as the final tiebreak.
+        """
+        rows = cls.query.filter_by(job=job, release=release).all()
+        if not rows:
+            return None
+        if job_name is not None:
+            target = str(job_name).strip().casefold()
+            named = [
+                r for r in rows
+                if str(r.job_name or "").strip().casefold() == target
+            ]
+            if named:
+                rows = named
+        return min(
+            rows,
+            key=lambda r: (
+                bool(r.is_archived),
+                r.is_active is False,
+                -(r.id or 0),
+            ),
+        )
+
     def to_dict(self):
         """
         Return raw job data as a dictionary.

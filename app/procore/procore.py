@@ -564,9 +564,12 @@ def _viewer_results_from_workflow(project_id, submittal_id, title, approver_ids)
 
 
 def _viewer_results_from_workflow_fallback(project_id, submittal_id, title):
-    """When distribution metadata is missing after an FC update, take any
-    workflow attachment that looks like a Final PDF / has a viewer_url on a
-    PDF-ish name. Prefer names containing 'final'."""
+    """When distribution metadata is missing after an FC update, take a
+    workflow attachment that looks like a Final PDF. Prefer names containing
+    'final'; accept other PDF-named attachments as last resort. Anything
+    else (DWGs, markups, submission sets without 'pdf' in the name) is
+    excluded — a wrong link persisted here is permanent, because the retry
+    worker skips rows that already have a viewer_url."""
     workflow_data = get_workflow_data(project_id, submittal_id)
     attachments = workflow_data.get("attachments") if isinstance(workflow_data, dict) else []
     scored = []
@@ -577,13 +580,12 @@ def _viewer_results_from_workflow_fallback(project_id, submittal_id, title):
         if not full:
             continue
         name = (att.get("name") or "").lower()
-        # Prefer final-pack-ish names; accept other PDFs as last resort.
         if "final" in name:
             score = 0
         elif name.endswith(".pdf") or "pdf" in name:
             score = 1
         else:
-            score = 2
+            continue
         scored.append((score, {
             "title": title,
             "submittal_id": submittal_id,
@@ -596,7 +598,7 @@ def _viewer_results_from_workflow_fallback(project_id, submittal_id, title):
 
 
 # Get Final PDF Viewers by Project ID and Submittals
-def get_final_pdf_viewers(project_id, submittals):
+def get_final_pdf_viewers(project_id, submittals, allow_fallback=True):
     """Extract viewer URLs for 'Final PDF Pack' responses.
 
     List endpoints often omit or stale ``last_distributed_submittal`` after an
@@ -605,6 +607,11 @@ def get_final_pdf_viewers(project_id, submittals):
       2. If missing, re-fetch the full submittal by id
       3. Match workflow_data attachments by approver_id
       4. If still empty, fall back to workflow PDF attachments with a viewer_url
+
+    ``allow_fallback=False`` skips step 4. Use it on paths that run before the
+    Final PDF Pack can exist (first attempt at card creation): a best-effort
+    guess persisted there is never re-checked by fc_retry_worker, so leaving
+    the row gray for the worker beats linking a premature document.
     """
     final_results = []
 
@@ -639,6 +646,9 @@ def get_final_pdf_viewers(project_id, submittals):
             if matched:
                 final_results.extend(matched)
                 continue
+
+        if not allow_fallback:
+            continue
 
         # FC update left distribution metadata empty but attachments still have
         # viewer_urls — better a best-effort link than a permanent gray button.
@@ -1405,7 +1415,11 @@ def get_viewer_url_for_job(job_number, release_number):
                 "release": release_number
             }
         
-        final_pdfs = get_final_pdf_viewers(project_id, submittals)
+        # No fallback on this path: it runs at card creation, before the Final
+        # PDF Pack exists (~24h Procore lag). Persisting a guessed attachment
+        # here would exclude the row from fc_retry_worker forever; leaving it
+        # gray lets the worker link the real pack when it appears.
+        final_pdfs = get_final_pdf_viewers(project_id, submittals, allow_fallback=False)
         if not final_pdfs:
             return {
                 "success": False,
@@ -1448,7 +1462,7 @@ def add_procore_link_to_trello_card(job, release):
     Function to add procore drafting document link to related trello card
     '''
     logger.debug("procore_link_lookup_started", job=job, release=release)
-    job_record = Releases.query.filter_by(job=job, release=release).first()
+    job_record = Releases.resolve(job, release)
     if not job_record:
         return None
     logger.debug("release_record_found", job=job, release=release, release_id=job_record.id)

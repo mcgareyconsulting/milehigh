@@ -206,7 +206,9 @@ def create_card_for_job(job, list_name, list_id, dry_run=False, verbose=False):
 
 def sync_releases_for_job(job, list_name, dry_run=False, verbose=False):
     """Ensure a Releases record exists and mirrors the Job record."""
-    rel = Releases.query.filter_by(job=job.job, release=job.release).one_or_none()
+    # Resolve (not one_or_none): job-number wrap can legitimately hold two rows
+    # with the same digits, which would raise MultipleResultsFound here.
+    rel = Releases.resolve(job.job, job.release, job_name=job.job_name)
 
     stage_group = get_stage_group_from_stage(list_name)
 

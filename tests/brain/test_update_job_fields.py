@@ -214,3 +214,25 @@ class TestUpdateJobFields:
 
             db.session.refresh(item)
             assert item.status == "completed"
+
+
+class TestWrapDuplicateTargeting:
+    """Job-number wrap: two rows share (job, release) with different job_name.
+    Digits-only routes must hit the active row, never the archived one."""
+
+    def test_patch_targets_active_row_not_archived_duplicate(self, app, admin_client):
+        with app.app_context():
+            old = make_release(410, "108", job_name="Columbine", is_archived=True, pm="Columbine PM")
+            new = make_release(410, "108", job_name="Alta", pm="Alta PM")
+            db.session.commit()
+            old_id, new_id = old.id, new.id
+
+            resp = admin_client.patch(
+                "/brain/jobs/410/108",
+                json={"fields": {"pm": "New PM"}},
+            )
+            assert resp.status_code == 200
+
+            db.session.expire_all()
+            assert db.session.get(Releases, new_id).pm == "New PM"
+            assert db.session.get(Releases, old_id).pm == "Columbine PM"

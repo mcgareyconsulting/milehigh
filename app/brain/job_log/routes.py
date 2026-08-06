@@ -33,7 +33,7 @@ from app.auth.utils import (
     admin_required,
     drafter_or_admin_required,
 )
-from app.route_utils import handle_errors, require_json, get_or_404
+from app.route_utils import handle_errors, require_json, get_or_404, get_release_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER, active_releases_filter
 from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
 from app.brain.job_log.features.start_install.assign_installer import AssignInstallerCommand
@@ -1489,7 +1489,7 @@ def update_notes(job, release):
 
         # Pre-flight: 404 vs 400 distinction matches the original route contract.
         from app.models import Releases
-        if not Releases.query.filter_by(job=job, release=release).first():
+        if Releases.resolve(job, release) is None:
             logger.warning("release_not_found", job=job, release=release)
             return jsonify({'error': 'Job not found'}), 404
 
@@ -1562,7 +1562,7 @@ def update_job_comp(job, release):
         except ValueError:
             pass
 
-    job_record, err = get_or_404(Releases, "Job not found", job=job, release=release)
+    job_record, err = get_release_or_404(job, release)
     if err:
         return err
 
@@ -1659,7 +1659,7 @@ def update_invoiced(job, release):
         except ValueError:
             pass
 
-    job_record, err = get_or_404(Releases, "Job not found", job=job, release=release)
+    job_record, err = get_release_or_404(job, release)
     if err:
         return err
 
@@ -1745,7 +1745,7 @@ def update_start_install(job, release):
             from app.trello.utils import add_business_days
             from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
 
-            job_record = Releases.query.filter_by(job=job, release=release).first()
+            job_record = Releases.resolve(job, release)
             if not job_record:
                 return jsonify({'error': 'Job not found'}), 404
 
@@ -1854,7 +1854,7 @@ def update_start_install(job, release):
 
         # Handle clearing a hard date (revert to formula-driven)
         if clear_hard_date:
-            job_record = Releases.query.filter_by(job=job, release=release).first()
+            job_record = Releases.resolve(job, release)
             if not job_record:
                 return jsonify({'error': 'Job not found'}), 404
 
@@ -1933,7 +1933,7 @@ def update_start_install(job, release):
 
         # Pre-flight 404 check — preserves the route's original 404 vs 400 distinction
         # before we delegate to the command.
-        if not Releases.query.filter_by(job=job, release=release).first():
+        if Releases.resolve(job, release) is None:
             logger.warning("release_not_found", job=job, release=release)
             return jsonify({'error': 'Job not found'}), 404
 
@@ -2970,7 +2970,7 @@ def _dispatch_undo(event, *, source, defer_cascade):
         from app.models import Releases
         target_val = bool(payload['from'])
         inverse_action = 'set_asap' if target_val else 'clear_asap'
-        job_record = Releases.query.filter_by(job=event.job, release=event.release).first()
+        job_record = Releases.resolve(event.job, event.release)
         new_event = JobEventService.create(
             job=event.job, release=event.release,
             action=inverse_action,
@@ -3059,7 +3059,7 @@ def undo_event(event_id):
             'error': "Undo events are not undoable. Edit the value in the Job Log directly."
         }), 400
 
-    job_record = Releases.query.filter_by(job=event.job, release=event.release).first()
+    job_record = Releases.resolve(event.job, event.release)
     if job_record is None:
         return jsonify({'error': 'Release not found'}), 404
 
@@ -3615,7 +3615,7 @@ def delete_job(job, release):
     Returns:
         JSON object with success status (200) or error (404)
     """
-    job_record, err = get_or_404(Releases, "Job not found", job=job, release=release)
+    job_record, err = get_release_or_404(job, release)
     if err:
         return err
 
@@ -3685,7 +3685,7 @@ def update_job_fields(job, release):
     if not isinstance(fields, dict) or not fields:
         return jsonify({"error": "fields must be a non-empty object"}), 400
 
-    job_record, err = get_or_404(Releases, "Job not found", job=job, release=release)
+    job_record, err = get_release_or_404(job, release)
     if err:
         return err
 
@@ -3799,7 +3799,7 @@ def archive_preview():
 def unarchive_release(job, release):
     """Unarchive a single release (set is_archived=False)."""
 
-    r, err = get_or_404(Releases, f'Release {job}-{release} not found', job=job, release=str(release))
+    r, err = get_release_or_404(job, str(release), error_msg=f'Release {job}-{release} not found')
     if err:
         return err
     if not r.is_archived:

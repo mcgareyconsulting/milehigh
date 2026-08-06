@@ -131,6 +131,16 @@ describe('ReleaseHubModal', () => {
         expect(screen.getByText('Drawings')).toBeInTheDocument();
     });
 
+    it('drops the Drawings & Photos tab when no releaseId is available', () => {
+        // A caller with only job/release digits (e.g. a Timeline material-order
+        // chip whose release row is not loaded) cannot fetch versions/photos —
+        // offering the tab would just render 404s.
+        renderHub({ releaseId: null });
+        expect(screen.queryByRole('tab', { name: 'Drawings & Photos' })).not.toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Details' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Change Log' })).toBeInTheDocument();
+    });
+
     it('switches tabs on click and keeps the visited pane mounted', () => {
         renderHub();
         expect(screen.getByText('Materials ordered')).toBeInTheDocument();
