@@ -164,14 +164,14 @@ function JobLogContent() {
             )}
 
             {!loading && !fetchError && effectiveView === 'table' && (
-                // Outer frame uses the same translucent ink as the grid dividers so the
-                // table edge reads as part of the lattice, not a separate lighter band.
-                <div className="bg-white dark:bg-slate-800 border border-black/[0.18] dark:border-white/[0.12] rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
+                // Lattice CSS: tokens.css .job-log-table-frame / .job-log-table
+                // (separate borders — collapse caused the left-edge hairline gap).
+                <div className="job-log-table-frame flex-1 min-h-0 flex flex-col">
                     <div
                         ref={tableScrollRef}
                         className="job-log-table-scroll overflow-auto flex-1"
                     >
-                        <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
+                        <table className="job-log-table">
                             <thead className="sticky top-0 z-10">
                                 <tr>
                                     {tableColumns.map((column) => {
@@ -181,24 +181,10 @@ function JobLogContent() {
                                         const isFilterable = FILTERABLE_COLUMNS.has(column);
                                         const colInfo = isFilterable ? uniqueValuesByColumn[column] : null;
                                         const colSelected = columnFilters[column] ?? [];
-                                        // Last visible column (no trailing gear column) gets no vertical divider,
-                                        // just the thin bottom rule shared by every header cell. Both dividers use
-                                        // box-shadow, not a real border, so the vertical one lines up pixel-for-pixel
-                                        // with the body cells' own box-shadow dividers (a real border under
-                                        // border-collapse is centered on the shared boundary and drifts a sub-pixel
-                                        // from a non-collapsed element) — and box-shadow is also immune to Safari's
-                                        // bug where collapsed borders on sticky <th> cells fail to paint.
-                                        const isLastHeaderColumn = tableColumns[tableColumns.length - 1] === column && !showAdminActions;
-                                        // Same `--grid` ink as the body cells (JobsTableRow — keep in sync).
-                                        // The bottom rule is 1.5px where the body's is 1px, which is what
-                                        // anchors the header band without introducing a second line style.
-                                        const headerDividerShadow = isLastHeaderColumn
-                                            ? 'shadow-[inset_0_-1.5px_0_0_var(--grid)]'
-                                            : 'shadow-[inset_-1px_0_0_0_var(--grid),inset_0_-1.5px_0_0_var(--grid)]';
                                         return (
                                             <th
                                                 key={column}
-                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-[13px]' : 'py-2 text-jl-head'} align-middle text-center font-bold text-ink bg-head-bg ${headerDividerShadow}`}
+                                                className={`${isReleaseNumber ? 'px-0.5' : 'px-1'} ${isOldMan ? 'py-2 text-[13px]' : 'py-1.5 text-jl-head'} align-middle text-center font-bold text-ink bg-head-bg leading-tight`}
                                                 style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                             >
                                                 {isFilterable ? (
@@ -218,13 +204,13 @@ function JobLogContent() {
                                                         {displayHeader}
                                                     </ColumnHeaderFilter>
                                                 ) : (
-                                                    displayHeader
+                                                    <span className="block w-full text-center leading-tight">{displayHeader}</span>
                                                 )}
                                             </th>
                                         );
                                     })}
                                     {showAdminActions && (
-                                        <th className="px-1 py-0.5 text-center text-xl font-bold text-ink uppercase tracking-wider bg-head-bg w-8 shadow-[inset_0_-1.5px_0_0_var(--grid)]">
+                                        <th className="px-1 py-0.5 text-center text-xl font-bold text-ink uppercase tracking-wider bg-head-bg w-8">
                                             ⚙
                                         </th>
                                     )}

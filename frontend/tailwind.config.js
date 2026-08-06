@@ -25,6 +25,21 @@ export default {
                 'slide-out-right': 'slideOutRight 0.3s ease-in forwards',
             },
             fontFamily: {
+                // Matches the Job Log print PDF (jsPDF embeds IBMPlexSans / IBMPlexMono
+                // from frontend/public/fonts/*.ttf). body already sets Plex in index.css;
+                // these theme keys make font-sans / font-mono utilities use the same faces.
+                sans: [
+                    'IBM Plex Sans',
+                    '-apple-system',
+                    'BlinkMacSystemFont',
+                    'Segoe UI',
+                    'Roboto',
+                    'Oxygen',
+                    'Ubuntu',
+                    'Cantarell',
+                    'Helvetica Neue',
+                    'sans-serif',
+                ],
                 // Numbers, dates, ids and version strings, per the design handoff.
                 mono: ['IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
             },

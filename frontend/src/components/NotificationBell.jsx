@@ -59,7 +59,7 @@ export default function NotificationBell({
     variant = 'topbar',
     expanded = false,
     itemHeight = 37,
-    railWidth = 60,
+    railWidth = 52,
     onHoverLabel = null,
     onLeaveLabel = null,
 }) {

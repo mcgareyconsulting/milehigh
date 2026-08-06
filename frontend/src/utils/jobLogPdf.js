@@ -95,8 +95,11 @@ const PRINT_WIDTH_OVERRIDES = {
 };
 
 
-const COLOR_GRAYED = [156, 163, 175];
-const COLOR_EVEN_ROW = [219, 234, 254];
+// Row + stage palette — light-mode source of truth for the live table
+// (tokens.css --band-b / --band-done / --st-*). Keep RGB in lockstep with
+// frontend/src/styles/tokens.css when either side changes.
+const COLOR_GRAYED = [156, 163, 175];       // #9ca3af gray-400 — complete rows
+const COLOR_EVEN_ROW = [219, 234, 254];     // #dbeafe blue-100 — zebra B
 // Start install hard-date states — mirror the on-screen Tailwind shades in
 // JobsTableRow.jsx (bg-red-500 / bg-green-500 / bg-yellow-400, text-gray-900).
 const COLOR_ASAP = [239, 68, 68];          // bg-red-500
@@ -107,8 +110,8 @@ const COLOR_HEAD_FILL = [224, 224, 224];
 const COLOR_HEAD_LINE = [40, 40, 40];
 const COLOR_BODY_LINE = [40, 40, 40];
 
-// Stage → stage_group → fill/text RGB. Mirrors useJobsFilters.js:478-506 so the
-// printed Stage cell carries the same color signal as the in-app dropdown.
+// Stage → stage_group → fill/text RGB. Same triples as stageGroupColors in
+// useJobsFilters.js and --st-* tokens (blue / emerald / violet 100+800).
 const STAGE_TO_GROUP = {
     'Released': 'FABRICATION',
     'Material Ordered': 'FABRICATION',

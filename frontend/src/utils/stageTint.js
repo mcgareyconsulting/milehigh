@@ -13,10 +13,11 @@
  *     together, or the table pill and the modal pill disagree for the same release.
  */
 
-// The Aug 2026 handoff's prototype collapses every stage into green/blue/purple.
-// The app has always shown Welded QC in amber, and the handoff README says to
-// keep the existing stage->color mapping rather than invent hues — so this keeps
-// the app's four and expresses them in the handoff's palette.
+// Mirrors jobLogPdf.js STAGE_TO_GROUP + STAGE_GROUP_COLORS (print = source of truth):
+//   FABRICATION   → blue   (#dbeafe / #1e40af)
+//   READY_TO_SHIP → green  (#d1fae5 / #065f46)  includes Welded QC + Paint Start
+//   COMPLETE      → purple (#ede9fe / #5b21b6)
+// Token vars --st-{hue}-bg/fg are the same RGB as the PDF.
 const HUE_BY_STAGE = {
     'Released': 'blue',
     'Material Ordered': 'blue',
@@ -27,8 +28,8 @@ const HUE_BY_STAGE = {
     'Weld Start': 'blue',
     'Weld Complete': 'blue',
     'Hold': 'blue',
-    'Welded QC': 'amber',
-    'Paint Start': 'blue',
+    'Welded QC': 'green',
+    'Paint Start': 'green',
     'Paint Complete': 'green',
     'Store at MHMW': 'green',
     'Ship Planning': 'green',

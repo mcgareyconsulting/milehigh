@@ -100,25 +100,29 @@ export const columnOrder = [
  * detailed viewport-tuning notes that previously lived in JobLog.jsx.
  */
 export const COLUMN_WIDTH_PERCENT = {
-    'Job #': 2.5,
-    'Release #': 2.5,
-    'Job': 8,
-    'Description': 8,
-    'Fab Hrs': 3.5,
-    'Install HRS': 3.5,
-    'Paint color': 5,
-    'PM': 2.5,
-    'BY': 3,
-    'Released': 5,
-    'Fab Order': 4,
-    'Stage': 6.5,
-    'Start install': 5.5,
-    'Ship Date': 5,
-    'Comp. ETA': 5,
-    'Job Comp': 4.5,
-    'Invoiced': 4.5,
-    'Mat. Ord.': 3,
-    'Notes': 15,
+    // Notes held at 11 after a pass that took it to 9 — room for short notes
+    // without starving name/date columns.
+    'Job #': 2.7,
+    'Release #': 2.7,
+    'Job': 9.3,
+    'Description': 9.3,
+    // Wide enough for "108.00" / "999.99" at text-jl mono without overflow
+    // that makes longer values look left-biased in the cell.
+    'Fab Hrs': 4.3,
+    'Install HRS': 4.3,
+    'Paint color': 5.1,
+    'PM': 2.7,
+    'BY': 3.1,
+    'Released': 5.2,
+    'Fab Order': 4.4,
+    'Stage': 6.0,
+    'Start install': 5.8,
+    'Ship Date': 5.3,
+    'Comp. ETA': 5.2,
+    'Job Comp': 4.1,
+    'Invoiced': 4.1,
+    'Mat. Ord.': 3.1,
+    'Notes': 11,
     'Actions': 5,
 };
 

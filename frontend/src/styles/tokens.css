@@ -27,9 +27,11 @@
   --border: #dde3ec;
   --border-strong: #c3ccd9;
   --grid: #b6bfcd;
-  --text: #182231;
-  --text-2: #5d6b7f;
-  --text-3: #93a0b1;
+  /* Print body/header ink is pure black (jobLogPdf textColor: 0). Primary sits
+     at near-black; secondary/tertiary stay hierarchical but not washed out. */
+  --text: #0a0a0a;
+  --text-2: #1f2937;
+  --text-3: #4b5563;
   --rail-bg: #16203a;
   --rail-fg: #8e9db9;
   --rail-fg-active: #ffffff;
@@ -39,21 +41,26 @@
   --accent: #2f5fd0;
   --accent-soft: #e7eefc;
   --accent-ink: #ffffff;
-  --band-b: #dcebfc;
-  --band-done: #dde2ea;
+  /* Row bands + stage fills track jobLogPdf.js (print is source of truth):
+     even zebra = COLOR_EVEN_ROW [219,234,254]; done = COLOR_GRAYED [156,163,175];
+     stage groups = STAGE_GROUP_COLORS (Tailwind blue/emerald/violet-100 + -800). */
+  --band-b: #dbeafe;
+  --band-done: #9ca3af;
   --row-hover: rgba(30, 90, 200, .07);
-  --st-green-fg: #0f6b46;
-  --st-green-bg: #e6f5ec;
-  --st-blue-fg: #1a4fbd;
-  --st-blue-bg: #e8effc;
-  --st-purple-fg: #5b3bbd;
-  --st-purple-bg: #f0ebfc;
-  --fl-red-fg: #9e2b25;
-  --fl-red-bg: #f6d3d0;
-  --fl-green-fg: #0c5f3e;
-  --fl-green-bg: #c6ead2;
-  --fl-amber-fg: #8a5208;
-  --fl-amber-bg: #f7e3ba;
+  --st-green-fg: #065f46;
+  --st-green-bg: #d1fae5;
+  --st-blue-fg: #1e40af;
+  --st-blue-bg: #dbeafe;
+  --st-purple-fg: #5b21b6;
+  --st-purple-bg: #ede9fe;
+  /* Date flags = jobLogPdf.js COLOR_ASAP / COLOR_HARD_FUTURE / COLOR_HARD_PAST
+     (Tailwind red-500 / green-500 / yellow-400). White ink on red+green; gray-900 on amber. */
+  --fl-red-fg: #ffffff;
+  --fl-red-bg: #ef4444;
+  --fl-green-fg: #ffffff;
+  --fl-green-bg: #22c55e;
+  --fl-amber-fg: #111827;
+  --fl-amber-bg: #facc15;
   --input-bg: #ffffff;
   --shadow: 0 24px 60px rgba(15, 26, 48, .22);
 }
@@ -79,29 +86,29 @@
   --accent-soft: #1c2b4d;
   --accent-ink: #0b1220;
   --band-b: #1a2740;
-  --band-done: #1b212d;
+  /* Dark analogue of print gray-400: mid slate so done rows recede without
+     glowing brighter than active zebra bands. Print itself is light-only. */
+  --band-done: #4b5563;
   --row-hover: rgba(255, 255, 255, .05);
-  --st-green-fg: #5cd0a0;
-  --st-green-bg: #122c22;
-  --st-blue-fg: #7fa8ff;
-  --st-blue-bg: #16233d;
-  --st-purple-fg: #b39cf7;
-  --st-purple-bg: #221c3b;
-  --fl-red-fg: #ff9d94;
-  --fl-red-bg: #46201d;
-  --fl-green-fg: #6fdcab;
-  --fl-green-bg: #16402a;
-  --fl-amber-fg: #f4bd6b;
-  --fl-amber-bg: #443015;
+  --st-green-fg: #6ee7b7;
+  --st-green-bg: #064e3b;
+  --st-blue-fg: #93c5fd;
+  --st-blue-bg: #1e3a5f;
+  --st-purple-fg: #c4b5fd;
+  --st-purple-bg: #3b0764;
+  /* Same saturated fills as light (print has no dark mode); keep white/dark ink. */
+  --fl-red-fg: #ffffff;
+  --fl-red-bg: #ef4444;
+  --fl-green-fg: #ffffff;
+  --fl-green-bg: #22c55e;
+  --fl-amber-fg: #111827;
+  --fl-amber-bg: #facc15;
   --input-bg: #101725;
   --shadow: 0 24px 60px rgba(0, 0, 0, .55);
 }
 
-/* The handoff's fourth stage hue. The prototype's stageTone() collapses every
-   stage into green/blue/purple, but the app has always shown Welded QC in
-   yellow and the README says to keep the existing stage→color mapping. These
-   are the amber date-flag values reused as a pill tint so the fourth hue sits
-   in the same palette rather than being invented. */
+/* Amber remains for date-flag past-due hard dates and any non-PDF stage cue.
+   Print stage groups are only blue / green / purple (no amber stage). */
 :root {
   --st-amber-fg: #8a5208;
   --st-amber-bg: #f7e3ba;
@@ -141,22 +148,52 @@
 .jl-band-b { background-color: var(--band-b); }
 .jl-band-done { background-color: var(--band-done); }
 
-/* Date-flag cells (handoff §3): the flag fills the whole cell in bold mono,
-   rather than the saturated red/yellow/green slab the table used before. The
-   `jl-flag` marker keeps the row-hover overlay off these cells so a red ASAP
-   stays unambiguously red under the cursor. */
+/* Date-flag cells: full-cell slab matching print (red-500 ASAP, green-500 hard
+   future, yellow-400 hard past). `jl-flag` keeps row-hover off these cells. */
 .jl-flag-red { background-color: var(--fl-red-bg); color: var(--fl-red-fg); font-weight: 700; }
 .jl-flag-green { background-color: var(--fl-green-bg); color: var(--fl-green-fg); font-weight: 700; }
 .jl-flag-amber { background-color: var(--fl-amber-bg); color: var(--fl-amber-fg); font-weight: 700; }
 
-.jl-flag-red:hover { filter: brightness(0.97); }
-.jl-flag-green:hover { filter: brightness(0.97); }
+.jl-flag-red:hover { filter: brightness(0.95); }
+.jl-flag-green:hover { filter: brightness(0.95); }
 .jl-flag-amber:hover { filter: brightness(0.97); }
 
-/* Row hover as an inset overlay rather than a background swap — the row already
-   owns its background (zebra band / install-complete grey), so tinting via
-   box-shadow layers over whichever band it happens to be. Scoped to cells that
-   don't paint their own flag fill, so a red ASAP cell stays red on hover. */
+/* Job Log lattice.
+   border-collapse: collapse is a known source of 1px hairline gaps between
+   cell backgrounds and the outer frame (WebKit/Blink paint the collapsed
+   edge model short of the box). separate + 0 spacing paints fills edge-to-
+   edge; cells only own right+bottom so shared edges stay 1px (no double).
+   Outer top/left/right/bottom live on .job-log-table-frame. */
+.job-log-table-frame {
+  border: 1px solid var(--grid);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: var(--surface);
+}
+.job-log-table {
+  width: 100%;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+.job-log-table thead th {
+  border-right: 1px solid var(--grid);
+  border-bottom: 1.5px solid var(--grid);
+}
+.job-log-table thead th:last-child {
+  border-right: none;
+}
+.job-log-table tbody td {
+  border-right: 1px solid var(--grid);
+  border-bottom: 1px solid var(--grid);
+}
+.job-log-table tbody td:last-child {
+  border-right: none;
+}
+
+/* Row hover as an inset overlay — does not touch borders, so the lattice
+   stays put. Scoped off flag cells so ASAP/hard-date fills stay solid. */
 tr.jl-row:hover > td:not(.jl-flag) {
-  box-shadow: inset -1px 0 0 0 var(--grid), inset 0 0 0 9999px var(--row-hover);
+  box-shadow: inset 0 0 0 9999px var(--row-hover);
 }

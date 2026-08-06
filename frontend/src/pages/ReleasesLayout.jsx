@@ -754,25 +754,25 @@ function ReleasesLayout() {
     return (
         <>
             <div
-                className="w-full h-[calc(100vh_-_var(--app-chrome-h))] bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-2 px-2 3xl:py-4 3xl:px-6 flex flex-col"
+                className="w-full h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas dark:bg-slate-900 flex flex-col"
                 style={{
                     width: '100%',
                     minWidth: '100%',
-                    paddingLeft: 'max(0.5rem, env(safe-area-inset-left))',
-                    paddingRight: 'max(0.5rem, env(safe-area-inset-right))',
-                    paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))',
+                    paddingLeft: 'env(safe-area-inset-left)',
+                    paddingRight: 'env(safe-area-inset-right)',
+                    paddingBottom: 'env(safe-area-inset-bottom)',
                 }}
             >
                 <div className="max-w-full mx-auto w-full h-full flex flex-col" style={{ width: '100%' }}>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col h-full">
+                    {/* Subtle outer pad + gap between filter and table — no heavy white frame. */}
+                    <div className="bg-surface overflow-hidden flex flex-col h-full p-1.5 gap-1.5 min-h-0">
 
-                        <div className="p-2 flex flex-col flex-1 min-h-0 space-y-1.5">
-                            <div className="bg-gray-100 dark:bg-slate-700 rounded-lg p-1.5 border border-gray-200 dark:border-slate-600 flex-shrink-0 space-y-1.5">
+                        <div className="bg-gray-100 dark:bg-slate-700 p-1.5 rounded-md border border-gray-200/80 dark:border-slate-600 flex-shrink-0 space-y-1 min-w-0">
 
-                                {/* Row 1: Project name buttons — only visible when expanded */}
+                                {/* Project name buttons — only when expanded */}
                                 {!isFilterMinimized && (
                                     <div
-                                        className="grid gap-1"
+                                        className="grid gap-1 min-w-0"
                                         style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 140 : 100}px, 1fr))` }}
                                     >
                                         <button
@@ -807,95 +807,103 @@ function ReleasesLayout() {
                                     </div>
                                 )}
 
-                                {/* Row 2: primary CTA + Actions/Projects + quick filters + view switcher + project chevron */}
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                    {/* Table | Cards | Auto — how the Table view renders (left-aligned to mirror DWL);
-                                        irrelevant on Board/Timeline and hidden below lg where card mode is enforced */}
-                                    {!onBoardRoute && !cardsEnforced && (
-                                        <ViewToggle value={viewMode} onChange={setViewMode} />
-                                    )}
-
-                                    <button
-                                        onClick={handleReleaseClick}
-                                        className="px-3 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-blue-700 text-white border border-blue-700 hover:bg-blue-800"
-                                        title="Create new releases from a CSV paste"
-                                    >
-                                        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10" /></svg>New Release
-                                    </button>
-
-                                    <button
-                                        onClick={openVerbalModal}
-                                        className="px-3 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-amber-600 text-white border border-amber-600 hover:bg-amber-700"
-                                        title="Quick-capture a release before drafting is done — release # is prefilled but editable"
-                                    >
-                                        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10" /></svg>Verbal Release
-                                    </button>
-
-                                    <Dropdown label="Actions">
-                                        <DropdownItem onClick={handlePrint} disabled={!hasData || loading || !reviewMode || printing}>
-                                            {printing ? '⏳ Building…' : '🖨️ Print'}
-                                        </DropdownItem>
-                                        <DropdownItem onClick={() => navigate('/archive')}>🗄️ Archive</DropdownItem>
-                                        {isAdmin && (
-                                            <DropdownItem onClick={handleExportCSV} disabled={!hasData || loading}>⬇️ Export CSV</DropdownItem>
+                                {/* Toolbar — single row, no wrap. Middle strip scrolls when the
+                                    rail expands and width shrinks, so controls never collide or
+                                    push a lone chevron onto its own line. */}
+                                <div className="flex items-center gap-1 min-w-0">
+                                    {/* Fixed left: view mode + create + menus */}
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        {!onBoardRoute && !cardsEnforced && (
+                                            <ViewToggle value={viewMode} onChange={setViewMode} />
                                         )}
-                                        {isAdmin && (
-                                            <DropdownItem onClick={async () => {
-                                                try {
-                                                    const data = await jobsApi.getArchivePreview();
-                                                    setArchivePreview(data);
-                                                    setShowArchiveModal(true);
-                                                } catch (err) {
-                                                    alert(`Failed to load archive preview: ${err.message}`);
-                                                }
-                                            }}>📦 Send to Archive</DropdownItem>
-                                        )}
-                                        {isAdmin && (
-                                            <DropdownItem onClick={async () => {
-                                                try {
-                                                    const data = await jobsApi.renumberFabricationFabOrders({ dryRun: true });
-                                                    setRenumberPreview(data);
-                                                    setShowRenumberModal(true);
-                                                } catch (err) {
-                                                    alert(`Failed to load renumber preview: ${err.message}`);
-                                                }
-                                            }}>🔢 Renumber Fab Order</DropdownItem>
-                                        )}
-                                    </Dropdown>
 
-                                    {/* Projects filter (number + name) — separate from the column-header dropdowns */}
-                                    <ProjectFilterDropdown
-                                        options={projectOptions}
-                                        selected={selectedProjectNames}
-                                        onChange={setSelectedProjectNames}
-                                    />
+                                        <button
+                                            onClick={handleReleaseClick}
+                                            className="px-2 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-blue-700 text-white border border-blue-700 hover:bg-blue-800"
+                                            title="Create new releases from a CSV paste"
+                                        >
+                                            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10" /></svg>
+                                            <span className="hidden min-[1100px]:inline">New Release</span>
+                                            <span className="min-[1100px]:hidden">New</span>
+                                        </button>
 
-                                    {/* Stage quick filters — linear buttons on desktop, single dropdown on tablet/mobile */}
-                                    <JobLogQuickFilters
-                                        selectedSubset={selectedSubset}
-                                        setSelectedSubset={setSelectedSubset}
-                                        reviewMode={reviewMode}
-                                        setReviewMode={setReviewMode}
-                                        compact={isMobile || isTablet}
-                                        canUseKatie={canUseKatie}
-                                    />
+                                        <button
+                                            onClick={openVerbalModal}
+                                            className="px-2 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-amber-600 text-white border border-amber-600 hover:bg-amber-700"
+                                            title="Quick-capture a release before drafting is done — release # is prefilled but editable"
+                                        >
+                                            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10" /></svg>
+                                            <span className="hidden min-[1100px]:inline">Verbal Release</span>
+                                            <span className="min-[1100px]:hidden">Verbal</span>
+                                        </button>
 
-                                    <div className="flex-1" />
+                                        <Dropdown label="Actions">
+                                            <DropdownItem onClick={handlePrint} disabled={!hasData || loading || !reviewMode || printing}>
+                                                {printing ? '⏳ Building…' : '🖨️ Print'}
+                                            </DropdownItem>
+                                            <DropdownItem onClick={() => navigate('/archive')}>🗄️ Archive</DropdownItem>
+                                            {isAdmin && (
+                                                <DropdownItem onClick={handleExportCSV} disabled={!hasData || loading}>⬇️ Export CSV</DropdownItem>
+                                            )}
+                                            {isAdmin && (
+                                                <DropdownItem onClick={async () => {
+                                                    try {
+                                                        const data = await jobsApi.getArchivePreview();
+                                                        setArchivePreview(data);
+                                                        setShowArchiveModal(true);
+                                                    } catch (err) {
+                                                        alert(`Failed to load archive preview: ${err.message}`);
+                                                    }
+                                                }}>📦 Send to Archive</DropdownItem>
+                                            )}
+                                            {isAdmin && (
+                                                <DropdownItem onClick={async () => {
+                                                    try {
+                                                        const data = await jobsApi.renumberFabricationFabOrders({ dryRun: true });
+                                                        setRenumberPreview(data);
+                                                        setShowRenumberModal(true);
+                                                    } catch (err) {
+                                                        alert(`Failed to load renumber preview: ${err.message}`);
+                                                    }
+                                                }}>🔢 Renumber Fab Order</DropdownItem>
+                                            )}
+                                        </Dropdown>
 
-                                    {/* Table | Board | Timeline — instant view switching over the shared releases dataset */}
-                                    <ReleasesViewSwitcher />
+                                        <ProjectFilterDropdown
+                                            options={projectOptions}
+                                            selected={selectedProjectNames}
+                                            onChange={setSelectedProjectNames}
+                                        />
+                                    </div>
 
-                                    {/* Project filter buttons — discreet chevron toggle, collapsed by default */}
-                                    <button
-                                        onClick={() => setIsFilterMinimized(!isFilterMinimized)}
-                                        className="p-1.5 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors flex-shrink-0"
-                                        title={isFilterMinimized ? "Show project filter buttons" : "Hide project filter buttons"}
-                                    >
-                                        <span className="text-xl leading-none text-gray-600 dark:text-slate-300">{isFilterMinimized ? '▾' : '▴'}</span>
-                                    </button>
+                                    {/* Flexible middle: quick filters — scrolls horizontally when tight */}
+                                    <div className="flex-1 min-w-0 overflow-x-auto overflow-y-hidden jl-toolbar-scroll">
+                                        <div className="flex items-center gap-1 w-max py-0.5 pr-1">
+                                            <JobLogQuickFilters
+                                                selectedSubset={selectedSubset}
+                                                setSelectedSubset={setSelectedSubset}
+                                                reviewMode={reviewMode}
+                                                setReviewMode={setReviewMode}
+                                                compact={isMobile || isTablet}
+                                                canUseKatie={canUseKatie}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Fixed right: view switcher + project-row chevron */}
+                                    <div className="flex items-center gap-1 shrink-0 pl-0.5">
+                                        <ReleasesViewSwitcher />
+                                        <button
+                                            onClick={() => setIsFilterMinimized(!isFilterMinimized)}
+                                            className="p-1 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors flex-shrink-0"
+                                            title={isFilterMinimized ? "Show project filter buttons" : "Hide project filter buttons"}
+                                        >
+                                            <span className="text-lg leading-none text-gray-600 dark:text-slate-300">{isFilterMinimized ? '▾' : '▴'}</span>
+                                        </button>
+                                    </div>
                                 </div>
 
-                                {/* Active-filter chips — only renders when at least one filter is active */}
+                                {/* Active-filter chips (subset / search / projects / columns) */}
                                 <ActiveFilterChips
                                     search={search}
                                     selectedSubset={selectedSubset}
@@ -911,58 +919,55 @@ function ReleasesLayout() {
                                     onClearSort={() => setColumnSort(null)}
                                 />
 
-                                {/* Row 3: Search + stats — always visible */}
-                                <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                        <div className="flex items-center gap-1.5">
-                                            <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
-                                                Search:
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={search}
-                                                onChange={(e) => setSearch(e.target.value)}
-                                                placeholder="Job #, release, name, description..."
-                                                title="Live-filter the visible rows by Job #, Release #, project name, or description. Case-insensitive substring match."
-                                                className="w-48 sm:w-64 px-2 py-2 md:py-0.5 text-sm md:text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
-                                            />
-                                        </div>
+                                {/* Search + stats — search can shrink; stats scroll if needed */}
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                        <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap shrink-0">
+                                            Search:
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={search}
+                                            onChange={(e) => setSearch(e.target.value)}
+                                            placeholder="Job #, release, name, description..."
+                                            title="Live-filter the visible rows by Job #, Release #, project name, or description. Case-insensitive substring match."
+                                            className="min-w-0 flex-1 max-w-xs px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                        />
                                         <button
                                             onClick={() => { resetFilters(); setReviewMode(false); }}
-                                            className="text-sm text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
+                                            className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap shrink-0"
                                             title="Clear project selections, stage subset, Review mode, and the search box to return to the default view."
                                         >
-                                            Reset Filters
+                                            Reset
                                         </button>
                                     </div>
-                                    <div className="flex items-center gap-3 text-sm font-semibold text-gray-700 dark:text-slate-200">
-                                        <span>
-                                            {/* Board ignores column-header filters, so its count comes from boardJobs */}
-                                            Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{onBoardRoute ? boardJobs.length : displayJobs.length}</span> records
+                                    <div className="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-slate-200 shrink-0 min-w-0 overflow-x-auto jl-toolbar-scroll max-w-[55%]">
+                                        <span className="whitespace-nowrap">
+                                            Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{onBoardRoute ? boardJobs.length : displayJobs.length}</span>
                                         </span>
-                                        <span className="text-gray-300 dark:text-slate-500">|</span>
-                                        <span>
-                                            Fab HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalFabHrs.toFixed(2)}</span>
+                                        <span className="text-gray-300 dark:text-slate-500 shrink-0">|</span>
+                                        <span className="whitespace-nowrap">
+                                            Fab: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalFabHrs.toFixed(2)}</span>
                                         </span>
-                                        <span className="text-gray-300 dark:text-slate-500">|</span>
-                                        <span>
-                                            Install HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalInstallHrs.toFixed(2)}</span>
+                                        <span className="text-gray-300 dark:text-slate-500 shrink-0">|</span>
+                                        <span className="whitespace-nowrap">
+                                            Install: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalInstallHrs.toFixed(2)}</span>
                                         </span>
-                                        <span className="text-gray-300 dark:text-slate-500">|</span>
-                                        <span className="text-gray-500 dark:text-slate-400 font-normal">
-                                            Last updated: <span className="font-semibold text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
+                                        <span className="text-gray-300 dark:text-slate-500 shrink-0 hidden min-[1280px]:inline">|</span>
+                                        <span className="text-gray-500 dark:text-slate-400 font-normal whitespace-nowrap hidden min-[1280px]:inline">
+                                            Updated <span className="font-semibold text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
                                         </span>
                                     </div>
                                 </div>
 
-                                {/* Active filter chips */}
+                                {/* Column-header filter chips (value multi-selects) */}
                                 {activeFilterChips.length > 0 && (
-                                    <div className="flex items-center gap-1.5 flex-wrap border-t border-gray-200 dark:border-slate-600 pt-2">
-                                        <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 whitespace-nowrap">Active filters:</span>
+                                    <div className="flex items-center gap-1.5 min-w-0 overflow-x-auto jl-toolbar-scroll border-t border-gray-200 dark:border-slate-600 pt-1.5">
+                                        <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 whitespace-nowrap shrink-0">Active filters:</span>
                                         {activeFilterChips.map((chip) => (
                                             <span
                                                 key={`${chip.column}:${chip.value}`}
-                                                className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-xs font-medium"
+                                                className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-xs font-medium shrink-0"
                                             >
                                                 <span className="whitespace-nowrap">{chip.label}: {chip.value}</span>
                                                 <button
@@ -978,9 +983,10 @@ function ReleasesLayout() {
                                         ))}
                                     </div>
                                 )}
-                            </div>
+                        </div>
 
-                            {/* Active view content (Table / Board / Timeline) */}
+                        {/* Active view content (Table / Board / Timeline) */}
+                        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                             <Outlet context={outletContext} />
                         </div>
                     </div>

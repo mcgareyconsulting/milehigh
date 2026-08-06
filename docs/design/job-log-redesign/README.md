@@ -1,5 +1,8 @@
 # Handoff: MHMW Brain — Job Log Redesign (rail + table + release modal)
 
+> **Shipped baseline (what the app looks like now):** see  
+> [`CURRENT_STYLING_PIN.md`](./CURRENT_STYLING_PIN.md) — pin this when restyling so handoff intent and production state stay distinct.
+
 ## Overview
 Redesign of the MHMW Brain Job Log page: (1) top nav bar replaced with a collapsible icon rail, (2) the data table restyled to match the "job-log-review" print PDF (hairline grid, project banding, tinted flags), (3) a new release-detail modal with quick actions and threaded notes, (4) full light + dark themes.
 

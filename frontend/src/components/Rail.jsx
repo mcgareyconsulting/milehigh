@@ -27,7 +27,9 @@ import NotificationBell from './NotificationBell';
 import { CURRENT_VERSION } from '../data/patchNotes';
 
 const RAIL_KEY = 'mhmw_rail_open';
-const RAIL_COLLAPSED = 60;
+// Collapsed: icon column only. 52px + 7px side pad fits the 38px logo without
+// the empty gutters the old 60px width left around the icons.
+const RAIL_COLLAPSED = 52;
 const RAIL_EXPANDED = 212;
 
 // Handoff spec: 37px rows, and the rail must never scroll. Those two only
@@ -248,7 +250,9 @@ export default function Rail({
                     transition: 'width .18s ease',
                     background: 'var(--rail-bg)',
                     borderRight: '1px solid var(--rail-border)',
-                    padding: '10px 9px 8px',
+                    // Slightly tighter side pad when collapsed so the narrower
+                    // rail still centers the 38px logo/icons without clipping.
+                    padding: open ? '10px 9px 8px' : '10px 7px 8px',
                 }}
                 aria-label="Main navigation"
             >
@@ -345,7 +349,7 @@ export default function Rail({
             </nav>
 
             {/* Tooltip. Portaled and fixed: the rail clips its own children, so an
-                in-tree tooltip would be cut off at the 60px edge. */}
+                in-tree tooltip would be cut off at the collapsed edge. */}
             {tip && !open && createPortal(
                 <div
                     className="dc-fade"

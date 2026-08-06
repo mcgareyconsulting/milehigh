@@ -147,9 +147,30 @@ export function formatDateShort(dateValue) {
     return `${month}/${day}/${year}`;
 }
 
+/** Unified-pool placeholder fab_order (see app.api.helpers.DEFAULT_FAB_ORDER). */
+export const DEFAULT_FAB_ORDER = 80.555;
+
+/**
+ * Format a fab_order for display/input. Keeps the 80.555 placeholder at three
+ * decimals (String(80.555) / narrow inputs often read as "80.55"). Other
+ * values: integers as whole numbers, otherwise up to 3dp without junk zeros.
+ */
+export function formatFabOrder(value) {
+    if (value === null || value === undefined || value === '') return '';
+    const n = typeof value === 'number' ? value : parseFloat(value);
+    if (!Number.isFinite(n)) return String(value);
+    // Float noise around the sentinel still shows as the canonical placeholder.
+    if (Math.abs(n - DEFAULT_FAB_ORDER) < 1e-6) return '80.555';
+    if (Number.isInteger(n) || Math.abs(n - Math.round(n)) < 1e-9) return String(Math.round(n));
+    // Trim trailing zeros after fixing to 3dp (e.g. 10.500 → "10.5", 12.250 → "12.25").
+    return n.toFixed(3).replace(/\.?0+$/, '');
+}
+
 /**
  * Format a cell value for display. When `columnName` is `'Fab Hrs'` or
  * `'Install HRS'`, numeric values are rounded to 2 decimal places.
+ * `'Fab Order'` uses formatFabOrder so the 80.555 placeholder is never clipped
+ * to two decimals.
  */
 export function formatCellValue(value, columnName) {
     if (value === null || value === undefined || value === '') {
@@ -161,6 +182,10 @@ export function formatCellValue(value, columnName) {
     if (columnName === 'Fab Hrs' || columnName === 'Install HRS') {
         const numValue = parseFloat(value);
         if (!Number.isNaN(numValue)) return numValue.toFixed(2);
+    }
+    if (columnName === 'Fab Order') {
+        const formatted = formatFabOrder(value);
+        return formatted === '' ? '—' : formatted;
     }
     return value;
 }

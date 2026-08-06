@@ -15,7 +15,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { setAsapAndAssign } from '../utils/asap';
-import { localTodayStr, toYmd } from '../utils/formatters';
+import { localTodayStr, toYmd, formatFabOrder } from '../utils/formatters';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import { ReleaseHubModal } from './ReleaseHubModal';
 import { MaterialOrderBadge } from './MaterialOrderBadge';
@@ -148,13 +148,23 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(147 197 253)', // blue-300
             className: 'bg-blue-100 text-blue-800 border-blue-300'
         },
+        // Welded QC + Paint Start sit in READY_TO_SHIP on the print PDF (green),
+        // not amber — keep the fallback map aligned when stageGroupColors is absent.
         'Welded QC': {
-            light: 'rgb(254 249 195)', // yellow-100
-            base: 'rgb(234 179 8)', // yellow-500
-            dark: 'rgb(202 138 4)', // yellow-600
-            text: 'rgb(133 77 14)', // yellow-800
-            border: 'rgb(253 224 71)', // yellow-300
-            className: 'bg-yellow-100 text-yellow-800 border-yellow-300'
+            light: 'rgb(209 250 229)', // emerald-100
+            base: 'rgb(16 185 129)', // emerald-500
+            dark: 'rgb(5 150 105)', // emerald-600
+            text: 'rgb(6 95 70)', // emerald-800
+            border: 'rgb(110 231 183)', // emerald-300
+            className: 'bg-emerald-100 text-emerald-800 border-emerald-300'
+        },
+        'Paint Start': {
+            light: 'rgb(209 250 229)', // emerald-100
+            base: 'rgb(16 185 129)',
+            dark: 'rgb(5 150 105)',
+            text: 'rgb(6 95 70)',
+            border: 'rgb(110 231 183)',
+            className: 'bg-emerald-100 text-emerald-800 border-emerald-300'
         },
         'Paint Complete': {
             light: 'rgb(209 250 229)', // emerald-100 (green)
@@ -253,7 +263,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // Local state for fab order
     const [localFabOrder, setLocalFabOrder] = useState(row['Fab Order'] ?? '');
     const [updatingFabOrder, setUpdatingFabOrder] = useState(false);
-    const [fabOrderInputValue, setFabOrderInputValue] = useState(row['Fab Order'] ?? '');
+    // formatFabOrder keeps the 80.555 placeholder at three decimals in the input.
+    const [fabOrderInputValue, setFabOrderInputValue] = useState(
+        () => formatFabOrder(row['Fab Order'] ?? ''),
+    );
 
     // Local state for notes
     const [localNotes, setLocalNotes] = useState(row['Notes'] ?? '');
@@ -367,7 +380,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     useEffect(() => {
         setLocalStage(row['Stage'] || 'Released');
         setLocalFabOrder(row['Fab Order'] ?? '');
-        setFabOrderInputValue(row['Fab Order'] ?? '');
+        setFabOrderInputValue(formatFabOrder(row['Fab Order'] ?? ''));
         setLocalNotes(row['Notes'] ?? '');
         setNotesInputValue(row['Notes'] ?? '');
         setLocalStartInstall(row['Start install'] ?? null);
@@ -432,25 +445,14 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const jobCompIsX = (localJobComp || '').toString().trim().toUpperCase() === 'X';
     const invoicedIsX = (localInvoiced || '').toString().trim().toUpperCase() === 'X';
     const isGrayed = isComplete || jobCompIsX;
-    // Completed rows are muted + receding: pale slab, dimmed content (via the `jl-done`
-    // rule in index.css). Light mode: paler than the old gray-400 slab so it falls back
-    // instead of competing with the blue banding. Dark mode: DARKER than the active rows
-    // (slate-900 vs 800/700) — finished work recedes; it must never glow brighter.
-    // Row bands (redesign handoff §3): install-complete rows take the grey band;
-    // everything else zebras. `bandIndex` counts only non-complete rows, so a
-    // grey row doesn't consume an alternation step and leave two white rows
-    // adjacent. Falls back to rowIndex when the parent hasn't supplied one.
+    // Row bands match jobLogPdf.js (print source of truth): white / blue-100
+    // (#dbeafe) zebra, gray-400 (#9ca3af) for complete. `bandIndex` counts only
+    // non-complete rows so a grey row doesn't break zebra adjacency. Falls back
+    // to rowIndex when the parent hasn't supplied one.
     const bandParity = (bandIndex ?? rowIndex) % 2;
     const rowBgClass = isGrayed ? 'jl-band-done' : (bandParity === 0 ? 'jl-band-a' : 'jl-band-b');
-    // ONE divider ink for the entire table — the `--grid` token, matched by the
-    // header in JobLogContent.jsx (keep in sync).
-    const cellDividerClass = 'border-grid';
-    // Vertical cell dividers use box-shadow, not a real border — under `border-collapse` a
-    // border is centered on the shared boundary between two cells, while the header's divider
-    // (a non-collapsed overlay) sits flush at its own edge; mixing the two causes a visible
-    // sub-pixel drift between the header and body dividers. box-shadow isn't subject to
-    // border-collapse, so using it in both places guarantees identical positioning.
-    const cellVDividerShadow = 'shadow-[inset_-1px_0_0_0_var(--grid)]';
+    // Lattice borders come from .job-log-table in tokens.css (border-right /
+    // border-bottom on td) — no per-cell shadow classes.
     const cellPy = isOldMan ? 'py-2' : 'py-0.5';
     const cellText = isOldMan ? 'text-[13px]' : 'text-jl';
     // Numbers, dates and ids ride IBM Plex Mono per the handoff's type spec.
@@ -518,7 +520,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             setLocalJobComp(oldJobComp);
             setJobCompInputValue(oldJobComp ?? '');
             setLocalFabOrder(oldFabOrder);
-            setFabOrderInputValue(oldFabOrder === null || oldFabOrder === undefined ? '' : String(oldFabOrder));
+            setFabOrderInputValue(formatFabOrder(oldFabOrder ?? ''));
             // Backend stage gate: a tagged photo is required. Re-open the modal
             // in gate mode so the user can upload one rather than just erroring.
             const data = error?.response?.data;
@@ -562,7 +564,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             console.error(`[FAB_ORDER] Failed to update fab order for job ${row['Job #']}-${row['Release #']}:`, error);
             // Revert on error
             setLocalFabOrder(oldValue);
-            setFabOrderInputValue(oldValue === null || oldValue === undefined ? '' : String(oldValue));
+            setFabOrderInputValue(formatFabOrder(oldValue ?? ''));
             alert(`Failed to update fab order: ${error.message}`);
         } finally {
             setUpdatingFabOrder(false);
@@ -627,7 +629,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             setJobCompInputValue(oldValue);
             setLocalStage(oldStage);
             setLocalFabOrder(oldFabOrder);
-            setFabOrderInputValue(oldFabOrder === null || oldFabOrder === undefined ? '' : String(oldFabOrder));
+            setFabOrderInputValue(formatFabOrder(oldFabOrder ?? ''));
             alert(`Failed to update job comp: ${err.message}`);
         } finally {
             setUpdatingJobComp(false);
@@ -893,7 +895,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 </tr>
             )}
             <tr
-                className={`group jl-row ${isGrayed ? 'jl-done' : ''} ${rowBgClass} transition-all duration-200 border-b ${cellDividerClass} ${row._asapPropagated ? ASAP_PROPAGATED_ROW_CLASS : ''} ${isDragOver ? 'bg-blue-50 dark:bg-blue-900/30' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
+                className={`group jl-row ${isGrayed ? 'jl-done' : ''} ${rowBgClass} transition-all duration-200 ${row._asapPropagated ? ASAP_PROPAGATED_ROW_CLASS : ''} ${isDragOver ? 'bg-blue-50 dark:bg-blue-900/30' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
                 draggable={isDraggable}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
@@ -916,24 +918,21 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     const shouldWrapAndTruncate = column === 'Job' || column === 'Description';
 
                     // Determine if this column should allow text wrapping
-                    const shouldWrap = column === 'Notes' || column === 'Paint color';
+                    // Paint color has its own branch (centered wrap); Notes keeps free wrap.
+                    const shouldWrap = column === 'Notes';
                     const whitespaceClass = shouldWrap ? 'whitespace-normal' : 'whitespace-nowrap';
 
                     // Prose columns keep the UI face; everything reaching the generic
                     // cell below is a number, date or code and takes IBM Plex Mono.
-                    const isTextColumn = column === 'Paint color' || column === 'PM' || column === 'BY';
+                    const isTextColumn = column === 'PM' || column === 'BY';
 
-                    // Reduce padding for Release # column
+                    // Reduce padding for tight numeric columns so values like
+                    // "108.00" still center instead of overflowing the cell.
                     const isReleaseNumber = column === 'Release #';
-                    const paddingClass = compact ? 'px-0.5' : (isReleaseNumber ? 'px-1' : 'px-2');
-
-                    // The true last visible column (no trailing gear/actions column) gets no
-                    // vertical divider — nothing to its right to separate from. Without this,
-                    // the last column's divider bleeds past the table's edge next to the
-                    // scrollbar.
-                    const isTrueLastColumn = columns[columns.length - 1] === column && !(isAdmin && showActions);
-                    const vDividerClass = isTrueLastColumn ? '' : cellVDividerShadow;
-
+                    const isHoursColumn = column === 'Fab Hrs' || column === 'Install HRS';
+                    const paddingClass = compact
+                        ? 'px-0.5'
+                        : (isReleaseNumber || isHoursColumn ? 'px-0.5' : 'px-2');
 
                     // See COLUMN_WIDTH_PERCENT in pages/JobLog.jsx for the viewport
                     // tuning + responsive plan before changing min-widths in this file.
@@ -941,7 +940,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-center relative`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} text-center relative`}
                                 style={{ minWidth: '230px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -965,70 +964,70 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         const currentOption = stageOptions.find(opt => opt.value === localStage);
                         const currentLabel = currentOption ? currentOption.label : localStage;
 
-                        const solidStyle = {
+                        // Print fills the entire Stage cell (not a floating pill). Width
+                        // comes from COLUMN_WIDTH_PERCENT — a fixed minWidth fought the
+                        // lattice and left labels looking left-biased.
+                        const stageCellStyle = {
                             backgroundColor: currentStageColors.light,
                             color: currentStageColors.text,
-                            borderColor: currentStageColors.border
                         };
 
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-center relative`}
-                                style={compact ? { width: '92px', minWidth: '92px', maxWidth: '92px' } : { minWidth: '115px' }}
+                                className={`px-0.5 ${cellPy} whitespace-nowrap ${cellText} align-middle font-bold text-center relative`}
+                                style={stageCellStyle}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
-                                <div className="flex items-center justify-center">
-                                    <div className="relative flex-1 min-w-0 max-w-full">
-                                        <button
-                                            ref={stageTriggerRef}
-                                            type="button"
-                                            onClick={() => !updatingStage && setShowStageDropdown((v) => !v)}
-                                            disabled={updatingStage}
-                                            className={`w-full ${compact ? 'px-1' : 'px-1.5'} py-0.5 ${cellText} border-2 rounded font-medium text-center transition-all ${updatingStage ? 'opacity-50 cursor-wait' : ''}`}
-                                            style={solidStyle}
-                                        >
-                                            {currentLabel}
-                                        </button>
-                                        {showStageDropdown && (
-                                            <>
-                                                <div
-                                                    className="fixed inset-0 z-10"
-                                                    onClick={() => setShowStageDropdown(false)}
-                                                    aria-hidden="true"
-                                                />
-                                                <div
-                                                    ref={stageListRef}
-                                                    className={`absolute left-0 right-0 ${dropdownDirection === 'up' ? 'bottom-full mb-0.5' : 'top-full mt-0.5'} rounded-md border-2 border-gray-300 dark:border-slate-500 shadow-lg z-20 max-h-64 overflow-y-auto overflow-x-hidden bg-white dark:bg-slate-800 flex flex-col`}
-                                                >
-                                                    {rotatedStageOptions.map((option) => {
-                                                        const optionColors = getStageColors(option.value);
-                                                        const isSelected = option.value === localStage;
-                                                        return (
-                                                            <button
-                                                                key={option.value}
-                                                                ref={isSelected ? selectedStageRef : null}
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    handleStageChange(option.value);
-                                                                    setShowStageDropdown(false);
-                                                                }}
-                                                                className={`w-full px-1.5 py-1 ${cellText} font-medium text-center first:rounded-t-md last:rounded-b-md hover:brightness-95 ${isSelected ? 'ring-1 ring-inset ring-gray-400 dark:ring-slate-400' : ''}`}
-                                                                style={{
-                                                                    backgroundColor: optionColors.light,
-                                                                    color: optionColors.text,
-                                                                    borderColor: optionColors.border
-                                                                }}
-                                                            >
-                                                                {option.label}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
+                                <div className="relative w-full flex items-center justify-center">
+                                    <button
+                                        ref={stageTriggerRef}
+                                        type="button"
+                                        onClick={() => !updatingStage && setShowStageDropdown((v) => !v)}
+                                        disabled={updatingStage}
+                                        className={`w-full min-w-0 px-0.5 py-0 ${cellText} border border-transparent hover:border-black/10 rounded font-bold text-center leading-tight transition-all bg-transparent ${updatingStage ? 'opacity-50 cursor-wait' : ''}`}
+                                        style={{ color: currentStageColors.text }}
+                                    >
+                                        {currentLabel}
+                                    </button>
+                                    {showStageDropdown && (
+                                        <>
+                                            <div
+                                                className="fixed inset-0 z-10"
+                                                onClick={() => setShowStageDropdown(false)}
+                                                aria-hidden="true"
+                                            />
+                                            <div
+                                                ref={stageListRef}
+                                                className={`absolute left-1/2 -translate-x-1/2 min-w-full w-max max-w-[12rem] ${dropdownDirection === 'up' ? 'bottom-full mb-0.5' : 'top-full mt-0.5'} rounded-md border-2 border-gray-300 dark:border-slate-500 shadow-lg z-20 max-h-64 overflow-y-auto overflow-x-hidden bg-white dark:bg-slate-800 flex flex-col`}
+                                            >
+                                                {rotatedStageOptions.map((option) => {
+                                                    const optionColors = getStageColors(option.value);
+                                                    const isSelected = option.value === localStage;
+                                                    return (
+                                                        <button
+                                                            key={option.value}
+                                                            ref={isSelected ? selectedStageRef : null}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                handleStageChange(option.value);
+                                                                setShowStageDropdown(false);
+                                                            }}
+                                                            className={`w-full px-1.5 py-1 ${cellText} font-medium text-center first:rounded-t-md last:rounded-b-md hover:brightness-95 ${isSelected ? 'ring-1 ring-inset ring-gray-400 dark:ring-slate-400' : ''}`}
+                                                            style={{
+                                                                backgroundColor: optionColors.light,
+                                                                color: optionColors.text,
+                                                                borderColor: optionColors.border
+                                                            }}
+                                                        >
+                                                            {option.label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </td>
                         );
@@ -1044,7 +1043,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${isDuplicateFabOrder ? '' : rowBgClass} ${vDividerClass} text-center`}
+                                // Tight cell pad — fab order is a short numeric; full
+                                // paddingClass + w-full input ballooned the hover chrome.
+                                className={`px-0.5 ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${isDuplicateFabOrder ? '' : rowBgClass} text-center`}
                                 style={isDuplicateFabOrder ? { backgroundColor: dupColor } : undefined}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -1074,7 +1075,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                                 }
                                             } else {
                                                 // Invalid input, revert
-                                                setFabOrderInputValue(localFabOrder === null || localFabOrder === undefined ? '' : String(localFabOrder));
+                                                setFabOrderInputValue(formatFabOrder(localFabOrder ?? ''));
                                             }
                                         }
                                     }}
@@ -1082,17 +1083,18 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         if (e.key === 'Enter') {
                                             e.target.blur();
                                         } else if (e.key === 'Escape') {
-                                            setFabOrderInputValue(localFabOrder === null || localFabOrder === undefined ? '' : String(localFabOrder));
+                                            setFabOrderInputValue(formatFabOrder(localFabOrder ?? ''));
                                             e.target.blur();
                                         }
                                     }}
                                     disabled={updatingFabOrder || isGrayed}
-                                    className={`w-full px-1 py-0.5 ${cellText} ${cellMono} rounded focus:outline-none ${isDuplicateFabOrder ? 'text-white font-bold bg-transparent border border-transparent' : `${quietInput} text-ink`} text-center ${updatingFabOrder ? 'opacity-50 cursor-wait' : ''} ${isGrayed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    size={6}
+                                    className={`mx-auto block max-w-full px-0.5 py-0 ${cellText} ${cellMono} rounded-sm focus:outline-none ${isDuplicateFabOrder ? 'text-white font-bold bg-transparent border border-transparent' : `${quietInput} text-ink`} text-center tabular-nums ${updatingFabOrder ? 'opacity-50 cursor-wait' : ''} ${isGrayed ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     placeholder="—"
                                     style={(() => {
-                                        const mw = compact ? '28px' : '48px';
-                                        const maxW = compact ? '40px' : undefined;
-                                        const base = { minWidth: mw, ...(maxW ? { maxWidth: maxW, width: maxW } : {}) };
+                                        // Wide enough for the 80.555 placeholder (3dp) without a full-cell pill.
+                                        const w = compact ? '2.75rem' : '3.25rem';
+                                        const base = { width: w, minWidth: w, maxWidth: '100%' };
                                         return isDuplicateFabOrder ? { ...base, backgroundColor: dupColor } : base;
                                     })()}
                                 />
@@ -1105,7 +1107,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`relative ${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-center whitespace-normal`}
+                                className={`relative ${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} text-center whitespace-normal`}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
@@ -1128,7 +1130,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         }
                                     }}
                                     disabled={updatingNotes}
-                                    className={`w-full px-1 py-0.5 ${cellText} ${quietInput} rounded focus:outline-none text-ink resize-none ${updatingNotes ? 'opacity-50 cursor-wait' : ''}`}
+                                    className={`w-full px-0.5 py-0.5 ${cellText} ${quietInput} rounded focus:outline-none text-ink text-center resize-none ${updatingNotes ? 'opacity-50 cursor-wait' : ''}`}
                                     placeholder="—"
                                     rows={2}
                                 />
@@ -1146,7 +1148,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             <td
                                 key={`${row.id}-${column}`}
                                 data-editable-x="true"
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-center`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} text-center`}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <input
@@ -1182,7 +1184,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             <td
                                 key={`${row.id}-${column}`}
                                 data-editable-x="true"
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-center`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} text-center`}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <input
@@ -1251,12 +1253,12 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} ${cellMono} align-middle font-medium ${startInstallBgClass} ${vDividerClass} text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''}`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} ${cellMono} align-middle font-medium ${startInstallBgClass} text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''}`}
                                 onClick={() => !updatingStartInstall && setIsStartInstallModalOpen(true)}
                                 title={titleText}
                             >
-                                <div className="leading-tight">{displayValue}</div>
-                                <div className={`text-jl-3 leading-tight ${isAsap || isHardDate || isHardDatePast ? 'opacity-[.78] font-medium' : 'text-ink-3'}`}>
+                                <div className="leading-tight text-center">{displayValue}</div>
+                                <div className={`text-jl-3 leading-tight text-center ${isAsap || isHardDate || isHardDatePast ? 'opacity-90 font-medium' : 'text-ink-2'}`}>
                                     {row['installer'] || '—'}
                                 </div>
                             </td>
@@ -1293,11 +1295,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} ${cellMono} align-middle font-medium ${shipBgClass} ${vDividerClass} text-center cursor-pointer transition-colors`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} ${cellMono} align-middle font-medium ${shipBgClass} text-center cursor-pointer transition-colors`}
                                 onClick={() => setIsStartInstallModalOpen(true)}
                                 title={`${displayValue} — Click to edit`}
                             >
-                                <div className="leading-tight">{displayValue}</div>
+                                <div className="leading-tight text-center">{displayValue}</div>
                             </td>
                         );
                     }
@@ -1310,7 +1312,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} ${cellText} align-middle ${rowBgClass} ${vDividerClass} text-center ${matStatus ? 'cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors' : ''}`}
+                                className={`${paddingClass} ${cellPy} ${cellText} align-middle ${rowBgClass} text-center ${matStatus ? 'cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors' : ''}`}
                                 onClick={matStatus ? () => openHub('details', { scrollToMaterials: true }) : undefined}
                             >
                                 <div className="flex items-center justify-center">
@@ -1323,20 +1325,44 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     // For Job and Description, show full value in tooltip
                     const tooltipValue = shouldWrapAndTruncate ? rawValue : rawValue;
 
-                    // Job column — plain text. It used to be a second way into the
-                    // detail modal; Description is now the row's single link.
+                    // Paint color — multi-line, explicitly centered (generic branch
+                    // left multi-line prose looking left-biased in a narrow column).
+                    if (column === 'Paint color') {
+                        const paintText = rawValue == null || rawValue === '—' ? '—' : String(rawValue);
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`px-0.5 ${cellPy} text-jl-2 align-middle ${rowBgClass} text-center text-ink`}
+                                title={paintText === '—' ? undefined : paintText}
+                            >
+                                <div
+                                    className="mx-auto w-full text-center leading-tight"
+                                    style={{
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: 'vertical',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        textAlign: 'center',
+                                    }}
+                                >
+                                    {paintText}
+                                </div>
+                            </td>
+                        );
+                    }
+
+                    // Job column — plain text. Width comes from COLUMN_WIDTH_PERCENT
+                    // (no fixed px) so the lattice stays even with the rest of the table.
                     if (column === 'Job') {
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 ${cellPy} text-jl-2 align-middle ${rowBgClass} ${vDividerClass} text-center text-ink-2`}
+                                className={`px-1 ${cellPy} text-jl-2 align-middle ${rowBgClass} text-center text-ink`}
                                 title={tooltipValue}
-                                style={{
-                                    maxWidth: '170px',
-                                    width: '170px'
-                                }}
                             >
                                 <div
+                                    className="mx-auto text-center"
                                     style={{
                                         display: '-webkit-box',
                                         WebkitLineClamp: 2,
@@ -1344,7 +1370,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         overflow: 'hidden',
                                         textOverflow: 'clip',
                                         lineHeight: '1.2',
-                                        textAlign: 'center'
+                                        textAlign: 'center',
                                     }}
                                 >
                                     {rawValue}
@@ -1361,15 +1387,12 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} ${vDividerClass} text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
+                                className={`px-1 ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
                                 title={hasText ? `${tooltipValue} — click to open` : 'Click to open'}
                                 onClick={() => openHub('details')}
-                                style={{
-                                    maxWidth: '170px',
-                                    width: '170px'
-                                }}
                             >
                                 <div
+                                    className="mx-auto text-center"
                                     style={{
                                         display: '-webkit-box',
                                         WebkitLineClamp: 2,
@@ -1377,7 +1400,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         overflow: 'hidden',
                                         textOverflow: 'clip',
                                         lineHeight: '1.2',
-                                        textAlign: 'center'
+                                        textAlign: 'center',
                                     }}
                                 >
                                     {/* The handoff renders Description as bold dark text
@@ -1399,7 +1422,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} ${cellText} ${cellMono} align-middle font-semibold ${rowBgClass} ${vDividerClass} text-center text-ink`}
+                                className={`${paddingClass} ${cellPy} ${cellText} ${cellMono} align-middle font-semibold ${rowBgClass} text-center text-ink`}
                             >
                                 <div className="flex items-center justify-center">
                                     {rawValue}
@@ -1413,18 +1436,17 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             key={`${row.id}-${column}`}
                             // Numbers and dates ride mono; free text (Job Name, Paint
                             // color, Notes) stays in the UI face at the secondary size.
-                            className={`${paddingClass} ${cellPy} ${isTextColumn ? 'text-jl-2 text-ink-2' : `${cellText} ${cellMono} text-ink-2`} align-middle ${rowBgClass} ${vDividerClass} text-center ${shouldWrapAndTruncate
+                            // Body values use primary ink (print is black). Secondary
+                            // size only for free-text support columns (Paint / PM / BY).
+                            className={`${paddingClass} ${cellPy} ${isTextColumn ? 'text-jl-2 text-ink' : `${cellText} ${cellMono} text-ink`} align-middle ${rowBgClass} text-center ${isHoursColumn ? 'tabular-nums' : ''} ${shouldWrapAndTruncate
                                 ? ''
                                 : whitespaceClass
                                 }`}
                             title={tooltipValue}
-                            style={shouldWrapAndTruncate ? {
-                                maxWidth: '170px',
-                                width: '170px'
-                            } : {}}
                         >
                             {shouldWrapAndTruncate ? (
                                 <div
+                                    className="mx-auto text-center"
                                     style={{
                                         display: '-webkit-box',
                                         WebkitLineClamp: 2,
@@ -1432,20 +1454,20 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         overflow: 'hidden',
                                         textOverflow: 'ellipsis',
                                         lineHeight: '1.2',
-                                        textAlign: 'center'
+                                        textAlign: 'center',
                                     }}
                                 >
                                     {rawValue}
                                 </div>
                             ) : (
-                                rawValue
+                                <span className={`block w-full text-center ${isHoursColumn ? 'tabular-nums' : ''}`}>{rawValue}</span>
                             )}
                         </td>
                     );
                 })}
                 {isAdmin && showActions && (
                     <td
-                        className={`px-1 ${cellPy} text-center align-middle bg-white dark:bg-slate-800 w-8 relative`}
+                        className={`px-1 ${cellPy} text-center align-middle ${rowBgClass} w-8 relative`}
                         style={{ width: '32px' }}
                     >
                         <button
