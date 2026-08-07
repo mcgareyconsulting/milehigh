@@ -5,11 +5,13 @@ purpose: Encapsulate the full stage update workflow (DB write, stage_group sync,
 exports:
   UpdateStageCommand: Dataclass command that executes a stage update with all side effects
   StageUpdateResult: Dataclass result with event_id, job_comp/fab_order extras
-imports_from: [app.models, app.services.outbox_service, app.services.job_event_service, app.api.helpers, app.brain.job_log.scheduling.service, app.brain.job_log.features.start_install.neutralize_install_date_cascade]
+imports_from: [app.models, app.services.outbox_service, app.services.job_event_service, app.api.helpers, app.brain.job_log.scheduling.service, app.brain.job_log.features.start_install.neutralize_install_date_cascade, app.brain.job_log.features.start_install.shipping_stage_date_discipline]
 imported_by: [app/brain/job_log/routes.py]
 invariants:
   - Fixed-tier stages (Ready-to-Ship / Complete groups) auto-assign fab_order via get_fixed_tier
   - Setting stage='Complete' cascades job_comp='X'; leaving Complete clears job_comp='X'
+  - Paint Complete + hard start_install auto-rolls to Ship Planning (N5; generalizes ASAP intercept)
+  - Ship Planning / Ship Complete apply N5 date discipline (formula blank or hard-date wash)
   - Deduplicated events raise ValueError (event_exists); caller decides whether to treat as success
   - Scheduling recalculation failure is logged but does not roll back the update
 """
@@ -23,6 +25,9 @@ from app.services.job_event_service import JobEventService
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
 from app.brain.job_log.features.start_install.neutralize_install_date_cascade import neutralize_install_date_cascade
+from app.brain.job_log.features.start_install.shipping_stage_date_discipline import (
+    apply_shipping_stage_date_discipline,
+)
 
 logger = get_logger(__name__)
 
@@ -137,24 +142,31 @@ class UpdateStageCommand:
                 )
                 raise StagePhotoRequiredError(self.stage)
 
-        # ASAP intercept: a release flagged ASAP that hits Paint Complete is ripped
-        # straight to Ship Planning. We override self.stage here so the rest of the
-        # flow (stage_group sync, fab_order auto-assign, Trello outbox) all naturally
-        # target Ship Planning. The event payload retains `via: 'Paint Complete'` and
-        # `asap_intercepted: True` for audit/undo clarity. One DB event, one Trello move.
+        # Paint Complete intercept (N5): hard start_install OR ASAP rips the release
+        # straight to Ship Planning (widens the earlier ASAP-only intercept). Override
+        # self.stage so stage_group / fab_order / Trello target Ship Planning. Payload
+        # keeps `via: 'Paint Complete'` plus intercept flags for audit. One event, one move.
         event_payload = {'from': old_stage, 'to': self.stage}
+        has_hard_install = (
+            job_record.start_install_formulaTF is False
+            and job_record.start_install is not None
+        )
+        was_asap = bool(getattr(job_record, 'start_install_asap', False))
         if (
             self.stage == 'Paint Complete'
-            and bool(getattr(job_record, 'start_install_asap', False))
+            and (has_hard_install or was_asap)
             and old_stage != 'Ship Planning'
         ):
             self.stage = 'Ship Planning'
             event_payload = {
                 'from': old_stage,
                 'to': 'Ship Planning',
-                'asap_intercepted': True,
                 'via': 'Paint Complete',
             }
+            if has_hard_install:
+                event_payload['hard_date_intercepted'] = True
+            if was_asap:
+                event_payload['asap_intercepted'] = True
 
         if self.undone_event_id is not None:
             event_payload['undone_event_id'] = self.undone_event_id
@@ -325,6 +337,17 @@ class UpdateStageCommand:
                 source=self.source,
             ):
                 extras['hard_date_cleared'] = True
+
+        # N5 shipping-stage date discipline: at Ship Planning / Ship Complete, blank
+        # stale formula dates (locked against re-estimation) or wash hard-date color.
+        # Independent of the complete-zone job_comp cascade above.
+        shipping_extras = apply_shipping_stage_date_discipline(
+            job_record,
+            parent_event_id=event.id,
+            stage=self.stage,
+            source=self.source,
+        )
+        extras.update(shipping_extras)
 
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = self.source_of_update

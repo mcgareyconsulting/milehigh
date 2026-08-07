@@ -113,7 +113,7 @@ Every open item in one place. Detail lives in the workstream sections below.
 | **BUG-6** | Row 164 — Nov 2025 outlier still in the DWL | S | — | **Dropped** 2026-08-06 (data, not code) |
 | **DP** | Drafter edit permissions, `job` → `released` | S | — | **Fixed** 2026-08-06 — drafters get gear “Edit row” (job→released); PATCH via `drafter_or_admin`; delete stays admin |
 | **N6** | Ship ↔ Install 'Break' button | S | — | **Fixed** 2026-08-06 — Break/Link in install+ship modal; linked = auto 1 biz day, broken = independent |
-| **N5** | Shipping-stage date discipline — formula dates blank at ship stages, hard dates wash white, **Paint Complete + hard date auto-rolls to Ship Planning** (generalizes the ASAP intercept, `stage/command.py:142`) | M | — | Spec expanded 2026-08-08 |
+| **N5** | Shipping-stage date discipline — formula dates blank at ship stages, hard dates wash white, **Paint Complete + hard date auto-rolls to Ship Planning** (generalizes the ASAP intercept, `stage/command.py:142`) | M | — | **Built** 2026-08-08 — `shipping_stage_date_discipline.py` + stage intercept + modal Break-default |
 | **N7** | Job log modal merge + redesign — + main-card change-log feed (dates + stage changes off `ReleaseEvents`) + banana icon flow replaces the progress bar | M | — | **In flight, uncommitted.** UI only — functionality frozen per the redesign package |
 | **N9** | Photo watermark + GPS — needs Pillow + pillow-heif | M | — | Capture standard settled. **§10.3 open** |
 | **H1** | Polish sweep — rolling calendar, full-screen modals, metrics load | M | N7 | Not started |
@@ -500,7 +500,7 @@ out of it at any point.
 | **N7** | **Job log modal merge + redesign** — **in flight, uncommitted** on the `feature/unified-release-modal` worktree. Soft dependency for punch-list and T&M entry points | M |
 | **N9** | **Photo watermark + GPS** — new 2026-08-06 | M |
 | **N10** | **Bulk edit on the job log** — see Workstream 2 | M |
-| **N5** | **Shipping-stage date discipline** — spec expanded 2026-08-08, see below | M |
+| **N5** | **Shipping-stage date discipline** — **Built** 2026-08-08, see below | M |
 | **N6** | **Ship ↔ Install 'Break' button** — **Fixed** 2026-08-06 in `StartInstallDateModal` | S |
 | **DP** | **Drafter edit permissions**, `job` → `released` columns — **Fixed** 2026-08-06: gear modal + API, not inline | S |
 | **H1** | Polish sweep — rolling calendar, full-screen modals, metrics load times, **"left sidebar mode" toggle in the theme settings** (alongside dark mode / old-man mode, `ThemeContext.jsx`) | M |
@@ -679,6 +679,12 @@ most of the time, what it's supposed to look like, where it's at."* A stamped
 photo is self-describing, which is exactly what the invoicing pile needs.
 
 ### N5 — shipping-stage date discipline
+
+**Built 2026-08-08** — implementation: `shipping_stage_date_discipline.py`
+(called from `UpdateStageCommand`), Paint Complete intercept widened in
+`stage/command.py`, modal Break-default in `StartInstallDateModal` when at
+Ship Planning/Complete without a hard date. Tests:
+`tests/brain/test_shipping_stage_date_discipline.py`.
 
 **Spec expanded 2026-08-08** — the 8/4 note ("drop ASAP + red after ship
 complete") grew into a full rule set for what happens to dates when a release

@@ -27,6 +27,9 @@ CascadeReason = Literal[
     'stage_set_to_install_complete',
     'job_comp_set_to_x',
     'invoiced_set_to_x',
+    # N5 shipping-stage wash (hard dates keep their value; color only)
+    'stage_set_to_ship_planning',
+    'stage_set_to_ship_complete',
 ]
 
 
@@ -86,12 +89,10 @@ def neutralize_install_date_cascade(
     job_record.source_of_update = source
 
     logger.info(
-        "Neutralized install date color on completion cascade",
-        extra={
-            'job': job_record.job,
-            'release': job_record.release,
-            'reason': reason,
-            'parent_event_id': parent_event_id,
-        },
+        "install_date_color_neutralized",
+        job=job_record.job,
+        release=job_record.release,
+        reason=reason,
+        parent_event_id=parent_event_id,
     )
     return True

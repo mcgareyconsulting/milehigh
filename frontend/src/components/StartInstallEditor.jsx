@@ -33,10 +33,13 @@ export default function StartInstallEditor({
     const release = row['Release #'];
     const value = row['Start install'];
 
-    const isAsap = row['start_install_asap'] === true;
-    // A no-color date (auto-recorded when an ASAP release reached Ship Complete+) shows
-    // the date plainly — neither the red ASAP nor the green/yellow hard-date treatment.
-    const isNoColor = row['start_install_no_color'] === true;
+    const stage = row['Stage'] ?? row.stage;
+    const atShippingStage = stage === 'Ship Planning' || stage === 'Ship Complete';
+    // N5: shipping stages never show ASAP red / hard-date green-yellow.
+    const isAsap = !atShippingStage && row['start_install_asap'] === true;
+    // A no-color date (shipping wash / complete-zone neutralize) shows the date plainly —
+    // neither the red ASAP nor the green/yellow hard-date treatment.
+    const isNoColor = atShippingStage || row['start_install_no_color'] === true;
     const isHardDate = !isAsap && !isNoColor && row['start_install_formulaTF'] === false && !!value;
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -154,6 +157,7 @@ export default function StartInstallEditor({
                     releaseNumber={release}
                     startInstallFormulaTF={row['start_install_formulaTF']}
                     isAsap={isAsap}
+                    stage={row['Stage'] ?? row.stage}
                 />
             )}
         </>
