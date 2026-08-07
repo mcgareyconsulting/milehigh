@@ -20,6 +20,21 @@ deliverable, not a repo artifact.
 
 **Effort:** S = under a day · M = 2–4 days · L = 1–2 weeks · XL = 3+ weeks.
 
+> **Status update — 2026-08-06, end of day (PRs #323–#334 merged).** The
+> "alongside" lane is largely cleared in one wave: the **bug pile**
+> (BUG-1/2/3/5), **drafter edit permissions**, and **N6** Break/Link merged via
+> #327 + the #331/#332 audit follow-ups; the **N7 core** — unified
+> `ReleaseHubModal`, the token/lattice design system across Job Log · Events ·
+> DWL · Archive, opt-in Left Sidebar Mode — merged via #326/#330/#333; **N5**
+> shipping-stage date discipline merged via #334. In-app patch notes updated to
+> v2.0.334. One migration joined the MIG backlog:
+> `releases_unique_job_release_name.py` (BUG-3). CI was hardened the same day:
+> backend tests parallelized with a hang timeout, and the suite now blocks real
+> network calls (tests had been silently hitting live APIs, including Anthropic).
+> **Next:** Workstream 0 — K4 backups, K3 storage decision + numbers, P11 delta
+> inventory, MIG backlog — then P1 opens Workstream 1. The open calls remain
+> Bill's: the reduced October scope (§1b) and §10.1 in-flight projects.
+
 ---
 
 ## 1. The forcing function
@@ -59,7 +74,7 @@ Every open item in one place. Detail lives in the workstream sections below.
 | **K4** | Backups — Postgres + binary disk | S–M | — | 🔴 **Not started.** Tier 0 since 7/22; runbook unmerged |
 | **K3** | Object storage migration + cost numbers for Bill | L | — | Not started. Size generously. **Blocks P7, C3, P11** — every submittal binary lands wherever this decides |
 | **N4** | Two-calendar business-day fix + 26-call-site audit | M | — | Not started. Gates E1–E3 |
-| **MIG** | Run the outstanding migration backlog per environment | S–M | — | Standing item. Several shipped features carry unrun migrations (A1 alone shipped five); Workstream 1 adds more. Scripts handed over per the usual split |
+| **MIG** | Run the outstanding migration backlog per environment | S–M | — | Standing item. Several shipped features carry unrun migrations (A1 alone shipped five); the 8/6 bug wave added `releases_unique_job_release_name.py` (the BUG-3 fix — verify run state per env); Workstream 1 adds more. Scripts handed over per the usual split |
 | | | **~14.5 d** | | |
 
 ### Workstream 1 — Procore exit (October)
@@ -114,10 +129,10 @@ Every open item in one place. Detail lives in the workstream sections below.
 | **DP** | Drafter edit permissions, `job` → `released` | S | — | **Fixed** 2026-08-06 — drafters get gear “Edit row” (job→released); PATCH via `drafter_or_admin`; delete stays admin |
 | **N6** | Ship ↔ Install 'Break' button | S | — | **Fixed** 2026-08-06 — Break/Link in install+ship modal; linked = auto 1 biz day, broken = independent |
 | **N5** | Shipping-stage date discipline — formula dates blank at ship stages, hard dates wash white, **Paint Complete + hard date auto-rolls to Ship Planning** (generalizes the ASAP intercept, `stage/command.py:142`) | M | — | **Built** 2026-08-08 — `shipping_stage_date_discipline.py` + stage intercept + modal Break-default |
-| **N7** | Job log modal merge + redesign — + main-card change-log feed (dates + stage changes off `ReleaseEvents`) + banana icon flow replaces the progress bar | M | — | **In flight, uncommitted.** UI only — functionality frozen per the redesign package |
+| **N7** | Job log modal merge + redesign — + main-card change-log feed (dates + stage changes off `ReleaseEvents`) + banana icon flow replaces the progress bar | M | — | **Core merged 2026-08-06** (PRs #326/#330/#333) — unified `ReleaseHubModal`, lattice/token design system across Job Log · Events · DWL · Archive, opt-in Left Sidebar Mode. **Remaining:** main-card change-log feed + banana icon flow |
 | **N9** | Photo watermark + GPS — needs Pillow + pillow-heif | M | — | Capture standard settled. **§10.3 open** |
 | **H1** | Polish sweep — rolling calendar, full-screen modals, metrics load | M | N7 | Not started |
-| | | **~12 d remaining** (bug pile + DP + N6 shipped 2026-08-06) | | |
+| | | **~7 d remaining** (bug pile + DP + N6 + N5 + N7 core all shipped 2026-08-06) | | |
 
 ### Workstream 4 — Carmen
 
@@ -794,14 +809,14 @@ to show did not fit the window and is retired.
 
 | When | What |
 |---|---|
-| **This week** | K4 backups · K3 decision + storage numbers for Bill · **P11 delta inventory** · the bug pile · drafter permissions · N6 · MIG backlog |
+| **This week** | K4 backups · K3 decision + storage numbers for Bill · **P11 delta inventory** · MIG backlog *(done 8/6: the bug pile · drafter permissions · N6)* |
 | **Weeks 1–3** | P1 extend `Submittals` · P0 origination · P2 workflow engine + tests — **blocked start on Bill's template export** · N4 |
 | **Weeks 3–4** | C3 **narrow** (revision viewer) · **P11 document pull begins** — paced by rate limits, runs in the background from here |
 | **Weeks 4–5** | P7 returned ingestion · D1 **minimal** (submittal tab) |
 | **Weeks 5–6** | P4 Tree of Life · FC conversion → release into the job log · P10 backfill |
 | **Weeks 6–8** | **660 Fox Hill parallel-run hardening** · P11 verified complete · the buffer this plan currently does not have |
 | **Post-October lane** | P3 Carmen step · P5 Separator (design vs 500-998) · P6 distribution · P8 aging · C3 full · D1 full · then Workstream 2: N1 → N10 → N2 → billing stages → invoicing tab |
-| **Alongside, as capacity allows** | N5 · N9 · N7 modal merge · N8 Carmen reporting |
+| **Alongside, as capacity allows** | N9 · N8 Carmen reporting · N7 remainder (change-log feed + banana icons) *(done 8/6: N5 · N7 core)* |
 
 **Pilot discipline matters more than the schedule.** **660 Fox Hill** runs in
 parallel with Procore from the first slice [L1041–1049], so that when the contract

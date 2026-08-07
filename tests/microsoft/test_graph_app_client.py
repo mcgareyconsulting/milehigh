@@ -31,6 +31,13 @@ def _resp(status, json_body=None, headers=None, reason=None):
 
 
 @pytest.fixture(autouse=True)
+def _no_retry_backoff():
+    """Override the global zero-delay fixture (tests/conftest.py): this module
+    asserts the real computed delays, with sleep itself mocked via _fast_sleep."""
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _fast_sleep():
     with patch.object(gac.time, "sleep") as sleep:
         yield sleep

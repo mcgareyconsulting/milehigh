@@ -10,13 +10,69 @@ domain-specific fixtures (e.g. tests/dwl/conftest.py for DWL-only fixtures,
 tests/brain/conftest.py for brain auth-patching clients).
 """
 import os
+import socket
 
 # Must run before any test module imports create_app
 os.environ.setdefault("TESTING", "1")
 
+# Neutralize behavior flags a local .env may set (dotenv does not override
+# existing env vars, so these hard sets win). Tests assume the defaults;
+# without this, suites pass in CI (no .env) but fail on dev machines —
+# e.g. TRELLO_MOCK=1 short-circuits the outbox move_card path.
+os.environ["TRELLO_MOCK"] = "0"
+os.environ["RECALL_CALENDAR_ENABLED"] = "0"
+
 from unittest.mock import Mock, patch
 
 import pytest
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _no_outbound_network(request):
+    """Fail fast on any real network connection from a test.
+
+    External services (Trello, Procore, Graph, Anthropic) must always be
+    mocked (tests/README.md); the DB is in-memory SQLite, so no test has a
+    legitimate reason to open a TCP socket. Before this guard, a locally
+    loaded .env let some tests silently hit live APIs (real Anthropic calls
+    from the material-orders ingest path, real outbox deliveries).
+
+    `pytest -m live` runs stand down: live-marked tests exist to make a real
+    LLM call on purpose (see pytest.ini), and the default addopts exclude
+    them from every normal run.
+    """
+    markexpr = request.config.getoption("-m", default="") or ""
+    if "live" in markexpr and "not live" not in markexpr:
+        yield
+        return
+
+    real_connect = socket.socket.connect
+
+    def blocked_connect(self, address, *args, **kwargs):
+        if self.family == getattr(socket, "AF_UNIX", None):
+            return real_connect(self, address, *args, **kwargs)
+        raise RuntimeError(
+            f"Test attempted outbound network connection to {address!r}. "
+            "Mock the external call (see tests/README.md)."
+        )
+
+    socket.socket.connect = blocked_connect
+    try:
+        yield
+    finally:
+        socket.socket.connect = real_connect
+
+
+@pytest.fixture(autouse=True)
+def _no_retry_backoff(monkeypatch):
+    """Zero out Graph-client retry backoff so exhaust-retries tests don't
+    sleep for real (1+2+4s per exercise). Patches the module-local delay
+    helper, not time.sleep, so tests that rely on real timing (sync lock
+    threads) are unaffected."""
+    monkeypatch.setattr(
+        "app.microsoft.graph_app_client._retry_delay_seconds",
+        lambda resp, attempt: 0,
+    )
 
 
 @pytest.fixture

@@ -17,6 +17,81 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.334',
+    date: 'August 6, 2026',
+    summary:
+      'The Job Log redesign lands — one release hub modal, a cleaner table, an optional left sidebar — plus smarter dates at the shipping stages and fixes for duplicate release numbers, fab-hour totals, and the drawing link.',
+    changes: [
+      {
+        type: 'new',
+        title: 'One release hub for everything about a release',
+        detail:
+          'Clicking a release\'s description on the Job Log now opens a single hub modal with three tabs — Details, Drawings & Photos, and Change Log — plus a notes rail that stays visible no matter which tab you\'re on, so a note you\'re mid-way through writing survives switching tabs. This replaces the separate details and notes-history popups. The description is now the row\'s one click-through; job and release numbers are plain text.',
+      },
+      {
+        type: 'improved',
+        title: 'The Job Log look, rebuilt',
+        detail:
+          'The Job Log table got its redesign: a uniform grid, IBM Plex type on screen and in the exported PDF, alternating row banding that skips completed rows, tinted stage pills, and whole-cell date flags. The Events, Drafting Work Load, and Archive pages were restyled to match, and the rest of the app picked up the same surface treatment so pages stop feeling like different eras.',
+      },
+      {
+        type: 'new',
+        title: 'Left sidebar, if you want it',
+        detail:
+          'A new Left Sidebar Mode toggle lives in the theme menu next to Dark Mode. Turn it on and, on a wide screen, the top bar is replaced by a collapsible icon rail on the left with the bell, theme, and logout in the footer. It\'s off by default, remembered per browser, and the top bar stays as-is on smaller screens.',
+      },
+      {
+        type: 'improved',
+        title: 'Dates behave themselves at the shipping stages',
+        detail:
+          'When a release reaches Shipping Planning or Ship Complete, estimated install and ship dates are cleared instead of lingering — an estimate that survived to the truck is stale by definition — and you set the real ones by hand. Dates you set by hand are kept but shown in plain white, with no ASAP red or urgency colors. And a release with a firm install date now rolls from Paint Complete straight into Shipping Planning automatically, the way ASAP releases already did.',
+      },
+      {
+        type: 'new',
+        title: 'Break or link ship and install dates',
+        detail:
+          'The install date modal now has an explicit Break / Link button between Ship Date and Start Install. Linked, setting either date fills the other one business day apart; broken, they move independently. No more guessing at when the two dates are tied together.',
+      },
+      {
+        type: 'new',
+        title: 'Drafters can edit Job Log rows',
+        detail:
+          'Drafters now get the row menu with Edit row, covering the fields from Job # through Released. Deleting rows stays admin-only.',
+      },
+      {
+        type: 'fixed',
+        title: 'Release numbers no longer collide across projects',
+        detail:
+          'Job numbers wrap around, so an archived release on an old project could block the same number on a new one — 410-108 Columbine blocking 410-108 Alta Metro. Uniqueness now includes the project name, and everywhere the app looks up a release by number it now resolves to the active row a human means, never an archived twin.',
+      },
+      {
+        type: 'fixed',
+        title: 'Fab hours now drop as fabrication progresses',
+        detail:
+          'Total Fab HRS ignored several mid-fabrication stages — Cut Complete, Fitup Start, Weld Start, Weld Complete — so the number barely moved while the shop worked. The remaining-hours discounts now cover every stage, consistently in the table, the totals, and the scheduling math.',
+      },
+      {
+        type: 'fixed',
+        title: 'The drawing button stops going grey for no reason',
+        detail:
+          'The Job Log\'s drawing link now survives Procore\'s quirks: it pages through large submittal lists instead of silently truncating, refetches when Procore hands back stale approver data after a re-distribute, looks back 30 days instead of 7, and refuses to ever link a photo or markup in place of the actual drawing PDF.',
+      },
+      {
+        type: 'fixed',
+        title: 'Order # 0 clears the slot in Drafting Work Load',
+        detail:
+          'Typing 0 in the ORDER # cell now clears the release out of the drafting order like blank or dash, instead of silently doing nothing.',
+      },
+      {
+        type: 'improved',
+        title: 'The Bug Tracker embraces its destiny',
+        adminOnly: true,
+        detail:
+          'The admin board is now Ongoing Complaints. You don\'t create an item, you File a Complaint, and an empty column has nothing to complain about.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.322',
     date: 'July 26, 2026',
     summary:

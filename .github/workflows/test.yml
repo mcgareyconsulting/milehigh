@@ -8,13 +8,15 @@ jobs:
   backend:
     name: Backend (pytest + coverage)
     runs-on: ubuntu-latest
+    # A healthy run is ~2 min; anything past 10 is a hung test, not a slow one.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: pip
 
       - name: Install dependencies
@@ -24,8 +26,13 @@ jobs:
         # --cov-fail-under is set just below current measured coverage so this
         # acts as a regression gate, not a ratchet. Bump it explicitly when
         # adding meaningful new coverage. See tests/README.md.
+        # COVERAGE_CORE=sysmon uses the PEP 669 tracer (Python 3.12+), which
+        # cuts coverage overhead severalfold vs the default C tracer.
+        env:
+          COVERAGE_CORE: sysmon
         run: |
           pytest \
+            -n auto \
             --tb=short \
             --junit-xml=test-results.xml \
             --cov \
@@ -50,13 +57,14 @@ jobs:
   frontend:
     name: Frontend (vitest)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 

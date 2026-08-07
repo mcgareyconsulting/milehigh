@@ -51,7 +51,9 @@ When the patch sites for `get_current_user` differ across blueprints (e.g. `app.
 
 ## Mocking conventions
 
-- **External services are always mocked.** Procore API, Trello API, OneDrive Graph — no real network calls in any test.
+- **External services are always mocked.** Procore API, Trello API, OneDrive Graph — no real network calls in any test. This is now enforced: an autouse fixture in `tests/conftest.py` blocks outbound socket connections, so an unmocked call fails loudly instead of silently hitting a live API. The only exception is an explicit `pytest -m live` run, where the guard stands down because live-marked tests make a real LLM call on purpose.
+- **Env flags are pinned.** `tests/conftest.py` hard-sets `TRELLO_MOCK=0` and `RECALL_CALENDAR_ENABLED=0` before app import so a developer's `.env` can't change test behavior (dotenv never overrides existing env vars). If a test depends on another env-derived flag, pin it there too.
+- **Retry backoff is zeroed.** The Graph client's `_retry_delay_seconds` is patched to 0 suite-wide so exhaust-retries tests don't sleep for real. `tests/microsoft/test_graph_app_client.py` overrides this because it asserts the computed delays.
 - **The DB is always real (in-memory).** Don't mock SQLAlchemy unless the test is purely about a service method's business logic. Mocked DB tests are easy to make green and easy to make wrong.
 - **Time:** when a test depends on `datetime.utcnow()`, freeze it with `freezegun` or pass timestamps explicitly. Don't rely on real time.
 - **Outbox:** when testing code that calls `OutboxService.add`, patch `app.services.outbox_service.OutboxService.add` to avoid creating real DB outbox rows you'll then have to assert on.
