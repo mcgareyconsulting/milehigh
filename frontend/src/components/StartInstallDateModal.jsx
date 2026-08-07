@@ -15,11 +15,16 @@
  *   - Clear Hard Date button is only shown when the row currently has a hard date (startInstallFormulaTF === false && currentDate && !isAsap).
  *   - Clear ASAP button is only shown when the row currently has ASAP set (isAsap === true).
  *   - Ship ↔ Install auto-estimate only runs while `linked` is true (default when gap is empty or 1 biz day). Break (N6) sets linked false; Link re-enables and re-applies ship = install − 1.
- * updated_by_agent: 2026-08-06T00:00:00Z
+ *   - N5: at Ship Planning / Ship Complete, open unlinked (Break / manual mode by default).
+ *     Auto ship↔install estimate is off until the user hits Link — covers formula blanking and
+ *     Store→Ship Planning before the parent row has refetched stage.
+ * updated_by_agent: 2026-08-08T00:00:00Z
  */
 import React, { useState, useEffect } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { toYmd, subtractBusinessDays, addBusinessDays } from '../utils/formatters';
+
+const SHIPPING_STAGES = new Set(['Ship Planning', 'Ship Complete']);
 
 /** True when ship is empty or exactly one business day before install. */
 function areDatesLinked(installYmd, shipYmd) {
@@ -28,7 +33,7 @@ function areDatesLinked(installYmd, shipYmd) {
     return shipYmd === subtractBusinessDays(installYmd, 1);
 }
 
-export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShipDate, currentInstaller, onSave, onSaveShipDate, onClearHardDate, onSetAsap, onClearAsap, jobNumber, releaseNumber, startInstallFormulaTF, isAsap }) {
+export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShipDate, currentInstaller, onSave, onSaveShipDate, onClearHardDate, onSetAsap, onClearAsap, jobNumber, releaseNumber, startInstallFormulaTF, isAsap, stage }) {
     const [dateInput, setDateInput] = useState('');
     const [shipDateInput, setShipDateInput] = useState('');
     const [linked, setLinked] = useState(true);
@@ -48,12 +53,19 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
             const installYmd = currentDate && !isAsap ? toYmd(currentDate) : '';
             setShipDateInput(shipYmd);
             setDateInput(installYmd);
-            // Start linked when the pair is empty/one-sided or already 1 biz day apart;
-            // a deliberately larger gap opens unlinked so Break is not required first.
-            setLinked(areDatesLinked(installYmd, shipYmd));
+            // N5: shipping stages always open in manual mode (Break). Estimated Link
+            // (ship = install − 1) only after the user opts in — never by default after
+            // formula wipe or a stage move into Ship Planning / Ship Complete.
+            if (SHIPPING_STAGES.has(stage)) {
+                setLinked(false);
+            } else {
+                // Outside shipping: link when empty/one-sided or already 1 biz day apart;
+                // a deliberately larger gap opens unlinked so Break is not required first.
+                setLinked(areDatesLinked(installYmd, shipYmd));
+            }
             setError('');
         }
-    }, [isOpen, currentDate, currentShipDate, isAsap, initialInstaller]);
+    }, [isOpen, currentDate, currentShipDate, isAsap, initialInstaller, stage, startInstallFormulaTF]);
 
     useEffect(() => {
         if (isOpen && installerOptions.length === 0) {
@@ -252,7 +264,9 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
                             ? 'ASAP sets a hard Start Install one week out and displays "ASAP" in red.'
                             : linked
                                 ? 'Ship and Install are linked (ship = install − 1 business day). Use Break between the fields for an independent gap. Saving Start Install sets a hard date and cascades; Ship date does not push to Trello or affect scheduling.'
-                                : 'Ship and Install are independent. Use Link between the fields to re-tie them. Saving Start Install sets a hard date and cascades; Ship date does not push to Trello or affect scheduling.'}
+                                : SHIPPING_STAGES.has(stage)
+                                    ? 'At Ship Planning/Complete, Ship and Install start independent (manual). Set each date yourself, or use Link to re-tie them (ship = install − 1 business day).'
+                                    : 'Ship and Install are independent. Use Link between the fields to re-tie them. Saving Start Install sets a hard date and cascades; Ship date does not push to Trello or affect scheduling.'}
                     </p>
 
                     <div className="mb-6">

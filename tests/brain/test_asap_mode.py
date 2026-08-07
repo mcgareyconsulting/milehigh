@@ -290,13 +290,17 @@ class TestAsapAutoAdvance:
             assert r.stage_group == "READY_TO_SHIP"
             # Ship Planning is fixed tier 2
             assert r.fab_order == 2
-            # ASAP flag stays set — admin manually clears
-            assert r.start_install_asap is True
+            # Fixture has ASAP flag but no hard date — N5 formula path locks blank dates;
+            # ASAP flag is cleared as part of that blanking/lock.
+            assert r.start_install_asap is False
+            assert r.start_install is None
+            assert r.start_install_formulaTF is False
 
             stage_event = ReleaseEvents.query.filter_by(action="update_stage").one()
             assert stage_event.payload["from"] == "Paint Start"
             assert stage_event.payload["to"] == "Ship Planning"
             assert stage_event.payload.get("asap_intercepted") is True
+            assert stage_event.payload.get("hard_date_intercepted") is None
             assert stage_event.payload.get("via") == "Paint Complete"
 
             # Exactly one Trello outbox enqueue, tied to the stage event
@@ -386,14 +390,14 @@ class TestAsapDropOnCompletion:
 
             db.session.refresh(r)
             assert r.stage == "Ship Complete"
-            # Flag cleared; the date is the PM's to keep.
+            # Flag cleared (ASAP drop and/or N5 wash); hard date kept, color washed white (N5).
             assert r.start_install_asap is False
             assert r.start_install == date(2026, 7, 1)
             assert r.comp_eta == date(2026, 7, 3)
             assert r.start_install_formulaTF is False
-            assert r.start_install_no_color is False
+            assert r.start_install_no_color is True
 
-            # A child event records the drop, linked to the stage event, with no date.
+            # A child event records the ASAP drop, linked to the stage event, with no date.
             stage_event = ReleaseEvents.query.filter_by(action="update_stage").one()
             drop = [
                 e for e in ReleaseEvents.query.all()
@@ -421,8 +425,10 @@ class TestAsapDropOnCompletion:
                 UpdateStageCommand(job_id=1, release="A", stage="Ship Complete").execute()
 
             db.session.refresh(r)
+            # N5 blanks/locks formula path at Ship Complete (no hard date).
             assert r.start_install_no_color is False
             assert r.start_install is None
+            assert r.start_install_formulaTF is False
             assert not any(
                 isinstance(e.payload, dict)
                 and e.payload.get("reason") == "asap_dropped_on_ship_complete"

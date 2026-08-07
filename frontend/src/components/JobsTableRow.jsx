@@ -1218,11 +1218,14 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
                     // Handle Start install column with clickable cell that opens modal
                     if (column === 'Start install') {
-                        const isAsap = row['start_install_asap'] === true;
+                        // N5: at shipping stages hard dates stay washed white (also covers optimistic
+                        // save before refetch brings back start_install_no_color).
+                        const atShippingStage = localStage === 'Ship Planning' || localStage === 'Ship Complete';
+                        const isAsap = !atShippingStage && row['start_install_asap'] === true;
                         const displayValue = isAsap ? 'ASAP' : formatDate(localStartInstall);
-                        // A no-color date (auto-recorded when an ASAP release reached Ship Complete+)
-                        // shows the date plainly — not the green/yellow hard-date treatment.
-                        const isNoColor = row['start_install_no_color'] === true;
+                        // A no-color date (N5 shipping wash / complete-zone neutralize) shows plainly —
+                        // not the green/yellow hard-date treatment.
+                        const isNoColor = atShippingStage || row['start_install_no_color'] === true;
                         // Hard date is when start_install_formulaTF is explicitly false and there's a date value
                         const isHardDate = !isAsap && !isNoColor && row['start_install_formulaTF'] === false && localStartInstall;
                         // Formula date is when start_install_formulaTF is true or formula starts with '='
@@ -1276,10 +1279,12 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     // install is still green. ASAP propagates red; formula/no-color/no-date
                     // fall through to neutral, matching Start install above.
                     if (column === 'Ship Date') {
-                        const isAsap = row['start_install_asap'] === true;
+                        const atShippingStage = localStage === 'Ship Planning' || localStage === 'Ship Complete';
+                        const isAsap = !atShippingStage && row['start_install_asap'] === true;
                         // Show "ASAP" instead of the underlying date, matching the Start install cell.
                         const displayValue = isAsap ? 'ASAP' : formatDate(localShipDate);
-                        const isNoColor = row['start_install_no_color'] === true;
+                        // N5: wash at shipping stages (mirrors Start install cell).
+                        const isNoColor = atShippingStage || row['start_install_no_color'] === true;
                         const hasDate = !!localShipDate;
                         // Same hard-date test the Start install cell uses.
                         const isHardDate = !isAsap && !isNoColor && row['start_install_formulaTF'] === false && localStartInstall;
@@ -1554,6 +1559,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 releaseNumber={row['Release #']}
                 startInstallFormulaTF={row['start_install_formulaTF']}
                 isAsap={row['start_install_asap'] === true}
+                // Use localStage so Store→Ship Planning (before parent refetch) still
+                // opens the modal in N5 manual/Break mode, not estimated Link.
+                stage={localStage}
             />
             <PdfMarkupModal
                 isOpen={pdfMarkupOpen}
