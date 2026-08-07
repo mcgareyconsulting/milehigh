@@ -89,7 +89,7 @@ function Operations() {
             'failed': 'bg-red-100 text-red-800',
             'pending': 'bg-yellow-100 text-yellow-800',
         };
-        return colors[status] || 'bg-gray-100 text-gray-800';
+        return colors[status] || 'bg-surface-2 text-ink';
     };
 
     const resetFilters = () => {
@@ -111,9 +111,9 @@ function Operations() {
     };
 
     return (
-        <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-8 px-4" style={{ width: '100%', minWidth: '100%' }}>
+        <div className="w-full min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas py-8 px-4" style={{ width: '100%', minWidth: '100%' }}>
             <div className="max-w-7xl mx-auto w-full" style={{ width: '100%', maxWidth: '1280px' }}>
-                <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                <div className="bg-surface rounded-2xl shadow-xl overflow-hidden">
                     <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-8 py-6">
                         <div className="flex justify-between items-center">
                             <div>
@@ -140,16 +140,16 @@ function Operations() {
 
                     <div className="p-8">
 
-                        <div className="bg-gradient-to-r from-gray-50 to-accent-50 rounded-xl p-6 mb-6 border border-gray-200">
+                        <div className="bg-gradient-to-r from-surface-2 to-brand-soft rounded-xl p-6 mb-6 border border-hairline">
                             <div className="flex flex-wrap gap-4 items-end">
                                 <div className="flex-1 min-w-[200px]">
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    <label className="block text-sm font-semibold text-ink-2 mb-2">
                                         📅 Filter by Date
                                     </label>
                                     <select
                                         value={selectedDate}
                                         onChange={(e) => setSelectedDate(e.target.value)}
-                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
+                                        className="w-full px-4 py-2.5 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-surface shadow-sm transition-all"
                                     >
                                         <option value="">All Dates</option>
                                         {availableDates.map(date => (
@@ -158,13 +158,13 @@ function Operations() {
                                     </select>
                                 </div>
                                 <div className="flex-1 min-w-[200px]">
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    <label className="block text-sm font-semibold text-ink-2 mb-2">
                                         🔧 Filter by Operation Type
                                     </label>
                                     <select
                                         value={selectedOperationType}
                                         onChange={(e) => setSelectedOperationType(e.target.value)}
-                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
+                                        className="w-full px-4 py-2.5 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-surface shadow-sm transition-all"
                                     >
                                         <option value="">All Types</option>
                                         {availableOperationTypes.map(type => (
@@ -173,7 +173,7 @@ function Operations() {
                                     </select>
                                 </div>
                                 <div className="min-w-[150px]">
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    <label className="block text-sm font-semibold text-ink-2 mb-2">
                                         🔢 Results Limit
                                     </label>
                                     <input
@@ -192,13 +192,13 @@ function Operations() {
                                                 }
                                             }
                                         }}
-                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
+                                        className="w-full px-4 py-2.5 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-surface shadow-sm transition-all"
                                     />
                                 </div>
                                 <div className="flex items-end">
                                     <button
                                         onClick={resetFilters}
-                                        className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg text-sm transition-colors duration-150 shadow-sm hover:shadow border border-gray-300 flex items-center gap-2"
+                                        className="px-6 py-2.5 bg-surface-2 hover:bg-head-bg text-ink-2 font-semibold rounded-lg text-sm transition-colors duration-150 shadow-sm hover:shadow border border-hairline-strong flex items-center gap-2"
                                     >
                                         <span>🔄</span>
                                         Reset Filters
@@ -210,7 +210,7 @@ function Operations() {
                         {loading && (
                             <div className="text-center py-12">
                                 <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mb-4"></div>
-                                <p className="text-gray-600 font-medium">Loading operations...</p>
+                                <p className="text-ink-2 font-medium">Loading operations...</p>
                             </div>
                         )}
                         {error && (
@@ -227,26 +227,26 @@ function Operations() {
 
                         {!loading && !error && (
                             <>
-                                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                                <div className="bg-surface rounded-xl border border-hairline shadow-sm overflow-hidden">
                                     <div className="overflow-x-auto">
                                         <table className="w-full">
-                                            <thead className="bg-gradient-to-r from-gray-50 to-accent-50">
+                                            <thead className="bg-gradient-to-r from-surface-2 to-brand-soft">
                                                 <tr>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Started</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Operation ID</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Type</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Status</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Source</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Duration (s)</th>
-                                                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Actions</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">Started</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">Operation ID</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">Type</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">Status</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">Source</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">Duration (s)</th>
+                                                    <th className="px-6 py-4 text-center text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">Actions</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="bg-white divide-y divide-gray-200">
+                                            <tbody className="bg-surface divide-y divide-gray-200">
                                                 {operations.length === 0 ? (
                                                     <tr>
                                                         <td colSpan="7" className="px-6 py-12 text-center">
-                                                            <div className="text-gray-400 text-4xl mb-3">📭</div>
-                                                            <p className="text-gray-500 font-medium">No operations found</p>
+                                                            <div className="text-ink-3 text-4xl mb-3">📭</div>
+                                                            <p className="text-ink-3 font-medium">No operations found</p>
                                                         </td>
                                                     </tr>
                                                 ) : (
@@ -256,15 +256,15 @@ function Operations() {
                                                             className="hover:bg-accent-50/50 transition-colors duration-150"
                                                             style={{ animationDelay: `${index * 50}ms` }}
                                                         >
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-ink-2">
                                                                 {formatDateTime(op.started_at)}
                                                             </td>
                                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                                <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded text-gray-800">
+                                                                <span className="font-mono text-xs bg-surface-2 px-2 py-1 rounded text-ink">
                                                                     {op.operation_id}
                                                                 </span>
                                                             </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-ink">
                                                                 {op.operation_type}
                                                             </td>
                                                             <td className="px-6 py-4 whitespace-nowrap">
@@ -272,10 +272,10 @@ function Operations() {
                                                                     {op.status}
                                                                 </span>
                                                             </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-ink-2">
                                                                 {op.source_system} {op.source_id || ''}
                                                             </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-medium">
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-ink-2 font-medium">
                                                                 {(op.duration_seconds || 0).toFixed(2)}s
                                                             </td>
                                                             <td className="px-6 py-4 whitespace-nowrap text-center">

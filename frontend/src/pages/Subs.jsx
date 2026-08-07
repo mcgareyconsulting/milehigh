@@ -33,7 +33,7 @@ const fmtDate = (iso) => {
 
 function PaidToggle({ paid, busy, onChange }) {
     return (
-        <div className="inline-flex rounded-md border border-gray-200 dark:border-slate-600 overflow-hidden text-xs font-medium">
+        <div className="inline-flex rounded-md border border-hairline overflow-hidden text-xs font-medium">
             <button
                 type="button"
                 disabled={busy}
@@ -41,7 +41,7 @@ function PaidToggle({ paid, busy, onChange }) {
                 className={`px-2.5 py-1 transition-colors ${
                     !paid
                         ? 'bg-amber-100 text-amber-900 dark:bg-amber-500/25 dark:text-amber-100'
-                        : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
+                        : 'bg-surface text-ink-3 hover:bg-surface-2'
                 } ${busy ? 'opacity-60 cursor-wait' : ''}`}
             >
                 No
@@ -50,10 +50,10 @@ function PaidToggle({ paid, busy, onChange }) {
                 type="button"
                 disabled={busy}
                 onClick={() => onChange(true)}
-                className={`px-2.5 py-1 border-l border-gray-200 dark:border-slate-600 transition-colors ${
+                className={`px-2.5 py-1 border-l border-hairline transition-colors ${
                     paid
                         ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/25 dark:text-emerald-100'
-                        : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
+                        : 'bg-surface text-ink-3 hover:bg-surface-2'
                 } ${busy ? 'opacity-60 cursor-wait' : ''}`}
             >
                 Yes
@@ -143,11 +143,11 @@ export default function Subs() {
     };
 
     if (authorized === null) {
-        return <div className="p-6 text-gray-500 dark:text-slate-400">Loading…</div>;
+        return <div className="p-6 text-ink-3">Loading…</div>;
     }
     if (!authorized) {
         return (
-            <div className="p-6 text-gray-600 dark:text-slate-300">
+            <div className="p-6 text-ink-2">
                 Invoice Paid is available to admins only.
             </div>
         );
@@ -158,14 +158,14 @@ export default function Subs() {
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
                 <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
                     <div>
-                        <h1 className="text-xl font-semibold text-gray-900 dark:text-slate-100">
+                        <h1 className="text-xl font-semibold text-ink">
                             Invoice Paid
                         </h1>
-                        <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                        <p className="mt-1 text-sm text-ink-3">
                             Active releases by installer. Mark whether the subcontractor invoice is paid.
                         </p>
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-slate-400 tabular-nums">
+                    <div className="text-xs text-ink-3 tabular-nums">
                         {totals.total} release{totals.total === 1 ? '' : 's'}
                         {totals.total > 0 && (
                             <span className="ml-2">
@@ -179,7 +179,7 @@ export default function Subs() {
 
                 {/* Filters */}
                 <div className="flex flex-wrap items-center gap-2 mb-4">
-                    <div className="inline-flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden text-sm">
+                    <div className="inline-flex rounded-lg border border-hairline overflow-hidden text-sm">
                         {PAID_FILTERS.map((f) => (
                             <button
                                 key={f.key}
@@ -188,8 +188,8 @@ export default function Subs() {
                                 className={`px-3 py-1.5 ${
                                     paidFilter === f.key
                                         ? 'bg-accent-500 text-white'
-                                        : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'
-                                } ${f.key !== 'all' ? 'border-l border-gray-200 dark:border-slate-600' : ''}`}
+                                        : 'bg-surface text-ink-2 hover:bg-surface-2'
+                                } ${f.key !== 'all' ? 'border-l border-hairline' : ''}`}
                             >
                                 {f.label}
                             </button>
@@ -199,7 +199,7 @@ export default function Subs() {
                     <select
                         value={installerFilter}
                         onChange={(e) => setInstallerFilter(e.target.value)}
-                        className="text-sm rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200 px-3 py-1.5"
+                        className="text-sm rounded-lg border border-hairline bg-input-bg text-ink-2 px-3 py-1.5"
                     >
                         <option value="">All installers</option>
                         {installers.map((name) => (
@@ -211,7 +211,7 @@ export default function Subs() {
                         type="button"
                         onClick={load}
                         disabled={loading}
-                        className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50"
+                        className="text-sm px-3 py-1.5 rounded-lg border border-hairline text-ink-2 hover:bg-surface-2 disabled:opacity-50"
                     >
                         Refresh
                     </button>
@@ -224,9 +224,9 @@ export default function Subs() {
                 )}
 
                 {loading && releases.length === 0 ? (
-                    <div className="text-sm text-gray-500 dark:text-slate-400 py-8">Loading…</div>
+                    <div className="text-sm text-ink-3 py-8">Loading…</div>
                 ) : releases.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-gray-300 dark:border-slate-600 px-4 py-10 text-center text-sm text-gray-500 dark:text-slate-400">
+                    <div className="rounded-lg border border-dashed border-hairline-strong px-4 py-10 text-center text-sm text-ink-3">
                         No assigned installers on active releases.
                     </div>
                 ) : (
@@ -235,19 +235,19 @@ export default function Subs() {
                             const unpaidCount = rows.filter((r) => !r.installer_invoice_paid).length;
                             return (
                                 <section key={installer}>
-                                    <div className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-[#f8fafc]/90 dark:bg-slate-900/90 backdrop-blur flex items-baseline justify-between gap-2 border-b border-gray-200 dark:border-slate-700 mb-2">
-                                        <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+                                    <div className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-canvas/90 backdrop-blur flex items-baseline justify-between gap-2 border-b border-hairline mb-2">
+                                        <h2 className="text-sm font-semibold text-ink">
                                             {installer}
                                         </h2>
-                                        <span className="text-xs text-gray-500 dark:text-slate-400 tabular-nums">
+                                        <span className="text-xs text-ink-3 tabular-nums">
                                             {unpaidCount} unpaid · {rows.length} total
                                         </span>
                                     </div>
 
-                                    <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                                    <div className="overflow-x-auto rounded-lg border border-hairline bg-surface">
                                         <table className="w-full text-sm">
                                             <thead>
-                                                <tr className="text-left text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400 border-b border-gray-100 dark:border-slate-700">
+                                                <tr className="text-left text-xs uppercase tracking-wide text-ink-3 border-b border-hairline">
                                                     <th className="px-3 py-2 font-medium">Job</th>
                                                     <th className="px-3 py-2 font-medium">Rel</th>
                                                     <th className="px-3 py-2 font-medium">Job name</th>
@@ -263,24 +263,24 @@ export default function Subs() {
                                                     return (
                                                         <tr
                                                             key={key}
-                                                            className="border-t border-gray-100 dark:border-slate-700/60 hover:bg-gray-50/80 dark:hover:bg-slate-700/30"
+                                                            className="border-t border-hairline hover:bg-surface-2"
                                                         >
-                                                            <td className="px-3 py-2 tabular-nums text-gray-900 dark:text-slate-100 font-medium">
+                                                            <td className="px-3 py-2 tabular-nums text-ink font-medium">
                                                                 {r.job}
                                                             </td>
-                                                            <td className="px-3 py-2 tabular-nums text-gray-700 dark:text-slate-200">
+                                                            <td className="px-3 py-2 tabular-nums text-ink-2">
                                                                 {r.release}
                                                             </td>
-                                                            <td className="px-3 py-2 text-gray-800 dark:text-slate-200 max-w-[12rem] truncate" title={r.job_name || ''}>
+                                                            <td className="px-3 py-2 text-ink-2 max-w-[12rem] truncate" title={r.job_name || ''}>
                                                                 {r.job_name || '—'}
                                                             </td>
-                                                            <td className="px-3 py-2 text-gray-600 dark:text-slate-300 hidden md:table-cell max-w-[14rem] truncate" title={r.description || ''}>
+                                                            <td className="px-3 py-2 text-ink-2 hidden md:table-cell max-w-[14rem] truncate" title={r.description || ''}>
                                                                 {r.description || '—'}
                                                             </td>
-                                                            <td className="px-3 py-2 text-gray-600 dark:text-slate-300 hidden sm:table-cell">
+                                                            <td className="px-3 py-2 text-ink-2 hidden sm:table-cell">
                                                                 {r.stage || '—'}
                                                             </td>
-                                                            <td className="px-3 py-2 text-gray-600 dark:text-slate-300 hidden lg:table-cell tabular-nums">
+                                                            <td className="px-3 py-2 text-ink-2 hidden lg:table-cell tabular-nums">
                                                                 {fmtDate(r.start_install)}
                                                             </td>
                                                             <td className="px-3 py-2 text-right">

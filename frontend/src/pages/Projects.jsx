@@ -96,7 +96,7 @@ const BAND_BAR = {
   green: 'bg-green-500',
   amber: 'bg-amber-400',
   red: 'bg-red-500',
-  neutral: 'bg-slate-300 dark:bg-slate-600',
+  neutral: 'bg-ink-3',
 };
 
 // Release stage → dot color. The stage label always renders next to the dot,
@@ -106,9 +106,9 @@ const STAGE_DOT = {
   Ship: 'bg-accent-400',
   Fabrication: 'bg-accent-400',
   'FC Complete': 'bg-accent-400',
-  Detailing: 'bg-slate-400',
-  Submittal: 'bg-slate-400',
-  'Design Assist': 'bg-slate-400',
+  Detailing: 'bg-ink-3',
+  Submittal: 'bg-ink-3',
+  'Design Assist': 'bg-ink-3',
   'On Hold': 'bg-amber-500',
 };
 
@@ -140,7 +140,7 @@ function BandCount({ band, count, label }) {
   return (
     <div className={`rounded-lg border ${b.border} ${b.bg} px-3 py-2.5`}>
       <div className={`text-2xl font-bold tabular-nums ${b.text}`}>{count}</div>
-      <div className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 dark:text-slate-400 mt-0.5">
+      <div className="flex items-center gap-1.5 text-[11px] font-medium text-ink-3 mt-0.5">
         <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${b.dot}`} />
         {label}
       </div>
@@ -165,19 +165,19 @@ function KpiTile({ label, value, caption }) {
 function Meter({ label, pct, barClass, display, tick }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-11 shrink-0 text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-slate-500">
+      <span className="w-11 shrink-0 text-[10px] font-medium uppercase tracking-wide text-ink-3">
         {label}
       </span>
-      <div className="relative flex-1 h-1.5 rounded-full bg-gray-200 dark:bg-slate-700">
+      <div className="relative flex-1 h-1.5 rounded-full bg-surface-2">
         <div className={`absolute inset-y-0 left-0 rounded-full ${barClass}`} style={{ width: `${pct}%` }} />
         {tick != null && tick > 0 && (
           <span
-            className="absolute -top-0.5 -bottom-0.5 w-0.5 rounded-full bg-gray-500 dark:bg-slate-300"
+            className="absolute -top-0.5 -bottom-0.5 w-0.5 rounded-full bg-ink-3"
             style={{ left: `${tick}%` }}
           />
         )}
       </div>
-      <span className="w-9 shrink-0 text-right text-[11px] font-semibold tabular-nums text-gray-600 dark:text-slate-300">
+      <span className="w-9 shrink-0 text-right text-[11px] font-semibold tabular-nums text-ink-2">
         {display}
       </span>
     </div>
@@ -186,10 +186,10 @@ function Meter({ label, pct, barClass, display, tick }) {
 
 function ReleaseChip({ release }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md bg-gray-50 dark:bg-slate-700/60 border border-gray-200 dark:border-slate-600 px-1.5 py-0.5">
-      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STAGE_DOT[release.stage] || 'bg-slate-400'}`} />
-      <span className="font-mono text-[11px] font-semibold text-gray-700 dark:text-slate-200">{release.release}</span>
-      <span className="text-[10px] text-gray-400 dark:text-slate-500">{release.stage}</span>
+    <span className="inline-flex items-center gap-1.5 rounded-md bg-surface-2 border border-hairline px-1.5 py-0.5">
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STAGE_DOT[release.stage] || 'bg-ink-3'}`} />
+      <span className="font-mono text-[11px] font-semibold text-ink-2">{release.release}</span>
+      <span className="text-[10px] text-ink-3">{release.stage}</span>
     </span>
   );
 }
@@ -198,7 +198,7 @@ function HealthChip({ metric }) {
   const t = toneClasses[metric.tone] || toneClasses.neutral;
   return (
     <div className="flex flex-col gap-0.5 min-w-0">
-      <span className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-slate-500 truncate">
+      <span className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-ink-3 truncate">
         <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${t.dot}`} />
         {CARD_HEALTH_LABELS[metric.key] || metric.label}
       </span>
@@ -224,7 +224,7 @@ function ProjectCard({ project, onOpen }) {
     <button
       type="button"
       onClick={onOpen}
-      className="group relative text-left rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 hover:border-accent-400 dark:hover:border-accent-400 hover:shadow-lg hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400 transition-all p-4 pl-5 flex flex-col gap-3 overflow-hidden"
+      className="group relative text-left rounded-xl border border-hairline bg-surface hover:border-accent-400 dark:hover:border-accent-400 hover:shadow-lg hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400 transition-all p-4 pl-5 flex flex-col gap-3 overflow-hidden"
     >
       <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${BAND_BAR[hs.band] || BAND_BAR.neutral}`} />
 
@@ -251,10 +251,10 @@ function ProjectCard({ project, onOpen }) {
       </div>
 
       <div className="min-w-0">
-        <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100 leading-snug group-hover:text-accent-600 dark:group-hover:text-accent-300 transition-colors">
+        <h3 className="text-base font-semibold text-ink leading-snug group-hover:text-accent-600 dark:group-hover:text-accent-300 transition-colors">
           {project.project_name}
         </h3>
-        <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400 truncate">
+        <p className="mt-0.5 text-xs text-ink-3 truncate">
           {project.customer.general_contractor}
           {project.team.project_manager && project.team.project_manager !== '—' && <> · PM {project.team.project_manager}</>}
         </p>
@@ -272,7 +272,7 @@ function ProjectCard({ project, onOpen }) {
       <div className="flex flex-wrap gap-1.5">
         {shownReleases.map(r => <ReleaseChip key={r.release} release={r} />)}
         {moreReleases > 0 && (
-          <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] text-gray-400 dark:text-slate-500">
+          <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] text-ink-3">
             +{moreReleases} more
           </span>
         )}
@@ -288,18 +288,18 @@ function ProjectCard({ project, onOpen }) {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-gray-100 dark:border-slate-700">
+      <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-hairline">
         {cardMetrics.map(k => <HealthChip key={k} metric={healthByKey[k]} />)}
       </div>
 
-      <div className="flex items-center justify-between pt-2.5 border-t border-gray-100 dark:border-slate-700 text-xs">
-        <span className="text-gray-400 dark:text-slate-500">
+      <div className="flex items-center justify-between pt-2.5 border-t border-hairline text-xs">
+        <span className="text-ink-3">
           {project.live
             ? <>{project.releases.length} release{project.releases.length === 1 ? '' : 's'} · live from job log</>
-            : <>Est. completion <span className="tabular-nums text-gray-600 dark:text-slate-300">{project.estimated_completion_date || '—'}</span></>}
+            : <>Est. completion <span className="tabular-nums text-ink-2">{project.estimated_completion_date || '—'}</span></>}
         </span>
         {project.financials && (
-          <span className="font-semibold tabular-nums text-gray-800 dark:text-slate-200">
+          <span className="font-semibold tabular-nums text-ink-2">
             {fmtMoney(project.financials.forecast_invoice_value)}
           </span>
         )}
@@ -434,7 +434,7 @@ export default function Projects() {
   }, [filter, sort, q, allProjects]);
 
   return (
-    <div className="flex-1 w-full bg-[#f8fafc] dark:bg-slate-900">
+    <div className="flex-1 w-full min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas">
       <div className="max-w-7xl mx-auto px-4 lg:px-6 py-6">
         {/* Hero — portfolio command band */}
         <div className="rounded-2xl bg-gradient-to-br from-accent-600 via-accent-700 to-accent-800 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900 dark:ring-1 dark:ring-slate-700 p-5 lg:p-6 mb-5">
@@ -488,7 +488,7 @@ export default function Projects() {
         {/* Portfolio health band + cross-project what's-upcoming */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
           <div className="lg:col-span-1">
-            <h2 className="text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-2">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-ink-3 mb-2">
               Portfolio Health
             </h2>
             <div className="grid grid-cols-2 gap-2.5">
@@ -499,12 +499,12 @@ export default function Projects() {
             </div>
           </div>
           <div className="lg:col-span-2">
-            <h2 className="text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-2">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-ink-3 mb-2">
               Upcoming — Next 3 Weeks ({upcoming.length})
             </h2>
-            <div className="rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 max-h-64 overflow-y-auto divide-y divide-gray-50 dark:divide-slate-700/50">
+            <div className="rounded-xl border border-hairline bg-surface max-h-64 overflow-y-auto divide-y divide-[var(--border)]">
               {upcoming.length === 0 ? (
-                <p className="p-4 text-sm text-gray-400 dark:text-slate-500">
+                <p className="p-4 text-sm text-ink-3">
                   Nothing installing or shipping in the next three weeks.
                 </p>
               ) : (
@@ -513,21 +513,21 @@ export default function Projects() {
                     key={`${e.project.id}-${e.kind}-${e.date}-${i}`}
                     type="button"
                     onClick={() => navigate(`/projects/${e.project.id}`)}
-                    className="w-full text-left flex items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-700/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400"
+                    className="w-full text-left flex items-center gap-3 px-3 py-2 hover:bg-surface-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400"
                   >
-                    <span className="w-14 shrink-0 text-xs tabular-nums text-gray-500 dark:text-slate-400">{fmtDate(e.date)}</span>
+                    <span className="w-14 shrink-0 text-xs tabular-nums text-ink-3">{fmtDate(e.date)}</span>
                     <span
                       className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${
                         e.kind === 'install'
                           ? 'bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300'
-                          : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                          : 'bg-surface-2 text-ink-2'
                       }`}
                     >
                       {e.kind}
                     </span>
-                    <span className="shrink-0 font-mono text-[11px] font-semibold text-gray-700 dark:text-slate-200">{e.release}</span>
-                    <span className="truncate text-sm text-gray-600 dark:text-slate-300">{e.description}</span>
-                    <span className="ml-auto shrink-0 font-mono text-[11px] text-gray-400 dark:text-slate-500">{e.project.job_number}</span>
+                    <span className="shrink-0 font-mono text-[11px] font-semibold text-ink-2">{e.release}</span>
+                    <span className="truncate text-sm text-ink-2">{e.description}</span>
+                    <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-3">{e.project.job_number}</span>
                   </button>
                 ))
               )}
@@ -538,7 +538,7 @@ export default function Projects() {
         {/* Needs attention — every warn/risk signal across the portfolio */}
         {attention.length > 0 && (
           <div className="mb-5">
-            <h2 className="text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-2">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-ink-3 mb-2">
               Needs Attention ({attention.length})
             </h2>
             <div className="flex flex-wrap gap-1.5">
@@ -560,22 +560,22 @@ export default function Projects() {
                 className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400 ${
                   filter === f.key
                     ? 'bg-accent-500 text-white'
-                    : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200 border border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700'
+                    : 'bg-surface text-ink-2 border border-hairline hover:bg-surface-2'
                 }`}
               >
                 {f.label}
-                <span className={`ml-1.5 ${filter === f.key ? 'text-white/80' : 'text-gray-400 dark:text-slate-500'}`}>
+                <span className={`ml-1.5 ${filter === f.key ? 'text-white/80' : 'text-ink-3'}`}>
                   {counts[f.key] || 0}
                 </span>
               </button>
             ))}
           </div>
-          <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
+          <label className="flex items-center gap-2 text-sm text-ink-3">
             Sort
             <select
               value={sort}
               onChange={e => setSort(e.target.value)}
-              className="px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-accent-400"
+              className="px-2.5 py-1.5 text-sm rounded-lg border border-hairline bg-surface text-ink-2 focus:outline-none focus:ring-2 focus:ring-accent-400"
             >
               {SORTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
@@ -584,7 +584,7 @@ export default function Projects() {
 
         {/* Grid */}
         {visible.length === 0 ? (
-          <div className="text-center py-16 text-gray-500 dark:text-slate-400">No projects match.</div>
+          <div className="text-center py-16 text-ink-3">No projects match.</div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {visible.map(p => (

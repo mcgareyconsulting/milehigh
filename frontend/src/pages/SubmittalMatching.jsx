@@ -12,21 +12,21 @@ import {
 const OUTCOME_BADGES = {
     confident: { label: 'Confident', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' },
     ambiguous: { label: 'Pick one', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' },
-    weak: { label: 'Weak', cls: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' },
-    no_overlap: { label: 'No suggestion', cls: 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400' },
+    weak: { label: 'Weak', cls: 'bg-surface-2 text-ink-2' },
+    no_overlap: { label: 'No suggestion', cls: 'bg-surface-2 text-ink-3' },
     no_pool: { label: 'No releases in job', cls: 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300' },
 };
 
 function StatTile({ label, value, tone = 'slate' }) {
     const tones = {
-        slate: 'text-slate-900 dark:text-slate-100',
+        slate: 'text-ink',
         green: 'text-emerald-600 dark:text-emerald-400',
         amber: 'text-amber-600 dark:text-amber-400',
         red: 'text-red-600 dark:text-red-400',
     };
     return (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3">
-            <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">{label}</div>
+        <div className="rounded-xl border border-hairline bg-surface px-4 py-3">
+            <div className="text-xs text-ink-3 uppercase tracking-wide">{label}</div>
             <div className={`text-2xl font-bold tabular-nums ${tones[tone] || tones.slate}`}>{value}</div>
         </div>
     );
@@ -44,15 +44,15 @@ function CandidateRow({ candidate, onLink, disabled }) {
                 Link
             </button>
             <div className="min-w-0">
-                <div className="text-sm text-slate-900 dark:text-slate-100 truncate">
+                <div className="text-sm text-ink truncate">
                     <span className="font-mono font-medium">{candidate.job}-{candidate.release}</span>
-                    <span className="mx-1.5 text-slate-400">·</span>
-                    {candidate.description || <em className="text-slate-400">no description</em>}
+                    <span className="mx-1.5 text-ink-3">·</span>
+                    {candidate.description || <em className="text-ink-3">no description</em>}
                     {candidate.is_archived && (
-                        <span className="ml-2 text-[10px] uppercase tracking-wide text-slate-400">archived</span>
+                        <span className="ml-2 text-[10px] uppercase tracking-wide text-ink-3">archived</span>
                     )}
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">
+                <div className="text-xs text-ink-3">
                     {candidate.released ? `released ${candidate.released}` : 'no release date'}
                     <span className="mx-1.5">·</span>
                     shared: {candidate.shared_tokens.join(', ')}
@@ -68,11 +68,11 @@ function DrrCard({ drr, onLink, onUnlink, onNoMatch, busy }) {
     const isNoMatch = drr.link_status === 'no_match';
 
     return (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
+        <div className="rounded-xl border border-hairline bg-surface p-4">
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <div className="font-medium text-slate-900 dark:text-slate-100">{drr.title}</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    <div className="font-medium text-ink">{drr.title}</div>
+                    <div className="text-xs text-ink-3 mt-0.5">
                         {drr.status || '—'}
                         {drr.closed_at && <><span className="mx-1.5">·</span>closed {drr.closed_at.slice(0, 10)}</>}
                         {drr.rel != null && <><span className="mx-1.5">·</span>Rel {drr.rel}</>}
@@ -87,7 +87,7 @@ function DrrCard({ drr, onLink, onUnlink, onNoMatch, busy }) {
                             type="button"
                             onClick={() => onUnlink(drr.id)}
                             disabled={busy}
-                            className="px-2.5 py-1 rounded-md text-xs font-medium border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                            className="px-2.5 py-1 rounded-md text-xs font-medium border border-hairline-strong text-ink-2 hover:bg-surface-2 disabled:opacity-50 transition-colors"
                         >
                             Undo
                         </button>
@@ -97,7 +97,7 @@ function DrrCard({ drr, onLink, onUnlink, onNoMatch, busy }) {
                             type="button"
                             onClick={() => onNoMatch(drr.id)}
                             disabled={busy}
-                            className="px-2.5 py-1 rounded-md text-xs font-medium border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                            className="px-2.5 py-1 rounded-md text-xs font-medium border border-hairline-strong text-ink-2 hover:bg-surface-2 disabled:opacity-50 transition-colors"
                         >
                             No match
                         </button>
@@ -118,13 +118,13 @@ function DrrCard({ drr, onLink, onUnlink, onNoMatch, busy }) {
             )}
 
             {isNoMatch && (
-                <div className="mt-3 rounded-lg bg-slate-50 dark:bg-slate-700/40 px-3 py-2 text-sm text-slate-600 dark:text-slate-300">
+                <div className="mt-3 rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink-2">
                     Reviewed — no job-log release for this scope.
                 </div>
             )}
 
             {!isLinked && !isNoMatch && drr.suggestion.candidates.length > 0 && (
-                <div className="mt-3 border-t border-slate-100 dark:border-slate-700 pt-2 divide-y divide-slate-50 dark:divide-slate-700/50">
+                <div className="mt-3 border-t border-hairline pt-2 divide-y divide-[var(--border)]">
                     {drr.suggestion.candidates.map(c => (
                         <CandidateRow key={c.release_pk} candidate={c} disabled={busy} onLink={rid => onLink(drr.id, rid)} />
                     ))}
@@ -213,8 +213,8 @@ export default function SubmittalMatching() {
 
     if (isAdmin === null) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] dark:bg-slate-900">
-                <div className="text-gray-600 dark:text-slate-400">Loading...</div>
+            <div className="min-h-[calc(100vh_-_var(--app-chrome-h))] flex items-center justify-center bg-canvas">
+                <div className="text-ink-3">Loading...</div>
             </div>
         );
     }
@@ -222,7 +222,7 @@ export default function SubmittalMatching() {
     if (!isAdmin) {
         return (
             <div className="max-w-3xl mx-auto px-6 py-12">
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Submittal Matching</h1>
+                <h1 className="text-2xl font-bold text-ink mb-2">Submittal Matching</h1>
                 <div className="rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-200 px-4 py-3">
                     Admin access required.
                 </div>
@@ -234,12 +234,13 @@ export default function SubmittalMatching() {
     const visibleDrrs = detail?.drrs?.filter(d => showReviewed || d.link_status === '') || [];
 
     return (
+        <div className="w-full min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas">
         <div className="max-w-6xl mx-auto px-6 py-8">
             <div className="mb-6">
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                <h1 className="text-2xl font-bold text-ink">
                     Submittal Matching — DRR → Release
                 </h1>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 max-w-3xl">
+                <p className="text-sm text-ink-3 mt-1 max-w-3xl">
                     Confirm which job-log release each DRR became. Suggestions are description matches
                     scoped to the project (archived releases included). Every confirmed link improves the
                     scheduling pipeline's timing data — the inferred FC span (DRR close → release) appears
@@ -255,11 +256,11 @@ export default function SubmittalMatching() {
 
             <div className="flex flex-wrap items-end gap-4 mb-5">
                 <label className="block">
-                    <span className="block text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Project</span>
+                    <span className="block text-xs uppercase tracking-wide text-ink-3 mb-1">Project</span>
                     <select
                         value={selected}
                         onChange={e => setSelected(e.target.value)}
-                        className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm"
+                        className="rounded-lg border border-hairline-strong bg-input-bg text-ink px-3 py-2 text-sm"
                     >
                         {(projects || []).map(p => (
                             <option key={p.project_number} value={p.project_number}>
@@ -268,12 +269,12 @@ export default function SubmittalMatching() {
                         ))}
                     </select>
                 </label>
-                <label className="flex items-center gap-2 pb-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
+                <label className="flex items-center gap-2 pb-2 text-sm text-ink-2 cursor-pointer">
                     <input
                         type="checkbox"
                         checked={showReviewed}
                         onChange={e => setShowReviewed(e.target.checked)}
-                        className="rounded border-slate-300"
+                        className="rounded border-hairline-strong"
                     />
                     Show reviewed
                 </label>
@@ -291,10 +292,10 @@ export default function SubmittalMatching() {
 
             <div className="space-y-3">
                 {detail === null && selected && (
-                    <div className="text-slate-500 dark:text-slate-400 text-sm">Loading DRRs…</div>
+                    <div className="text-ink-3 text-sm">Loading DRRs…</div>
                 )}
                 {detail !== null && visibleDrrs.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-600 px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                    <div className="rounded-xl border border-dashed border-hairline-strong px-4 py-8 text-center text-sm text-ink-3">
                         {showReviewed ? 'No DRRs in this project.' : 'All DRRs in this project are reviewed. 🎉'}
                     </div>
                 )}
@@ -309,6 +310,7 @@ export default function SubmittalMatching() {
                     />
                 ))}
             </div>
+        </div>
         </div>
     );
 }

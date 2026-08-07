@@ -18,7 +18,7 @@ function PMBoardContent() {
     const { loading, fetchError } = useOutletContext();
 
     return (
-        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
+        <div className="bg-surface border border-hairline rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
             {loading && (
                 <div className="text-center py-12">
                     <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mb-4"></div>

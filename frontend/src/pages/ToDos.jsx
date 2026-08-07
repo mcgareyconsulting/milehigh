@@ -187,21 +187,22 @@ export default function ToDos() {
         return next;
     });
 
-    if (loading) return <div className="flex-1 flex items-center justify-center"><span className="text-gray-500 dark:text-slate-400">Loading…</span></div>;
-    if (!authed) return <div className="flex-1 flex items-center justify-center"><span className="text-gray-500 dark:text-slate-400">Please log in to see your to-dos.</span></div>;
+    if (loading) return <div className="flex-1 flex items-center justify-center"><span className="text-ink-3">Loading…</span></div>;
+    if (!authed) return <div className="flex-1 flex items-center justify-center"><span className="text-ink-3">Please log in to see your to-dos.</span></div>;
 
     const isOverdue = (it) => it.due_date && it.status !== 'done' && it.due_date < today;
     const hasActiveFilters = dueFilter !== 'all' || itemType !== 'all' || job !== 'all' || q.trim();
     const chipBase = 'px-3 py-1.5 text-sm rounded-lg border transition-colors';
 
     return (
+        <div className="w-full min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas">
         <div className="flex-1 p-4 md:p-6 max-w-[1100px] mx-auto w-full">
             <div className="flex items-center justify-between gap-3 mb-4">
-                <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">
+                <h1 className="text-xl font-bold text-ink">
                     To-Dos
-                    {!isAdmin && <span className="ml-2 text-sm font-normal text-gray-400 dark:text-slate-500">assigned to you</span>}
+                    {!isAdmin && <span className="ml-2 text-sm font-normal text-ink-3">assigned to you</span>}
                 </h1>
-                <span className="text-sm text-gray-400 dark:text-slate-500">{filtered.length} shown</span>
+                <span className="text-sm text-ink-3">{filtered.length} shown</span>
             </div>
             {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-sm">{error}</div>}
 
@@ -209,12 +210,12 @@ export default function ToDos() {
             <div className="space-y-2 mb-5">
                 {/* Row 1 — status (server) + owner (server, admin) + text search */}
                 <div className="flex items-center gap-2 flex-wrap">
-                    <div className="inline-flex rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
+                    <div className="inline-flex rounded-lg border border-hairline overflow-hidden">
                         {STATUS_TABS.map(t => (
                             <button key={t.value} onClick={() => setStatus(t.value)}
                                 className={`px-3 py-1.5 text-sm ${status === t.value
                                     ? 'bg-accent-500 text-white'
-                                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                                    : 'bg-surface text-ink-2 hover:bg-surface-2'}`}>
                                 {t.label}
                             </button>
                         ))}
@@ -226,17 +227,17 @@ export default function ToDos() {
                                 menuWidth={220}
                                 icon={selected
                                     ? <Avatar user={selected} size={20} />
-                                    : <span className="inline-flex items-center justify-center shrink-0 h-5 w-5 rounded-full bg-gray-100 text-gray-500 dark:bg-slate-600 dark:text-slate-300 text-[10px] font-semibold">All</span>}
+                                    : <span className="inline-flex items-center justify-center shrink-0 h-5 w-5 rounded-full bg-surface-2 text-ink-3 text-[10px] font-semibold">All</span>}
                                 label={<span className="ml-1.5">{selected ? userName(selected) : 'All owners'}</span>}
                                 active={!!owner}
                                 buttonClassName={`px-2.5 py-1.5 text-sm rounded-lg border inline-flex items-center gap-1 whitespace-nowrap transition-colors ${owner
                                     ? 'bg-accent-50 dark:bg-accent-500/15 border-accent-300 dark:border-accent-500/40 text-accent-700 dark:text-accent-200'
-                                    : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
+                                    : 'bg-surface border-hairline-strong text-ink-2 hover:bg-surface-2'}`}
                             >
                                 <DropdownItem
                                     onClick={() => setOwner('')}
                                     active={!owner}
-                                    icon={<span className="inline-flex items-center justify-center shrink-0 h-5 w-5 rounded-full bg-gray-100 text-gray-500 dark:bg-slate-600 dark:text-slate-300 text-[10px] font-semibold">All</span>}
+                                    icon={<span className="inline-flex items-center justify-center shrink-0 h-5 w-5 rounded-full bg-surface-2 text-ink-3 text-[10px] font-semibold">All</span>}
                                 >
                                     All owners
                                 </DropdownItem>
@@ -256,11 +257,11 @@ export default function ToDos() {
                     <div className="relative flex-1 min-w-[180px] max-w-xs">
                         <input
                             type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Search to-dos…"
-                            className="w-full px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-200 placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-accent-500/40 focus:border-accent-400"
+                            className="w-full px-3 py-1.5 text-sm rounded-lg border border-hairline-strong bg-input-bg text-ink-2 placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-accent-500/40 focus:border-accent-400"
                         />
                         {q && (
                             <button onClick={() => setQ('')} title="Clear search"
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 text-sm leading-none">×</button>
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-3 hover:text-ink-2 text-sm leading-none">×</button>
                         )}
                     </div>
                 </div>
@@ -274,7 +275,7 @@ export default function ToDos() {
                             <button key={c.key} onClick={() => setDueFilter(c.key)}
                                 className={`${chipBase} ${active
                                     ? (danger ? 'bg-red-500 border-red-500 text-white' : 'bg-accent-500 border-accent-500 text-white')
-                                    : `bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 ${danger ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-slate-300'}`}`}>
+                                    : `bg-surface border-hairline hover:bg-surface-2 ${danger ? 'text-red-600 dark:text-red-400' : 'text-ink-2'}`}`}>
                                 {c.label}
                             </button>
                         );
@@ -289,14 +290,14 @@ export default function ToDos() {
                                 <button onClick={() => setItemType('all')}
                                     className={`${chipBase} ${itemType === 'all'
                                         ? 'bg-accent-500 border-accent-500 text-white'
-                                        : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                                        : 'bg-surface border-hairline text-ink-2 hover:bg-surface-2'}`}>
                                     All types
                                 </button>
                                 {typeOptions.map(t => (
                                     <button key={t} onClick={() => setItemType(t)}
                                         className={`${chipBase} ${itemType === t
                                             ? 'bg-accent-500 border-accent-500 text-white'
-                                            : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                                            : 'bg-surface border-hairline text-ink-2 hover:bg-surface-2'}`}>
                                         {typeMeta(t).label}
                                     </button>
                                 ))}
@@ -304,7 +305,7 @@ export default function ToDos() {
                         )}
                         {jobOptions.length > 0 && (
                             <select value={job} onChange={e => setJob(e.target.value)}
-                                className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-200">
+                                className="px-3 py-1.5 text-sm rounded-lg border border-hairline-strong bg-input-bg text-ink-2">
                                 <option value="all">All jobs</option>
                                 {jobOptions.map(j => <option key={j} value={j}>{j}</option>)}
                             </select>
@@ -315,11 +316,11 @@ export default function ToDos() {
 
             {/* List */}
             {todos.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-gray-300 dark:border-slate-700 p-12 text-center text-sm text-gray-400 dark:text-slate-500">
+                <div className="rounded-xl border border-dashed border-hairline-strong p-12 text-center text-sm text-ink-3">
                     {status === 'done' ? 'No completed to-dos.' : 'No to-dos here. Accepted meeting action items show up as to-dos.'}
                 </div>
             ) : filtered.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-gray-300 dark:border-slate-700 p-10 text-center text-sm text-gray-400 dark:text-slate-500">
+                <div className="rounded-xl border border-dashed border-hairline-strong p-10 text-center text-sm text-ink-3">
                     No to-dos match these filters.
                     {hasActiveFilters && (
                         <button onClick={() => { setDueFilter('all'); setItemType('all'); setJob('all'); setQ(''); }}
@@ -335,12 +336,12 @@ export default function ToDos() {
                             <section key={g.key}>
                                 <button onClick={() => toggleCollapse(g.key)}
                                     className="flex items-center gap-2 w-full text-left mb-2 group">
-                                    <span className={`text-gray-400 dark:text-slate-500 text-xs transition-transform ${isCollapsed ? '-rotate-90' : ''}`}>▾</span>
-                                    <h2 className={`text-sm font-semibold ${danger ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-slate-200'}`}>
+                                    <span className={`text-ink-3 text-xs transition-transform ${isCollapsed ? '-rotate-90' : ''}`}>▾</span>
+                                    <h2 className={`text-sm font-semibold ${danger ? 'text-red-600 dark:text-red-400' : 'text-ink-2'}`}>
                                         {g.label}
                                     </h2>
-                                    <span className="text-xs text-gray-400 dark:text-slate-500">{g.items.length}</span>
-                                    <span className="flex-1 border-t border-gray-100 dark:border-slate-800 ml-1" />
+                                    <span className="text-xs text-ink-3">{g.items.length}</span>
+                                    <span className="flex-1 border-t border-hairline ml-1" />
                                 </button>
                                 {!isCollapsed && (
                                     <ul className="space-y-2">
@@ -357,7 +358,7 @@ export default function ToDos() {
                                             ].filter(Boolean);
                                             return (
                                                 <li key={it.id}
-                                                    className="flex items-start gap-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 hover:border-gray-300 dark:hover:border-slate-600 transition-colors">
+                                                    className="flex items-start gap-3 rounded-xl border border-hairline bg-surface p-3 hover:border-hairline-strong transition-colors">
                                                     <input
                                                         type="checkbox" checked={done} disabled={busy === it.id}
                                                         onChange={() => toggleDone(it)}
@@ -365,11 +366,11 @@ export default function ToDos() {
                                                         title={done ? 'Reopen' : 'Mark done'}
                                                     />
                                                     <div className="flex-1 min-w-0">
-                                                        <div className={`text-sm leading-snug ${done ? 'line-through text-gray-400 dark:text-slate-500' : 'text-gray-900 dark:text-slate-100'}`}>
+                                                        <div className={`text-sm leading-snug ${done ? 'line-through text-ink-3' : 'text-ink'}`}>
                                                             {it.title}
                                                         </div>
                                                         {metaParts.length > 0 && (
-                                                            <div className="mt-1 text-xs text-gray-500 dark:text-slate-400 truncate">
+                                                            <div className="mt-1 text-xs text-ink-3 truncate">
                                                                 {metaParts.join(' · ')}
                                                             </div>
                                                         )}
@@ -383,12 +384,12 @@ export default function ToDos() {
                                                         {it.due_date && (
                                                             <span className={`whitespace-nowrap text-xs font-medium px-2 py-0.5 rounded-full ring-1 ring-inset ${
                                                                 done
-                                                                    ? 'bg-slate-100 text-slate-500 ring-slate-200/80 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30'
+                                                                    ? 'bg-surface-2 text-ink-3 ring-hairline'
                                                                     : overdue
                                                                         ? 'bg-red-50 text-red-700 ring-red-200/70 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30'
                                                                         : dueToday
                                                                             ? 'bg-amber-50 text-amber-700 ring-amber-200/70 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30'
-                                                                            : 'bg-slate-100 text-slate-600 ring-slate-200/80 dark:bg-slate-500/10 dark:text-slate-300 dark:ring-slate-500/30'
+                                                                            : 'bg-surface-2 text-ink-2 ring-hairline'
                                                             }`}>
                                                                 {overdue ? 'overdue · ' : 'due '}{fmtDue(it.due_date)}
                                                             </span>
@@ -404,6 +405,7 @@ export default function ToDos() {
                     })}
                 </div>
             )}
+        </div>
         </div>
     );
 }

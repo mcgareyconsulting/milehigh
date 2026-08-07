@@ -191,7 +191,7 @@ function Archive() {
 
     return (
         <div
-            className="w-full h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas dark:bg-slate-900 flex flex-col"
+            className="w-full h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas flex flex-col"
             style={{
                 width: '100%',
                 minWidth: '100%',
@@ -229,7 +229,7 @@ function Archive() {
                                         onClick={() => setSelectedProjectNames([])}
                                         className={`w-full px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.length === 0
                                             ? 'bg-blue-700 text-white'
-                                            : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
+                                            : 'bg-surface border border-hairline-strong text-ink-2 hover:bg-surface-2'
                                             }`}
                                     >
                                         All
@@ -246,7 +246,7 @@ function Archive() {
                                             }}
                                             className={`w-full px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.includes(option)
                                                 ? 'bg-blue-700 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
+                                                : 'bg-surface border border-hairline-strong text-ink-2 hover:bg-surface-2'
                                                 }`}
                                             title={option}
                                         >
@@ -262,13 +262,13 @@ function Archive() {
                                     <ViewToggle value={viewMode} onChange={setViewMode} />
                                     <button
                                         onClick={() => navigate('/job-log')}
-                                        className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
+                                        className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-surface border border-hairline-strong text-ink-2 hover:bg-surface-2"
                                     >
                                         📋 Job Log
                                     </button>
                                     <button
                                         onClick={() => refetch()}
-                                        className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
+                                        className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-surface border border-hairline-strong text-ink-2 hover:bg-surface-2"
                                     >
                                         ⟳ Refresh
                                     </button>
@@ -302,7 +302,7 @@ function Archive() {
                                             value={search}
                                             onChange={(e) => setSearch(e.target.value)}
                                             placeholder="Job #, release, name, description..."
-                                            className="w-48 sm:w-64 px-2 py-2 md:py-0.5 text-sm md:text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                            className="w-48 sm:w-64 px-2 py-2 md:py-0.5 text-sm md:text-xs border border-hairline-strong rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-input-bg text-ink"
                                         />
                                     </div>
                                 </div>
@@ -342,7 +342,7 @@ function Archive() {
                         )}
 
                         {!loading && !fetchError && effectiveView === 'cards' && (
-                            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl overflow-hidden flex-1 min-h-0 flex flex-col">
+                            <div className="bg-surface border border-hairline rounded-xl overflow-hidden flex-1 min-h-0 flex flex-col">
                                 <JobLogCardGrid
                                     jobs={displayJobs}
                                     search={search}
@@ -388,7 +388,7 @@ function Archive() {
                                                 <tr>
                                                     <td
                                                         colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
-                                                        className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-surface"
+                                                        className="px-6 py-12 text-center text-ink-3 font-medium bg-surface"
                                                     >
                                                         {hasJobsData
                                                             ? 'No records match the selected filters.'

@@ -1,7 +1,7 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Collapsible left icon rail that replaces the top nav bar at >=1440px, per the Aug 2026 Job Log redesign handoff (docs/design/job-log-redesign/README.md §1).
+ * purpose: Collapsible left icon rail that replaces the top nav bar at >=1440px when Left Sidebar Mode is on (opt-in via ThemeContext; top header is default). Per Aug 2026 Job Log redesign handoff (docs/design/job-log-redesign/README.md §1).
  * exports:
  *   Rail: Left navigation rail. Props: isAuthenticated, isAdmin, canSeeReport, onLogout, onOpenPatchNotes.
  * imports_from: [react, react-dom, react-router-dom, ../context/ThemeContext, ../context/LocationContext, ./QuickSearch, ./NotificationBell]
@@ -14,6 +14,7 @@
  *     don't spill during the width transition, which would otherwise clip them too.
  *   - Routes, labels and role gating mirror AppShell's top bar exactly — the rail is a
  *     presentation swap, not a different information architecture.
+ *   - Mounted only when AppShell's isSidebarMode is true; theme panel can turn the mode off.
  * updated_by_agent: 2026-08-06T00:00:00Z
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -160,7 +161,7 @@ export default function Rail({
 }) {
     const navigate = useNavigate();
     const location = useLocation();
-    const { isDark, isOldMan, toggleDark, toggleOldMan } = useTheme();
+    const { isDark, isOldMan, isSidebarMode, toggleDark, toggleOldMan, toggleSidebarMode } = useTheme();
     const { locationEnabled, locationRequesting, handleLocationToggle } = useLocationContext();
 
     const [open, setOpen] = useState(() => localStorage.getItem(RAIL_KEY) === 'true');
@@ -387,7 +388,7 @@ export default function Rail({
                     data-rail-panel
                     className="dc-pop"
                     style={{
-                        position: 'fixed', left: railW + 6, top: panelTop - 60, width: 216, zIndex: 60,
+                        position: 'fixed', left: railW + 6, top: panelTop - 100, width: 220, zIndex: 60,
                         background: 'var(--surface)', border: '1px solid var(--border-strong)',
                         borderRadius: 12, boxShadow: 'var(--shadow)', padding: 12,
                     }}
@@ -395,6 +396,12 @@ export default function Rail({
                     <ThemeToggleRow label="Dark Mode" on={isDark} onToggle={toggleDark} />
                     <div style={{ height: 10 }} />
                     <ThemeToggleRow label="Old Man Mode" on={isOldMan} onToggle={toggleOldMan} amber />
+                    <div style={{ height: 10 }} />
+                    <ThemeToggleRow
+                        label="Left Sidebar Mode"
+                        on={isSidebarMode}
+                        onToggle={toggleSidebarMode}
+                    />
                 </div>,
                 document.body
             )}

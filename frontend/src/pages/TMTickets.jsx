@@ -24,7 +24,7 @@ const STATUS_TABS = [
 ];
 
 const STATUS_BADGE = {
-    draft: 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-300',
+    draft: 'bg-surface-2 text-ink-2',
     submitted: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
     pending_approval: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
     approved: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
@@ -94,9 +94,10 @@ export default function TMTickets() {
     const closeModal = () => { setModalOpen(false); setModalTicket(null); setModalCandidates([]); };
 
     return (
+        <div className="w-full min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas">
         <div className="flex-1 p-4 md:p-6 max-w-[1200px] mx-auto w-full">
             <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-                <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">T&amp;M Tickets</h1>
+                <h1 className="text-xl font-bold text-ink">T&amp;M Tickets</h1>
                 <button
                     onClick={openNew}
                     className="px-4 py-2.5 sm:py-1.5 text-sm font-medium rounded-lg text-white bg-accent-500 hover:bg-accent-600 transition-colors"
@@ -115,7 +116,7 @@ export default function TMTickets() {
                         key={t.value} onClick={() => setStatus(t.value)}
                         className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${status === t.value
                             ? 'bg-accent-500 border-accent-500 text-white'
-                            : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                            : 'bg-surface border-hairline text-ink-2 hover:bg-surface-2'}`}
                     >
                         {t.label}
                     </button>
@@ -124,10 +125,10 @@ export default function TMTickets() {
 
             {loading ? (
                 <div className="flex items-center justify-center py-16">
-                    <span className="text-gray-500 dark:text-slate-400">Loading…</span>
+                    <span className="text-ink-3">Loading…</span>
                 </div>
             ) : tickets.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-gray-300 dark:border-slate-700 p-12 text-center text-sm text-gray-400 dark:text-slate-500">
+                <div className="rounded-xl border border-dashed border-hairline-strong p-12 text-center text-sm text-ink-3">
                     No tickets here yet. Create one to get started.
                 </div>
             ) : (
@@ -139,61 +140,61 @@ export default function TMTickets() {
                         {tickets.map(t => (
                             <button
                                 key={t.id} onClick={() => openTicket(t.id)}
-                                className="w-full text-left rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 active:bg-gray-50 dark:active:bg-slate-700/50"
+                                className="w-full text-left rounded-xl border border-hairline bg-surface p-3 active:bg-surface-2"
                             >
                                 <div className="flex items-center justify-between gap-2 mb-1.5">
-                                    <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+                                    <span className="text-sm font-semibold text-ink">
                                         {t.release ? `${t.release.job}-${t.release.release}` : (t.job ?? `Ticket #${t.id}`)}
                                     </span>
                                     <span className={`shrink-0 px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_BADGE[t.status] || STATUS_BADGE.draft}`}>
                                         {STATUS_LABEL[t.status] || t.status}
                                     </span>
                                 </div>
-                                <div className="flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-slate-400">
+                                <div className="flex items-center justify-between gap-2 text-xs text-ink-3">
                                     <span>{t.customer || '—'}</span>
                                     <span>{fmtDate(t.date_of_work)}</span>
                                 </div>
-                                <div className="mt-1 text-[11px] text-gray-400 dark:text-slate-500">
+                                <div className="mt-1 text-[11px] text-ink-3">
                                     {t.created_by ? `${t.created_by} · ` : ''}{fmtDateTime(t.created_at)}
                                 </div>
                             </button>
                         ))}
                     </div>
 
-                    <div className="hidden sm:block overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                    <div className="hidden sm:block overflow-x-auto rounded-xl border border-hairline bg-surface">
                         <table className="min-w-full text-sm">
-                            <thead className="bg-gray-50 dark:bg-slate-900/40">
+                            <thead className="bg-head-bg">
                                 <tr>
-                                    <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-slate-400">ID</th>
-                                    <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-slate-400">Job</th>
-                                    <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-slate-400">Release</th>
-                                    <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-slate-400">Date of work</th>
-                                    <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-slate-400">Customer</th>
-                                    <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-slate-400">Status</th>
-                                    <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-slate-400">Created by</th>
-                                    <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-slate-400">Created</th>
+                                    <th className="px-3 py-2 text-left font-semibold text-ink-3">ID</th>
+                                    <th className="px-3 py-2 text-left font-semibold text-ink-3">Job</th>
+                                    <th className="px-3 py-2 text-left font-semibold text-ink-3">Release</th>
+                                    <th className="px-3 py-2 text-left font-semibold text-ink-3">Date of work</th>
+                                    <th className="px-3 py-2 text-left font-semibold text-ink-3">Customer</th>
+                                    <th className="px-3 py-2 text-left font-semibold text-ink-3">Status</th>
+                                    <th className="px-3 py-2 text-left font-semibold text-ink-3">Created by</th>
+                                    <th className="px-3 py-2 text-left font-semibold text-ink-3">Created</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {tickets.map(t => (
                                     <tr
                                         key={t.id} onClick={() => openTicket(t.id)}
-                                        className="border-t border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer"
+                                        className="border-t border-hairline hover:bg-surface-2 cursor-pointer"
                                     >
-                                        <td className="px-3 py-2 text-gray-500 dark:text-slate-400">#{t.id}</td>
-                                        <td className="px-3 py-2 text-gray-900 dark:text-slate-100">{t.job ?? '—'}</td>
-                                        <td className="px-3 py-2 text-gray-900 dark:text-slate-100">
+                                        <td className="px-3 py-2 text-ink-3">#{t.id}</td>
+                                        <td className="px-3 py-2 text-ink">{t.job ?? '—'}</td>
+                                        <td className="px-3 py-2 text-ink">
                                             {t.release ? `${t.release.job}-${t.release.release}` : '—'}
                                         </td>
-                                        <td className="px-3 py-2 text-gray-700 dark:text-slate-300">{fmtDate(t.date_of_work)}</td>
-                                        <td className="px-3 py-2 text-gray-700 dark:text-slate-300">{t.customer || '—'}</td>
+                                        <td className="px-3 py-2 text-ink-2">{fmtDate(t.date_of_work)}</td>
+                                        <td className="px-3 py-2 text-ink-2">{t.customer || '—'}</td>
                                         <td className="px-3 py-2">
                                             <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_BADGE[t.status] || STATUS_BADGE.draft}`}>
                                                 {STATUS_LABEL[t.status] || t.status}
                                             </span>
                                         </td>
-                                        <td className="px-3 py-2 text-gray-700 dark:text-slate-300">{t.created_by || '—'}</td>
-                                        <td className="px-3 py-2 text-gray-500 dark:text-slate-400">{fmtDateTime(t.created_at)}</td>
+                                        <td className="px-3 py-2 text-ink-2">{t.created_by || '—'}</td>
+                                        <td className="px-3 py-2 text-ink-3">{fmtDateTime(t.created_at)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -209,6 +210,7 @@ export default function TMTickets() {
                 onClose={closeModal}
                 onSaved={load}
             />
+        </div>
         </div>
     );
 }

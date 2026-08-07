@@ -18,8 +18,8 @@ import { getNextWeekSchedule } from '../services/installScheduleApi';
 const DATE_KIND = {
     hard: { label: 'Hard', cls: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 ring-1 ring-green-400/50' },
     asap: { label: 'ASAP', cls: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 ring-1 ring-red-400/50' },
-    projected: { label: 'Projected', cls: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300 ring-1 ring-gray-300/50' },
-    neutral: { label: 'Done', cls: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' },
+    projected: { label: 'Projected', cls: 'bg-surface-2 text-ink-2 ring-1 ring-hairline' },
+    neutral: { label: 'Done', cls: 'bg-surface-2 text-ink-3' },
 };
 
 const fmtDate = (iso) => {
@@ -37,9 +37,9 @@ function DatePill({ kind }) {
 
 function Stat({ label, value, tone = '' }) {
     return (
-        <div className="flex flex-col items-center px-4 py-2 rounded-lg bg-white dark:bg-slate-800 shadow-sm">
+        <div className="flex flex-col items-center px-4 py-2 rounded-lg bg-surface shadow-sm border border-hairline">
             <span className={`text-2xl font-bold ${tone}`}>{value}</span>
-            <span className="text-xs text-gray-500 dark:text-slate-400 uppercase tracking-wide">{label}</span>
+            <span className="text-xs text-ink-3 uppercase tracking-wide">{label}</span>
         </div>
     );
 }
@@ -48,17 +48,17 @@ function Stat({ label, value, tone = '' }) {
 function ReleaseCard({ card, conflictCodes }) {
     const inConflict = conflictCodes.has(card.code);
     return (
-        <div className={`rounded-lg border p-3 bg-white dark:bg-slate-800 shadow-sm ${
-            inConflict ? 'border-red-400 dark:border-red-500' : 'border-gray-200 dark:border-slate-700'
+        <div className={`rounded-lg border p-3 bg-surface shadow-sm ${
+            inConflict ? 'border-red-400 dark:border-red-500' : 'border-hairline'
         }`}>
             <div className="flex items-center justify-between gap-2">
                 <span className="font-mono text-sm font-bold text-accent-600 dark:text-accent-400">{card.code}</span>
                 <DatePill kind={card.date_kind} />
             </div>
-            <div className="mt-1 text-sm font-medium text-gray-800 dark:text-slate-100 truncate" title={card.project_name}>
+            <div className="mt-1 text-sm font-medium text-ink truncate" title={card.project_name}>
                 {card.project_name}
             </div>
-            <div className="mt-2 flex items-center justify-between text-xs text-gray-600 dark:text-slate-300">
+            <div className="mt-2 flex items-center justify-between text-xs text-ink-2">
                 <span>📅 {fmtDate(card.start_install)}{card.comp_eta && card.comp_eta !== card.start_install ? ` → ${fmtDate(card.comp_eta)}` : ''}</span>
                 <span className="font-semibold">⏱ {fmtHours(card.est_hours)}</span>
             </div>
@@ -89,7 +89,7 @@ function CrewColumn({ crew }) {
                     {crew.conflicts.length > 0 && <span className="px-1.5 py-0.5 rounded bg-red-600 font-semibold">{crew.conflicts.length} CONFLICT{crew.conflicts.length > 1 ? 'S' : ''}</span>}
                 </div>
             </div>
-            <div className="flex-1 flex flex-col gap-2 p-2 rounded-b-lg bg-gray-50 dark:bg-slate-900/50 min-h-[120px]">
+            <div className="flex-1 flex flex-col gap-2 p-2 rounded-b-lg bg-surface-2 min-h-[120px] border-x border-b border-hairline">
                 {crew.cards.map((c) => (
                     <ReleaseCard key={c.release_id} card={c} conflictCodes={conflictCodes} />
                 ))}
@@ -121,12 +121,12 @@ export default function InstallSchedule() {
     const s = data?.summary;
 
     return (
-        <div className="flex flex-col h-full p-4 gap-4 overflow-hidden">
+        <div className="flex flex-col h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas p-4 gap-4 overflow-hidden">
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
-                    <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">Installation Schedule</h1>
+                    <h1 className="text-xl font-bold text-ink">Installation Schedule</h1>
                     {data?.window && (
-                        <p className="text-sm text-gray-500 dark:text-slate-400">
+                        <p className="text-sm text-ink-3">
                             {fmtDate(data.window.start)} – {fmtDate(data.window.end)} · hard dates first
                         </p>
                     )}
@@ -139,7 +139,7 @@ export default function InstallSchedule() {
                             className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
                                 days === d
                                     ? 'bg-accent-600 text-white'
-                                    : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+                                    : 'bg-surface text-ink-2 hover:bg-surface-2 border border-hairline'
                             }`}
                         >
                             {d} days
@@ -147,7 +147,7 @@ export default function InstallSchedule() {
                     ))}
                     <button
                         onClick={() => load(days)}
-                        className="px-3 py-1.5 text-sm rounded-lg bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700"
+                        className="px-3 py-1.5 text-sm rounded-lg bg-surface text-ink-2 hover:bg-surface-2 border border-hairline"
                     >
                         ↻ Refresh
                     </button>
@@ -158,7 +158,7 @@ export default function InstallSchedule() {
                 <div className="flex flex-wrap gap-2">
                     <Stat label="Releases" value={s.total_releases} />
                     <Stat label="Hard dates" value={s.hard_dates} tone="text-green-600 dark:text-green-400" />
-                    <Stat label="Projected" value={s.projected_dates} tone="text-gray-500" />
+                    <Stat label="Projected" value={s.projected_dates} tone="text-ink-3" />
                     <Stat label="Unassigned" value={s.unassigned_releases} tone={s.unassigned_releases ? 'text-amber-600 dark:text-amber-400' : ''} />
                     <Stat label="Overloaded crews" value={s.overloaded_crews} tone={s.overloaded_crews ? 'text-red-600 dark:text-red-400' : ''} />
                     <Stat label="Conflicts" value={s.crews_with_conflicts} tone={s.crews_with_conflicts ? 'text-red-600 dark:text-red-400' : ''} />
@@ -166,10 +166,10 @@ export default function InstallSchedule() {
                 </div>
             )}
 
-            {loading && <div className="text-gray-500 dark:text-slate-400">Loading schedule…</div>}
+            {loading && <div className="text-ink-3">Loading schedule…</div>}
             {error && <div className="text-red-600 dark:text-red-400">{error}</div>}
             {!loading && !error && data && data.crews.length === 0 && (
-                <div className="text-gray-500 dark:text-slate-400">No releases scheduled to install in this window.</div>
+                <div className="text-ink-3">No releases scheduled to install in this window.</div>
             )}
 
             {!loading && !error && data && data.crews.length > 0 && (

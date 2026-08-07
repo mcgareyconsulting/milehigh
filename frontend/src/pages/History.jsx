@@ -129,7 +129,7 @@ function History() {
     };
 
     const getChangeTypeColor = (action) => {
-        if (!action) return 'bg-gray-100 text-gray-800';
+        if (!action) return 'bg-surface-2 text-ink';
 
         const actionLower = action.toLowerCase();
         const colors = {
@@ -142,7 +142,7 @@ function History() {
             'list_move': 'bg-purple-100 text-purple-800',
         };
         // Try exact match first, then check first part of action (e.g., 'update' from 'update_stage')
-        return colors[actionLower] || colors[actionLower.split('_')[0]] || 'bg-gray-100 text-gray-800';
+        return colors[actionLower] || colors[actionLower.split('_')[0]] || 'bg-surface-2 text-ink';
     };
 
     const filteredHistory = selectedJobKey
@@ -185,9 +185,9 @@ function History() {
     };
 
     return (
-        <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-8 px-4" style={{ width: '100%', minWidth: '100%' }}>
+        <div className="w-full min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas py-8 px-4" style={{ width: '100%', minWidth: '100%' }}>
             <div className="max-w-7xl mx-auto w-full" style={{ width: '100%', maxWidth: '1280px' }}>
-                <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                <div className="bg-surface rounded-2xl shadow-xl overflow-hidden">
                     <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-8 py-6">
                         <div className="flex justify-between items-center">
                             <div>
@@ -201,15 +201,15 @@ function History() {
 
                         <form onSubmit={handleSubmit} className="bg-gradient-to-r from-accent-50 to-blue-50 rounded-xl p-6 mb-6 border border-accent-200 shadow-sm">
                             <div className="mb-4">
-                                <p className="text-sm text-gray-600 mb-2">
+                                <p className="text-sm text-ink-2 mb-2">
                                     💡 <strong>Search options:</strong> Enter Job Number/Release OR Submittal ID to find change history
                                 </p>
                             </div>
                             <div className="space-y-4">
                                 <div className="flex flex-wrap gap-4 items-end">
                                     <div className="flex-1 min-w-[200px]">
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                            🔢 Job Number <span className="text-gray-400 font-normal">(optional)</span>
+                                        <label className="block text-sm font-semibold text-ink-2 mb-2">
+                                            🔢 Job Number <span className="text-ink-3 font-normal">(optional)</span>
                                         </label>
                                         <input
                                             type="number"
@@ -219,12 +219,12 @@ function History() {
                                                 if (e.target.value) setSubmittalId(''); // Clear submittal if job entered
                                             }}
                                             placeholder="e.g., 123"
-                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
+                                            className="w-full px-4 py-2.5 border border-hairline-strong rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-surface shadow-sm transition-all"
                                         />
                                     </div>
                                     <div className="flex-1 min-w-[200px]">
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                            📦 Release <span className="text-gray-400 font-normal">(optional)</span>
+                                        <label className="block text-sm font-semibold text-ink-2 mb-2">
+                                            📦 Release <span className="text-ink-3 font-normal">(optional)</span>
                                         </label>
                                         <input
                                             type="text"
@@ -234,19 +234,19 @@ function History() {
                                                 if (e.target.value) setSubmittalId(''); // Clear submittal if release entered
                                             }}
                                             placeholder="e.g., 1"
-                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
+                                            className="w-full px-4 py-2.5 border border-hairline-strong rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-surface shadow-sm transition-all"
                                         />
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    <div className="flex-1 border-t border-gray-300"></div>
-                                    <span className="text-sm text-gray-500 font-medium">OR</span>
-                                    <div className="flex-1 border-t border-gray-300"></div>
+                                    <div className="flex-1 border-t border-hairline-strong"></div>
+                                    <span className="text-sm text-ink-3 font-medium">OR</span>
+                                    <div className="flex-1 border-t border-hairline-strong"></div>
                                 </div>
                                 <div className="flex flex-wrap gap-4 items-end">
                                     <div className="flex-1 min-w-[200px]">
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                            📋 Submittal ID <span className="text-gray-400 font-normal">(optional)</span>
+                                        <label className="block text-sm font-semibold text-ink-2 mb-2">
+                                            📋 Submittal ID <span className="text-ink-3 font-normal">(optional)</span>
                                         </label>
                                         <input
                                             type="text"
@@ -259,7 +259,7 @@ function History() {
                                                 }
                                             }}
                                             placeholder="e.g., 12345"
-                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
+                                            className="w-full px-4 py-2.5 border border-hairline-strong rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-surface shadow-sm transition-all"
                                         />
                                     </div>
                                     <div className="min-w-[180px]">
@@ -297,7 +297,7 @@ function History() {
                         {submitted && !loading && !error && (
                             <>
                                 <div className="bg-gradient-to-r from-accent-50 to-blue-50 rounded-xl p-6 mb-6 border border-accent-200">
-                                    <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                                    <h2 className="text-2xl font-bold text-ink mb-2">
                                         {searchMetadata?.searchType === 'submittal'
                                             ? `History for Submittal ${searchMetadata.searchSubmittalId}`
                                             : searchMetadata?.searchType === 'both'
@@ -308,21 +308,21 @@ function History() {
                                         }
                                     </h2>
                                     <div className="flex items-center gap-4 flex-wrap">
-                                        <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-accent-200">
-                                            <p className="text-sm text-gray-600">
+                                        <div className="bg-surface px-4 py-2 rounded-lg shadow-sm border border-accent-200">
+                                            <p className="text-sm text-ink-2">
                                                 Total changes: <span className="font-bold text-accent-700">{history.length}</span>
                                             </p>
                                         </div>
                                         {selectedJobKey && (
-                                            <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-accent-200">
-                                                <p className="text-sm text-gray-600">
+                                            <div className="bg-surface px-4 py-2 rounded-lg shadow-sm border border-accent-200">
+                                                <p className="text-sm text-ink-2">
                                                     Showing: <span className="font-bold text-accent-700">{filteredHistory.length}</span>
                                                 </p>
                                             </div>
                                         )}
                                         {searchMetadata?.jobReleases && searchMetadata.jobReleases.length > 1 && (
-                                            <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-accent-200">
-                                                <p className="text-sm text-gray-600">
+                                            <div className="bg-surface px-4 py-2 rounded-lg shadow-sm border border-accent-200">
+                                                <p className="text-sm text-ink-2">
                                                     Job-Release combinations: <span className="font-bold text-accent-700">{searchMetadata.jobReleases.length}</span>
                                                 </p>
                                             </div>
@@ -330,7 +330,7 @@ function History() {
                                     </div>
                                     {searchMetadata?.jobReleases && searchMetadata.jobReleases.length > 1 && (
                                         <div className="mt-4 pt-4 border-t border-accent-200">
-                                            <p className="text-sm font-semibold text-gray-700 mb-2">Found Job-Release combinations:</p>
+                                            <p className="text-sm font-semibold text-ink-2 mb-2">Found Job-Release combinations:</p>
                                             <div className="flex flex-wrap gap-2">
                                                 {searchMetadata.jobReleases.map((jr) => {
                                                     const key = `${jr.job}-${jr.release}`;
@@ -342,7 +342,7 @@ function History() {
                                                             onClick={() => setSelectedJobKey(key)}
                                                             className={`px-3 py-1 rounded-lg text-sm font-medium border transition ${isActive
                                                                 ? 'bg-accent-500 text-white border-accent-500 shadow'
-                                                                : 'bg-white text-gray-700 border-accent-200 hover:bg-accent-50'
+                                                                : 'bg-surface text-ink-2 border-accent-200 hover:bg-accent-50'
                                                                 }`}
                                                         >
                                                             {jr.job}-{jr.release}
@@ -358,56 +358,56 @@ function History() {
                                     // Submittal history view
                                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                         <div className="lg:col-span-1">
-                                            <div className="bg-white border border-accent-200 rounded-xl shadow-sm p-6 h-full">
-                                                <h3 className="text-xl font-semibold text-gray-800">
+                                            <div className="bg-surface border border-accent-200 rounded-xl shadow-sm p-6 h-full">
+                                                <h3 className="text-xl font-semibold text-ink">
                                                     {submittalDetails ? `Submittal ${submittalDetails.submittal_id}` : 'Submittal Details'}
                                                 </h3>
                                                 {submittalDetails ? (
                                                     <>
-                                                        <p className="text-gray-500 mt-1">{submittalDetails.title || '—'}</p>
-                                                        <dl className="mt-6 space-y-4 text-sm text-gray-600">
+                                                        <p className="text-ink-3 mt-1">{submittalDetails.title || '—'}</p>
+                                                        <dl className="mt-6 space-y-4 text-sm text-ink-2">
                                                             <div>
-                                                                <dt className="font-semibold text-gray-700">Status</dt>
+                                                                <dt className="font-semibold text-ink-2">Status</dt>
                                                                 <dd>{submittalDetails.status || '—'}</dd>
                                                             </div>
                                                             <div>
-                                                                <dt className="font-semibold text-gray-700">Type</dt>
+                                                                <dt className="font-semibold text-ink-2">Type</dt>
                                                                 <dd>{submittalDetails.type || '—'}</dd>
                                                             </div>
                                                             <div>
-                                                                <dt className="font-semibold text-gray-700">Ball in Court</dt>
+                                                                <dt className="font-semibold text-ink-2">Ball in Court</dt>
                                                                 <dd>{submittalDetails.ball_in_court || '—'}</dd>
                                                             </div>
                                                             <div>
-                                                                <dt className="font-semibold text-gray-700">Project</dt>
+                                                                <dt className="font-semibold text-ink-2">Project</dt>
                                                                 <dd>{submittalDetails.project_name || submittalDetails.project_number || '—'}</dd>
                                                             </div>
                                                         </dl>
                                                     </>
                                                 ) : (
-                                                    <p className="text-gray-500 mt-4 text-sm">
+                                                    <p className="text-ink-3 mt-4 text-sm">
                                                         Submittal details not available.
                                                     </p>
                                                 )}
                                             </div>
                                         </div>
                                         <div className="lg:col-span-2">
-                                            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                                            <div className="bg-surface rounded-xl border border-hairline shadow-sm overflow-hidden">
                                                 <div className="overflow-x-auto">
                                                     <table className="w-full">
                                                         <thead className="bg-gradient-to-r from-gray-50 to-accent-50">
                                                             <tr>
-                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Created At</th>
-                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Applied At</th>
-                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Action</th>
-                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">New Value</th>
-                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Source</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">Created At</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">Applied At</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">Action</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">New Value</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">Source</th>
                                                             </tr>
                                                         </thead>
-                                                        <tbody className="bg-white divide-y divide-gray-200">
+                                                        <tbody className="bg-surface divide-y divide-[var(--border)]">
                                                             {history.length === 0 ? (
                                                                 <tr>
-                                                                    <td colSpan={5} className="px-6 py-6 text-center text-sm text-gray-500">
+                                                                    <td colSpan={5} className="px-6 py-6 text-center text-sm text-ink-3">
                                                                         No change history for this submittal.
                                                                     </td>
                                                                 </tr>
@@ -418,10 +418,10 @@ function History() {
                                                                         className="hover:bg-accent-50/50 transition-colors duration-150"
                                                                         style={{ animationDelay: `${index * 30}ms` }}
                                                                     >
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-ink-2">
                                                                             {formatDateTime(entry.created_at)}
                                                                         </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-ink-2">
                                                                             {formatDateTime(entry.applied_at)}
                                                                         </td>
                                                                         <td className="px-6 py-4 whitespace-nowrap">
@@ -435,10 +435,10 @@ function History() {
                                                                                     {entry.new_value}
                                                                                 </span>
                                                                             ) : (
-                                                                                <span className="text-gray-400">-</span>
+                                                                                <span className="text-ink-3">-</span>
                                                                             )}
                                                                         </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-ink-2">
                                                                             {entry.source}
                                                                         </td>
                                                                     </tr>
@@ -451,38 +451,38 @@ function History() {
                                         </div>
                                     </div>
                                 ) : !hasJobDetails && history.length === 0 ? (
-                                    <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-                                        <div className="text-gray-400 text-5xl mb-4">📭</div>
-                                        <p className="text-gray-500 font-medium text-lg">No change history found</p>
-                                        <p className="text-gray-400 text-sm mt-2">
+                                    <div className="bg-surface rounded-xl border border-hairline p-12 text-center">
+                                        <div className="text-ink-3 text-5xl mb-4">📭</div>
+                                        <p className="text-ink-3 font-medium text-lg">No change history found</p>
+                                        <p className="text-ink-3 text-sm mt-2">
                                             {getNotFoundMessage()}
                                         </p>
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                         <div className="lg:col-span-1">
-                                            <div className="bg-white border border-accent-200 rounded-xl shadow-sm p-6 h-full">
-                                                <h3 className="text-xl font-semibold text-gray-800">
+                                            <div className="bg-surface border border-accent-200 rounded-xl shadow-sm p-6 h-full">
+                                                <h3 className="text-xl font-semibold text-ink">
                                                     {selectedJobDetails ? `${selectedJobDetails.job}-${selectedJobDetails.release}` : 'Select a job-release'}
                                                 </h3>
                                                 {selectedJobDetails ? (
                                                     <>
-                                                        <p className="text-gray-500 mt-1">{selectedJobDetails.job_name}</p>
-                                                        <dl className="mt-6 space-y-4 text-sm text-gray-600">
+                                                        <p className="text-ink-3 mt-1">{selectedJobDetails.job_name}</p>
+                                                        <dl className="mt-6 space-y-4 text-sm text-ink-2">
                                                             <div>
-                                                                <dt className="font-semibold text-gray-700">Description</dt>
+                                                                <dt className="font-semibold text-ink-2">Description</dt>
                                                                 <dd>{selectedJobDetails.description || '—'}</dd>
                                                             </div>
                                                             <div>
-                                                                <dt className="font-semibold text-gray-700">Install Hours</dt>
+                                                                <dt className="font-semibold text-ink-2">Install Hours</dt>
                                                                 <dd>{selectedJobDetails.install_hrs ?? '—'}</dd>
                                                             </div>
                                                             <div>
-                                                                <dt className="font-semibold text-gray-700">Start Install Date</dt>
+                                                                <dt className="font-semibold text-ink-2">Start Install Date</dt>
                                                                 <dd>{formatDate(selectedJobDetails.start_install)}</dd>
                                                             </div>
                                                             <div>
-                                                                <dt className="font-semibold text-gray-700">Trello List</dt>
+                                                                <dt className="font-semibold text-ink-2">Trello List</dt>
                                                                 <dd>{selectedJobDetails.trello_list_name || '—'}</dd>
                                                             </div>
                                                         </dl>
@@ -499,7 +499,7 @@ function History() {
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => setPdfHistoryOpen(true)}
-                                                                        className="inline-flex items-center px-4 py-2 rounded-lg bg-white border border-accent-500 text-accent-700 font-semibold hover:bg-accent-50 transition"
+                                                                        className="inline-flex items-center px-4 py-2 rounded-lg bg-surface border border-accent-500 text-accent-700 font-semibold hover:bg-accent-50 transition"
                                                                     >
                                                                         View History
                                                                     </button>
@@ -510,7 +510,7 @@ function History() {
                                                                     href={selectedJobDetails.viewer_url}
                                                                     target="_blank"
                                                                     rel="noopener noreferrer"
-                                                                    className="inline-flex items-center px-4 py-2 rounded-lg bg-white border border-gray-300 text-gray-700 font-semibold hover:bg-gray-100 transition"
+                                                                    className="inline-flex items-center px-4 py-2 rounded-lg bg-surface border border-hairline-strong text-ink-2 font-semibold hover:bg-surface-2 transition"
                                                                 >
                                                                     Open in Procore
                                                                 </a>
@@ -518,29 +518,29 @@ function History() {
                                                         </div>
                                                     </>
                                                 ) : (
-                                                    <p className="text-gray-500 mt-4 text-sm">
+                                                    <p className="text-ink-3 mt-4 text-sm">
                                                         Choose a job-release to view its details and related changes.
                                                     </p>
                                                 )}
                                             </div>
                                         </div>
                                         <div className="lg:col-span-2">
-                                            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                                            <div className="bg-surface rounded-xl border border-hairline shadow-sm overflow-hidden">
                                                 <div className="overflow-x-auto">
                                                     <table className="w-full">
                                                         <thead className="bg-gradient-to-r from-gray-50 to-accent-50">
                                                             <tr>
-                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Created At</th>
-                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Applied At</th>
-                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Action</th>
-                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">New Value</th>
-                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Source</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">Created At</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">Applied At</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">Action</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">New Value</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-ink-2 uppercase tracking-wider border-b border-hairline">Source</th>
                                                             </tr>
                                                         </thead>
-                                                        <tbody className="bg-white divide-y divide-gray-200">
+                                                        <tbody className="bg-surface divide-y divide-[var(--border)]">
                                                             {filteredHistory.length === 0 ? (
                                                                 <tr>
-                                                                    <td colSpan={searchMetadata?.searchType !== 'both' ? 7 : 6} className="px-6 py-6 text-center text-sm text-gray-500">
+                                                                    <td colSpan={searchMetadata?.searchType !== 'both' ? 7 : 6} className="px-6 py-6 text-center text-sm text-ink-3">
                                                                         No change history for the selected job-release.
                                                                     </td>
                                                                 </tr>
@@ -551,10 +551,10 @@ function History() {
                                                                         className="hover:bg-accent-50/50 transition-colors duration-150"
                                                                         style={{ animationDelay: `${index * 30}ms` }}
                                                                     >
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-ink-2">
                                                                             {formatDateTime(entry.created_at)}
                                                                         </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-ink-2">
                                                                             {formatDateTime(entry.applied_at)}
                                                                         </td>
                                                                         <td className="px-6 py-4 whitespace-nowrap">
@@ -568,10 +568,10 @@ function History() {
                                                                                     {entry.new_value}
                                                                                 </span>
                                                                             ) : (
-                                                                                <span className="text-gray-400">-</span>
+                                                                                <span className="text-ink-3">-</span>
                                                                             )}
                                                                         </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-ink-2">
                                                                             {entry.source}
                                                                         </td>
                                                                     </tr>

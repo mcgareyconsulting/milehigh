@@ -114,10 +114,11 @@ body>#root>div>div {
    themselves with calc(100vh - var(--app-chrome-h)); before this was a variable
    they each hardcoded the top bar's 3.5rem.
 
-   At 1440px the rail takes over and the top bar is gone (see AppShell), so there
-   is nothing left to subtract — without this those pages left a bar-sized strip
-   of dead space along the bottom of the window. Subcontractors keep the top bar
-   at every width and opt out via .app-shell-topbar. */
+   When Left Sidebar Mode is on at ≥1440px the rail takes over and the top bar is
+   gone (see AppShell), so there is nothing left to subtract — without this those
+   pages left a bar-sized strip of dead space along the bottom of the window.
+   Top-header mode (default), subcontractors, and any shell that always shows the
+   top bar opt out via .app-shell-topbar. */
 :root {
   --app-chrome-h: 3.5rem;
 }
