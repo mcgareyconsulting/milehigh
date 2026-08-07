@@ -102,8 +102,8 @@ def init_scheduler(app):
 
     # --- Nightly FC PDF Pack retry worker (2:00 AM Mountain Time) ---
     # Procore's Final PDF Pack can land up to ~24h after a release hits the
-    # job log; this catches the misses by retrying releases with NULL
-    # viewer_url that were released within the last 7 days.
+    # job log; this catches the misses by retrying active releases with a
+    # NULL/empty viewer_url inside the worker's LOOKBACK_DAYS window.
     # Pinned to America/Denver so the fire time tracks MT through DST,
     # independent of the Render container's UTC clock.
     def fc_pdf_retry():
@@ -112,7 +112,7 @@ def init_scheduler(app):
             try:
                 retry_missing_fc_viewer_urls(trigger="cron")
             except Exception as e:
-                logger.error("FC PDF retry job failed", error=str(e), exc_info=True)
+                logger.error("fc_retry_job_failed", error=str(e), exc_info=True)
 
     scheduler.add_job(
         func=fc_pdf_retry,
