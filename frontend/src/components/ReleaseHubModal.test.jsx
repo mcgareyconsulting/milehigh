@@ -33,7 +33,8 @@ vi.mock('../services/jobsApi', () => ({
                     created_at: '2026-07-02T09:10:00',
                     payload: { from: '', to: 'Fab has pack' },
                 },
-                // A stage change must not leak into the notes rail.
+                // Stage + ship date land on the main-card activity feed (N7),
+                // not the notes rail.
                 {
                     id: 4,
                     action: 'update_stage',
@@ -41,6 +42,14 @@ vi.mock('../services/jobsApi', () => ({
                     source: 'Brain',
                     created_at: '2026-07-03T09:10:00',
                     payload: { from: 'Cut Start', to: 'Cut Complete' },
+                },
+                {
+                    id: 5,
+                    action: 'update_ship_date',
+                    user_name: 'Dave Cruz',
+                    source: 'Brain',
+                    created_at: '2026-07-04T11:00:00',
+                    payload: { from: null, to: '2026-07-28' },
                 },
             ],
         })),
@@ -157,6 +166,26 @@ describe('ReleaseHubModal', () => {
         for (const heading of ['Schedule', 'Production', 'Assignment', 'Materials ordered', 'Stage progress']) {
             expect(screen.getByText(heading)).toBeInTheDocument();
         }
+    });
+
+    it('renders the banana-code icon row instead of the 17-segment progress bar', () => {
+        renderHub();
+        // StageIconRow exposes each department as an img alt like "Cut yellow".
+        expect(screen.getByAltText(/Admin/i)).toBeInTheDocument();
+        expect(screen.getByAltText(/Install/i)).toBeInTheDocument();
+    });
+
+    it('intermingles stage/date updates with notes on the right Activity rail', async () => {
+        renderHub();
+        // Stage + ship from the events mock, plus a note body — one timeline.
+        expect(await screen.findByText('Stage Cut Start → Cut Complete')).toBeInTheDocument();
+        expect(screen.getByText(/Ship date set to Jul 28, 2026/)).toBeInTheDocument();
+        expect(screen.getByText('Waiting on GC embed approval')).toBeInTheDocument();
+        // Kind chips distinguish note rows from system updates (chip text is uppercase CSS).
+        expect(screen.getAllByText('Note').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Ship').length).toBeGreaterThanOrEqual(1);
+        // Header renamed from Notes → Activity.
+        expect(screen.getByText('Activity')).toBeInTheDocument();
     });
 
     it('renders the release fields the Job Log row carries', () => {

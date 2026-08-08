@@ -1,10 +1,13 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: The Details pane of the release hub — a two-column dossier (Schedule/Assignment, Production/Materials) plus the stage progress ladder, per the Aug 2026 redesign handoff §4.
+ * purpose: The Details pane of the release hub — a two-column dossier (Schedule/Assignment,
+ *   Production/Materials) plus banana-code stage flow (N7). Date/stage activity lives on the
+ *   right rail, intermingled with notes.
  * exports:
  *   JobDetailsBody: The detail sections, with no dialog chrome, for a host modal to place
- * imports_from: [react, ../services/jobsApi, ../constants/columnHeaders, ../utils/stageTint]
+ * imports_from: [react, ../services/jobsApi, ../constants/columnHeaders, ../utils/stageTint,
+ *   ./StageIconRow]
  * imported_by: [frontend/src/components/ReleaseHubModal.jsx]
  * invariants:
  *   - Owns its own data fetch, so it loads when mounted rather than on an isOpen flag
@@ -12,13 +15,18 @@
  *     Timeline rows both render — the two surfaces serialize releases slightly differently
  *   - External links (Events/Procore/Trello) live in the host's header, and the notes thread
  *     in the host's right rail; neither belongs here
+ *   - UI only / functionality frozen: no new write paths from this pane
  * updated_by_agent: 2026-08-06T00:00:00Z
  */
 import React, { useState, useEffect, useRef } from 'react';
 
 import { jobsApi } from '../services/jobsApi';
 import { HEADER_OVERRIDES } from '../constants/columnHeaders';
-import { stageTint, STAGE_LADDER, stageLadderIndex } from '../utils/stageTint';
+import { stageTint } from '../utils/stageTint';
+import { StageIconRow } from './StageIconRow';
+
+/** Slightly larger than the table column so the icons read at modal scale. */
+const MODAL_BANANA_ICON_SIZE = 36;
 
 // Label a field exactly as the Job Log table headers it, so the modal and the
 // table speak the same language ('Job Comp' reads "Install Prog" in both).
@@ -161,7 +169,6 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
     const startInstall = formatDate(pick('Start install', 'start_install'));
 
     const stage = pick('Stage', 'stage');
-    const currentStageIdx = stageLadderIndex(stage);
     const tint = stageTint(stage);
 
     return (
@@ -271,39 +278,17 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
                 </div>
             </div>
 
+            {/* N7: same bottom placement as the old progress bar; visual is the live
+                Banana Code icon row already used on Job Log / Archive. */}
             <div style={{ marginTop: 22 }}>
                 <SectionLabel>Stage progress</SectionLabel>
-                {/* One bar segment per stage: past = accent, current = the stage's
-                    own tint, future = grid grey. The handoff labels every segment,
-                    but it drew a 7-stage ladder — the real one is 17, and 17 labels
-                    at this width truncate to "Relea… Materi… Cut St…", which reads
-                    as noise. Only the ends and the current stage are named; the
-                    rest carry their name as a tooltip. */}
-                <div className="flex items-stretch" style={{ gap: 4, marginTop: 12 }}>
-                    {STAGE_LADDER.map((s, i) => {
-                        const isCurrent = i === currentStageIdx;
-                        const isPast = currentStageIdx >= 0 && i < currentStageIdx;
-                        const bar = isCurrent ? tint.fg : (isPast ? 'var(--accent)' : 'var(--grid)');
-                        return (
-                            <div key={s} className="flex-1 min-w-0" title={s}>
-                                <div style={{ height: 5, borderRadius: 3, background: bar }} />
-                            </div>
-                        );
-                    })}
-                </div>
-                <div className="flex items-baseline justify-between gap-3" style={{ marginTop: 8 }}>
-                    <span className="text-jl-2 text-ink-3">{STAGE_LADDER[0]}</span>
-                    {currentStageIdx >= 0 ? (
-                        <span className="text-jl font-bold text-ink">
-                            {stage}
-                            <span className="text-ink-3 font-medium">
-                                {` · step ${currentStageIdx + 1} of ${STAGE_LADDER.length}`}
-                            </span>
-                        </span>
+                <div className="flex flex-col items-center" style={{ marginTop: 14, gap: 10 }}>
+                    <StageIconRow stage={stage} iconSize={MODAL_BANANA_ICON_SIZE} />
+                    {stage ? (
+                        <span className="text-jl font-bold text-ink">{stage}</span>
                     ) : (
-                        <span className="text-jl-2 text-ink-3 italic">Stage not on the ladder</span>
+                        <span className="text-jl-2 text-ink-3 italic">No stage set</span>
                     )}
-                    <span className="text-jl-2 text-ink-3">{STAGE_LADDER[STAGE_LADDER.length - 1]}</span>
                 </div>
             </div>
 
