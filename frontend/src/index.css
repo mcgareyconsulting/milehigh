@@ -135,8 +135,8 @@ body>#root>div>div {
 @media (min-width: 1440px) {
   .app-shell:not(.app-shell-topbar) {
     --app-chrome-h: 0px;
-    /* Covers the pod at a 2-digit unread count (bell + badge + "new"). */
-    --notif-pod-gutter: 118px;
+    /* Compact circular pod (~40px) + a little air so badges/hang styles clear. */
+    --notif-pod-gutter: 52px;
   }
 }
 
