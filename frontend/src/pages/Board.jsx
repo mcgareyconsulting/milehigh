@@ -360,7 +360,7 @@ export default function Board() {
                 </div>
 
                 <button onClick={() => setShowNewModal(true)}
-                    className="ml-auto px-3 py-1.5 text-xs font-semibold text-white bg-accent-500 hover:bg-accent-600 rounded-lg shadow-sm transition-colors flex items-center gap-1">
+                    className="ml-auto notif-pod-reserve px-3 py-1.5 text-xs font-semibold text-white bg-accent-500 hover:bg-accent-600 rounded-lg shadow-sm transition-colors flex items-center gap-1">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
                     </svg>

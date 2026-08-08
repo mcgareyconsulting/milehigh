@@ -202,7 +202,7 @@ export default function ToDos() {
                     To-Dos
                     {!isAdmin && <span className="ml-2 text-sm font-normal text-ink-3">assigned to you</span>}
                 </h1>
-                <span className="text-sm text-ink-3">{filtered.length} shown</span>
+                <span className="text-sm text-ink-3 notif-pod-reserve">{filtered.length} shown</span>
             </div>
             {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-sm">{error}</div>}
 

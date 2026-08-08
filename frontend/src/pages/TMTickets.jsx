@@ -100,7 +100,7 @@ export default function TMTickets() {
                 <h1 className="text-xl font-bold text-ink">T&amp;M Tickets</h1>
                 <button
                     onClick={openNew}
-                    className="px-4 py-2.5 sm:py-1.5 text-sm font-medium rounded-lg text-white bg-accent-500 hover:bg-accent-600 transition-colors"
+                    className="notif-pod-reserve px-4 py-2.5 sm:py-1.5 text-sm font-medium rounded-lg text-white bg-accent-500 hover:bg-accent-600 transition-colors"
                 >
                     + New ticket
                 </button>

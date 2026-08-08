@@ -196,7 +196,7 @@ function DraftingWorkLoadAdmin() {
                 <div className="bg-surface rounded-lg shadow-lg border border-hairline p-6 mb-6">
                     <div className="flex justify-between items-center mb-4">
                         <h1 className="text-3xl font-bold text-ink">Health Scan Admin</h1>
-                        <div className="flex gap-3">
+                        <div className="flex gap-3 notif-pod-reserve">
                             <button
                                 onClick={runHealthScan}
                                 disabled={loading}

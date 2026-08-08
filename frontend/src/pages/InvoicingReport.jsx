@@ -340,7 +340,7 @@ function InvoicingReport() {
                         DRR submittal lifecycle and release progress, grouped by project.
                     </p>
                 </div>
-                <div className="ml-auto flex items-end gap-3">
+                <div className="ml-auto flex items-end gap-3 notif-pod-reserve">
                     <label className="flex flex-col text-sm font-medium text-ink-3">
                         Month
                         <select value={month} onChange={(e) => setMonth(parseInt(e.target.value, 10))} className={selectClass}>

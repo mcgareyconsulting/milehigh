@@ -676,7 +676,7 @@ export default function ProjectDetail() {
                 {project.estimated_completion_date && <> · Est. completion {project.estimated_completion_date}</>}
               </p>
             </div>
-            <div className="text-right">
+            <div className="text-right notif-pod-reserve">
               {project.financials && (
                 <>
                   <div className="text-2xl font-bold text-ink tabular-nums">{fmtMoney(project.financials.forecast_invoice_value)}</div>

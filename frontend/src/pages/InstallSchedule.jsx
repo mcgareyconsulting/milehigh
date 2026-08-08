@@ -131,7 +131,7 @@ export default function InstallSchedule() {
                         </p>
                     )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 notif-pod-reserve">
                     {[7, 14, 31].map((d) => (
                         <button
                             key={d}

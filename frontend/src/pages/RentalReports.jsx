@@ -195,7 +195,7 @@ function RentalReports() {
                         {report?.snapshot?.created_by && <> · by {report.snapshot.created_by}</>}
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 notif-pod-reserve">
                     {snapshots.length > 0 && (
                         <select className={selectClass} value={selectedSnapshot} onChange={(e) => setSelectedSnapshot(e.target.value)}>
                             <option value="">Latest</option>
