@@ -3,12 +3,13 @@
  * schema_version: 1
  * purpose: Collapsible left icon rail that replaces the top nav bar at >=1440px when Left Sidebar Mode is on (opt-in via ThemeContext; top header is default). Per Aug 2026 Job Log redesign handoff (docs/design/job-log-redesign/README.md §1).
  * exports:
- *   Rail: Left navigation rail. Props: isAuthenticated, isAdmin, canSeeReport, onLogout, onOpenPatchNotes.
- * imports_from: [react, react-dom, react-router-dom, ../context/ThemeContext, ../context/LocationContext, ./QuickSearch, ./NotificationBell]
+ *   Rail: Left navigation rail. Props: isAdmin, canSeeReport, onLogout, onOpenPatchNotes.
+ * imports_from: [react, react-dom, react-router-dom, ../context/ThemeContext, ../context/LocationContext, ./QuickSearch]
  * imported_by: [frontend/src/components/AppShell.jsx]
  * invariants:
- *   - Never scrolls. The content budget (logo 38 + 16 items x 37 + footer 3 x 37 + dividers) must fit the
+ *   - Never scrolls. The content budget (logo 38 + 15 items x 37 + footer 3 x 37 + dividers) must fit the
  *     viewport; a new nav item means shrinking ITEM_H, not adding overflow.
+ *   - Notifications live as the floating corner pod on AppShell main (not a rail row).
  *   - Open/collapsed state persists in localStorage under RAIL_KEY.
  *   - Tooltips and popovers portal to document.body: the rail clips its own children so labels
  *     don't spill during the width transition, which would otherwise clip them too.
@@ -24,7 +25,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { useLocationContext } from '../context/LocationContext';
 import QuickSearch from './QuickSearch';
-import NotificationBell from './NotificationBell';
 import { CURRENT_VERSION } from '../data/patchNotes';
 
 const RAIL_KEY = 'mhmw_rail_open';
@@ -34,11 +34,11 @@ const RAIL_COLLAPSED = 52;
 const RAIL_EXPANDED = 212;
 
 // Handoff spec: 37px rows, and the rail must never scroll. Those two only
-// coexist on a tall enough window — a full admin rail is 19 rows, which needs
-// ~810px and silently loses its last items (Matching, Notifications) on a
-// laptop. The README's own instruction for that case is to reduce item height
-// rather than allow scroll, so the height is computed from the viewport and
-// only reaches the spec's 37px when there's room for it.
+// coexist on a tall enough window — a full admin rail is 18 rows, which needs
+// ~770px and silently loses its last items (Matching) on a short laptop. The
+// README's own instruction for that case is to reduce item height rather than
+// allow scroll, so the height is computed from the viewport and only reaches
+// the spec's 37px when there's room for it.
 const ITEM_H_MAX = 37;
 const ITEM_H_MIN = 26;
 // Padding (18) + logo (38) + two dividers with their margins (19 + 17).
@@ -153,7 +153,6 @@ function RailItem({ icon, label, active, onClick, badge = 0, trigger, open, onHo
 }
 
 export default function Rail({
-    isAuthenticated,
     isAdmin,
     canSeeReport,
     onLogout,
@@ -226,11 +225,11 @@ export default function Rail({
 
     // Fixed rows (Search, Map, Locations, Projects, Job Log, Drafting WL,
     // Events, To-Dos, Install Schedule) plus whatever this user's role unlocks.
+    // Notifications are the floating pod on AppShell, not a rail row.
     const mainItemCount =
         9 +
         (canSeeReport ? 1 : 0) +
-        (isAdmin ? 5 : 0) +
-        (isAuthenticated ? 1 : 0);
+        (isAdmin ? 5 : 0);
     const itemH = fitItemHeight(viewportH, mainItemCount);
 
     const hideTip = useCallback(() => setTip(null), []);
@@ -316,16 +315,6 @@ export default function Rail({
                     {isAdmin && routeItem('/board', 'Ongoing Complaints', ICON.bug)}
                     {isAdmin && routeItem('/tm-tickets', 'T&M', ICON.tm)}
                     {isAdmin && routeItem('/admin/submittal-matching', 'Matching', ICON.matching)}
-                    {isAuthenticated && (
-                        <NotificationBell
-                            variant="rail"
-                            expanded={open}
-                            itemHeight={itemH}
-                            railWidth={railW}
-                            onHoverLabel={showTip}
-                            onLeaveLabel={() => setTip(null)}
-                        />
-                    )}
                 </div>
 
                 <div className="shrink-0" style={{ height: 1, background: 'var(--rail-border)', margin: '8px 0' }} />

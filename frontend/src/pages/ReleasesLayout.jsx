@@ -890,8 +890,10 @@ function ReleasesLayout() {
                                         </div>
                                     </div>
 
-                                    {/* Fixed right: view switcher + project-row chevron */}
-                                    <div className="flex items-center gap-1 shrink-0 pl-0.5">
+                                    {/* Fixed right: view switcher + project-row chevron.
+                                        --notif-pod-gutter (118px in Left Sidebar Mode) keeps
+                                        this cluster clear of the floating notification pod. */}
+                                    <div className="flex items-center gap-1 shrink-0 pl-0.5 notif-pod-reserve">
                                         <ReleasesViewSwitcher />
                                         <button
                                             onClick={() => setIsFilterMinimized(!isFilterMinimized)}

@@ -165,7 +165,7 @@ export default function Subs() {
                             Active releases by installer. Mark whether the subcontractor invoice is paid.
                         </p>
                     </div>
-                    <div className="text-xs text-ink-3 tabular-nums">
+                    <div className="text-xs text-ink-3 tabular-nums notif-pod-reserve">
                         {totals.total} release{totals.total === 1 ? '' : 's'}
                         {totals.total > 0 && (
                             <span className="ml-2">

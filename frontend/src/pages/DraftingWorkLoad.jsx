@@ -298,8 +298,9 @@ function DraftingWorkLoad() {
                         {/* Actions + Filters - fixed, do not scroll */}
                         <div className="flex-shrink-0">
                             <div className="bg-gray-100 dark:bg-slate-700 rounded-md p-1.5 border border-gray-200/80 dark:border-slate-600 flex-shrink-0 space-y-1.5">
-                                {/* Row 2: view mode + primary CTA + Actions + Open/Draft + priority filters */}
-                                <div className="flex items-center gap-1.5 flex-wrap">
+                                {/* Row 2: view mode + primary CTA + Actions + Open/Draft + priority filters.
+                                    notif-pod-reserve keeps the rightmost admin CTAs clear of the floating pod. */}
+                                <div className="flex items-center gap-1.5 flex-wrap notif-pod-reserve">
                                     <ViewToggle value={viewMode} onChange={setViewMode} accent={isDraftTab ? 'green' : 'blue'} />
 
                                     <div className="flex-1" />

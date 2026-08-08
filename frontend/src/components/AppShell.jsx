@@ -12,6 +12,8 @@
  *   - Header height: 3.5rem (h-14) up to 3xl, then 4rem to give 27"+ / TV more room.
  *   - Left rail only when isSidebarMode is on AND width ≥1440px; top header is the default.
  *   - Under 1440px always uses top bar + drawer regardless of isSidebarMode.
+ *   - In Left Sidebar Mode at ≥1440px the notification control is the floating corner pod
+ *     on <main> (not a rail row); topbar mode keeps the header bell. Only one mounts at a time.
  */
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
@@ -40,6 +42,21 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
   const [canSeeReport, setCanSeeReport] = useState(false);
   const [canUseBBChat, setCanUseBBChat] = useState(false);
   const [showPatchNotes, setShowPatchNotes] = useState(false);
+  // Rail chrome only applies at ≥1440px (matches AppShell header/rail CSS). Used so we
+  // mount exactly one NotificationBell — never a hidden topbar instance polling in parallel
+  // with the floating pod.
+  const [wideForRail, setWideForRail] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 1440px)').matches
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const mq = window.matchMedia('(min-width: 1440px)');
+    const onChange = () => setWideForRail(mq.matches);
+    onChange();
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -51,6 +68,10 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
       });
     }
   }, [isAuthenticated]);
+
+  // Pod replaces the rail row at wide sidebar mode; topbar bell covers every other case.
+  const showNotifPod = isAuthenticated && useRail && wideForRail;
+  const showTopbarBell = isAuthenticated && !showNotifPod;
 
   useEffect(() => {
     if (!showThemeMenu) return;
@@ -106,7 +127,6 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
       {useRail && (
         <div className="hidden min-[1440px]:flex sticky top-0 h-screen">
           <Rail
-            isAuthenticated={isAuthenticated}
             isAdmin={isAdmin}
             canSeeReport={canSeeReport}
             onLogout={handleLogout}
@@ -207,8 +227,8 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
             </>
           )}
 
-          {/* Notification bell (always visible if authenticated) */}
-          {isAuthenticated && <NotificationBell />}
+          {/* Notification bell — topbar / narrow. Wide Left Sidebar Mode uses the pod on <main>. */}
+          {showTopbarBell && <NotificationBell />}
 
           {/* Theme picker (always visible) */}
           <div className="relative" data-theme-menu>
@@ -327,8 +347,17 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
 
       <PatchNotesModal isOpen={showPatchNotes} onClose={() => setShowPatchNotes(false)} isAdmin={isAdmin} />
 
-      {/* Main content */}
-      <main className="flex-1 w-full min-h-0 flex flex-col">
+      {/* Main content. Pod is fixed to this corner in Left Sidebar Mode so every
+          page inherits one hard-to-miss notification trigger. --notif-pod-gutter
+          (see index.css) reserves space for toolbars that would sit under it. */}
+      <main className="relative flex-1 w-full min-h-0 flex flex-col">
+        {showNotifPod && (
+          <div className="absolute top-2.5 right-3 z-50 pointer-events-none">
+            <div className="pointer-events-auto">
+              <NotificationBell variant="pod" />
+            </div>
+          </div>
+        )}
         <Outlet />
       </main>
       </div>

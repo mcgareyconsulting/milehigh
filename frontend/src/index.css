@@ -121,6 +121,9 @@ body>#root>div>div {
    top bar opt out via .app-shell-topbar. */
 :root {
   --app-chrome-h: 3.5rem;
+  /* Width reserved for the floating notification pod (Left Sidebar Mode only).
+     0 by default; toolbars that would sit under the pod apply .notif-pod-reserve. */
+  --notif-pod-gutter: 0px;
 }
 
 @media (min-width: 1920px) {
@@ -132,7 +135,16 @@ body>#root>div>div {
 @media (min-width: 1440px) {
   .app-shell:not(.app-shell-topbar) {
     --app-chrome-h: 0px;
+    /* Compact circular pod (~40px) + a little air so badges/hang styles clear. */
+    --notif-pod-gutter: 52px;
   }
+}
+
+/* Right-side margin matching the floating pod. No-op outside Left Sidebar Mode
+   (--notif-pod-gutter is 0). Use on toolbar clusters / page headers that would
+   otherwise sit under the absolute top-right pill. */
+.notif-pod-reserve {
+  margin-right: var(--notif-pod-gutter);
 }
 
 /* Custom scrollbar */

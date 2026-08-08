@@ -188,7 +188,7 @@ function Metrics() {
             {/* Header */}
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <h1 className="text-xl font-bold text-ink">System Metrics</h1>
-                <div className="inline-flex rounded-lg border border-hairline overflow-hidden">
+                <div className="inline-flex rounded-lg border border-hairline overflow-hidden notif-pod-reserve">
                     {PERIODS.map((p) => (
                         <button
                             key={p.key}

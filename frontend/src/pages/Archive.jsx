@@ -273,7 +273,7 @@ function Archive() {
                                         ⟳ Refresh
                                     </button>
                                 </div>
-                                <div className="ml-auto">
+                                <div className="ml-auto notif-pod-reserve">
                                     <button
                                         onClick={() => setIsFilterMinimized(!isFilterMinimized)}
                                         className="p-1.5 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors"

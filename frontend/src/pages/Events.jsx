@@ -98,7 +98,7 @@ function Events() {
                 {/* Subtle outer pad + gap between filter and table — no heavy white card (Job Log shell). */}
                 <div className="bg-surface overflow-hidden flex flex-col flex-1 min-h-0 p-1.5 gap-1.5">
                     <div className="bg-surface-2 p-1.5 rounded-md border border-hairline flex-shrink-0 space-y-1.5">
-                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap min-w-0 notif-pod-reserve">
                             <h1 className="text-sm font-bold text-ink whitespace-nowrap pr-1">Job Events</h1>
                             <div className="flex items-center gap-1.5">
                                 <label className={labelClass}>Date:</label>

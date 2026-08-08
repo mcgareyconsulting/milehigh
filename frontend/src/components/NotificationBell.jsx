@@ -5,7 +5,7 @@
  * exports:
  *   NotificationBell: Default export — renders bell icon with unread badge, dropdown list, desktop opt-in, and toast stack
  * imports_from: [react, react-dom, react-router-dom, ../services/notificationApi, ../utils/desktopNotifications]
- * imported_by: [frontend/src/components/AppShell.jsx, frontend/src/components/Rail.jsx]
+ * imported_by: [frontend/src/components/AppShell.jsx]
  * invariants:
  *   - Polls /brain/notifications/unread-count every 30 seconds; pauses are NOT visibility-gated (runs even in background tabs).
  *   - Toast auto-dismisses after 5s with a 300ms exit animation — changing timing requires matching CSS animation duration.
@@ -14,6 +14,9 @@
  *   - Desktop banners require Chrome permission + localStorage preference; fire on new arrivals even if tab is focused.
  *   - Rail variant portals the panel to document.body (rail has overflow:hidden + sticky ancestors);
  *     in-tree fixed positioning is clipped and stacks under the rail chrome.
+ *   - Pod variant uses the in-tree absolute right-0 panel (same as topbar); mount it over the content
+ *     corner — AppShell main when Left Sidebar Mode is on. Compact circle: bell + hanging count badge
+ *     (no "new" label); zero unread is icon-only.
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -38,6 +41,67 @@ const PANEL_MAX_H = 384; // max-h-96
 const PANEL_GAP = 6;
 const VIEWPORT_PAD = 8;
 
+function formatCount(n) {
+    return n > 99 ? '99+' : String(n);
+}
+
+const POD_BELL_PATH = 'M6 9a6 6 0 1 1 12 0v5l2 3H4l2-3z M10 20a2 2 0 0 0 4 0';
+
+/**
+ * Floating corner trigger: surface circle + bell, with the unread count hanging
+ * off the top-right (surface ring) so it reads as a notification bubble.
+ */
+function PodTrigger({ unreadCount, open, onOpen }) {
+    const count = unreadCount > 0 ? formatCount(unreadCount) : null;
+    const label = count
+        ? `Notifications, ${unreadCount} unread`
+        : 'Notifications';
+
+    return (
+        <button
+            type="button"
+            onClick={onOpen}
+            aria-label={label}
+            aria-expanded={open}
+            className="relative grid place-items-center rounded-full bg-surface border border-hairline
+                       text-ink-2 transition-colors hover:bg-surface-2
+                       focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2
+                       focus:ring-offset-canvas"
+            style={{
+                width: 40,
+                height: 40,
+                boxShadow: 'var(--shadow)',
+            }}
+        >
+            <span className="relative grid place-items-center" style={{ width: 20, height: 20 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d={POD_BELL_PATH} />
+                </svg>
+                {count && (
+                    <span
+                        className="absolute grid place-items-center font-bold text-white pointer-events-none tabular-nums"
+                        style={{
+                            background: '#e0483c',
+                            borderRadius: 999,
+                            fontSize: count.length > 2 ? 9 : 10,
+                            minWidth: 18,
+                            height: 18,
+                            padding: '0 4px',
+                            top: -10,
+                            right: -12,
+                            boxShadow: '0 0 0 2px var(--surface)',
+                            lineHeight: 1,
+                        }}
+                    >
+                        {count}
+                    </span>
+                )}
+            </span>
+        </button>
+    );
+}
+
 function timeAgo(dateStr) {
     const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
     if (seconds < 60) return 'just now';
@@ -60,9 +124,9 @@ function getActionText(message, boardItemTitle) {
 /**
  * @param variant 'topbar' (default) renders the round icon button the top bar
  *   has always used. 'rail' renders a full-width left-rail row and portals the
- *   dropdown to a fixed position beside the rail — the rail clips its children,
- *   so an in-tree `absolute right-0` panel would be both cut off and pointed
- *   the wrong way off the left edge of the screen.
+ *   dropdown to a fixed position beside the rail. 'pod' renders a floating
+ *   pill intended to be absolutely positioned over the top-right corner of the
+ *   content area — the in-tree `absolute right-0` panel is correct there.
  */
 export default function NotificationBell({
     variant = 'topbar',
@@ -352,6 +416,7 @@ export default function NotificationBell({
     const desktopOn = desktopPref === 'on' && desktopPerm === 'granted';
 
     const isRail = variant === 'rail';
+    const isPod = variant === 'pod';
 
     const panelBody = open ? (
         <div
@@ -360,7 +425,7 @@ export default function NotificationBell({
             className={
                 isRail
                     ? 'fixed overflow-y-auto bg-surface border border-hairline rounded-xl shadow-lg z-[60]'
-                    : 'absolute right-0 mt-2 w-96 max-h-96 overflow-y-auto bg-surface border border-hairline rounded-xl shadow-lg z-50'
+                    : 'absolute right-0 mt-2 w-96 max-h-96 overflow-y-auto bg-surface border border-hairline rounded-xl shadow-lg z-[60]'
             }
             style={
                 isRail && railPanelPos
@@ -489,7 +554,9 @@ export default function NotificationBell({
 
     return (
         <div ref={ref} className={isRail ? 'relative w-full shrink-0' : 'relative'}>
-            {isRail ? (
+            {isPod ? (
+                <PodTrigger unreadCount={unreadCount} open={open} onOpen={handleOpen} />
+            ) : isRail ? (
                 <button
                     type="button"
                     onClick={handleOpen}

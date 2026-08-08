@@ -463,7 +463,7 @@ export default function Projects() {
               value={q}
               onChange={e => setQ(e.target.value)}
               placeholder="Search projects, job #, GC, PM…"
-              className="w-full sm:w-72 px-3 py-2 text-sm rounded-lg bg-white/10 ring-1 ring-inset ring-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/50"
+              className="w-full sm:w-72 notif-pod-reserve px-3 py-2 text-sm rounded-lg bg-white/10 ring-1 ring-inset ring-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/50"
             />
           </div>
 

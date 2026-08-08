@@ -331,7 +331,7 @@ export default function Meetings() {
             {/* Header */}
             <div className="flex items-center justify-between gap-3 mb-4">
                 <h1 className="text-xl font-bold text-ink">Meetings &amp; Action Items</h1>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 notif-pod-reserve">
                     <button onClick={runScan} title="Send due-date notifications now"
                         className="text-[11px] px-2 py-1.5 rounded-md border border-hairline-strong text-ink-2 hover:bg-surface-2">
                         Scan due
