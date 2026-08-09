@@ -8,6 +8,7 @@ read-only), plus:
   - get_project_pipeline    → active releases + open drafting for one job
   - build_project_lookahead → GC-facing multi-phase 3-week production schedule model
   - render_project_lookahead_pdf → print-ready PDF artifact + download path
+  - EOS scorecard metrics   → get_eos_metric / get_eos_metrics_for_owner (David/Bill/Luis/Doug)
 
 Each tool has a JSON-Schema definition in `TOOL_DEFINITIONS` and an executor in
 `TOOL_EXECUTORS`. User-scoped tools read `context["user_id"]` — never a model-supplied id.
@@ -35,6 +36,7 @@ from app.models import (
     db,
 )
 
+from . import eos_metrics
 from .assembler import assemble
 
 logger = get_logger(__name__)
@@ -49,8 +51,30 @@ TOOL_NOTIFICATIONS = "get_my_notifications"
 TOOL_PROJECT_PIPELINE = "get_project_pipeline"
 TOOL_PROJECT_LOOKAHEAD = "build_project_lookahead"
 TOOL_RENDER_LOOKAHEAD_PDF = "render_project_lookahead_pdf"
+TOOL_EOS_METRIC = "get_eos_metric"
+TOOL_EOS_FOR_OWNER = "get_eos_metrics_for_owner"
+# Backward-compatible alias for David's metric (same as get_eos_metric).
+TOOL_HOURS_RELEASED = "get_hours_released_to_production"
 
 MAX_RESULTS = 25
+
+_WEEK_PROPS = {
+    "weeks_back": {
+        "type": "integer",
+        "description": (
+            "0 = week containing today (default), 1 = previous Mon–Sun week, "
+            "2 = two weeks ago, etc. Ignored when week_of is set."
+        ),
+        "default": 0,
+    },
+    "week_of": {
+        "type": "string",
+        "description": (
+            "Optional ISO date (YYYY-MM-DD) anywhere in the desired Mon–Sun week. "
+            "Overrides weeks_back when provided."
+        ),
+    },
+}
 
 TOOL_DEFINITIONS = [
     {
@@ -246,6 +270,73 @@ TOOL_DEFINITIONS = [
                 },
             },
             "required": ["job"],
+        },
+    },
+    {
+        "name": TOOL_EOS_METRIC,
+        "description": (
+            "One EOS leadership scorecard metric for a Mon–Sun week (Mountain). "
+            "metric ids: hours_released_to_production (David Servold / drafting — new "
+            "releases + fab hrs by released date); yellow_dates (Bill O'Neill — count of "
+            "past hard start-install dates, goal 0); fabrication_hours (Luis Solano — shop "
+            "fab hrs completed via stage transitions); qc_completed (Luis — % of post-fab "
+            "moves that hit Welded QC); fab_backlog (Luis — remaining fab hrs snapshot); "
+            "tm_hours (Doug Ferrin — T&M labor hrs); target_dates_met (Doug — % of hard "
+            "install dates in week that are complete); releases_met_or_allocated (Doug — % "
+            "with install date in week that are complete or have an installer). "
+            "Use when the user names a metric, says 'EOS', 'scorecard', or an owner's "
+            "number (David/Bill/Luis/Doug). Prefer get_eos_metrics_for_owner when they want "
+            "everything for one person. Week default = current; weeks_back=1 = last week."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "metric": {
+                    "type": "string",
+                    "description": (
+                        "Metric id, e.g. hours_released_to_production, yellow_dates, "
+                        "fabrication_hours, qc_completed, fab_backlog, tm_hours, "
+                        "target_dates_met, releases_met_or_allocated."
+                    ),
+                },
+                **_WEEK_PROPS,
+            },
+            "required": ["metric"],
+        },
+    },
+    {
+        "name": TOOL_EOS_FOR_OWNER,
+        "description": (
+            "All ready EOS scorecard metrics for one owner. Owners: David (drafting — hours "
+            "released to production), Bill (yellow dates), Luis (fabrication hours, QC "
+            "completed, fab backlog), Doug (T&M hours, target dates met, releases met or "
+            "allocated). Use for 'pull my EOS metrics', 'David's numbers', 'Luis shop "
+            "scorecard', 'Doug's field metrics'. If owner is omitted, uses the signed-in "
+            "user when they match David/Bill/Luis/Doug."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "owner": {
+                    "type": "string",
+                    "description": "David, Bill, Luis, or Doug (optional if session user matches).",
+                },
+                **_WEEK_PROPS,
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": TOOL_HOURS_RELEASED,
+        "description": (
+            "Alias for get_eos_metric(metric=hours_released_to_production). David's drafting "
+            "metric: new releases this Mon–Sun week + sum of fab_hrs by released date. "
+            "Non-archived only; zero fab_hrs still count."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {**_WEEK_PROPS},
+            "required": [],
         },
     },
 ]
@@ -622,7 +713,53 @@ def render_project_lookahead_pdf(
     return build_project_lookahead(job, weeks=weeks, include_pdf=True, context=context)
 
 
-USER_SCOPED_TOOLS = {TOOL_NOTIFICATIONS}
+# Re-export week helpers for tests that imported them from tools.
+mon_sun_week_bounds = eos_metrics.mon_sun_week_bounds
+_mountain_today = eos_metrics.mountain_today
+
+
+def get_hours_released_to_production(
+    weeks_back: int = 0,
+    week_of: str | None = None,
+) -> dict[str, Any]:
+    """David Servold — Hours Released to Production (thin wrapper)."""
+    return eos_metrics.hours_released_to_production(
+        weeks_back=weeks_back, week_of=week_of
+    )
+
+
+def get_eos_metric(
+    metric: str,
+    weeks_back: int = 0,
+    week_of: str | None = None,
+) -> dict[str, Any]:
+    return eos_metrics.get_eos_metric(
+        metric=metric, weeks_back=weeks_back, week_of=week_of
+    )
+
+
+def get_eos_metrics_for_owner(
+    owner: str | None = None,
+    weeks_back: int = 0,
+    week_of: str | None = None,
+    *,
+    context: dict | None = None,
+) -> dict[str, Any]:
+    """Owner bundle; resolves signed-in user when owner is omitted."""
+    user = None
+    ctx = context or {}
+    uid = ctx.get("user_id")
+    if uid is not None:
+        user = db.session.get(User, uid)
+    return eos_metrics.get_eos_metrics_for_owner(
+        owner=owner,
+        weeks_back=weeks_back,
+        week_of=week_of,
+        user=user,
+    )
+
+
+USER_SCOPED_TOOLS = {TOOL_NOTIFICATIONS, TOOL_EOS_FOR_OWNER}
 
 TOOL_EXECUTORS = {
     TOOL_SEARCH_BY_ID: search_jobs_by_identifier,
@@ -635,6 +772,9 @@ TOOL_EXECUTORS = {
     TOOL_PROJECT_PIPELINE: get_project_pipeline,
     TOOL_PROJECT_LOOKAHEAD: build_project_lookahead,
     TOOL_RENDER_LOOKAHEAD_PDF: render_project_lookahead_pdf,
+    TOOL_EOS_METRIC: get_eos_metric,
+    TOOL_EOS_FOR_OWNER: get_eos_metrics_for_owner,
+    TOOL_HOURS_RELEASED: get_hours_released_to_production,
 }
 
 
@@ -646,7 +786,7 @@ def execute_tool(name: str, arguments: dict, context: dict | None = None) -> dic
     try:
         if name == TOOL_NOTIFICATIONS:
             return fn(context or {}, **(arguments or {}))
-        if name in (TOOL_RENDER_LOOKAHEAD_PDF, TOOL_PROJECT_LOOKAHEAD):
+        if name in (TOOL_RENDER_LOOKAHEAD_PDF, TOOL_PROJECT_LOOKAHEAD, TOOL_EOS_FOR_OWNER):
             return fn(**(arguments or {}), context=context or {})
         return fn(**(arguments or {}))
     except TypeError as exc:
