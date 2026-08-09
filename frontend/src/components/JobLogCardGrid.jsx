@@ -83,7 +83,7 @@ export default function JobLogCardGrid({
                             key={row.id}
                             job={row}
                             onOpen={(job) => openHub(job, 'details')}
-                            onOpenDrawings={(job) => openHub(job, 'drawings')}
+                            onOpenDrawings={(job) => openHub(job, 'attachments')}
                             onUpdate={onUpdate}
                             stageToGroup={stageToGroup}
                             stageGroupColors={stageGroupColors}

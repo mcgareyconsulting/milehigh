@@ -48,12 +48,20 @@ describe('summarizeActivity', () => {
         expect(s.author).toBe('Trello');
     });
 
-    it('only treats date + stage actions as feed material', () => {
+    it('includes stage, fab, and date actions (notes handled separately)', () => {
         expect(ACTIVITY_ACTIONS.has('update_notes')).toBe(false);
-        expect(ACTIVITY_ACTIONS.has('update_fab_order')).toBe(false);
+        expect(ACTIVITY_ACTIONS.has('update_fab_order')).toBe(true);
         expect(ACTIVITY_ACTIONS.has('update_stage')).toBe(true);
         expect(ACTIVITY_ACTIONS.has('update_ship_date')).toBe(true);
         expect(ACTIVITY_ACTIONS.has('update_start_install')).toBe(true);
         expect(ACTIVITY_ACTIONS.has('clear_hard_date')).toBe(true);
+    });
+
+    it('formats fab order transitions', () => {
+        expect(summarizeActivity({
+            action: 'update_fab_order',
+            user_name: 'David',
+            payload: { from: 3, to: 1 },
+        }).text).toBe('Fab Order 3 → 1');
     });
 });

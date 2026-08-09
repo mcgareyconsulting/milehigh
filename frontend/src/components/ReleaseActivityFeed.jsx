@@ -1,31 +1,32 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Shared helpers for date/stage activity summaries used by the release hub
- *   right rail (intermingled with notes). Display-only over ReleaseEvents.
+ * purpose: Shared helpers for the release hub Activity rail (notes + stage/date/fab).
  * exports:
- *   ACTIVITY_ACTIONS: Set of event actions that count as date/stage updates.
- *   summarizeActivity: One human sentence + author for a ReleaseEvents row.
+ *   ACTIVITY_ACTIONS: Set of non-note event actions that appear in the rail
+ *   summarizeActivity: One human sentence + author for a ReleaseEvents row
+ *   formatDateValue: Display a date payload without UTC off-by-one
  * imports_from: []
  * imported_by: [frontend/src/components/ReleaseNotesRail.jsx,
  *   frontend/src/components/ReleaseActivityFeed.test.jsx]
  * invariants:
- *   - Dates and stage changes only: update_stage, update_ship_date, update_start_install,
- *     clear_hard_date. Notes stay on their own action.
- *   - Pure helpers — no network, no React render of a standalone feed.
+ *   - Activity rail: notes (separate action), stage, fab order, ship date, start install,
+ *     clear_hard_date. Everything else stays on Change Log only.
+ *   - Pure helpers — no network, no React.
  * updated_by_agent: 2026-08-08T00:00:00Z
  */
 
-/** Actions that belong in the mixed activity rail (roadmap N7: dates + stage). */
+/** Non-note actions that belong in the mixed activity rail. */
 export const ACTIVITY_ACTIONS = new Set([
     'update_stage',
+    'update_fab_order',
     'update_ship_date',
     'update_start_install',
     'clear_hard_date',
 ]);
 
 /** Display a date payload value (ISO date or ASAP flag) without UTC off-by-one. */
-const formatDateValue = (value) => {
+export const formatDateValue = (value) => {
     if (value == null || value === '') return null;
     const s = String(value);
     if (/^asap$/i.test(s.trim())) return 'ASAP';
@@ -39,14 +40,15 @@ const formatDateValue = (value) => {
     return s;
 };
 
-const fromTo = (payload = {}) => {
+export const fromTo = (payload = {}) => {
     const from = payload.from ?? payload.old ?? payload.old_value ?? null;
     const to = payload.to ?? payload.new ?? payload.new_value ?? null;
     return { from, to };
 };
 
 /**
- * One human sentence per event. Full undo / payload detail lives on the Change Log tab.
+ * One human sentence per event (Change Log / fallbacks). Rich chip rendering
+ * in the rail uses structured fields from buildTimeline instead.
  */
 export function summarizeActivity(event) {
     const action = event.action;
@@ -58,6 +60,14 @@ export function summarizeActivity(event) {
         if (from && to && from !== to) return { text: `Stage ${from} → ${to}`, author };
         if (to) return { text: `Stage set to ${to}`, author };
         return { text: 'Stage updated', author };
+    }
+
+    if (action === 'update_fab_order') {
+        if (from != null && to != null && String(from) !== String(to)) {
+            return { text: `Fab Order ${from} → ${to}`, author };
+        }
+        if (to != null) return { text: `Fab Order set to ${to}`, author };
+        return { text: 'Fab Order updated', author };
     }
 
     if (action === 'update_ship_date') {
