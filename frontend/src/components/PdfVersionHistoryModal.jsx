@@ -1,12 +1,10 @@
 /**
- * Attachment hub for a release, split into two columns:
- *   - Drawings: the saved PDF version history. Each row offers View (read-only)
- *     and Edit (opens the markup modal seeded from that version).
- *   - Photos: a flat list of image attachments, each with an editable optional
- *     note. A "Take photo" button captures straight from the device camera.
+ * Attachment hub for a release:
+ *   - Standalone modal: two-column drawings + photos (legacy layout).
+ *   - Embedded in ReleaseHubModal: left rail (drawings/findings/photos) + thin
+ *     read-only PDF viewer on the right with finding cite jumps.
  *
- * The single "Choose file" picker lives above both columns: PDFs are routed to
- * the Drawings flow (next version), images are routed to the Photos flow.
+ * PDFs → drawing versions; images → photos. Markup authoring stays in PdfMarkupModal.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -15,6 +13,8 @@ import { jobsApi } from '../services/jobsApi';
 import { fetchMentionableUsers } from '../services/notificationApi';
 import { checkAuth } from '../utils/auth';
 import { BBReviewPanel } from './BBReviewPanel';
+import { PdfReadViewer } from './PdfReadViewer';
+import { actionableCount } from './bbReview/urgency';
 import MentionInput from './shared/MentionInput';
 
 const isPdfFile = (file) =>
@@ -55,6 +55,9 @@ export function PdfVersionHistoryModal({
     // header, Close button) so the hub modal can host the body inside a tab.
     // The host owns closing; only the gate-confirm action survives in the footer.
     embedded = false,
+    // Optional: report total actionable Carmen findings for the hub tab badge.
+    // Wired fully when reviews are prefetched; safe no-op until then.
+    onActionableCount = null,
 }) {
     const [versions, setVersions] = useState([]);
     const [photos, setPhotos] = useState([]);
@@ -70,10 +73,18 @@ export function PdfVersionHistoryModal({
     const [commentDrafts, setCommentDrafts] = useState({});            // versionId -> string
     const [commentBusy, setCommentBusy] = useState({});               // versionId -> bool
     const [mentionableUsers, setMentionableUsers] = useState([]);
-    // Carmen review is admin-only (backend also enforces @admin_required); gate the panel UX.
-    const [isAdmin, setIsAdmin] = useState(false);
+    // Carmen review loop: admin OR drafter (backend: drafter_or_admin_required).
+    const [canReview, setCanReview] = useState(false);
+    // Embedded hub: which version is in the right-pane viewer + cite bar.
+    const [viewingVersionId, setViewingVersionId] = useState(null);
+    const [citePage, setCitePage] = useState(null);
+    const [citeRuleId, setCiteRuleId] = useState(null);
+    // versionId → actionable finding count (for hub tab badge).
+    const [flagsByVersion, setFlagsByVersion] = useState({});
     const fileInputRef = useRef(null);
+    const pdfInputRef = useRef(null);
     const cameraInputRef = useRef(null);
+    const photoInputRef = useRef(null);
 
     const loadVersions = async () => {
         if (!releaseId) return;
@@ -126,11 +137,52 @@ export function PdfVersionHistoryModal({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
-    // Admin gate for the Carmen review panel — resolved once when the modal opens.
+    // Admin or drafter may run/view Carmen reviews on a version.
     useEffect(() => {
         if (!isOpen) return;
-        checkAuth().then((u) => setIsAdmin(!!u?.is_admin)).catch(() => setIsAdmin(false));
+        checkAuth()
+            .then((u) => setCanReview(!!(u?.is_admin || u?.is_drafter)))
+            .catch(() => setCanReview(false));
     }, [isOpen]);
+
+    // Default the embedded viewer to the newest drawing once versions load.
+    useEffect(() => {
+        if (!embedded || !versions.length) return;
+        setViewingVersionId((cur) => {
+            if (cur != null && versions.some((v) => v.id === cur)) return cur;
+            return versions[0].id;
+        });
+    }, [embedded, versions]);
+
+    // Sum actionable flags → hub Attachments tab badge.
+    useEffect(() => {
+        if (!onActionableCount) return;
+        const total = Object.values(flagsByVersion).reduce((s, n) => s + (Number(n) || 0), 0);
+        onActionableCount(total);
+    }, [flagsByVersion, onActionableCount]);
+
+    // Prefetch reviews for badge when reviewer can access Carmen.
+    useEffect(() => {
+        if (!isOpen || !canReview || !releaseId || !versions.length) return;
+        let cancelled = false;
+        (async () => {
+            const next = {};
+            await Promise.all(versions.map(async (v) => {
+                try {
+                    const r = await jobsApi.getBBReview(releaseId, v.id);
+                    if (r?.status === 'complete') {
+                        next[v.id] = actionableCount(r.findings || []);
+                    } else {
+                        next[v.id] = 0;
+                    }
+                } catch {
+                    next[v.id] = 0;
+                }
+            }));
+            if (!cancelled) setFlagsByVersion((prev) => ({ ...prev, ...next }));
+        })();
+        return () => { cancelled = true; };
+    }, [isOpen, canReview, releaseId, versions]);
 
     // Auto-expand the version a notification pointed at, once it appears.
     useEffect(() => {
@@ -338,31 +390,7 @@ export function PdfVersionHistoryModal({
                         PDFs go to Drawings; images go to Photos.
                     </span>
                     {(uploading || photoBusy) && <span className="text-sm text-gray-500 dark:text-slate-400">Uploading…</span>}
-                    {/* Embedded: the Procore link has no header to live in, so it
-                        rides at the end of the toolbar instead. */}
-                    {embedded && (
-                        <span className="ml-auto">
-                            {hasViewerUrl ? (
-                                <a
-                                    href={viewerUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-accent-600 text-white hover:bg-accent-700 whitespace-nowrap"
-                                    title="Open this drawing in Procore"
-                                >
-                                    ↗ View in Procore
-                                </a>
-                            ) : (
-                                <span
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-gray-200 dark:bg-slate-600 text-gray-500 dark:text-slate-400 cursor-help select-none whitespace-nowrap"
-                                    title="No FC link found"
-                                    aria-disabled="true"
-                                >
-                                    ↗ View in Procore
-                                </span>
-                            )}
-                        </span>
-                    )}
+                    {/* Embedded hub: Procore lives on the ReleaseHub header — no duplicate link. */}
                 </div>
 
                 {gateStage && (
@@ -493,11 +521,11 @@ export function PdfVersionHistoryModal({
                                             )}
                                         </div>
 
-                                        {/* Carmen Miranda code-compliance review (admin-only) */}
+                                        {/* Carmen review — admin or drafter */}
                                         <BBReviewPanel
                                             releaseId={releaseId}
                                             versionId={v.id}
-                                            enabled={isAdmin}
+                                            enabled={canReview}
                                         />
                                     </li>
                                     );
@@ -628,10 +656,341 @@ export function PdfVersionHistoryModal({
         </>
     );
 
-    // The hub renders the body directly inside its tab pane; the surface follows
-    // the theme so the tab matches the Details pane beside it.
+    // ── Embedded hub: left rail + thin read viewer ─────────────────────────
     if (embedded) {
-        return <div className="flex flex-col flex-1 min-h-0 bg-white dark:bg-slate-800">{body}</div>;
+        const viewing = versions.find((v) => v.id === viewingVersionId) || null;
+        const fileUrl = viewing
+            ? `${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions/${viewing.id}/file`
+            : null;
+        const fileName = viewing
+            ? (viewing.original_filename || `v${viewing.version_number}.pdf`)
+            : '';
+
+        const openInViewer = (versionId) => {
+            setViewingVersionId(versionId);
+            setCitePage(null);
+            setCiteRuleId(null);
+        };
+
+        const handleCite = (page, ruleId) => {
+            setCitePage(page);
+            setCiteRuleId(ruleId);
+        };
+
+        const pillBtn = {
+            fontSize: 11.5,
+            padding: '4px 10px',
+            borderRadius: 999,
+            border: 0,
+            cursor: 'pointer',
+            fontWeight: 600,
+        };
+
+        return (
+            <div className="flex flex-1 min-h-0 bg-surface">
+                {/* Left rail */}
+                <div
+                    className="shrink-0 flex flex-col min-h-0 border-r border-hairline bg-surface overflow-hidden"
+                    style={{ width: 404 }}
+                >
+                    <div className="flex-1 min-h-0 overflow-y-auto" style={{ padding: '12px 14px 18px' }}>
+                        {error && (
+                            <p className="text-sm mb-2" style={{ color: 'var(--fl-red-bg)' }}>{error}</p>
+                        )}
+
+                        {/* DRAWINGS */}
+                        <div className="flex items-center justify-between gap-2" style={{ marginBottom: 10 }}>
+                            <span className="text-jl-label font-bold uppercase text-ink-3">Drawings</span>
+                            <div className="flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => pdfInputRef.current?.click()}
+                                    disabled={uploading}
+                                    style={{
+                                        ...pillBtn,
+                                        background: 'var(--accent-soft)',
+                                        color: 'var(--accent)',
+                                        opacity: uploading ? 0.5 : 1,
+                                    }}
+                                >
+                                    {uploading ? 'Uploading…' : '+ Upload PDF'}
+                                </button>
+                                <input
+                                    ref={pdfInputRef}
+                                    type="file"
+                                    accept="application/pdf,.pdf"
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) await uploadDrawing(file);
+                                        if (pdfInputRef.current) pdfInputRef.current.value = '';
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        {loading && <p className="text-jl-2 text-ink-3 italic">Loading…</p>}
+                        {!loading && versions.length === 0 && (
+                            <p className="text-jl-2 text-ink-3 italic" style={{ marginBottom: 16 }}>
+                                No drawings yet — upload a PDF to create v1.
+                            </p>
+                        )}
+                        {!loading && versions.length > 0 && (
+                            <ul className="space-y-2.5" style={{ marginBottom: 18 }}>
+                                {versions.map((v) => {
+                                    const active = v.id === viewingVersionId;
+                                    const flags = flagsByVersion[v.id] || 0;
+                                    return (
+                                        <li
+                                            key={v.id}
+                                            className="border border-hairline bg-surface"
+                                            style={{
+                                                borderRadius: 10,
+                                                padding: 12,
+                                                boxShadow: active ? 'inset 0 0 0 1.5px var(--accent)' : undefined,
+                                            }}
+                                        >
+                                            <div className="flex items-baseline gap-2 flex-wrap">
+                                                <span className="font-semibold text-ink truncate" style={{ fontSize: 13 }}>
+                                                    {v.original_filename || `Drawing v${v.version_number}`}
+                                                </span>
+                                                <span className="font-mono text-ink-3" style={{ fontSize: 11 }}>
+                                                    v{v.version_number}
+                                                </span>
+                                                <span className="text-ink-3 ml-auto" style={{ fontSize: 11 }}>
+                                                    {fmtSize(v.file_size_bytes)}
+                                                </span>
+                                            </div>
+                                            <p className="text-ink-3" style={{ fontSize: 11.5, marginTop: 3 }}>
+                                                {fmtDate(v.uploaded_at)}
+                                                {v.uploaded_by?.name ? ` · ${v.uploaded_by.name}` : ''}
+                                            </p>
+                                            {flags > 0 && (
+                                                <span
+                                                    className="inline-block font-mono font-semibold"
+                                                    style={{
+                                                        marginTop: 6,
+                                                        fontSize: 10.5,
+                                                        padding: '1px 6px',
+                                                        borderRadius: 999,
+                                                        background: '#fef3c7',
+                                                        color: '#b45309',
+                                                    }}
+                                                >
+                                                    ⚠ {flags} to confirm
+                                                </span>
+                                            )}
+                                            <div className="flex items-center flex-wrap" style={{ gap: 8, marginTop: 8 }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openInViewer(v.id)}
+                                                    className="text-brand font-semibold bg-transparent border-0 cursor-pointer"
+                                                    style={{ fontSize: 12 }}
+                                                >
+                                                    View
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onOpenVersion?.(v.id, 'edit')}
+                                                    className="text-ink-2 font-semibold bg-transparent border-0 cursor-pointer"
+                                                    style={{ fontSize: 12 }}
+                                                >
+                                                    Edit markup
+                                                </button>
+                                            </div>
+                                            {canReview && (
+                                                <BBReviewPanel
+                                                    releaseId={releaseId}
+                                                    versionId={v.id}
+                                                    enabled
+                                                    autoLoad
+                                                    defaultOpen={active && flags > 0}
+                                                    onCite={(page, ruleId) => {
+                                                        openInViewer(v.id);
+                                                        handleCite(page, ruleId);
+                                                    }}
+                                                    onFlagsChange={(n) => {
+                                                        setFlagsByVersion((prev) => (
+                                                            prev[v.id] === n ? prev : { ...prev, [v.id]: n }
+                                                        ));
+                                                    }}
+                                                />
+                                            )}
+                                            {/* Comments still available */}
+                                            <div className="mt-2 pt-2 border-t border-hairline">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleComments(v.id)}
+                                                    className="text-xs font-medium text-brand bg-transparent border-0 cursor-pointer flex items-center gap-1"
+                                                >
+                                                    <span>{expandedComments[v.id] ? '▾' : '▸'}</span>
+                                                    Comments
+                                                    {commentsByVersion[v.id]?.length
+                                                        ? ` (${commentsByVersion[v.id].length})`
+                                                        : ''}
+                                                </button>
+                                                {expandedComments[v.id] && (
+                                                    <div className="mt-2 space-y-2">
+                                                        {commentsByVersion[v.id] === undefined && (
+                                                            <p className="text-xs text-ink-3 italic">Loading…</p>
+                                                        )}
+                                                        {commentsByVersion[v.id]?.map((c) => (
+                                                            <div key={c.id} className="text-sm">
+                                                                <div className="flex items-baseline gap-2">
+                                                                    <span className="font-semibold text-ink">{c.author_name}</span>
+                                                                    <span className="text-xs text-ink-3">{fmtDate(c.created_at)}</span>
+                                                                </div>
+                                                                <p className="text-ink-2 break-words whitespace-pre-wrap">
+                                                                    {renderCommentBody(c.body)}
+                                                                </p>
+                                                            </div>
+                                                        ))}
+                                                        <div className="flex items-end gap-2 pt-1">
+                                                            <MentionInput
+                                                                value={commentDrafts[v.id] || ''}
+                                                                onChange={(val) => setCommentDrafts((prev) => ({ ...prev, [v.id]: val }))}
+                                                                onSubmit={() => submitComment(v.id)}
+                                                                users={mentionableUsers}
+                                                                placeholder="Add a comment… @ to tag"
+                                                                multiline
+                                                                disabled={!!commentBusy[v.id]}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => submitComment(v.id)}
+                                                                disabled={!!commentBusy[v.id] || !(commentDrafts[v.id] || '').trim()}
+                                                                className="px-3 py-1.5 text-xs bg-accent-600 text-white rounded-md font-semibold disabled:opacity-50 shrink-0"
+                                                            >
+                                                                Post
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        )}
+
+                        {/* PHOTOS */}
+                        <div className="flex items-center justify-between gap-2" style={{ marginBottom: 10, marginTop: 8 }}>
+                            <span className="text-jl-label font-bold uppercase text-ink-3">Photos</span>
+                            <div className="flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => photoInputRef.current?.click()}
+                                    disabled={photoBusy}
+                                    style={{
+                                        ...pillBtn,
+                                        background: 'var(--accent-soft)',
+                                        color: 'var(--accent)',
+                                        opacity: photoBusy ? 0.5 : 1,
+                                    }}
+                                >
+                                    + Upload photo
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => cameraInputRef.current?.click()}
+                                    disabled={photoBusy}
+                                    className="font-semibold border border-hairline-strong bg-surface text-ink-2"
+                                    style={{
+                                        fontSize: 11.5,
+                                        padding: '4px 10px',
+                                        borderRadius: 999,
+                                        opacity: photoBusy ? 0.5 : 1,
+                                    }}
+                                >
+                                    📷 Take
+                                </button>
+                                <input
+                                    ref={photoInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) await uploadPhoto(file, gateStage);
+                                        if (photoInputRef.current) photoInputRef.current.value = '';
+                                    }}
+                                />
+                                <input
+                                    ref={cameraInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    className="hidden"
+                                    onChange={handleCameraCapture}
+                                />
+                            </div>
+                        </div>
+                        {photosLoading && <p className="text-jl-2 text-ink-3 italic">Loading…</p>}
+                        {!photosLoading && photos.length === 0 && (
+                            <p className="text-jl-2 text-ink-3 italic">No photos yet.</p>
+                        )}
+                        {!photosLoading && photos.length > 0 && (
+                            <div
+                                className="grid"
+                                style={{ gridTemplateColumns: '1fr 1fr', gap: 8 }}
+                            >
+                                {photos.map((p) => (
+                                    <a
+                                        key={p.id}
+                                        href={`${API_BASE_URL}/brain/releases/${releaseId}/photos/${p.id}/file`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="block border border-hairline overflow-hidden bg-surface-2"
+                                        style={{ borderRadius: 8, height: 96 }}
+                                        title={p.note || p.original_filename || 'photo'}
+                                    >
+                                        <img
+                                            src={`${API_BASE_URL}/brain/releases/${releaseId}/photos/${p.id}/file`}
+                                            alt={p.original_filename || 'photo'}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    </a>
+                                ))}
+                            </div>
+                        )}
+
+                        {gateStage && (
+                            <div
+                                className="mt-4 p-3 rounded-lg text-sm border"
+                                style={{
+                                    background: gateSatisfied ? 'var(--st-green-bg)' : 'var(--st-amber-bg)',
+                                    color: gateSatisfied ? 'var(--st-green-fg)' : 'var(--st-amber-fg)',
+                                    borderColor: 'var(--border)',
+                                }}
+                            >
+                                {gateSatisfied
+                                    ? `✓ Photo for ${gateStage} attached.`
+                                    : `A photo is required to move to ${gateStage}.`}
+                                {gateSatisfied && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onConfirmStage?.()}
+                                        className="mt-2 block font-semibold underline bg-transparent border-0 cursor-pointer"
+                                        style={{ color: 'inherit' }}
+                                    >
+                                        Confirm {gateStage}
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Right: read viewer */}
+                <PdfReadViewer
+                    fileUrl={fileUrl}
+                    fileName={fileName}
+                    citePage={citePage}
+                    citeRuleId={citeRuleId}
+                    onClearCite={() => { setCitePage(null); setCiteRuleId(null); }}
+                />
+            </div>
+        );
     }
 
     return createPortal(

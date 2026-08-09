@@ -1537,6 +1537,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 initialTab={hubTab}
                 scrollToMaterials={modalScrollToMaterials}
                 onOrdersChanged={refreshMaterialSummary}
+                onNotesChanged={(notes) => {
+                    setLocalNotes(notes);
+                    setNotesInputValue(notes ?? '');
+                }}
                 onOpenVersion={(vid, mode) => {
                     setIsModalOpen(false);
                     setPdfMarkupVersionId(vid);

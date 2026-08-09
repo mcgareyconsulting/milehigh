@@ -1,19 +1,19 @@
-"""REST endpoints for Carmen Miranda PDF review (admin-only).
+"""REST endpoints for Carmen Miranda PDF review.
 
 Registered on brain_bp under /brain:
   POST /releases/<release_id>/drawing/versions/<vid>/carmen-review  — enqueue a review (202)
   GET  /releases/<release_id>/drawing/versions/<vid>/carmen-review  — latest review status + findings
 
-Admin-only, matching the "admin-only Carmen Miranda" decision. The POST returns immediately
-(202) with a `pending` row; the review runs on a background thread (worker.py). The
-frontend panel polls the GET until status is `complete` or `error`.
+Per-version GET/POST are open to admin OR drafter (AI review loop in the release hub).
+The POST returns immediately (202) with a `pending` row; the review runs on a background
+thread (worker.py). The frontend panel polls the GET until status is `complete` or `error`.
 """
 import io
 
 from flask import jsonify, current_app, send_file
 
 from app.brain import brain_bp
-from app.auth.utils import admin_required, login_required, get_current_user
+from app.auth.utils import admin_required, drafter_or_admin_required, login_required, get_current_user
 from flask import request
 
 from app.models import (
@@ -46,7 +46,7 @@ def _load_version(release_id, version_id):
     '/releases/<int:release_id>/drawing/versions/<int:version_id>/carmen-review',
     methods=['POST'],
 )
-@admin_required
+@drafter_or_admin_required
 def request_bb_review(release_id, version_id):
     version = _load_version(release_id, version_id)
     if not version:
@@ -82,7 +82,7 @@ def request_bb_review(release_id, version_id):
     '/releases/<int:release_id>/drawing/versions/<int:version_id>/carmen-review',
     methods=['GET'],
 )
-@admin_required
+@drafter_or_admin_required
 def get_bb_review(release_id, version_id):
     version = _load_version(release_id, version_id)
     if not version:
