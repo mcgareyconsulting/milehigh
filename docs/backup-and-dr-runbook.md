@@ -12,9 +12,11 @@ S3-compatible bucket by swapping the endpoint.
 
 > ⚠️ **Partially provisioned — read §7 before trusting anything here.** Postgres
 > PITR (3-day), the `/var/data` disk, the `mhmw-data` bucket, its scoped token
-> and all six lifecycle rules are **live**. The two backup scripts are written,
-> tested, and verified end-to-end against sandbox. **Neither cron is scheduled
-> yet, and no recovery drill has been run** — until that drill passes, this is a
+> and all six lifecycle rules are **live**. The **database backup cron is live
+> and has run successfully against production** (2026-08-09, 5.3 MB).
+> **Still outstanding: the blob backup is not scheduled** — it cannot run as a
+> cron job at all, because Render disks are not visible to cron services (§3) —
+> **and no recovery drill has been run.** Until that drill passes, this is a
 > backup we believe in rather than one we have proven. Render-side steps are
 > configured in the dashboard, outside this repo.
 
@@ -145,8 +147,9 @@ produces a ladder with no cleanup code to maintain or to fail silently.
 | Blobs weekly | `backups/disk/prod/weekly/` | delete after 56 days |
 | *(whole bucket)* | — | **abort incomplete multipart uploads after 7 days** |
 
-At ~3.4 MB/dump the full 34-object database ladder is ~140 MB; the blob tarballs
-are effectively the entire storage bill, which stays under a dollar a month.
+At the measured production dump size of **5.3 MB**, the full 34-object database
+ladder is ~180 MB. The blob tarballs are effectively the entire storage bill,
+which stays under a dollar a month.
 
 **On the multipart rule:** the blob archive is large enough to upload in parts.
 A run that dies partway leaves completed parts that are *billed as storage but
@@ -400,13 +403,20 @@ here is the only proof the backup works).
 | 2026-08-09 | Lifecycle rules live | 5 delete rules + multipart abort — see §2.2 | Daniel |
 | 2026-08-09 | Storage-root bug fixed | `MATERIAL_ORDER_STORAGE_ROOT` / `LOOKAHEAD_PDF_STORAGE_ROOT` were resolving to ephemeral paths; env vars set + derivation added to `app/config.py` | Claude |
 | 2026-08-09 | `backup_postgres.py` verified | sandbox → R2 end-to-end, 40 MB DB → 3.4 MB dump, daily + weekly objects byte-identical | Claude |
-| _TBD_ | pg_dump→R2 cron live | **Check `pg_dump --version` in the cron environment is ≥ 17 first** — Render's runtime image version has bitten people; fall back to a Docker-based cron if it lags | |
+| 2026-08-09 | **pg_dump→R2 cron live** | Render Cron Job service, `python -m scripts.backup_postgres`, `0 7 * * *` (01:00 MDT / 00:00 MST). Build command `pip install -r requirements.txt` | Daniel |
+| 2026-08-09 | **First production backup ever run** | 5.3 MB dump, `daily/` + `weekly/` objects verified byte-identical in R2 (5,596,996 B each) | Daniel |
+| 2026-08-09 | pg_dump version risk **retired** | Render's Python runtime ships **pg_dump 18.4 (Debian 18.4-1.pgdg12+1)** against Postgres 17 — comfortably newer. **No Docker-based cron needed** | — |
 | _TBD_ | `backup_blobs.py` cron live | schedule / retention | |
 | _TBD_ | First recovery drill | artifact / RTO / result | |
 | _TBD_ | Token rotation | no TTL was set deliberately; rotate manually and record here | |
 
 **Open items, deliberately not closed:**
 
+- ⚠️ **The cron service points at `feature/backup-infrastructure`, not `main`.**
+  Deliberate — it let the first production run happen before merging an unproven
+  path onto `main`. **Switch the service's branch to `main` when this merges, and
+  do not delete the feature branch before you do**, or the backup silently stops
+  building. This is the single most likely way for this to break.
 - **Sandbox test objects** from the 2026-08-09 verification sit under
   `backups/postgres/sandbox/…`, which has **no lifecycle rule** (rules cover
   `prod/` only). They are ~7 MB and will live until deleted by hand.
