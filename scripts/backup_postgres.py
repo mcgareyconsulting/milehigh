@@ -68,6 +68,23 @@ def require_tool(name: str) -> None:
         )
 
 
+def tool_version(name: str) -> str:
+    """Best-effort `<tool> --version`, for the run log.
+
+    Worth a line in every run: Render's cron image ships whatever pg_dump it
+    ships, and a client older than the server fails the dump outright. Logging it
+    means the first Trigger Run answers "is this image compatible?" without a
+    shell, and every later run leaves a record.
+    """
+    try:
+        result = subprocess.run(
+            [name, "--version"], capture_output=True, text=True, timeout=10
+        )
+        return (result.stdout or result.stderr).strip() or "unknown"
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
 def dump(url: str, out_path: str) -> None:
     """pg_dump in custom format — same flags as migrations/copy_prod_to_sandbox.sh."""
     print("  running pg_dump...")
@@ -128,6 +145,7 @@ def main() -> int:
     filename = f"mhmw-{env_segment}-{stamp}.dump"
 
     print(f"backup_postgres: {args.env} ({mask(url)}) @ {stamp}")
+    print(f"  client: {tool_version('pg_dump')}")
 
     workdir = tempfile.mkdtemp(prefix="mhmw-backup-")
     out_path = os.path.join(workdir, filename)
