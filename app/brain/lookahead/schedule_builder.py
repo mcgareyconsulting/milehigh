@@ -16,7 +16,8 @@ invariants:
   - Pure given (pipeline, today, weeks). No DB writes.
   - Every phase bar carries date_source in {hard, projected, estimated, missing}.
   - Paint duration is provisional (PAINT_BUSINESS_DAYS=3) until shop calibration lands.
-  - Install/ship anchors come only from stored dates (or ship = install-1bd). Never invent
+  - N4 calendars: fab + paint use SHOP (Mon–Thu); ship + drafting use FIELD (Mon–Fri).
+  - Install/ship anchors come only from stored dates (or ship = install-1bd field). Never invent
     install from a job-local fab queue — that understates hours_in_front vs the full shop.
   - All active pipeline rows are included; window is metadata for the Gantt viewport.
 """
@@ -38,9 +39,14 @@ from app.brain.lookahead.pipeline import (
     KIND_PROJECTED,
     get_project_pipeline,
 )
-from app.trello.utils import calculate_business_days_before
+from app.trello.utils import (
+    CALENDAR_FIELD,
+    CALENDAR_SHOP,
+    calculate_business_days_before,
+)
 
 # Provisional until shop data analysis replaces it (user will re-gap).
+# Paint/fab count on the SHOP calendar (Mon–Thu). Ship/drafting use FIELD (Mon–Fri).
 PAINT_BUSINESS_DAYS = 3
 SHIP_LEAD_BUSINESS_DAYS = 1
 # Cap how far back an open DRR drafting bar extends on the Gantt (table keeps full dates later).
@@ -200,9 +206,11 @@ def _phase_bar(
 
 
 def _paint_window(ship: date) -> tuple[date, date]:
-    """Three business days ending the business day before ship."""
-    paint_end = calculate_business_days_before(ship, 1)
-    paint_start = calculate_business_days_before(ship, PAINT_BUSINESS_DAYS)
+    """Three *shop* business days (Mon–Thu) ending the shop day before ship."""
+    paint_end = calculate_business_days_before(ship, 1, calendar=CALENDAR_SHOP)
+    paint_start = calculate_business_days_before(
+        ship, PAINT_BUSINESS_DAYS, calendar=CALENDAR_SHOP
+    )
     return paint_start, paint_end
 
 
@@ -249,33 +257,43 @@ def _build_release_phases(
     ship = _parse_date(row.get("ship_date"))
     ship_src = SOURCE_HARD if ship else SOURCE_MISSING
     if ship is None and install_start is not None and _needs_ship(stage, is_complete):
-        ship = calculate_business_days_before(install_start, SHIP_LEAD_BUSINESS_DAYS)
+        # Ship is field (Mon–Fri): typically the business day before install.
+        ship = calculate_business_days_before(
+            install_start, SHIP_LEAD_BUSINESS_DAYS, calendar=CALENDAR_FIELD
+        )
         ship_src = SOURCE_ESTIMATED
 
-    # --- Paint (provisional 3-day bar, anchored to ship) ---
+    # --- Paint (provisional 3 shop-day bar, Mon–Thu, anchored to ship) ---
     paint_start = paint_end = None
     paint_src = SOURCE_ESTIMATED
     if _needs_paint(stage, is_complete) and ship is not None:
         paint_start, paint_end = _paint_window(ship)
 
     # --- Fabrication (back-chain only — never invent from a partial shop queue) ---
+    # Fab duration uses SHOP calendar (Fridays off).
     fab_start = fab_end = None
     fab_src = SOURCE_ESTIMATED
     if _needs_fab(stage, is_complete):
         released = _parse_date(row.get("released"))
 
         if paint_start is not None:
-            fab_end = calculate_business_days_before(paint_start, 1)
+            fab_end = calculate_business_days_before(
+                paint_start, 1, calendar=CALENDAR_SHOP
+            )
             fab_src = SOURCE_ESTIMATED
         elif ship is not None:
-            fab_end = calculate_business_days_before(ship, PAINT_BUSINESS_DAYS + 1)
+            fab_end = calculate_business_days_before(
+                ship, PAINT_BUSINESS_DAYS + 1, calendar=CALENDAR_SHOP
+            )
             fab_src = SOURCE_ESTIMATED
 
         if fab_end is not None:
             remaining = calculate_remaining_fab_hours(row.get("fab_hrs"), stage)
             if remaining > 0.1:
                 days = max(1, int(-(-remaining // SchedulingConfig.FAB_HOURS_PER_DAY)))  # ceil
-                fab_start = calculate_business_days_before(fab_end, max(days - 1, 0))
+                fab_start = calculate_business_days_before(
+                    fab_end, max(days - 1, 0), calendar=CALENDAR_SHOP
+                )
             else:
                 fab_start = fab_end
             # Don't start fab bars before release day (or today) when we have a floor.
@@ -290,7 +308,7 @@ def _build_release_phases(
             phases.append(bar)
 
     if paint_start is not None:
-        note = f"Provisional {PAINT_BUSINESS_DAYS}-business-day paint window"
+        note = f"Provisional {PAINT_BUSINESS_DAYS}-shop-day paint window (Mon–Thu)"
         bar = _phase_bar(PHASE_PAINT, paint_start, paint_end, paint_src, note=note)
         if bar:
             phases.append(bar)
@@ -350,7 +368,10 @@ def _build_drafting_phases(row: dict, *, today: date) -> list[dict[str, Any]]:
         return phases
 
     # Cap multi-month open packages so the Gantt stays readable; full history is a PR2 table concern.
-    span_floor = calculate_business_days_before(draft_end, DRAFT_BAR_MAX_BUSINESS_DAYS)
+    # Drafting is Mon–Fri (field/admin calendar).
+    span_floor = calculate_business_days_before(
+        draft_end, DRAFT_BAR_MAX_BUSINESS_DAYS, calendar=CALENDAR_FIELD
+    )
     draft_start = max(created, span_floor)
     if draft_start > draft_end:
         draft_start = draft_end
@@ -445,6 +466,8 @@ def build_lookahead_schedule(
                 "paint_business_days": PAINT_BUSINESS_DAYS,
                 "ship_lead_business_days": SHIP_LEAD_BUSINESS_DAYS,
                 "paint_note": "Paint duration is a provisional estimate pending shop calibration.",
+                "shop_calendar": "Mon–Thu (fab + paint; Fridays off)",
+                "field_calendar": "Mon–Fri (ship + install + drafting)",
             },
             "flags": list(pipeline.get("flags") or []) if pipeline else [],
         }
@@ -527,6 +550,8 @@ def build_lookahead_schedule(
             "paint_business_days": PAINT_BUSINESS_DAYS,
             "ship_lead_business_days": SHIP_LEAD_BUSINESS_DAYS,
             "paint_note": "Paint duration is a provisional estimate pending shop calibration.",
+            "shop_calendar": "Mon–Thu (fab + paint; Fridays off)",
+            "field_calendar": "Mon–Fri (ship + install + drafting)",
         },
         "flags": list(pipeline.get("flags") or []),
         "gc_approvals": pipeline.get("gc_approvals") or [],

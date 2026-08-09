@@ -7,7 +7,8 @@ exports:
   parse_trello_datetime: Convert Trello ISO-8601 strings to naive Python datetimes.
   extract_identifier: Pull the "NNN-NNN" job-release prefix from a card name.
   mountain_due_datetime: Convert a local date to 6 pm Mountain ISO string for Trello due dates.
-  calculate_business_days_before: Count backward N business days from a date.
+  CALENDAR_FIELD / CALENDAR_SHOP / is_business_day: N4 two-calendar model.
+  add_business_days / calculate_business_days_before: working-day math with calendar=.
   should_sort_list_by_fab_order: Decide whether a list needs Fab-Order re-sorting.
   sort_list_if_needed: Sort a list by Fab Order if it is a target list, with logging.
 imports_from: [app.config, app.trello.api, app.trello.logging, app.logging_config, zoneinfo, re]
@@ -15,7 +16,8 @@ imported_by: [app/trello/sync.py, app/trello/scanner.py, app/trello/card_creatio
 invariants:
   - parse_webhook_data never raises; errors return {"event": "error", "handled": False}.
   - All Mountain-time conversions are DST-aware via ZoneInfo.
-updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+  - Default calendar is FIELD (Mon–Fri); SHOP is Mon–Thu (fab + paint).
+updated_by_agent: 2026-08-09T00:00:00Z
 """
 
 import re
@@ -25,6 +27,32 @@ from zoneinfo import ZoneInfo
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# N4 — two working calendars (docs/roadmap.md)
+# ---------------------------------------------------------------------------
+# SHOP  — fabrication + paint: Mon–Thu, 4×10s (Fridays off)
+# FIELD — ship + install (+ drafting/admin default): Mon–Fri
+# Default for helpers is FIELD so un-audited call sites keep prior Mon–Fri behavior.
+CALENDAR_FIELD = "field"
+CALENDAR_SHOP = "shop"
+
+_CALENDAR_MAX_WEEKDAY = {
+    CALENDAR_FIELD: 4,  # Mon–Fri (weekday 0–4)
+    CALENDAR_SHOP: 3,   # Mon–Thu (weekday 0–3)
+}
+
+
+def is_business_day(d, calendar=CALENDAR_FIELD) -> bool:
+    """True if ``d`` is a working day on the given calendar (no holiday table yet)."""
+    if isinstance(d, datetime):
+        d = d.date()
+    max_wd = _CALENDAR_MAX_WEEKDAY.get(calendar)
+    if max_wd is None:
+        raise ValueError(
+            f"unknown calendar {calendar!r}; use CALENDAR_FIELD or CALENDAR_SHOP"
+        )
+    return d.weekday() <= max_wd
 
 
 def parse_webhook_data(data):
@@ -223,65 +251,67 @@ def mountain_start_datetime(local_date):
     return dt_utc.isoformat().replace("+00:00", "Z")
 
 
-def calculate_business_days_before(target_date, business_days=2):
+def calculate_business_days_before(target_date, business_days=2, calendar=CALENDAR_FIELD):
     """
     Calculate the date that is a specified number of business days before the target date.
-    
+
     Args:
         target_date: The target date (date or datetime object)
         business_days: Number of business days to go back (default: 2)
-    
+        calendar: CALENDAR_FIELD (Mon–Fri, default) or CALENDAR_SHOP (Mon–Thu)
+
     Returns:
         date: The calculated date that is business_days before target_date
     """
-    # Convert to date if it's a datetime
     if isinstance(target_date, datetime):
         current_date = target_date.date()
     else:
         current_date = target_date
-    
+
+    if not business_days or business_days <= 0:
+        return current_date
+
     days_back = 0
     business_days_counted = 0
-    
+
     while business_days_counted < business_days:
         days_back += 1
         check_date = current_date - timedelta(days=days_back)
-        
-        # Check if it's a weekday (Monday=0, Sunday=6)
-        if check_date.weekday() < 5:  # Monday through Friday
+        if is_business_day(check_date, calendar=calendar):
             business_days_counted += 1
-    
+
     return current_date - timedelta(days=days_back)
 
 
-def add_business_days(start_date, business_days):
+def add_business_days(start_date, business_days, calendar=CALENDAR_FIELD):
     """
     Calculate the date that is a specified number of business days after the start date.
-    
+
     Args:
         start_date: The start date (date or datetime object)
         business_days: Number of business days to add
-    
+        calendar: CALENDAR_FIELD (Mon–Fri, default) or CALENDAR_SHOP (Mon–Thu)
+
     Returns:
         date: The calculated date that is business_days after start_date
     """
-    # Convert to date if it's a datetime
     if isinstance(start_date, datetime):
         current_date = start_date.date()
     else:
         current_date = start_date
-    
+
+    if not business_days or business_days <= 0:
+        return current_date
+
     days_forward = 0
     business_days_counted = 0
-    
+
     while business_days_counted < business_days:
         days_forward += 1
         check_date = current_date + timedelta(days=days_forward)
-        
-        # Check if it's a weekday (Monday=0, Sunday=6)
-        if check_date.weekday() < 5:  # Monday through Friday
+        if is_business_day(check_date, calendar=calendar):
             business_days_counted += 1
-    
+
     return current_date + timedelta(days=days_forward)
 
 

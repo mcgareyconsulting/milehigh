@@ -364,5 +364,9 @@ def _draw_footer(c, page_w, page_num):
 
     c.setFillColor(colors.Color(0.48, 0.48, 0.52))
     c.setFont("Helvetica", 5.5)
-    c.drawString(MARGIN, y_note, "Paint duration is provisional (3 business days).")
+    c.drawString(
+        MARGIN,
+        y_note,
+        "Paint duration is provisional (3 shop days, Mon–Thu). Fab Mon–Thu; ship Mon–Fri.",
+    )
     c.drawRightString(page_w - MARGIN, y_note, f"Page {page_num}")

@@ -15,9 +15,9 @@ imports_from: [app.brain.job_log.scheduling.config, app.trello.utils]
 imported_by: [app/brain/job_log/scheduling/__init__.py, app/brain/job_log/scheduling/service.py, app/brain/job_log/scheduling/preview.py]
 invariants:
   - Hard-date jobs (is_hard_date=True) are excluded from hours_in_front sums
-  - All date arithmetic uses business days only (Monday-Friday)
+  - Fab projections use SHOP calendar (Mon–Thu); install uses FIELD (Mon–Fri) — N4
   - Unknown stages default to 100% remaining (conservative)
-updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+updated_by_agent: 2026-08-09T00:00:00Z
 
 Scheduling calculation module.
 
@@ -30,7 +30,7 @@ from datetime import date, datetime
 from typing import Dict, List, Optional, Tuple, Any
 
 from app.brain.job_log.scheduling.config import SchedulingConfig
-from app.trello.utils import add_business_days
+from app.trello.utils import CALENDAR_FIELD, CALENDAR_SHOP, add_business_days
 
 
 def calculate_remaining_fab_hours(
@@ -160,9 +160,12 @@ def calculate_projected_fab_complete_date(
     
     if days_in_front == 0:
         return reference_date
-    
-    # Add working days (Monday-Friday only)
-    return add_business_days(reference_date, days_in_front)
+
+    # Fab shop works Mon–Thu only (N4). Spreading hours_in_front across shop days
+    # is what makes "Fridays off" show up in projected install dates.
+    return add_business_days(
+        reference_date, days_in_front, calendar=CALENDAR_SHOP
+    )
 
 
 def calculate_install_start_date(
@@ -171,7 +174,8 @@ def calculate_install_start_date(
     """
     Calculate install start date.
     
-    Formula: projected_fab_completion + install_buffer (working days)
+    Formula: projected_fab_completion + install_buffer (shop working days).
+    Buffer covers post-fab shop work (paint lead) so it uses the SHOP calendar.
     
     Args:
         projected_fab_complete_date: Projected fab completion date
@@ -183,7 +187,9 @@ def calculate_install_start_date(
         return None
     
     buffer_days = SchedulingConfig.INSTALL_BUFFER_DAYS
-    return add_business_days(projected_fab_complete_date, buffer_days)
+    return add_business_days(
+        projected_fab_complete_date, buffer_days, calendar=CALENDAR_SHOP
+    )
 
 
 def calculate_install_complete_date(
@@ -233,8 +239,11 @@ def calculate_install_complete_date(
         return None
 
     # Completion is the LAST working day of the install (inclusive of the start day): a
-    # 1-day install completes the day it starts, so add (install_days - 1) business days.
-    return add_business_days(install_start_date, install_days - 1)
+    # 1-day install completes the day it starts, so add (install_days - 1) field days.
+    # Field = Mon–Fri (N4).
+    return add_business_days(
+        install_start_date, install_days - 1, calendar=CALENDAR_FIELD
+    )
 
 
 def calculate_scheduling_fields(
