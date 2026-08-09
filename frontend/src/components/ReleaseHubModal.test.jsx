@@ -3,8 +3,9 @@
 // shell, the initialTab entry points, the dossier content, and the click-out
 // margin that dismisses it.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { ReleaseHubModal } from './ReleaseHubModal.jsx';
+import { jobsApi } from '../services/jobsApi';
 
 // The details body fetches material orders; the drawings body fetches versions
 // and photos; the rail fetches notes. None of those network shapes are under
@@ -12,7 +13,9 @@ import { ReleaseHubModal } from './ReleaseHubModal.jsx';
 vi.mock('../services/jobsApi', () => ({
     jobsApi: {
         getMaterialOrders: vi.fn(() => Promise.resolve({ orders: [] })),
-        markMaterialOrderReceived: vi.fn(() => Promise.resolve({})),
+        markMaterialOrderReceived: vi.fn((id, received = true) =>
+            Promise.resolve({ order: { id, status: received ? 'received' : 'ordered', description: 'Part' } })
+        ),
         updateNotes: vi.fn(() => Promise.resolve({})),
         getBBReview: vi.fn(() => Promise.resolve(null)),
         requestBBReview: vi.fn(() => Promise.resolve({ status: 'pending' })),
@@ -103,6 +106,9 @@ const JOB = {
 };
 
 beforeEach(() => {
+    jobsApi.getMaterialOrders.mockReset();
+    jobsApi.getMaterialOrders.mockResolvedValue({ orders: [] });
+    jobsApi.markMaterialOrderReceived.mockClear();
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ versions: [], photos: [], events: [] }),
@@ -317,6 +323,25 @@ describe('ReleaseHubModal', () => {
         fireEvent.click(screen.getByRole('button', { name: '+ Note' }));
         expect(screen.getByPlaceholderText(/Overwrite Job Log notes/i)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Save note' })).toBeInTheDocument();
+    });
+
+    it('shows Mark all received on Materials ordered when orders are pending', async () => {
+        jobsApi.getMaterialOrders.mockResolvedValue({
+            orders: [
+                { id: 1, description: 'Plate A', status: 'ordered', quantity: 6 },
+                { id: 2, description: 'Plate B', status: 'ordered', quantity: 2 },
+                { id: 3, description: 'Galv', shipping_status: 'planning' },
+            ],
+        });
+        renderHub();
+        const btn = await screen.findByRole('button', { name: 'Mark all received' });
+        fireEvent.click(btn);
+        await waitFor(() => {
+            // Two itemized pending rows — status-order skipped.
+            expect(jobsApi.markMaterialOrderReceived).toHaveBeenCalledTimes(2);
+            expect(jobsApi.markMaterialOrderReceived).toHaveBeenCalledWith(1, true);
+            expect(jobsApi.markMaterialOrderReceived).toHaveBeenCalledWith(2, true);
+        });
     });
 
     it('opens Change Log with hub layout (no Identifier table)', async () => {

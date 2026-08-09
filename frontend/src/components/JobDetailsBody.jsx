@@ -71,14 +71,17 @@ export function formatInstallProg(raw) {
     return s;
 }
 
-/** Uppercase section rule. */
-function SectionLabel({ children }) {
+/** Uppercase section rule. Optional `action` sits on the right of the same line. */
+function SectionLabel({ children, action = null }) {
     return (
         <div
-            className="text-jl-label font-bold uppercase text-ink-3 border-b border-hairline-strong"
+            className="flex items-center justify-between gap-2 border-b border-hairline-strong"
             style={{ paddingBottom: 6 }}
         >
-            {children}
+            <span className="text-jl-label font-bold uppercase text-ink-3 min-w-0">
+                {children}
+            </span>
+            {action}
         </div>
     );
 }
@@ -175,6 +178,7 @@ function FlowCell({ label, value, flag = null, accent = false }) {
 export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged = null }) {
     const [materialOrders, setMaterialOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(false);
+    const [markAllBusy, setMarkAllBusy] = useState(false);
     const materialsRef = useRef(null);
 
     const jobId = job ? (job['Job #'] || job.job) : null;
@@ -209,6 +213,36 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
             if (onOrdersChanged) onOrdersChanged();
         } catch {
             // Leave the row unchanged (e.g. insufficient permissions).
+        }
+    };
+
+    // Itemized orders only (not galvanizing/stock shipping_status rows).
+    const pendingReceivable = materialOrders.filter(
+        (o) => !o.shipping_status && o.status !== 'received'
+    );
+
+    const handleMarkAllReceived = async () => {
+        if (!pendingReceivable.length || markAllBusy) return;
+        setMarkAllBusy(true);
+        try {
+            const results = await Promise.all(
+                pendingReceivable.map((o) =>
+                    jobsApi.markMaterialOrderReceived(o.id, true)
+                        .then((data) => ({ id: o.id, order: data?.order || { ...o, status: 'received' } }))
+                        .catch(() => null)
+                )
+            );
+            const byId = new Map(
+                results.filter(Boolean).map((r) => [r.id, r.order])
+            );
+            if (byId.size > 0) {
+                setMaterialOrders((prev) =>
+                    prev.map((o) => (byId.has(o.id) ? byId.get(o.id) : o))
+                );
+                if (onOrdersChanged) onOrdersChanged();
+            }
+        } finally {
+            setMarkAllBusy(false);
         }
     };
 
@@ -373,7 +407,21 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
                 </div>
 
                 <div className="min-w-0">
-                    <SectionLabel>Materials ordered</SectionLabel>
+                    <SectionLabel
+                        action={pendingReceivable.length > 0 ? (
+                            <button
+                                type="button"
+                                onClick={handleMarkAllReceived}
+                                disabled={markAllBusy}
+                                className="text-brand font-semibold bg-transparent border-0 cursor-pointer disabled:opacity-50 shrink-0"
+                                style={{ fontSize: 11.5 }}
+                            >
+                                {markAllBusy ? 'Marking…' : 'Mark all received'}
+                            </button>
+                        ) : null}
+                    >
+                        Materials ordered
+                    </SectionLabel>
                     {materialsBlock}
                 </div>
             </div>
