@@ -14,11 +14,12 @@ S3-compatible bucket by swapping the endpoint.
 > PITR (3-day), the `/var/data` disk, the `mhmw-data` bucket, its scoped token
 > and all six lifecycle rules are **live**. The **database backup cron is live
 > and has run successfully against production** (2026-08-09, 5.3 MB).
-> **Still outstanding: the blob backup is not scheduled** — it cannot run as a
-> cron job at all, because Render disks are not visible to cron services (§3) —
-> **and no recovery drill has been run.** Until that drill passes, this is a
-> backup we believe in rather than one we have proven. Render-side steps are
-> configured in the dashboard, outside this repo.
+> **The first recovery drill passed on 2026-08-09** — a real production artifact
+> was restored off-platform onto a laptop, schema-checked against the application
+> models, and booted. The database backup is therefore *proven*, not merely
+> believed. **Still outstanding: the blob backup is not scheduled** — it cannot
+> run as a cron job at all, because Render disks are not visible to cron services
+> (§3). Render-side steps are configured in the dashboard, outside this repo.
 
 ---
 
@@ -407,8 +408,35 @@ here is the only proof the backup works).
 | 2026-08-09 | **First production backup ever run** | 5.3 MB dump, `daily/` + `weekly/` objects verified byte-identical in R2 (5,596,996 B each) | Daniel |
 | 2026-08-09 | pg_dump version risk **retired** | Render's Python runtime ships **pg_dump 18.4 (Debian 18.4-1.pgdg12+1)** against Postgres 17 — comfortably newer. **No Docker-based cron needed** | — |
 | _TBD_ | `backup_blobs.py` cron live | schedule / retention | |
-| _TBD_ | First recovery drill | artifact / RTO / result | |
+| 2026-08-09 | **First recovery drill — PASSED** | Artifact `backups/postgres/prod/daily/2026/08/09/mhmw-prod-2026-08-09T1843Z.dump` (5.3 MB, 509 TOC entries, from PG 17.9). Restored to a **local** Postgres 17, off-platform. `pg_restore` **0.78s**. Row counts: releases 966 · submittals 1,888 · release_events 11,062 · submittal_events 6,393 · users 29. Schema check: **47/47 model tables present, 0 missing**. App booted against the restored DB; data loads | Daniel + Claude |
 | _TBD_ | Token rotation | no TTL was set deliberately; rotate manually and record here | |
+
+**What the first drill taught us (2026-08-09):**
+
+- **Restore locally, not into sandbox.** Layer 2 exists to survive Render being
+  gone; restoring into another Render database cannot test that claim. The drill
+  restored onto a laptop and proved the artifact is portable off-platform
+  entirely. Make this the standing procedure — it also leaves sandbox usable as
+  a test environment.
+- ⚠️ **Empty the outbox tables before booting a restored copy.** A restored
+  database is an *active* system: `create_app()` starts APScheduler with seven+
+  jobs plus the `outbox_retry_worker` daemon, and the restored
+  `trello_outbox` / `procore_outbox` rows would be delivered for real against
+  whatever credentials are in the environment. Run
+  `DELETE FROM trello_outbox; DELETE FROM procore_outbox;` on the scratch DB
+  first, and set `TRELLO_MOCK=1`.
+- **The measured 0.78s is the data path, not full recovery.** A real incident
+  also needs a new Postgres provisioned and `DATABASE_URL` repointed — call it
+  15–30 minutes. Still far inside the 2h RTO target, with the restore itself
+  nowhere near the bottleneck.
+- **Comparing the restored schema against `db.metadata` is the strongest single
+  check** — it catches a structurally valid dump that is missing tables the
+  application needs. It also surfaced 5 tables in production that no model
+  defines (`job_events`, `procore_webhook_events`, `stash_sessions`,
+  `stashed_job_changes`, `user_panel_layouts`) — schema drift in prod, not a
+  backup problem, but worth knowing.
+- **Destroy the scratch copy afterwards.** `dropdb mhmw_drill` and delete the
+  local dump; both hold every row of production.
 
 **Open items, deliberately not closed:**
 

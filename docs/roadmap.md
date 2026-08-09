@@ -71,7 +71,7 @@ Every open item in one place. Detail lives in the workstream sections below.
 
 | ID | Item | Effort | Depends on | Status |
 |---|---|---|---|---|
-| **K4** | Backups — Postgres + binary disk | S–M | — | 🟠 **Mostly done 8/9.** Premise was wrong (PITR always on, 3-day). Offsite R2 layer built + verified; runbook merged. **Left: 2 crons + recovery drill** |
+| **K4** | Backups — Postgres + binary disk | S–M | — | 🟢 **Postgres DONE 8/9** — cron live, first prod backup run, **recovery drill passed** (restored off-platform, schema-verified, app booted). 🟠 **Blobs deferred** — Procore still carries PDFs/photos; folding into the data-lake work |
 | **K3** | Object storage migration + cost numbers for Bill | L | — | Not started. Size generously. **Blocks P7, C3, P11** — every submittal binary lands wherever this decides |
 | **N4** | Two-calendar business-day fix + 26-call-site audit | M | — | Not started. Gates E1–E3 |
 | **MIG** | Run the outstanding migration backlog per environment | S–M | — | Standing item. Several shipped features carry unrun migrations (A1 alone shipped five); the 8/6 bug wave added `releases_unique_job_release_name.py` (the BUG-3 fix — verify run state per env); Workstream 1 adds more. Scripts handed over per the usual split |
