@@ -7,6 +7,8 @@ expire on the wrong clock (data loss).
 """
 from datetime import datetime, timezone
 
+import pytest
+
 from scripts._r2 import backup_key, tiers_for
 from scripts.backup_postgres import ENV_SEGMENT, key_for
 
@@ -61,6 +63,52 @@ class TestKeys:
     def test_sandbox_keys_are_not_covered_by_prod_rules(self):
         key = key_for(ENV_SEGMENT["sandbox"], "daily", _utc("2026-08-09"), "f")
         assert not key.startswith("backups/postgres/prod/")
+
+
+class TestShrinkGuard:
+    """A dump can exit zero having captured far less than it should.
+
+    Reduced privileges are the usual cause: valid archive, readable table of
+    contents, most of the database missing. Every other check passes it. Size
+    versus the previous artifact is the only signal that catches it.
+    """
+
+    def _guard(self, monkeypatch, previous_size, new_size, allow_shrink=False):
+        from scripts import _r2, backup_postgres
+
+        monkeypatch.setattr(
+            _r2,
+            "latest_object",
+            lambda prefix, s3=None: (
+                None
+                if previous_size is None
+                else {"Size": previous_size, "Key": "prev.dump"}
+            ),
+        )
+        backup_postgres.check_not_shrunk(
+            None, "prod", new_size, allow_shrink=allow_shrink
+        )
+
+    def test_first_run_has_nothing_to_compare(self, monkeypatch):
+        self._guard(monkeypatch, None, 5_000_000)  # must not raise
+
+    def test_same_size_passes(self, monkeypatch):
+        self._guard(monkeypatch, 5_000_000, 5_000_000)
+
+    def test_modest_shrink_passes(self, monkeypatch):
+        # Real databases fluctuate; the guard is a tripwire, not a trend monitor.
+        self._guard(monkeypatch, 5_000_000, 3_000_000)  # 60%
+
+    def test_growth_passes(self, monkeypatch):
+        self._guard(monkeypatch, 5_000_000, 9_000_000)
+
+    def test_collapse_blocks_the_upload(self, monkeypatch):
+        with pytest.raises(SystemExit):
+            self._guard(monkeypatch, 5_000_000, 1_000_000)  # 20%
+
+    def test_collapse_can_be_overridden(self, monkeypatch):
+        # A genuine purge or dropped table is a legitimate reason to shrink.
+        self._guard(monkeypatch, 5_000_000, 1_000_000, allow_shrink=True)
 
 
 class TestBlobKeys:

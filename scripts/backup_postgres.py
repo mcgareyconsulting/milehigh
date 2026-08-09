@@ -116,6 +116,47 @@ def verify(dump_path: str) -> None:
         )
 
 
+# A dump this much smaller than the previous one is treated as a failure rather
+# than a backup. Generous on purpose: it is a corruption tripwire, not a trend
+# monitor, and a false positive here blocks a backup.
+SHRINK_THRESHOLD = 0.5
+
+
+def check_not_shrunk(s3, env_segment: str, size: int, *, allow_shrink: bool) -> None:
+    """Refuse to upload a dump that collapsed in size versus the previous one.
+
+    `pg_dump` can exit zero having captured far less than it should — reduced
+    privileges being the usual cause. The result is a valid archive with a
+    readable table of contents that is missing most of the database, which every
+    other check here would pass. Size is the only signal that catches it.
+    """
+    previous = _r2.latest_object(f"backups/postgres/{env_segment}/daily/", s3=s3)
+    if previous is None:
+        print("  size check: no previous backup to compare against (first run)")
+        return
+
+    ratio = size / previous["Size"] if previous["Size"] else 1.0
+    summary = (
+        f"{size / 1024 / 1024:.1f} MB vs previous "
+        f"{previous['Size'] / 1024 / 1024:.1f} MB ({ratio:.0%})"
+    )
+    if ratio >= SHRINK_THRESHOLD:
+        print(f"  size check: {summary}")
+        return
+
+    if allow_shrink:
+        print(f"  size check: {summary} — SHRANK, allowed by --allow-shrink")
+        return
+
+    sys.exit(
+        f"error: dump shrank to {ratio:.0%} of the previous one ({summary}).\n"
+        f"That is the signature of a partial dump, not a smaller database.\n"
+        f"Previous: {previous['Key']}\n"
+        f"If the database genuinely shrank (a purge, a dropped table), re-run "
+        f"with --allow-shrink."
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -132,6 +173,11 @@ def main() -> int:
     )
     parser.add_argument(
         "--keep-local", action="store_true", help="do not delete the local dump"
+    )
+    parser.add_argument(
+        "--allow-shrink",
+        action="store_true",
+        help="upload even if the dump is much smaller than the previous one",
     )
     args = parser.parse_args()
 
@@ -168,6 +214,9 @@ def main() -> int:
             return 0
 
         s3 = _r2.client()
+        check_not_shrunk(
+            s3, env_segment, os.path.getsize(out_path), allow_shrink=args.allow_shrink
+        )
         primary = key_for(env_segment, tiers[0], now, filename)
         _r2.upload(out_path, primary, s3=s3)
         # Extra tiers are server-side copies — the payload only crosses the wire once.

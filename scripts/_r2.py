@@ -99,6 +99,23 @@ def client():
     )
 
 
+def latest_object(prefix: str, *, s3=None):
+    """Most recently modified object under `prefix`, or None if there are none.
+
+    Used to compare a new artifact against the previous one — a dump that
+    suddenly collapses in size is the signature of a silent partial failure
+    (e.g. reduced privileges), which otherwise exits zero and looks healthy.
+    """
+    s3 = s3 or client()
+    newest = None
+    paginator = s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket(), Prefix=prefix):
+        for obj in page.get("Contents", []):
+            if newest is None or obj["LastModified"] > newest["LastModified"]:
+                newest = obj
+    return newest
+
+
 def upload(local_path: str, key: str, *, s3=None) -> None:
     """Upload a file to <bucket>/<key>. boto3 splits large files automatically.
 
