@@ -109,7 +109,7 @@ email/photo/PDF lives. **Recommendation: Cloudflare R2** as a single S3-compatib
 store serving *both* roles, split by key prefix:
 
 ```
-r2://milehigh-data/
+r2://mhmw-data/
   backups/
     postgres/prod/2026/07/23/milehigh-prod-2026-07-23T0700Z.dump
     postgres/sandbox/...
@@ -250,7 +250,7 @@ pillar:
 
 - Enable a **scheduled read-only mirror** of the repo to a second location (a
   second git host, or a periodic `git clone --mirror` bundle pushed to
-  `r2://milehigh-data/backups/code/`). Low effort, closes the org-loss gap.
+  `r2://mhmw-data/backups/code/`). Low effort, closes the org-loss gap.
 
 **The real gap is everything that is *not* in git:**
 
