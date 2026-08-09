@@ -258,7 +258,7 @@ which changes the risk profile of two items the catalog already flagged.
 
 | # | Item | Why now |
 |---|---|---|
-| 0.1 | **K4 — backups** | Catalog Tier 0, unresolved since 2026-07-22, a runbook sitting unmerged on `claude/render-backup-data-architecture-vlizsr`. **When Procore goes away, an unrecoverable Postgres and an unbacked-up disk stop being a risk and become the plan.** This is the argument that should finally move it |
+| 0.1 | **K4 — backups** | 🟠 **Largely closed 2026-08-09.** The premise was wrong — Postgres PITR (3-day) had been on since before 7/22, so Postgres was never unrecoverable; the binary disk genuinely was unprotected and now has a tiered offsite backup to R2, verified against sandbox. **Still open: two crons and a recovery drill.** The October argument holds for that remainder — when the Brain becomes the system of record for submittals and drawings, an *unproven* backup is the exposure |
 | 0.2 | **K3 — object storage decision + cost numbers** | Bill asked for numbers on the record: *"I'll start preparing some numbers for that, so there's some awareness"* [L662–666]. Every binary currently sits on one Render disk. Procore's document history does not fit that shape |
 | 0.3 | **Archival policy** | Agreed in the meeting: closed projects get metadata + a text record, and the drawing files get dropped [L666–683]. Write it down; it bounds 0.2's cost estimate |
 
@@ -440,7 +440,7 @@ Each of these is cut with a citation, so nobody has to re-litigate it from memor
 | **B3 Soft-link sub/DRR/FC** | **Dissolved as a feature.** §1.2 — owning the record makes the link a primary key. The correctness question it raised is answered by `docs/submittal-id-coherence-audit.md`: three separate Procore records, and the new model removes the class of problem |
 | **B1 Procore export** | Still Bill's. **The inventory sub-task should come back to Daniel** (§4) |
 | **B4 Customer-Procore access** | **De-risked.** Invited-user access survives October [L811–818]. Still worth the rep question; no longer a blocker |
-| **K4 Backups** | Unchanged in rank (Tier 0), **strengthened in argument** (§0.1) |
+| **K4 Backups** | **Largely closed 2026-08-09** (§0.1). The Tier 0 premise was wrong — PITR was always on. Offsite layer built and verified; two crons and a recovery drill remain |
 | **K3 Object storage** | **Promoted from unranked to a precondition.** Bill asked for the numbers on the record |
 | **K2 → D1 → D2** | Was "the whole critical path" as of 2026-07-26. **It is not any more.** The project page (D1) is now a *dependency* of the submittal work rather than a peer — the submittal section and aging view live on it |
 | **A2 Change orders** | Still blocked on Bill. Unchanged |
@@ -493,9 +493,10 @@ slack, against an eight-week window that also contains Slice 0, live bug fixes, 
 
 **That is tight but not unreasonable**, on three conditions:
 
-1. **Slice 0 happens this week**, not opportunistically. Backups in particular have now been Tier 0 for
-   two weeks with nothing enabled — and the October plan is what converts that from a risk into a
-   certainty.
+1. **Slice 0 happens this week**, not opportunistically. Backups moved on 8/9, and the finding was that
+   the Tier 0 premise had been wrong for two weeks — PITR was enabled the whole time. What is left is
+   small (two crons, one recovery drill) but it is the part that makes the backup *proven* rather than
+   *believed*, and the October plan is what makes that distinction matter.
 2. **The §4 inventory runs early**, in Slice 1. It is the only thing here that can produce a surprise
    large enough to change the plan, and it costs a day.
 3. **Slice 5 is allowed to slip.** It is the natural release valve — genuinely valuable, and genuinely

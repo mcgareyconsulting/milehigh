@@ -71,7 +71,7 @@ Every open item in one place. Detail lives in the workstream sections below.
 
 | ID | Item | Effort | Depends on | Status |
 |---|---|---|---|---|
-| **K4** | Backups — Postgres + binary disk | S–M | — | 🔴 **Not started.** Tier 0 since 7/22; runbook unmerged |
+| **K4** | Backups — Postgres + binary disk | S–M | — | 🟢 **Postgres DONE 8/9** — cron live, first prod backup run, **recovery drill passed** (restored off-platform, schema-verified, app booted). 🟠 **Blobs deferred** — Procore still carries PDFs/photos; folding into the data-lake work |
 | **K3** | Object storage migration + cost numbers for Bill | L | — | Not started. Size generously. **Blocks P7, C3, P11** — every submittal binary lands wherever this decides |
 | **N4** | Two-calendar business-day fix + 26-call-site audit | M | — | Not started. Gates E1–E3 |
 | **MIG** | Run the outstanding migration backlog per environment | S–M | — | Standing item. Several shipped features carry unrun migrations (A1 alone shipped five); the 8/6 bug wave added `releases_unique_job_release_name.py` (the BUG-3 fix — verify run state per env); Workstream 1 adds more. Scripts handed over per the usual split |
@@ -204,7 +204,7 @@ Not features. Everything below sits on these.
 
 | ID | Item | Effort | Note |
 |---|---|---|---|
-| **K4** | **Backups** | S–M | 🔴 Tier 0 since 2026-07-22, still nothing enabled. A runbook sits unmerged on `claude/render-backup-data-architecture-vlizsr`. **October is what converts this from a risk into a certainty** — the Brain becomes the system of record for submittals and drawings, and neither Postgres nor the binary disk is recoverable today |
+| **K4** | **Backups** | S–M | 🟠 **Substantially done 2026-08-09.** The Tier 0 premise was **wrong**: Postgres PITR (3-day window) had been enabled since before 7/22 — the database was never unrecoverable. The binary disk genuinely had nothing, and now has an offsite tiered backup to R2 (`mhmw-data`), verified end-to-end against sandbox, with the runbook merged and corrected. **Outstanding: schedule both crons, run the recovery drill** — until the drill passes this is believed, not proven. The work also surfaced a live data-loss bug (two storage roots writing to ephemeral paths, now fixed) |
 | **K3** | **Object storage + cost numbers** | L | Every binary is on one Render disk. Bill asked for numbers on the record [L662–666]. Procore's document history does not fit that shape. Archival policy agreed in the meeting: closed projects keep metadata + a text record, drawing files get dropped [L666–683]. **Size generously** — the retention posture decided 2026-08-06 is *"handle as much as possible and slide irrelevant data out as those things become more clear,"* so prune later rather than filter on the way in |
 | **N4** | **Two-calendar business-day fix** | M | See below |
 
@@ -809,7 +809,7 @@ to show did not fit the window and is retired.
 
 | When | What |
 |---|---|
-| **This week** | K4 backups · K3 decision + storage numbers for Bill · **P11 delta inventory** · MIG backlog *(done 8/6: the bug pile · drafter permissions · N6)* |
+| **This week** | K4 backups **crons + recovery drill** *(build done 8/9)* · K3 decision + storage numbers for Bill *(R2 provisioned 8/9 — storage cost is now a known sub-$1/mo figure; the open part is the blob migration, not the vendor)* · **P11 delta inventory** · MIG backlog *(done 8/6: the bug pile · drafter permissions · N6)* |
 | **Weeks 1–3** | P1 extend `Submittals` · P0 origination · P2 workflow engine + tests — **blocked start on Bill's template export** · N4 |
 | **Weeks 3–4** | C3 **narrow** (revision viewer) · **P11 document pull begins** — paced by rate limits, runs in the background from here |
 | **Weeks 4–5** | P7 returned ingestion · D1 **minimal** (submittal tab) |
@@ -837,8 +837,11 @@ by deciding rather than deferring. That is real progress. It is not four weeks o
 progress.
 
 Two conditions still carry the plan. **Workstream 0 happens this week** rather
-than opportunistically; backups have been Tier 0 for over two weeks with nothing
-enabled, and October is what converts that exposure from a risk into a certainty.
+than opportunistically. Backups moved on 8/9 — and the finding was that the Tier
+0 premise had been wrong for two weeks, since Postgres PITR was on the whole
+time. What remains there is small (two crons and a recovery drill) but is the
+part that converts a believed backup into a proven one, and October is what makes
+that distinction matter.
 And **Workstream 2 is allowed to slip** — it is the release valve, and nothing in
 it stops us leaving Procore.
 

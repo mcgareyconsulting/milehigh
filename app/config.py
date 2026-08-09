@@ -148,6 +148,24 @@ class Config:
             os.path.dirname(PDF_STORAGE_ROOT.rstrip("/")), "photos"
         )
 
+    # Supplier-order email attachments and ingested GC lookahead PDFs. Both were
+    # read by their features but never defined here, so config.get() returned
+    # None and they fell back to <repo>/app/storage/... — inside the deployed
+    # code tree, which is wiped on every deploy. Derive them from the PDF root
+    # like PHOTO_STORAGE_ROOT above so one mounted disk implies all its
+    # children and a forgotten env var cannot route data onto ephemeral disk.
+    MATERIAL_ORDER_STORAGE_ROOT = os.environ.get("MATERIAL_ORDER_STORAGE_ROOT")
+    if not MATERIAL_ORDER_STORAGE_ROOT and PDF_STORAGE_ROOT:
+        MATERIAL_ORDER_STORAGE_ROOT = os.path.join(
+            os.path.dirname(PDF_STORAGE_ROOT.rstrip("/")), "order_attachments"
+        )
+
+    LOOKAHEAD_PDF_STORAGE_ROOT = os.environ.get("LOOKAHEAD_PDF_STORAGE_ROOT")
+    if not LOOKAHEAD_PDF_STORAGE_ROOT and PDF_STORAGE_ROOT:
+        LOOKAHEAD_PDF_STORAGE_ROOT = os.path.join(
+            os.path.dirname(PDF_STORAGE_ROOT.rstrip("/")), "lookahead"
+        )
+
     # Sunbelt rental report discrepancy thresholds. A rental is flagged a
     # cost/duration outlier once accrued cost (weeks on rent * week_rate) reaches
     # SUNBELT_COST_OUTLIER_USD, or it has been on rent SUNBELT_DURATION_OUTLIER_DAYS.
