@@ -67,6 +67,12 @@ export const PATCH_NOTES = [
       },
       {
         type: 'fixed',
+        title: 'Two ASAPs per PM now means two',
+        detail:
+          'The two-ASAP-per-PM limit turned out to be a suggestion — an "Add anyway?" prompt let a third one through, which is how some PMs ended up at three. The override is gone: a third ASAP is refused outright, with a message saying whose limit is full. A PM already holding three keeps them until one is cleared, but no new third gets in.',
+      },
+      {
+        type: 'fixed',
         title: 'Supplier-order attachments and lookahead PDFs survive deploys',
         adminOnly: true,
         detail:

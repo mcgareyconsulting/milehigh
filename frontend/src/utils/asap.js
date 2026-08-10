@@ -1,11 +1,11 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Shared ASAP-set logic enforcing the 2-per-PM soft cap. Sets the ASAP flag and, when the
- *   backend returns 409 asap_limit, confirms with the user before retrying with force.
+ * purpose: Shared ASAP-set logic enforcing the 2-per-PM hard cap. Sets the ASAP flag and, when the
+ *   backend returns 409 asap_limit, informs the user the cap was hit.
  * exports:
  *   setAsapWithCapConfirm(job, release): Promise<boolean> — true if the flag was set, false if the
- *     user declined past the cap. Throws on any other failure.
+ *     PM is at the cap. Throws on any other failure.
  *   setAsapAndAssign(job, release, installer): Promise<boolean> — set ASAP, then (when an installer
  *     was picked) assign it installer-only so the mirror bar is seeded in the same action.
  * imports_from: [../services/jobsApi]
@@ -20,11 +20,8 @@ export async function setAsapWithCapConfirm(job, release) {
     } catch (error) {
         const data = error.originalError?.response?.data;
         if (error.statusCode === 409 && data?.error === 'asap_limit') {
-            if (!window.confirm(`${data.pm} already has ${data.count} ASAPs. Add anyway?`)) {
-                return false;
-            }
-            await jobsApi.setStartInstallAsap(job, release, true, true);
-            return true;
+            window.alert(`${data.pm} already has ${data.count} ASAPs (limit ${data.limit}). Clear one before adding another.`);
+            return false;
         }
         throw error;
     }

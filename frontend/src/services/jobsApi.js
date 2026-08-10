@@ -325,11 +325,11 @@ class JobsApi {
         }
     }
 
-    async setStartInstallAsap(job, release, asap, force = false) {
+    async setStartInstallAsap(job, release, asap) {
         try {
             const response = await axios.patch(
                 `${API_BASE_URL}/brain/update-start-install/${job}/${release}`,
-                { asap, asap_force: force }
+                { asap }
             );
             return response.data;
         } catch (error) {

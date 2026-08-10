@@ -167,7 +167,7 @@ class TestSetClearAsapRoute:
 
 
 # ---------------------------------------------------------------------------
-# Route: ASAP soft cap of 2 per PM
+# Route: ASAP hard cap of 2 per PM
 # ---------------------------------------------------------------------------
 
 class TestAsapPmLimit:
@@ -198,7 +198,7 @@ class TestAsapPmLimit:
             assert r3.start_install_asap is False
             assert ReleaseEvents.query.filter_by(action="set_asap").count() == 0
 
-    def test_third_asap_succeeds_with_force(self, app, admin_client):
+    def test_asap_force_is_ignored(self, app, admin_client):
         with app.app_context():
             self._seed_two_asaps("Jane")
             _make_release(3, "A", pm="Jane")
@@ -208,11 +208,12 @@ class TestAsapPmLimit:
                 "/brain/update-start-install/3/A",
                 json={"asap": True, "asap_force": True},
             )
-            assert resp.status_code == 200
+            assert resp.status_code == 409
+            assert resp.get_json()["error"] == "asap_limit"
 
             db.session.expire_all()
             r3 = Releases.query.filter_by(job=3, release="A").first()
-            assert r3.start_install_asap is True
+            assert r3.start_install_asap is False
 
     def test_different_pm_at_two_is_unaffected(self, app, admin_client):
         with app.app_context():

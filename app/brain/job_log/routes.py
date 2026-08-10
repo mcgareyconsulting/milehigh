@@ -1766,9 +1766,8 @@ def update_start_install(job, release):
             new_asap = bool(asap)
             action = 'set_asap' if new_asap else 'clear_asap'
 
-            # Soft cap: at most 2 ASAPs per PM. Setting a 3rd requires asap_force=true.
-            force = bool(request.json.get('asap_force', False))
-            if new_asap and not old_asap and job_record.pm and not force:
+            # Hard cap: at most 2 ASAPs per PM. Setting a 3rd is rejected outright.
+            if new_asap and not old_asap and job_record.pm:
                 asap_count = Releases.query.filter(
                     Releases.pm == job_record.pm,
                     Releases.start_install_asap.is_(True),
