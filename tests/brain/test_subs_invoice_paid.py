@@ -91,6 +91,26 @@ class TestListSubsReleases:
         # installers roster stays full so the dropdown doesn't collapse
         assert data["installers"] == ["Octavio", "Saul 2"]
 
+    def test_oscar_excluded_from_subs_invoice_tab(self, admin_client, app):
+        """Oscar is an installer crew but not a sub — hide from Invoice Paid only."""
+        _seed(app)
+        with app.app_context():
+            make_release(
+                600, "1", job_name="Oscar Crew Work",
+                installer="Oscar", stage="Install Start",
+                is_active=True, is_archived=False,
+            )
+            db.session.commit()
+
+        data = admin_client.get("/brain/subs/releases").get_json()
+        assert all(r["installer"] != "Oscar" for r in data["releases"])
+        assert "Oscar" not in data["installers"]
+        # Sub crews still present
+        assert set(data["installers"]) == {"Octavio", "Saul 2"}
+
+        filtered = admin_client.get("/brain/subs/releases?installer=Oscar").get_json()
+        assert filtered["releases"] == []
+
 
 class TestUpdateInstallerInvoicePaid:
     def test_unauthenticated_returns_401(self, client, app):
@@ -182,3 +202,123 @@ class TestUpdateInstallerInvoicePaid:
                 job=200, release="2", action="update_installer_invoice_paid"
             ).all()
             assert events == []
+
+
+class TestInstallerInvoiceProgress:
+    def test_list_includes_progress_and_numbers(self, admin_client, app):
+        _seed(app)
+        with app.app_context():
+            r = Releases.query.filter_by(job=100, release="1").one()
+            r.installer_invoice_progress = 40
+            r.installer_invoice_numbers = "INV-1\nINV-2"
+            db.session.commit()
+
+        data = admin_client.get("/brain/subs/releases").get_json()
+        by_job = {row["job"]: row for row in data["releases"]}
+        assert by_job[100]["installer_invoice_progress"] == 40
+        assert by_job[100]["installer_invoice_numbers"] == "INV-1\nINV-2"
+        assert by_job[150]["installer_invoice_progress"] is None
+        assert by_job[150]["installer_invoice_numbers"] == ""
+
+    def test_set_progress_and_clear(self, admin_client, app):
+        _seed(app)
+        resp = admin_client.patch(
+            "/brain/subs/releases/100/1/installer-invoice-progress",
+            json={"installer_invoice_progress": 75},
+        )
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body["installer_invoice_progress"] == 75
+        assert body["changed"] is True
+        assert body["event_id"] is not None
+
+        with app.app_context():
+            r = Releases.query.filter_by(job=100, release="1").one()
+            assert r.installer_invoice_progress == 75
+            events = ReleaseEvents.query.filter_by(
+                job=100, release="1", action="update_installer_invoice_progress"
+            ).all()
+            assert len(events) == 1
+            assert events[0].payload == {"from": None, "to": 75}
+
+        clear = admin_client.patch(
+            "/brain/subs/releases/100/1/installer-invoice-progress",
+            json={"installer_invoice_progress": None},
+        )
+        assert clear.status_code == 200
+        assert clear.get_json()["installer_invoice_progress"] is None
+
+        with app.app_context():
+            r = Releases.query.filter_by(job=100, release="1").one()
+            assert r.installer_invoice_progress is None
+
+    def test_progress_out_of_range_400(self, admin_client, app):
+        _seed(app)
+        resp = admin_client.patch(
+            "/brain/subs/releases/100/1/installer-invoice-progress",
+            json={"installer_invoice_progress": 101},
+        )
+        assert resp.status_code == 400
+
+    def test_progress_noop(self, admin_client, app):
+        _seed(app)
+        with app.app_context():
+            r = Releases.query.filter_by(job=100, release="1").one()
+            r.installer_invoice_progress = 10
+            db.session.commit()
+
+        resp = admin_client.patch(
+            "/brain/subs/releases/100/1/installer-invoice-progress",
+            json={"installer_invoice_progress": 10},
+        )
+        assert resp.status_code == 200
+        assert resp.get_json()["changed"] is False
+        assert resp.get_json()["event_id"] is None
+
+
+class TestInstallerInvoiceNumbers:
+    def test_set_multiline_numbers(self, admin_client, app):
+        _seed(app)
+        resp = admin_client.patch(
+            "/brain/subs/releases/100/1/installer-invoice-numbers",
+            json={"installer_invoice_numbers": "A-100\nB-200"},
+        )
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body["installer_invoice_numbers"] == "A-100\nB-200"
+        assert body["changed"] is True
+
+        with app.app_context():
+            r = Releases.query.filter_by(job=100, release="1").one()
+            assert r.installer_invoice_numbers == "A-100\nB-200"
+            events = ReleaseEvents.query.filter_by(
+                job=100, release="1", action="update_installer_invoice_numbers"
+            ).all()
+            assert len(events) == 1
+            assert events[0].payload == {"from": None, "to": "A-100\nB-200"}
+
+    def test_clear_numbers_with_empty_string(self, admin_client, app):
+        _seed(app)
+        admin_client.patch(
+            "/brain/subs/releases/100/1/installer-invoice-numbers",
+            json={"installer_invoice_numbers": "INV-9"},
+        )
+        resp = admin_client.patch(
+            "/brain/subs/releases/100/1/installer-invoice-numbers",
+            json={"installer_invoice_numbers": "  "},
+        )
+        assert resp.status_code == 200
+        assert resp.get_json()["installer_invoice_numbers"] == ""
+        assert resp.get_json()["changed"] is True
+
+        with app.app_context():
+            r = Releases.query.filter_by(job=100, release="1").one()
+            assert r.installer_invoice_numbers is None
+
+    def test_numbers_missing_field_400(self, admin_client, app):
+        _seed(app)
+        resp = admin_client.patch(
+            "/brain/subs/releases/100/1/installer-invoice-numbers",
+            json={},
+        )
+        assert resp.status_code == 400

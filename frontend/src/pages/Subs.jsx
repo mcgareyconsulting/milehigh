@@ -2,20 +2,25 @@
  * @milehigh-header
  * schema_version: 1
  * purpose: Admin "Invoice Paid" tab under the Subs shell — active releases assigned
- *   to subcontractor installers, grouped by installer, with a yes/no toggle for
- *   installer invoice paid. Distinct from top-level customer "Invoicing" and from
- *   Job Log "Invoiced".
+ *   to subcontractor installers, grouped by installer. Tracks progress %, invoice
+ *   number(s), and invoiced-complete (yes/no). Distinct from top-level customer
+ *   "Invoicing" and from Job Log "Invoiced".
  * exports:
  *   Subs: Page component (admin-gated).
  * imports_from: [react, ../utils/auth, ../services/subsApi]
  * imported_by: [App.jsx via SubsLayout at /subs/invoice-paid]
  * invariants:
  *   - Renders an access message (no fetch) unless the authenticated user is_admin.
- *   - Server enforces admin; optimistic toggle reverts on error.
+ *   - Server enforces admin; optimistic edits revert on error.
  */
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { checkAuth } from '../utils/auth';
-import { fetchSubsReleases, updateInstallerInvoicePaid } from '../services/subsApi';
+import {
+    fetchSubsReleases,
+    updateInstallerInvoicePaid,
+    updateInstallerInvoiceProgress,
+    updateInstallerInvoiceNumbers,
+} from '../services/subsApi';
 
 const PAID_FILTERS = [
     { key: 'all', label: 'All', paid: undefined },
@@ -59,6 +64,105 @@ function PaidToggle({ paid, busy, onChange }) {
                 Yes
             </button>
         </div>
+    );
+}
+
+/** Progress % cell — commits on blur / Enter. */
+function ProgressInput({ value, busy, onCommit }) {
+    const [draft, setDraft] = useState(value == null ? '' : String(value));
+    const lastProp = useRef(value);
+
+    useEffect(() => {
+        if (lastProp.current !== value) {
+            lastProp.current = value;
+            setDraft(value == null ? '' : String(value));
+        }
+    }, [value]);
+
+    const commit = () => {
+        const trimmed = draft.trim();
+        if (trimmed === '') {
+            if (value != null) onCommit(null);
+            else setDraft('');
+            return;
+        }
+        const n = Number(trimmed);
+        if (!Number.isInteger(n) || n < 0 || n > 100) {
+            setDraft(value == null ? '' : String(value));
+            return;
+        }
+        if (n !== value) onCommit(n);
+        else setDraft(String(n));
+    };
+
+    return (
+        <div className="inline-flex items-center gap-0.5">
+            <input
+                type="text"
+                inputMode="numeric"
+                value={draft}
+                disabled={busy}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={commit}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                    if (e.key === 'Escape') {
+                        setDraft(value == null ? '' : String(value));
+                        e.currentTarget.blur();
+                    }
+                }}
+                placeholder="—"
+                aria-label="Progress percent"
+                className={`w-12 px-1.5 py-1 text-sm tabular-nums text-center rounded-md border border-hairline bg-input-bg text-ink focus:outline-none focus:ring-1 focus:ring-accent-500 ${
+                    busy ? 'opacity-60 cursor-wait' : ''
+                }`}
+            />
+            <span className="text-xs text-ink-3">%</span>
+        </div>
+    );
+}
+
+/** Multi-line invoice numbers — commits on blur. */
+function InvoiceNumbersInput({ value, busy, onCommit }) {
+    const [draft, setDraft] = useState(value || '');
+    const lastProp = useRef(value);
+
+    useEffect(() => {
+        if (lastProp.current !== value) {
+            lastProp.current = value;
+            setDraft(value || '');
+        }
+    }, [value]);
+
+    const commit = () => {
+        const prev = (value || '').trim();
+        const next = draft.trim();
+        if (next === prev) {
+            setDraft(value || '');
+            return;
+        }
+        onCommit(next);
+    };
+
+    return (
+        <textarea
+            value={draft}
+            disabled={busy}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                    setDraft(value || '');
+                    e.currentTarget.blur();
+                }
+            }}
+            rows={2}
+            placeholder="Invoice #"
+            aria-label="Invoice numbers"
+            className={`w-full min-w-[7rem] max-w-[12rem] px-1.5 py-1 text-xs leading-snug rounded-md border border-hairline bg-input-bg text-ink resize-y focus:outline-none focus:ring-1 focus:ring-accent-500 ${
+                busy ? 'opacity-60 cursor-wait' : ''
+            }`}
+        />
     );
 }
 
@@ -117,26 +221,66 @@ export default function Subs() {
 
     const rowKey = (r) => `${r.job}-${r.release}`;
 
+    const patchRow = (key, partial) => {
+        setReleases((list) =>
+            list.map((r) => (rowKey(r) === key ? { ...r, ...partial } : r)),
+        );
+    };
+
     const handleToggle = async (row, nextPaid) => {
         if (boolEq(row.installer_invoice_paid, nextPaid)) return;
         const key = rowKey(row);
-        setBusyKey(key);
+        setBusyKey(`${key}:paid`);
         setError(null);
         const prev = row.installer_invoice_paid;
-        setReleases((list) =>
-            list.map((r) =>
-                rowKey(r) === key ? { ...r, installer_invoice_paid: nextPaid } : r,
-            ),
-        );
+        patchRow(key, { installer_invoice_paid: nextPaid });
         try {
             await updateInstallerInvoicePaid(row.job, row.release, nextPaid);
         } catch (e) {
-            setReleases((list) =>
-                list.map((r) =>
-                    rowKey(r) === key ? { ...r, installer_invoice_paid: prev } : r,
-                ),
-            );
+            patchRow(key, { installer_invoice_paid: prev });
             setError(e?.response?.data?.error || e.message || 'Failed to update paid status');
+        } finally {
+            setBusyKey(null);
+        }
+    };
+
+    const handleProgress = async (row, nextProgress) => {
+        const key = rowKey(row);
+        const prev = row.installer_invoice_progress ?? null;
+        if (prev === nextProgress) return;
+        setBusyKey(`${key}:progress`);
+        setError(null);
+        patchRow(key, { installer_invoice_progress: nextProgress });
+        try {
+            const res = await updateInstallerInvoiceProgress(row.job, row.release, nextProgress);
+            // Server may normalize null
+            if (res && 'installer_invoice_progress' in res) {
+                patchRow(key, { installer_invoice_progress: res.installer_invoice_progress });
+            }
+        } catch (e) {
+            patchRow(key, { installer_invoice_progress: prev });
+            setError(e?.response?.data?.error || e.message || 'Failed to update progress');
+        } finally {
+            setBusyKey(null);
+        }
+    };
+
+    const handleInvoiceNumbers = async (row, nextNumbers) => {
+        const key = rowKey(row);
+        const prev = row.installer_invoice_numbers || '';
+        const next = nextNumbers || '';
+        if (prev.trim() === next.trim()) return;
+        setBusyKey(`${key}:numbers`);
+        setError(null);
+        patchRow(key, { installer_invoice_numbers: next });
+        try {
+            const res = await updateInstallerInvoiceNumbers(row.job, row.release, next);
+            if (res && 'installer_invoice_numbers' in res) {
+                patchRow(key, { installer_invoice_numbers: res.installer_invoice_numbers || '' });
+            }
+        } catch (e) {
+            patchRow(key, { installer_invoice_numbers: prev });
+            setError(e?.response?.data?.error || e.message || 'Failed to update invoice numbers');
         } finally {
             setBusyKey(null);
         }
@@ -155,14 +299,14 @@ export default function Subs() {
 
     return (
         <div className="flex-1 min-h-0 overflow-auto">
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
                 <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
                     <div>
                         <h1 className="text-xl font-semibold text-ink">
                             Invoice Paid
                         </h1>
                         <p className="mt-1 text-sm text-ink-3">
-                            Active releases by installer. Mark whether the subcontractor invoice is paid.
+                            Active releases by installer. Track progress, invoice numbers, and whether the subcontractor invoice is complete.
                         </p>
                     </div>
                     <div className="text-xs text-ink-3 tabular-nums notif-pod-reserve">
@@ -254,39 +398,58 @@ export default function Subs() {
                                                     <th className="px-3 py-2 font-medium hidden md:table-cell">Description</th>
                                                     <th className="px-3 py-2 font-medium hidden sm:table-cell">Stage</th>
                                                     <th className="px-3 py-2 font-medium hidden lg:table-cell">Start install</th>
-                                                    <th className="px-3 py-2 font-medium text-right">Invoice paid</th>
+                                                    <th className="px-3 py-2 font-medium whitespace-nowrap">Progress</th>
+                                                    <th className="px-3 py-2 font-medium whitespace-nowrap">Invoice #</th>
+                                                    <th className="px-3 py-2 font-medium text-right whitespace-nowrap">Invoiced complete</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {rows.map((r) => {
                                                     const key = rowKey(r);
+                                                    const busyPaid = busyKey === `${key}:paid`;
+                                                    const busyProgress = busyKey === `${key}:progress`;
+                                                    const busyNumbers = busyKey === `${key}:numbers`;
                                                     return (
                                                         <tr
                                                             key={key}
                                                             className="border-t border-hairline hover:bg-surface-2"
                                                         >
-                                                            <td className="px-3 py-2 tabular-nums text-ink font-medium">
+                                                            <td className="px-3 py-2 tabular-nums text-ink font-medium align-top">
                                                                 {r.job}
                                                             </td>
-                                                            <td className="px-3 py-2 tabular-nums text-ink-2">
+                                                            <td className="px-3 py-2 tabular-nums text-ink-2 align-top">
                                                                 {r.release}
                                                             </td>
-                                                            <td className="px-3 py-2 text-ink-2 max-w-[12rem] truncate" title={r.job_name || ''}>
+                                                            <td className="px-3 py-2 text-ink-2 max-w-[12rem] truncate align-top" title={r.job_name || ''}>
                                                                 {r.job_name || '—'}
                                                             </td>
-                                                            <td className="px-3 py-2 text-ink-2 hidden md:table-cell max-w-[14rem] truncate" title={r.description || ''}>
+                                                            <td className="px-3 py-2 text-ink-2 hidden md:table-cell max-w-[14rem] truncate align-top" title={r.description || ''}>
                                                                 {r.description || '—'}
                                                             </td>
-                                                            <td className="px-3 py-2 text-ink-2 hidden sm:table-cell">
+                                                            <td className="px-3 py-2 text-ink-2 hidden sm:table-cell align-top">
                                                                 {r.stage || '—'}
                                                             </td>
-                                                            <td className="px-3 py-2 text-ink-2 hidden lg:table-cell tabular-nums">
+                                                            <td className="px-3 py-2 text-ink-2 hidden lg:table-cell tabular-nums align-top">
                                                                 {fmtDate(r.start_install)}
                                                             </td>
-                                                            <td className="px-3 py-2 text-right">
+                                                            <td className="px-3 py-2 align-top">
+                                                                <ProgressInput
+                                                                    value={r.installer_invoice_progress}
+                                                                    busy={busyProgress}
+                                                                    onCommit={(n) => handleProgress(r, n)}
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2 align-top">
+                                                                <InvoiceNumbersInput
+                                                                    value={r.installer_invoice_numbers}
+                                                                    busy={busyNumbers}
+                                                                    onCommit={(v) => handleInvoiceNumbers(r, v)}
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2 text-right align-top">
                                                                 <PaidToggle
                                                                     paid={!!r.installer_invoice_paid}
-                                                                    busy={busyKey === key}
+                                                                    busy={busyPaid}
                                                                     onChange={(next) => handleToggle(r, next)}
                                                                 />
                                                             </td>

@@ -1,10 +1,12 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: HTTP calls for the admin Subs page (installer invoice paid tracking).
+ * purpose: HTTP calls for the admin Subs page (installer invoice tracking).
  * exports:
  *   fetchSubsReleases: List active assigned releases + distinct installers
  *   updateInstallerInvoicePaid: Toggle paid yes/no for a job-release
+ *   updateInstallerInvoiceProgress: Set 0–100 progress (or null to clear)
+ *   updateInstallerInvoiceNumbers: Set multi-line invoice numbers (or empty to clear)
  * imports_from: [axios, ../utils/api]
  * imported_by: [pages/Subs.jsx]
  * invariants:
@@ -31,6 +33,22 @@ export async function updateInstallerInvoicePaid(job, release, installerInvoiceP
     const { data } = await axios.patch(
         `${BASE}/releases/${job}/${encodeURIComponent(release)}/installer-invoice-paid`,
         { installer_invoice_paid: !!installerInvoicePaid },
+    );
+    return data;
+}
+
+export async function updateInstallerInvoiceProgress(job, release, progress) {
+    const { data } = await axios.patch(
+        `${BASE}/releases/${job}/${encodeURIComponent(release)}/installer-invoice-progress`,
+        { installer_invoice_progress: progress },
+    );
+    return data;
+}
+
+export async function updateInstallerInvoiceNumbers(job, release, numbers) {
+    const { data } = await axios.patch(
+        `${BASE}/releases/${job}/${encodeURIComponent(release)}/installer-invoice-numbers`,
+        { installer_invoice_numbers: numbers ?? '' },
     );
     return data;
 }

@@ -520,6 +520,10 @@ class Releases(db.Model):
     installer_invoice_paid = db.Column(
         db.Boolean, nullable=False, default=False, server_default='0'
     )
+    # Install progress toward the subcontractor invoice (0–100). Editable on Subs → Invoice Paid.
+    installer_invoice_progress = db.Column(db.Integer, nullable=True)
+    # Subcontractor invoice number(s) for this release. Free-text, multi-line (one or more IDs).
+    installer_invoice_numbers = db.Column(db.Text, nullable=True)
     comp_eta = db.Column(db.Date)  # Changed from String to Date
     job_comp = db.Column(db.String(8))
     invoiced = db.Column(db.String(8))
@@ -615,6 +619,8 @@ class Releases(db.Model):
             "installer": self.installer,
             "num_guys": self.num_guys,
             "installer_invoice_paid": bool(self.installer_invoice_paid),
+            "installer_invoice_progress": self.installer_invoice_progress,
+            "installer_invoice_numbers": self.installer_invoice_numbers,
             "comp_eta": self.comp_eta,
             "job_comp": self.job_comp,
             "invoiced": self.invoiced,
