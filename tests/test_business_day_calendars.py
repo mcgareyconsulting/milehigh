@@ -39,15 +39,25 @@ def test_unknown_calendar_raises():
 
 
 def test_add_business_days_field_counts_friday():
-    # Mon + 4 field days = Fri
+    # Exclusive of start (legacy Excel / field contract): Mon + 4 field days =
+    # Tue, Wed, Thu, Fri → 2026-08-14.
     assert add_business_days(MON, 4, calendar=CALENDAR_FIELD) == date(2026, 8, 14)
 
 
 def test_add_business_days_shop_skips_friday():
-    # Thu + 1 shop day skips Fri/Sat/Sun → Mon
+    # Exclusive of start — same contract as field, different working set.
+    # Thu + 1 shop day: skip Fri/Sat/Sun → next Mon.
     assert add_business_days(THU, 1, calendar=CALENDAR_SHOP) == MON
-    # Mon + 4 shop days = Mon..Thu = next Thu (skips Fri)
-    assert add_business_days(MON, 4, calendar=CALENDAR_SHOP) == date(2026, 8, 13)
+
+    # Mon + 4 shop days = one full shop week of capacity (~400 hrs @ ~100/day).
+    # Counted days: Tue, Wed, Thu, next Mon — Friday is NOT a shop day.
+    # Landing on Thu (8/13) would be wrong: that is only *three* exclusive shop
+    # steps (Tue/Wed/Thu), or an inclusive Mon–Thu span the helper does not use.
+    assert add_business_days(MON, 4, calendar=CALENDAR_SHOP) == date(2026, 8, 17)
+
+    # Parity check: field's 5th day is Friday; shop never lands there.
+    assert add_business_days(MON, 5, calendar=CALENDAR_FIELD) == date(2026, 8, 17)  # next Mon
+    assert add_business_days(MON, 5, calendar=CALENDAR_SHOP) == date(2026, 8, 18)   # next Tue
 
 
 def test_before_shop_skips_friday_backward():
@@ -83,5 +93,9 @@ def test_paint_window_style_chain_never_starts_on_friday():
 def test_fab_projection_uses_shop_calendar():
     from app.brain.job_log.scheduling.calculator import calculate_projected_fab_complete_date
 
-    # 1 shop day after Thursday → Monday (not Friday)
+    # days_in_front=0 → complete "today" (reference), even if today is Friday.
+    assert calculate_projected_fab_complete_date(0, FRI) == FRI
+    # 1 day of queue ahead of Thursday → clears next shop day (Monday), not Friday.
     assert calculate_projected_fab_complete_date(1, THU) == MON
+    # ~1 shop-week of queue (4 days @ FAB_HOURS_PER_DAY) from Monday → next Monday.
+    assert calculate_projected_fab_complete_date(4, MON) == date(2026, 8, 17)
