@@ -263,7 +263,7 @@ class JobsApi {
         }
     }
 
-    // Carmen Miranda code-compliance review of a drawing version (admin-only).
+    // Carmen code-compliance review of a drawing version (admin or drafter).
     async getBBReview(releaseId, versionId) {
         try {
             const response = await axios.get(

@@ -40,20 +40,32 @@ Source findings: `~/Desktop/Transcripts/MHMW/processed/`. Meeting rollup:
 
 **Effort:** S = under a day · M = 2–4 days · L = 1–2 weeks · XL = 3+ weeks.
 
-> ### 🔴 Read this first
+> ### 🟠 Read this first — **substantially corrected 2026-08-09**
 >
-> **There is no backup of production.** Confirmed 2026-07-22 — neither the
-> Postgres database nor the disk holding every PDF and photo. This is **K4**,
-> it is scheduled for **this week**, and it outranks every feature below it.
-> Nothing in this catalog is worth building if the data it operates on cannot
-> be recovered.
+> **The "there is no backup of production" claim that headed this catalog since
+> 2026-07-22 was wrong.** Render-managed **PITR has been enabled all along**,
+> with a 3-day window. The database was never as exposed as this document said,
+> and K4's Tier 0 framing rested on that error for over two weeks.
 >
-> **Status 2026-07-26 — still true.** A runbook and data-architecture plan exist
-> on `claude/render-backup-data-architecture-vlizsr` (unmerged, 610 lines of
-> docs). **Nothing has been enabled**; nothing backup-related has reached main.
-> The week it was scheduled for has ended with the exposure unchanged — and this
-> batch just added `tm_tickets`, `tm_ticket_attachments`, and `subcontractors`
-> to the set of tables with no backup behind them.
+> **What was actually true:** the 3-day window is short (corruption noticed after
+> a weekend is past recovery), PITR lives in the same Render account as the
+> database (a correlated failure), and **the binary disk had no protection at
+> all** — that part was correct.
+>
+> **Status 2026-08-09.** An independent offsite layer now exists:
+> `scripts/backup_postgres.py` and `scripts/backup_blobs.py` write tiered,
+> lifecycle-expired backups to Cloudflare R2 (`mhmw-data`), verified end-to-end
+> against sandbox. **Neither cron is scheduled yet and no recovery drill has
+> run**, so this is not finished — see `docs/backup-and-dr-runbook.md` §7 for the
+> exact live/not-live split.
+>
+> **The audit also found a live data-loss bug**, unrelated to backups but found
+> by looking: `MATERIAL_ORDER_STORAGE_ROOT` and `LOOKAHEAD_PDF_STORAGE_ROOT` were
+> read by their features but never defined in config, so supplier-order
+> attachments and ingested lookahead PDFs were written into the deployed code
+> tree and **destroyed on every deploy** while their DB rows survived pointing at
+> nothing. Fixed. Marked-up PDFs and photos were always on the mounted disk and
+> were never affected.
 
 ---
 
@@ -1761,8 +1773,9 @@ written is an operation.
 
 #### Backups — split out as K4
 
-Backups were originally bundled here. **They are now K4 and are CRITICAL.**
-Confirmed 2026-07-22: **there is no backup.**
+Backups were originally bundled here. **They are now K4.** Status as of
+2026-08-09: largely closed, and the 2026-07-22 "there is no backup" premise was
+wrong about Postgres — PITR was enabled all along.
 
 One connection matters for sequencing: **object storage solves the binary-backup
 problem structurally.** Versioning and replication are built into every object
@@ -1774,22 +1787,32 @@ writing a disk-backup script with a short shelf life.
 
 ---
 
-### K4. Backups — **🔴 CRITICAL. This week.**
+### K4. Backups — **🟠 Largely closed 2026-08-09. Crons + drill remain.**
 
-> **Confirmed by Daniel 2026-07-22: there is no backup.** Elevated above every
-> other item in this catalog. Nothing else here matters if the data is not
-> recoverable.
+> **The 2026-07-22 "there is no backup" finding was half wrong**, and it drove
+> this item's Tier 0 rank for over two weeks. Managed Postgres PITR had been
+> enabled the entire time. The binary disk half was correct.
 
 **This is not a feature and should not be queued behind features.** Every item
 in this document assumes the data it operates on continues to exist.
 
-#### What is unprotected
+#### State as of 2026-08-09
 
 | Asset | State |
 |---|---|
-| **Production Postgres** | No backup. Every release, submittal, event stream, and audit trail |
-| **Binary storage disk** | No backup. Every marked-up PDF, release photo, board photo |
-| **The combination** | Worse than either alone — a restored DB with no files gives you `storage_key` rows pointing at nothing, which *looks* like a successful restore |
+| **Production Postgres** | ✅ Managed PITR, **3-day window** (was always on) **+** nightly `pg_dump` → R2, tiered and lifecycle-expired. `scripts/backup_postgres.py`, verified end-to-end against sandbox |
+| **Binary storage disk** | 🟠 `/var/data` (1 GB). `scripts/backup_blobs.py` tars the whole mount → R2. Written and tested, **never yet run against the real disk** |
+| **The combination** | The failure mode this table used to warn about — `storage_key` rows pointing at nothing — **was already happening in production**, independent of any restore: two storage roots resolved to ephemeral paths and were wiped every deploy. Found and fixed 2026-08-09 |
+
+#### What is still open
+
+- **Neither cron is scheduled.** Nothing runs automatically.
+- **No production backup has ever run.** Sandbox only.
+- **No recovery drill.** Runbook §6 defines it. Until it passes, the backup is
+  believed rather than proven — and an untested backup has a long history of
+  turning out never to have been valid.
+- **3-day PITR bounds detection, not just loss.** Corruption noticed after a
+  weekend is past that window; layer 2 is what covers it.
 
 #### Why this is worse than it looks
 
@@ -1918,7 +1941,7 @@ the transcript alone.
 
 | Item | Effort | Note |
 |---|---|---|
-| **K4 Backups** | S–M | **Still no backup as of 2026-07-26.** A runbook exists on an unmerged branch; nothing is enabled. The week it was scheduled for has passed and the exposure is unchanged — **and it now covers T&M tickets, field photos, and subcontractor accounts too.** Not a feature — the precondition for every other item being worth building |
+| **K4 Backups** | S–M | 🟠 **Mostly done 2026-08-09, not finished.** The "no backup" premise was wrong — Postgres PITR (3-day) was always on. Offsite layer 2 now built and verified to R2: `backup_postgres.py`, `backup_blobs.py`, lifecycle retention, runbook corrected. **Remaining: schedule both crons, run the recovery drill.** Until the drill passes this is unproven. Also fixed a live data-loss bug in two storage roots found during the work |
 
 ---
 
@@ -2048,12 +2071,19 @@ deferred.** If one Procore submittal advances GC→DRR→FC and our sync freezes
 DWL DRR filtering, `start_install`, Rel assignment. Resolvable with a read-only
 SQL check. See B3.
 
-**There is no backup — see K4.** Confirmed 2026-07-22, **still true 2026-07-26.**
-Prod Postgres and the binary storage disk are both unprotected. A runbook and
-data-architecture plan were written to
-`claude/render-backup-data-architecture-vlizsr` and never merged or executed.
-This outranked everything else in the catalog for a week in which four other
-items shipped.
+**The backup picture was misdiagnosed — see K4.** The 2026-07-22 finding of "no
+backup" was **wrong about Postgres**: managed PITR (3-day window) had been
+enabled the whole time. It was **right about the binary disk**, which had no
+protection. Corrected 2026-08-09, when an offsite layer to R2 was built,
+verified against sandbox, and the runbook merged. Crons and the recovery drill
+remain outstanding.
+
+**The lesson generalizes past backups.** Nobody could say what was protected
+without checking the dashboard, and nobody had. The same session found an hourly
+OneDrive→Excel poller documented in CLAUDE.md that does not exist, a persistent
+disk still mounted for that dead pipeline, and two storage roots silently writing
+to ephemeral paths. **The gap is between what is documented and what is true**,
+and a data lake built over that gap inherits it at scale.
 
 **Carmen's mailbox moved and the code review cannot prove the outside moved with
 it.** `carmen_ai@mhmw.com` replaced `bb@mhmw.com` in `Config.CARMEN_MAILBOX` and

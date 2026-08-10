@@ -1,17 +1,20 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Single modal for a release — details, drawings/photos and change log behind tabs, with a threaded notes rail. Styled to the Aug 2026 redesign handoff §4.
+ * purpose: Single modal for a release — Details / Attachments / Change Log, with an
+ *   Activity rail on Details and Change Log (hidden on Attachments for full-width viewer).
  * exports:
- *   ReleaseHubModal: Portal modal with Details / Drawings & Photos / Change Log tabs
- * imports_from: [react, react-dom, ./JobDetailsBody, ./PdfVersionHistoryModal, ./EventsList, ./ReleaseNotesRail, ../utils/stageTint]
- * imported_by: [frontend/src/components/JobsTableRow.jsx, frontend/src/components/JobLogCardGrid.jsx, frontend/src/components/GanttChart.jsx]
+ *   ReleaseHubModal: Portal modal shell for a release
+ * imports_from: [react, react-dom, ./JobDetailsBody, ./PdfVersionHistoryModal, ./EventsList,
+ *   ./ReleaseNotesRail, ../utils/stageTint]
+ * imported_by: [frontend/src/components/JobsTableRow.jsx, frontend/src/components/JobLogCardGrid.jsx,
+ *   frontend/src/components/GanttChart.jsx]
  * invariants:
  *   - Renders via createPortal to document.body to escape table overflow clipping
  *   - Leaves a click-out margin around the panel: the backdrop stays reachable on every edge
  *   - A tab pane stays mounted once visited, so drafts and uploads survive tab switching
- *   - The notes rail sits OUTSIDE the tab panes — notes stay readable whichever tab is open
- * updated_by_agent: 2026-08-06T00:00:00Z
+ *   - Activity rail renders on Details + Change Log only — Attachments takes the full width
+ * updated_by_agent: 2026-08-08T00:00:00Z
  */
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -24,9 +27,14 @@ import { stageTint } from '../utils/stageTint';
 
 const TABS = [
     { key: 'details', label: 'Details' },
-    { key: 'drawings', label: 'Drawings & Photos' },
+    { key: 'attachments', label: 'Attachments' },
     { key: 'changelog', label: 'Change Log' },
 ];
+
+/** Map legacy initialTab values from callers that still pass 'drawings'. */
+const normalizeTab = (tab) => (tab === 'drawings' ? 'attachments' : tab);
+
+const ACTIVITY_RAIL_WIDTH = 346;
 
 export function ReleaseHubModal({
     isOpen,
@@ -39,16 +47,26 @@ export function ReleaseHubModal({
     onOrdersChanged = null,
     initialCommentVersionId = null,
     onOpenVersion = null,
+    /** Actionable Carmen findings count for the Attachments tab badge (0 = hidden). */
+    attachmentsBadgeCount = 0,
+    onAttachmentsBadgeCount = null,
+    /** Called after Activity rail overwrites Job Log notes (parent can refresh row). */
+    onNotesChanged = null,
 }) {
-    const [activeTab, setActiveTab] = useState(initialTab);
+    const startTab = normalizeTab(initialTab);
+    const [activeTab, setActiveTab] = useState(startTab);
     // Panes render once activated and then stay mounted (hidden) so an
     // in-progress comment or note draft isn't thrown away by a tab switch.
-    const [visited, setVisited] = useState(() => ({ [initialTab]: true }));
+    const [visited, setVisited] = useState(() => ({ [startTab]: true }));
+    // Local badge can be lifted from the Attachments pane once reviews load.
+    const [badgeFromPane, setBadgeFromPane] = useState(0);
 
     useEffect(() => {
         if (!isOpen) return;
-        setActiveTab(initialTab);
-        setVisited((prev) => ({ ...prev, [initialTab]: true }));
+        const tab = normalizeTab(initialTab);
+        setActiveTab(tab);
+        setVisited((prev) => ({ ...prev, [tab]: true }));
+        setBadgeFromPane(0);
     }, [isOpen, initialTab]);
 
     useEffect(() => {
@@ -87,6 +105,15 @@ export function ReleaseHubModal({
     const context = [jobName, pm ? `PM ${pm}` : null, by ? `Detailed by ${by}` : null]
         .filter(Boolean).join(' · ');
 
+    const showActivityRail = activeTab === 'details' || activeTab === 'changelog';
+    const badgeCount = Math.max(0, Number(attachmentsBadgeCount) || 0, Number(badgeFromPane) || 0);
+
+    const reportBadge = (n) => {
+        const count = Math.max(0, Number(n) || 0);
+        setBadgeFromPane(count);
+        onAttachmentsBadgeCount?.(count);
+    };
+
     const content = (
         <div
             className="fixed inset-0 z-50 dc-fade flex items-center justify-center p-4"
@@ -96,8 +123,8 @@ export function ReleaseHubModal({
             <div
                 className="dc-pop bg-surface border border-hairline-strong flex flex-col overflow-hidden"
                 style={{
-                    width: 'min(1180px, 94vw)',
-                    height: 'min(760px, 92vh)',
+                    width: 'min(1380px, 96vw)',
+                    height: 'min(860px, 94vh)',
                     borderRadius: 14,
                     boxShadow: 'var(--shadow)',
                 }}
@@ -164,10 +191,11 @@ export function ReleaseHubModal({
                     </div>
 
                     <div className="flex items-center" style={{ gap: 18, marginTop: 12 }}>
-                        {/* Drawings needs the release row's id to fetch versions/photos;
+                        {/* Attachments needs the release row's id to fetch versions/photos;
                             without it the pane would just render 404s, so drop the tab. */}
-                        {TABS.filter((tab) => tab.key !== 'drawings' || releaseId != null).map((tab) => {
+                        {TABS.filter((tab) => tab.key !== 'attachments' || releaseId != null).map((tab) => {
                             const active = tab.key === activeTab;
+                            const showBadge = tab.key === 'attachments' && badgeCount > 0;
                             return (
                                 <button
                                     key={tab.key}
@@ -175,7 +203,7 @@ export function ReleaseHubModal({
                                     onClick={() => selectTab(tab.key)}
                                     aria-selected={active}
                                     role="tab"
-                                    className="bg-transparent border-0 cursor-pointer"
+                                    className="bg-transparent border-0 cursor-pointer inline-flex items-center gap-1.5"
                                     style={{
                                         padding: '8px 0 9px',
                                         fontSize: 13,
@@ -185,15 +213,37 @@ export function ReleaseHubModal({
                                     }}
                                 >
                                     {tab.label}
+                                    {showBadge && (
+                                        <span
+                                            className="font-mono font-semibold"
+                                            style={{
+                                                fontSize: 10.5,
+                                                padding: '1px 6px',
+                                                borderRadius: 999,
+                                                background: '#fef3c7',
+                                                color: '#b45309',
+                                                lineHeight: 1.3,
+                                            }}
+                                            aria-label={`${badgeCount} findings to confirm`}
+                                        >
+                                            {badgeCount}
+                                        </span>
+                                    )}
                                 </button>
                             );
                         })}
                     </div>
                 </div>
 
-                {/* Body: pane | notes rail. The rail is a sibling of the panes, not
-                    inside one, so notes stay visible on every tab. */}
-                <div className="flex-1 min-h-0 grid" style={{ gridTemplateColumns: 'minmax(0,1fr) 372px' }}>
+                {/* Body: pane | activity rail (rail only on Details + Change Log). */}
+                <div
+                    className="flex-1 min-h-0 grid"
+                    style={{
+                        gridTemplateColumns: showActivityRail
+                            ? `minmax(0,1fr) ${ACTIVITY_RAIL_WIDTH}px`
+                            : 'minmax(0,1fr)',
+                    }}
+                >
                     <div className="min-w-0 relative">
                         {visited.details && (
                             <div
@@ -209,9 +259,9 @@ export function ReleaseHubModal({
                             </div>
                         )}
 
-                        {visited.drawings && releaseId != null && (
+                        {visited.attachments && releaseId != null && (
                             <div
-                                className={`absolute inset-0 flex flex-col ${activeTab === 'drawings' ? '' : 'hidden'}`}
+                                className={`absolute inset-0 flex flex-col ${activeTab === 'attachments' ? '' : 'hidden'}`}
                                 role="tabpanel"
                             >
                                 <PdfVersionHistoryModal
@@ -223,6 +273,7 @@ export function ReleaseHubModal({
                                     initialCommentVersionId={initialCommentVersionId}
                                     onClose={onClose}
                                     onOpenVersion={onOpenVersion}
+                                    onActionableCount={reportBadge}
                                 />
                             </div>
                         )}
@@ -233,16 +284,23 @@ export function ReleaseHubModal({
                                 style={{ padding: '16px 18px 22px' }}
                                 role="tabpanel"
                             >
-                                <EventsList jobFilter={jobNumber} releaseFilter={releaseNumber} />
+                                <EventsList
+                                    jobFilter={jobNumber}
+                                    releaseFilter={releaseNumber}
+                                    variant="hub"
+                                />
                             </div>
                         )}
                     </div>
 
-                    <ReleaseNotesRail
-                        job={jobNumber}
-                        release={releaseNumber}
-                        currentNotes={job['Notes'] ?? job.notes}
-                    />
+                    {showActivityRail && (
+                        <ReleaseNotesRail
+                            job={jobNumber}
+                            release={releaseNumber}
+                            currentNotes={job['Notes'] ?? job.notes}
+                            onNotesChanged={onNotesChanged}
+                        />
+                    )}
                 </div>
             </div>
         </div>
