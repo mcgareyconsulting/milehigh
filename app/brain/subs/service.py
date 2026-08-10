@@ -3,20 +3,22 @@
 schema_version: 1
 purpose: Query and update helpers for the admin Subs installer-invoice page.
 exports:
-  list_subs_releases: Active assigned releases, sorted by installer / job / release
+  list_subs_releases: Assigned releases for Invoice Paid (active + archived-until-complete)
   set_installer_invoice_paid: Toggle paid flag + audit event (no-op if unchanged)
   set_installer_invoice_progress: Set 0–100 progress + audit event (no-op if unchanged)
   set_installer_invoice_numbers: Set multi-line invoice numbers + audit event (no-op if unchanged)
 imports_from: [app.models, app.services.job_event_service, app.logging_config]
 imported_by: [app/brain/subs/routes.py]
 invariants:
-  - Only active, non-archived releases with a non-empty installer appear in the list.
+  - Live assigned releases appear; archived assigned releases stay until invoiced complete.
   - Oscar is MHMW staff (still in INSTALLER_TEAMS for scheduling) — hidden from this tab.
   - installer_invoice_* fields are independent of Releases.invoiced (customer billing).
   - No Trello / outbox / scheduling cascade.
 """
 from datetime import datetime
 from typing import Optional
+
+from sqlalchemy import String, and_, cast, or_
 
 from app.models import Releases, db
 from app.services.job_event_service import JobEventService
@@ -46,59 +48,93 @@ def _serialize_release(rel: Releases) -> dict:
         "stage": rel.stage,
         "start_install": rel.start_install.isoformat() if rel.start_install else None,
         "job_comp": rel.job_comp,
+        "is_archived": bool(rel.is_archived),
         "installer_invoice_paid": bool(rel.installer_invoice_paid),
         "installer_invoice_progress": rel.installer_invoice_progress,
         "installer_invoice_numbers": rel.installer_invoice_numbers or "",
     }
 
 
-def _active_assigned_base_query():
-    """Active, non-archived releases with a non-empty installer."""
-    return Releases.query.filter(
-        Releases.is_archived.is_(False),
-        # Treat NULL is_active as active (legacy rows).
-        (Releases.is_active.is_(None)) | (Releases.is_active.is_(True)),
+def _has_installer_clause():
+    return and_(
         Releases.installer.isnot(None),
         Releases.installer != "",
     )
+
+
+def _subs_list_base_query():
+    """Releases that belong on Invoice Paid.
+
+    - Active (non-archived, not soft-deleted) with an installer, or
+    - Archived with an installer and *not* yet invoiced complete (outstanding sub balance).
+    """
+    has_installer = _has_installer_clause()
+    live = and_(
+        Releases.is_archived.is_(False),
+        # Treat NULL is_active as active (legacy rows).
+        (Releases.is_active.is_(None)) | (Releases.is_active.is_(True)),
+        has_installer,
+    )
+    archived_outstanding = and_(
+        Releases.is_archived.is_(True),
+        Releases.installer_invoice_paid.is_(False),
+        has_installer,
+    )
+    return Releases.query.filter(or_(live, archived_outstanding))
 
 
 def list_subs_releases(
     *,
     paid: Optional[bool] = None,
     installer: Optional[str] = None,
+    q: Optional[str] = None,
 ) -> dict:
-    """Return active releases with an installer, sorted for the Subs page.
+    """Return releases for the Subs Invoice Paid page.
 
     Args:
         paid: If True/False, filter by installer_invoice_paid; None = all.
         installer: Exact installer team name filter; None = all.
+        q: Free-text search (job, release, name, description, installer, invoice #).
 
-    `installers` is always the full distinct set of active assigned teams so
-    filter chips stay stable when paid/installer filters shrink the table.
+    `installers` is always the full distinct set of crews still on this list
+    (ignoring paid/installer/q filters) so filter chips stay stable.
     """
-    # Stable roster for the installer dropdown (ignore paid/installer filters).
+    # Stable roster for the installer dropdown (ignore paid/installer/search filters).
     installer_names = {
         name
-        for (name,) in _active_assigned_base_query()
+        for (name,) in _subs_list_base_query()
         .with_entities(Releases.installer)
         .distinct()
         .all()
         if name and not _is_subs_excluded_installer(name)
     }
 
-    q = _active_assigned_base_query()
+    query = _subs_list_base_query()
 
     if paid is not None:
-        q = q.filter(Releases.installer_invoice_paid.is_(paid))
+        query = query.filter(Releases.installer_invoice_paid.is_(paid))
 
     if installer:
         # Don't let a filter resurrect an excluded (non-sub) crew.
         if _is_subs_excluded_installer(installer):
             return {"releases": [], "installers": sorted(installer_names)}
-        q = q.filter(Releases.installer == installer)
+        query = query.filter(Releases.installer == installer)
 
-    rows = q.order_by(
+    term = (q or "").strip()
+    if term:
+        like = f"%{term}%"
+        query = query.filter(
+            or_(
+                cast(Releases.job, String).ilike(like),
+                Releases.release.ilike(like),
+                Releases.job_name.ilike(like),
+                Releases.description.ilike(like),
+                Releases.installer.ilike(like),
+                Releases.installer_invoice_numbers.ilike(like),
+            )
+        )
+
+    rows = query.order_by(
         Releases.installer.asc(),
         Releases.job.asc(),
         Releases.release.asc(),
@@ -146,6 +182,7 @@ def set_installer_invoice_paid(
         return {
             "status": "success",
             "installer_invoice_paid": new,
+            "is_archived": bool(job_record.is_archived),
             "event_id": None,
             "changed": False,
         }
@@ -175,6 +212,7 @@ def set_installer_invoice_paid(
     return {
         "status": "success",
         "installer_invoice_paid": new,
+        "is_archived": bool(job_record.is_archived),
         "event_id": event.id if event else None,
         "changed": True,
     }

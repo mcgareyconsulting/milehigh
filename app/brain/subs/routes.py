@@ -52,18 +52,22 @@ def _parse_bool_body(raw):
 @admin_required
 @handle_errors("list subs releases")
 def list_subs_releases():
-    """List active releases with an installer, sorted by installer / job / release.
+    """List Invoice Paid releases (live assigned + archived until invoiced complete).
 
     Query params:
         paid: true|false (optional) — filter by installer_invoice_paid
         installer: exact team name (optional)
+        q: free-text search (optional)
     """
     paid = _parse_paid_arg(request.args.get("paid"))
     installer = request.args.get("installer") or None
     if installer is not None:
         installer = installer.strip() or None
+    q = request.args.get("q") or None
+    if q is not None:
+        q = q.strip() or None
 
-    payload = service.list_subs_releases(paid=paid, installer=installer)
+    payload = service.list_subs_releases(paid=paid, installer=installer, q=q)
     return jsonify(payload), 200
 
 

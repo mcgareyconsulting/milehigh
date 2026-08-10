@@ -14,7 +14,7 @@
  *   - Server enforces admin; optimistic edits revert on error.
  *   - Styling matches Subs sibling pages (SubcontractorAdmin / T&M token shell).
  */
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { checkAuth } from '../utils/auth';
 import {
     fetchSubsReleases,
@@ -163,7 +163,7 @@ function InvoiceNumbersInput({ value, busy, onCommit }) {
             rows={2}
             placeholder="Invoice #"
             aria-label="Invoice numbers"
-            className={`w-full min-w-[6.5rem] max-w-[11rem] px-1.5 py-0.5 text-jl font-mono leading-snug resize-y ${inputClass} ${
+            className={`w-full max-w-[11rem] mx-auto block px-1.5 py-0.5 text-jl font-mono leading-snug text-center resize-y ${inputClass} ${
                 busy ? 'opacity-60 cursor-wait' : ''
             }`}
         />
@@ -188,11 +188,19 @@ export default function Subs() {
     const [installers, setInstallers] = useState([]);
     const [paidFilter, setPaidFilter] = useState('all');
     const [installerFilter, setInstallerFilter] = useState('');
+    const [searchInput, setSearchInput] = useState('');
+    const [searchQ, setSearchQ] = useState('');
     const [busyKey, setBusyKey] = useState(null);
 
     useEffect(() => {
         checkAuth().then((user) => setAuthorized(!!(user && user.is_admin)));
     }, []);
+
+    // Debounce free-text search so we don't hit the API on every keystroke.
+    useEffect(() => {
+        const t = setTimeout(() => setSearchQ(searchInput.trim()), 300);
+        return () => clearTimeout(t);
+    }, [searchInput]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -202,6 +210,7 @@ export default function Subs() {
             const data = await fetchSubsReleases({
                 paid: paidOpt,
                 installer: installerFilter || undefined,
+                q: searchQ || undefined,
             });
             setReleases(data.releases || []);
             setInstallers(data.installers || []);
@@ -210,7 +219,7 @@ export default function Subs() {
         } finally {
             setLoading(false);
         }
-    }, [paidFilter, installerFilter]);
+    }, [paidFilter, installerFilter, searchQ]);
 
     useEffect(() => {
         if (authorized) load();
@@ -237,11 +246,29 @@ export default function Subs() {
         setBusyKey(`${key}:paid`);
         setError(null);
         const prev = row.installer_invoice_paid;
-        patchRow(key, { installer_invoice_paid: nextPaid });
+        // Archived rows leave the list once marked invoiced complete.
+        if (nextPaid && row.is_archived) {
+            setReleases((list) => list.filter((r) => rowKey(r) !== key));
+        } else {
+            patchRow(key, { installer_invoice_paid: nextPaid });
+        }
         try {
             await updateInstallerInvoicePaid(row.job, row.release, nextPaid);
         } catch (e) {
-            patchRow(key, { installer_invoice_paid: prev });
+            if (nextPaid && row.is_archived) {
+                // Restore removed archived row
+                setReleases((list) => {
+                    if (list.some((r) => rowKey(r) === key)) return list;
+                    return [...list, { ...row, installer_invoice_paid: prev }].sort((a, b) => {
+                        const ia = (a.installer || '').localeCompare(b.installer || '');
+                        if (ia !== 0) return ia;
+                        if (a.job !== b.job) return a.job - b.job;
+                        return String(a.release).localeCompare(String(b.release));
+                    });
+                });
+            } else {
+                patchRow(key, { installer_invoice_paid: prev });
+            }
             setError(e?.response?.data?.error || e.message || 'Failed to update paid status');
         } finally {
             setBusyKey(null);
@@ -312,7 +339,7 @@ export default function Subs() {
                     <div className="min-w-0">
                         <h1 className="text-xl font-bold text-ink">Invoice Paid</h1>
                         <p className="mt-0.5 text-sm text-ink-3">
-                            Active releases by installer. Progress, invoice numbers, and complete status.
+                            Sub invoices by installer. Archived releases stay until marked invoiced complete.
                         </p>
                     </div>
                     <div className="text-xs text-ink-3 font-mono tabular-nums notif-pod-reserve shrink-0">
@@ -355,6 +382,15 @@ export default function Subs() {
                         ))}
                     </select>
 
+                    <input
+                        type="search"
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                        placeholder="Search job, name, invoice #…"
+                        aria-label="Search releases"
+                        className="text-sm rounded-lg border border-hairline bg-surface text-ink px-3 py-1.5 min-w-[12rem] flex-1 max-w-xs focus:outline-none focus:ring-1 focus:ring-accent-500"
+                    />
+
                     <button
                         type="button"
                         onClick={load}
@@ -377,97 +413,134 @@ export default function Subs() {
                     </div>
                 ) : releases.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-hairline-strong p-12 text-center text-sm text-ink-3">
-                        No assigned installers on active releases.
+                        {searchQ
+                            ? `No releases match “${searchQ}”.`
+                            : 'No assigned sub releases with outstanding work.'}
                     </div>
                 ) : (
-                    <div className="space-y-5">
-                        {groups.map(([installer, rows]) => {
-                            const unpaidCount = rows.filter((r) => !r.installer_invoice_paid).length;
-                            return (
-                                <section key={installer}>
-                                    <div className="flex items-baseline justify-between gap-2 mb-1.5 px-0.5">
-                                        <h2 className="text-sm font-bold text-ink">
-                                            {installer}
-                                        </h2>
-                                        <span className="text-xs text-ink-3 font-mono tabular-nums">
-                                            {unpaidCount} unpaid · {rows.length} total
-                                        </span>
-                                    </div>
-
-                                    <div className="overflow-x-auto rounded-xl border border-hairline bg-surface">
-                                        <table className="min-w-full text-sm">
-                                            <thead className="bg-head-bg">
-                                                <tr>
-                                                    <th className="px-3 py-2 text-left font-semibold text-ink-3">Job</th>
-                                                    <th className="px-3 py-2 text-left font-semibold text-ink-3">Rel</th>
-                                                    <th className="px-3 py-2 text-left font-semibold text-ink-3">Job name</th>
-                                                    <th className="px-3 py-2 text-left font-semibold text-ink-3 hidden md:table-cell">Description</th>
-                                                    <th className="px-3 py-2 text-left font-semibold text-ink-3 hidden sm:table-cell">Stage</th>
-                                                    <th className="px-3 py-2 text-left font-semibold text-ink-3 hidden lg:table-cell whitespace-nowrap">Start install</th>
-                                                    <th className="px-3 py-2 text-left font-semibold text-ink-3 whitespace-nowrap">Progress</th>
-                                                    <th className="px-3 py-2 text-left font-semibold text-ink-3 whitespace-nowrap">Invoice #</th>
-                                                    <th className="px-3 py-2 text-right font-semibold text-ink-3 whitespace-nowrap">Invoiced complete</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {rows.map((r) => {
-                                                    const key = rowKey(r);
-                                                    const busyPaid = busyKey === `${key}:paid`;
-                                                    const busyProgress = busyKey === `${key}:progress`;
-                                                    const busyNumbers = busyKey === `${key}:numbers`;
-                                                    return (
-                                                        <tr
-                                                            key={key}
-                                                            className="border-t border-hairline hover:bg-surface-2"
-                                                        >
-                                                            <td className="px-3 py-2 font-mono tabular-nums text-ink align-top">
-                                                                {r.job}
-                                                            </td>
-                                                            <td className="px-3 py-2 font-mono tabular-nums text-ink-2 align-top">
-                                                                {r.release}
-                                                            </td>
-                                                            <td className="px-3 py-2 text-ink max-w-[12rem] truncate align-top" title={r.job_name || ''}>
-                                                                {r.job_name || '—'}
-                                                            </td>
-                                                            <td className="px-3 py-2 text-ink-2 hidden md:table-cell max-w-[14rem] truncate align-top" title={r.description || ''}>
-                                                                {r.description || '—'}
-                                                            </td>
-                                                            <td className="px-3 py-2 text-ink-2 hidden sm:table-cell align-top">
-                                                                {r.stage || '—'}
-                                                            </td>
-                                                            <td className="px-3 py-2 text-ink-2 hidden lg:table-cell font-mono tabular-nums align-top whitespace-nowrap">
-                                                                {fmtDate(r.start_install)}
-                                                            </td>
-                                                            <td className="px-3 py-2 align-top">
+                    /* One table for all installers so columns share one layout (no drift). */
+                    <div className="overflow-x-auto rounded-xl border border-hairline bg-surface">
+                        <table className="w-full text-sm table-fixed min-w-[1080px]">
+                            <colgroup>
+                                <col style={{ width: '4.5%' }} />
+                                <col style={{ width: '4.5%' }} />
+                                <col style={{ width: '14%' }} />
+                                <col style={{ width: '14%' }} />
+                                <col style={{ width: '10%' }} />
+                                <col style={{ width: '8%' }} />
+                                <col style={{ width: '7%' }} />
+                                <col style={{ width: '7%' }} />
+                                <col style={{ width: '14%' }} />
+                                <col style={{ width: '11%' }} />
+                            </colgroup>
+                            <thead className="bg-head-bg">
+                                <tr>
+                                    <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle">Job</th>
+                                    <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle">Rel</th>
+                                    <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle">Job name</th>
+                                    <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle">Description</th>
+                                    <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle">Stage</th>
+                                    <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle whitespace-nowrap">Start install</th>
+                                    <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle whitespace-nowrap">Status</th>
+                                    <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle whitespace-nowrap">Progress</th>
+                                    <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle whitespace-nowrap">Invoice #</th>
+                                    <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle whitespace-nowrap">Invoiced complete</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {groups.map(([installer, rows]) => {
+                                    const unpaidCount = rows.filter((r) => !r.installer_invoice_paid).length;
+                                    return (
+                                        <Fragment key={installer}>
+                                            <tr className="bg-canvas border-t border-hairline">
+                                                <td
+                                                    colSpan={10}
+                                                    className="px-3 py-2 align-middle"
+                                                >
+                                                    <div className="flex items-baseline justify-between gap-2">
+                                                        <span className="text-sm font-bold text-ink">
+                                                            {installer}
+                                                        </span>
+                                                        <span className="text-xs text-ink-3 font-mono tabular-nums">
+                                                            {unpaidCount} unpaid · {rows.length} total
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {rows.map((r) => {
+                                                const key = rowKey(r);
+                                                const busyPaid = busyKey === `${key}:paid`;
+                                                const busyProgress = busyKey === `${key}:progress`;
+                                                const busyNumbers = busyKey === `${key}:numbers`;
+                                                return (
+                                                    <tr
+                                                        key={key}
+                                                        className="border-t border-hairline hover:bg-surface-2"
+                                                    >
+                                                        <td className="px-2 py-2 font-mono tabular-nums text-ink text-center align-middle">
+                                                            {r.job}
+                                                        </td>
+                                                        <td className="px-2 py-2 font-mono tabular-nums text-ink-2 text-center align-middle">
+                                                            {r.release}
+                                                        </td>
+                                                        <td className="px-2 py-2 text-ink text-center align-middle" title={r.job_name || ''}>
+                                                            <span className="line-clamp-2 break-words">{r.job_name || '—'}</span>
+                                                        </td>
+                                                        <td className="px-2 py-2 text-ink-2 text-center align-middle" title={r.description || ''}>
+                                                            <span className="line-clamp-2 break-words">{r.description || '—'}</span>
+                                                        </td>
+                                                        <td className="px-2 py-2 text-ink-2 text-center align-middle">
+                                                            <span className="line-clamp-2 break-words">{r.stage || '—'}</span>
+                                                        </td>
+                                                        <td className="px-2 py-2 text-ink-2 text-center align-middle font-mono tabular-nums whitespace-nowrap">
+                                                            {fmtDate(r.start_install)}
+                                                        </td>
+                                                        <td className="px-2 py-2 text-center align-middle whitespace-nowrap">
+                                                            {r.is_archived ? (
+                                                                <span className="inline-block px-1.5 py-0.5 text-[11px] font-semibold rounded border border-hairline bg-surface-2 text-ink-3">
+                                                                    Archived
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-block px-1.5 py-0.5 text-[11px] font-semibold rounded border border-emerald-200/80 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200">
+                                                                    Live
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-2 py-2 text-center align-middle">
+                                                            <div className="inline-flex justify-center">
                                                                 <ProgressInput
                                                                     value={r.installer_invoice_progress}
                                                                     busy={busyProgress}
                                                                     onCommit={(n) => handleProgress(r, n)}
                                                                 />
-                                                            </td>
-                                                            <td className="px-3 py-2 align-top">
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-2 py-2 text-center align-middle">
+                                                            <div className="flex justify-center w-full">
                                                                 <InvoiceNumbersInput
                                                                     value={r.installer_invoice_numbers}
                                                                     busy={busyNumbers}
                                                                     onCommit={(v) => handleInvoiceNumbers(r, v)}
                                                                 />
-                                                            </td>
-                                                            <td className="px-3 py-2 text-right align-top">
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-2 py-2 text-center align-middle">
+                                                            <div className="inline-flex justify-center">
                                                                 <PaidToggle
                                                                     paid={!!r.installer_invoice_paid}
                                                                     busy={busyPaid}
                                                                     onChange={(next) => handleToggle(r, next)}
                                                                 />
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </section>
-                            );
-                        })}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </Fragment>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 )}
             </div>

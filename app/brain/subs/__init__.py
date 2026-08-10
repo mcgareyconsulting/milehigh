@@ -3,6 +3,7 @@
 schema_version: 1
 purpose: Admin Subs view — releases assigned to subcontractor installers with
   installer-invoice tracking (Lexi/Katie): paid yes/no, progress %, invoice #s.
+  Archived outstanding balances stay until invoiced complete; free-text search.
 exports: (none — routes register on brain_bp via side-effect import)
 imports_from: []
 imported_by: [app/brain/__init__.py]

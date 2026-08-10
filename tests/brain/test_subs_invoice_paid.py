@@ -8,7 +8,7 @@ from tests.conftest import make_release
 
 
 def _seed(app):
-    """Three assigned active rows, one unassigned, one archived, one inactive."""
+    """Three assigned live rows + fixtures for archive / inactive / unassigned."""
     with app.app_context():
         make_release(
             100, "1", job_name="Alpha",
@@ -33,15 +33,24 @@ def _seed(app):
             300, "9", job_name="Unassigned",
             installer=None, is_active=True, is_archived=False,
         )
-        # Should be excluded: archived
+        # Should be excluded: archived + already invoiced complete
         make_release(
-            400, "1", job_name="Archived",
-            installer="Oscar", is_active=True, is_archived=True,
+            400, "1", job_name="Archived Complete",
+            installer="Octavio", is_active=True, is_archived=True,
+            installer_invoice_paid=True,
         )
-        # Should be excluded: inactive
+        # Should be excluded: inactive soft-deleted (Oscar would also be filtered)
         make_release(
             500, "1", job_name="Inactive",
-            installer="Oscar", is_active=False, is_archived=False,
+            installer="Saul 2", is_active=False, is_archived=False,
+        )
+        # Should APPEAR: archived with outstanding sub balance
+        make_release(
+            450, "7", job_name="Archived Outstanding",
+            installer="Saul 2", stage="Install Complete",
+            is_active=True, is_archived=True,
+            installer_invoice_paid=False,
+            installer_invoice_numbers="INV-ARCH-7",
         )
         db.session.commit()
 
@@ -63,25 +72,29 @@ class TestListSubsReleases:
         assert resp.status_code == 200
         data = resp.get_json()
         releases = data["releases"]
-        # Only the three active assigned rows
-        assert len(releases) == 3
+        # Three live assigned + one archived outstanding
+        assert len(releases) == 4
         keys = [(r["installer"], r["job"], r["release"]) for r in releases]
         assert keys == [
             ("Octavio", 150, "3"),
             ("Octavio", 200, "2"),
             ("Saul 2", 100, "1"),
+            ("Saul 2", 450, "7"),
         ]
         assert data["installers"] == ["Octavio", "Saul 2"]
-        # Paid flag preserved
         by_job = {r["job"]: r for r in releases}
         assert by_job[200]["installer_invoice_paid"] is True
         assert by_job[100]["installer_invoice_paid"] is False
+        assert by_job[450]["is_archived"] is True
+        assert by_job[450]["installer_invoice_paid"] is False
+        # Archived already-complete is hidden
+        assert 400 not in by_job
 
     def test_paid_filter(self, admin_client, app):
         _seed(app)
         unpaid = admin_client.get("/brain/subs/releases?paid=false").get_json()["releases"]
         paid = admin_client.get("/brain/subs/releases?paid=true").get_json()["releases"]
-        assert {r["job"] for r in unpaid} == {100, 150}
+        assert {r["job"] for r in unpaid} == {100, 150, 450}
         assert {r["job"] for r in paid} == {200}
 
     def test_installer_filter(self, admin_client, app):
@@ -90,6 +103,35 @@ class TestListSubsReleases:
         assert {r["job"] for r in data["releases"]} == {150, 200}
         # installers roster stays full so the dropdown doesn't collapse
         assert data["installers"] == ["Octavio", "Saul 2"]
+
+    def test_search_q(self, admin_client, app):
+        _seed(app)
+        by_name = admin_client.get("/brain/subs/releases?q=Alpha").get_json()["releases"]
+        assert {r["job"] for r in by_name} == {100}
+
+        by_inv = admin_client.get("/brain/subs/releases?q=INV-ARCH").get_json()["releases"]
+        assert {r["job"] for r in by_inv} == {450}
+
+        by_job = admin_client.get("/brain/subs/releases?q=150").get_json()["releases"]
+        assert {r["job"] for r in by_job} == {150}
+
+        none = admin_client.get("/brain/subs/releases?q=zzznomatch").get_json()["releases"]
+        assert none == []
+
+    def test_archived_drops_after_marked_complete(self, admin_client, app):
+        _seed(app)
+        before = admin_client.get("/brain/subs/releases").get_json()["releases"]
+        assert any(r["job"] == 450 for r in before)
+
+        resp = admin_client.patch(
+            "/brain/subs/releases/450/7/installer-invoice-paid",
+            json={"installer_invoice_paid": True},
+        )
+        assert resp.status_code == 200
+        assert resp.get_json()["is_archived"] is True
+
+        after = admin_client.get("/brain/subs/releases").get_json()["releases"]
+        assert all(r["job"] != 450 for r in after)
 
     def test_oscar_excluded_from_subs_invoice_tab(self, admin_client, app):
         """Oscar is an installer crew but not a sub — hide from Invoice Paid only."""
