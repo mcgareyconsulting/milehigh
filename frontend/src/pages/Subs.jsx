@@ -12,6 +12,7 @@
  * invariants:
  *   - Renders an access message (no fetch) unless the authenticated user is_admin.
  *   - Server enforces admin; optimistic edits revert on error.
+ *   - Styling matches Subs sibling pages (SubcontractorAdmin / T&M token shell).
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { checkAuth } from '../utils/auth';
@@ -28,6 +29,9 @@ const PAID_FILTERS = [
     { key: 'paid', label: 'Paid', paid: true },
 ];
 
+const inputClass =
+    'rounded border border-hairline-strong bg-input-bg text-ink focus:outline-none focus:ring-1 focus:ring-accent-500';
+
 const fmtDate = (iso) => {
     if (!iso) return '—';
     const d = new Date(`${iso}T00:00:00`);
@@ -38,7 +42,7 @@ const fmtDate = (iso) => {
 
 function PaidToggle({ paid, busy, onChange }) {
     return (
-        <div className="inline-flex rounded-md border border-hairline overflow-hidden text-xs font-medium">
+        <div className="inline-flex rounded border border-hairline-strong overflow-hidden text-xs font-medium">
             <button
                 type="button"
                 disabled={busy}
@@ -55,7 +59,7 @@ function PaidToggle({ paid, busy, onChange }) {
                 type="button"
                 disabled={busy}
                 onClick={() => onChange(true)}
-                className={`px-2.5 py-1 border-l border-hairline transition-colors ${
+                className={`px-2.5 py-1 border-l border-hairline-strong transition-colors ${
                     paid
                         ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/25 dark:text-emerald-100'
                         : 'bg-surface text-ink-3 hover:bg-surface-2'
@@ -113,11 +117,11 @@ function ProgressInput({ value, busy, onCommit }) {
                 }}
                 placeholder="—"
                 aria-label="Progress percent"
-                className={`w-12 px-1.5 py-1 text-sm tabular-nums text-center rounded-md border border-hairline bg-input-bg text-ink focus:outline-none focus:ring-1 focus:ring-accent-500 ${
+                className={`w-11 px-1 py-0.5 text-jl font-mono tabular-nums text-center ${inputClass} ${
                     busy ? 'opacity-60 cursor-wait' : ''
                 }`}
             />
-            <span className="text-xs text-ink-3">%</span>
+            <span className="text-jl-3 text-ink-3">%</span>
         </div>
     );
 }
@@ -159,7 +163,7 @@ function InvoiceNumbersInput({ value, busy, onCommit }) {
             rows={2}
             placeholder="Invoice #"
             aria-label="Invoice numbers"
-            className={`w-full min-w-[7rem] max-w-[12rem] px-1.5 py-1 text-xs leading-snug rounded-md border border-hairline bg-input-bg text-ink resize-y focus:outline-none focus:ring-1 focus:ring-accent-500 ${
+            className={`w-full min-w-[6.5rem] max-w-[11rem] px-1.5 py-0.5 text-jl font-mono leading-snug resize-y ${inputClass} ${
                 busy ? 'opacity-60 cursor-wait' : ''
             }`}
         />
@@ -253,7 +257,6 @@ export default function Subs() {
         patchRow(key, { installer_invoice_progress: nextProgress });
         try {
             const res = await updateInstallerInvoiceProgress(row.job, row.release, nextProgress);
-            // Server may normalize null
             if (res && 'installer_invoice_progress' in res) {
                 patchRow(key, { installer_invoice_progress: res.installer_invoice_progress });
             }
@@ -287,29 +290,32 @@ export default function Subs() {
     };
 
     if (authorized === null) {
-        return <div className="p-6 text-ink-3">Loading…</div>;
+        return (
+            <div className="w-full min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas flex items-center justify-center text-ink-3">
+                Loading…
+            </div>
+        );
     }
     if (!authorized) {
         return (
-            <div className="p-6 text-ink-2">
+            <div className="w-full min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas flex items-center justify-center p-6 text-center text-ink-3">
                 Invoice Paid is available to admins only.
             </div>
         );
     }
 
     return (
-        <div className="flex-1 min-h-0 overflow-auto">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
-                    <div>
-                        <h1 className="text-xl font-semibold text-ink">
-                            Invoice Paid
-                        </h1>
-                        <p className="mt-1 text-sm text-ink-3">
-                            Active releases by installer. Track progress, invoice numbers, and whether the subcontractor invoice is complete.
+        <div className="w-full min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas">
+            <div className="flex-1 p-4 md:p-6 max-w-[1400px] mx-auto w-full">
+                {/* Header — matches SubcontractorAdmin / T&M */}
+                <div className="flex items-start sm:items-center justify-between gap-3 mb-4 flex-wrap">
+                    <div className="min-w-0">
+                        <h1 className="text-xl font-bold text-ink">Invoice Paid</h1>
+                        <p className="mt-0.5 text-sm text-ink-3">
+                            Active releases by installer. Progress, invoice numbers, and complete status.
                         </p>
                     </div>
-                    <div className="text-xs text-ink-3 tabular-nums notif-pod-reserve">
+                    <div className="text-xs text-ink-3 font-mono tabular-nums notif-pod-reserve shrink-0">
                         {totals.total} release{totals.total === 1 ? '' : 's'}
                         {totals.total > 0 && (
                             <span className="ml-2">
@@ -321,29 +327,27 @@ export default function Subs() {
                     </div>
                 </div>
 
-                {/* Filters */}
-                <div className="flex flex-wrap items-center gap-2 mb-4">
-                    <div className="inline-flex rounded-lg border border-hairline overflow-hidden text-sm">
-                        {PAID_FILTERS.map((f) => (
-                            <button
-                                key={f.key}
-                                type="button"
-                                onClick={() => setPaidFilter(f.key)}
-                                className={`px-3 py-1.5 ${
-                                    paidFilter === f.key
-                                        ? 'bg-accent-500 text-white'
-                                        : 'bg-surface text-ink-2 hover:bg-surface-2'
-                                } ${f.key !== 'all' ? 'border-l border-hairline' : ''}`}
-                            >
-                                {f.label}
-                            </button>
-                        ))}
-                    </div>
+                {/* Filters — pill buttons like T&M status tabs */}
+                <div className="flex items-center gap-1.5 flex-wrap mb-4">
+                    {PAID_FILTERS.map((f) => (
+                        <button
+                            key={f.key}
+                            type="button"
+                            onClick={() => setPaidFilter(f.key)}
+                            className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                                paidFilter === f.key
+                                    ? 'bg-accent-500 border-accent-500 text-white'
+                                    : 'bg-surface border-hairline text-ink-2 hover:bg-surface-2'
+                            }`}
+                        >
+                            {f.label}
+                        </button>
+                    ))}
 
                     <select
                         value={installerFilter}
                         onChange={(e) => setInstallerFilter(e.target.value)}
-                        className="text-sm rounded-lg border border-hairline bg-input-bg text-ink-2 px-3 py-1.5"
+                        className="text-sm rounded-lg border border-hairline bg-surface text-ink-2 px-3 py-1.5"
                     >
                         <option value="">All installers</option>
                         {installers.map((name) => (
@@ -355,52 +359,54 @@ export default function Subs() {
                         type="button"
                         onClick={load}
                         disabled={loading}
-                        className="text-sm px-3 py-1.5 rounded-lg border border-hairline text-ink-2 hover:bg-surface-2 disabled:opacity-50"
+                        className="text-sm px-3 py-1.5 rounded-lg border border-hairline-strong text-ink-2 hover:bg-surface-2 disabled:opacity-50"
                     >
                         Refresh
                     </button>
                 </div>
 
                 {error && (
-                    <div className="mb-4 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-200 text-sm px-3 py-2">
+                    <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-sm">
                         {error}
                     </div>
                 )}
 
                 {loading && releases.length === 0 ? (
-                    <div className="text-sm text-ink-3 py-8">Loading…</div>
+                    <div className="flex items-center justify-center py-16">
+                        <span className="text-ink-3">Loading…</span>
+                    </div>
                 ) : releases.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-hairline-strong px-4 py-10 text-center text-sm text-ink-3">
+                    <div className="rounded-xl border border-dashed border-hairline-strong p-12 text-center text-sm text-ink-3">
                         No assigned installers on active releases.
                     </div>
                 ) : (
-                    <div className="space-y-6">
+                    <div className="space-y-5">
                         {groups.map(([installer, rows]) => {
                             const unpaidCount = rows.filter((r) => !r.installer_invoice_paid).length;
                             return (
                                 <section key={installer}>
-                                    <div className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-canvas/90 backdrop-blur flex items-baseline justify-between gap-2 border-b border-hairline mb-2">
-                                        <h2 className="text-sm font-semibold text-ink">
+                                    <div className="flex items-baseline justify-between gap-2 mb-1.5 px-0.5">
+                                        <h2 className="text-sm font-bold text-ink">
                                             {installer}
                                         </h2>
-                                        <span className="text-xs text-ink-3 tabular-nums">
+                                        <span className="text-xs text-ink-3 font-mono tabular-nums">
                                             {unpaidCount} unpaid · {rows.length} total
                                         </span>
                                     </div>
 
-                                    <div className="overflow-x-auto rounded-lg border border-hairline bg-surface">
-                                        <table className="w-full text-sm">
-                                            <thead>
-                                                <tr className="text-left text-xs uppercase tracking-wide text-ink-3 border-b border-hairline">
-                                                    <th className="px-3 py-2 font-medium">Job</th>
-                                                    <th className="px-3 py-2 font-medium">Rel</th>
-                                                    <th className="px-3 py-2 font-medium">Job name</th>
-                                                    <th className="px-3 py-2 font-medium hidden md:table-cell">Description</th>
-                                                    <th className="px-3 py-2 font-medium hidden sm:table-cell">Stage</th>
-                                                    <th className="px-3 py-2 font-medium hidden lg:table-cell">Start install</th>
-                                                    <th className="px-3 py-2 font-medium whitespace-nowrap">Progress</th>
-                                                    <th className="px-3 py-2 font-medium whitespace-nowrap">Invoice #</th>
-                                                    <th className="px-3 py-2 font-medium text-right whitespace-nowrap">Invoiced complete</th>
+                                    <div className="overflow-x-auto rounded-xl border border-hairline bg-surface">
+                                        <table className="min-w-full text-sm">
+                                            <thead className="bg-head-bg">
+                                                <tr>
+                                                    <th className="px-3 py-2 text-left font-semibold text-ink-3">Job</th>
+                                                    <th className="px-3 py-2 text-left font-semibold text-ink-3">Rel</th>
+                                                    <th className="px-3 py-2 text-left font-semibold text-ink-3">Job name</th>
+                                                    <th className="px-3 py-2 text-left font-semibold text-ink-3 hidden md:table-cell">Description</th>
+                                                    <th className="px-3 py-2 text-left font-semibold text-ink-3 hidden sm:table-cell">Stage</th>
+                                                    <th className="px-3 py-2 text-left font-semibold text-ink-3 hidden lg:table-cell whitespace-nowrap">Start install</th>
+                                                    <th className="px-3 py-2 text-left font-semibold text-ink-3 whitespace-nowrap">Progress</th>
+                                                    <th className="px-3 py-2 text-left font-semibold text-ink-3 whitespace-nowrap">Invoice #</th>
+                                                    <th className="px-3 py-2 text-right font-semibold text-ink-3 whitespace-nowrap">Invoiced complete</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -414,13 +420,13 @@ export default function Subs() {
                                                             key={key}
                                                             className="border-t border-hairline hover:bg-surface-2"
                                                         >
-                                                            <td className="px-3 py-2 tabular-nums text-ink font-medium align-top">
+                                                            <td className="px-3 py-2 font-mono tabular-nums text-ink align-top">
                                                                 {r.job}
                                                             </td>
-                                                            <td className="px-3 py-2 tabular-nums text-ink-2 align-top">
+                                                            <td className="px-3 py-2 font-mono tabular-nums text-ink-2 align-top">
                                                                 {r.release}
                                                             </td>
-                                                            <td className="px-3 py-2 text-ink-2 max-w-[12rem] truncate align-top" title={r.job_name || ''}>
+                                                            <td className="px-3 py-2 text-ink max-w-[12rem] truncate align-top" title={r.job_name || ''}>
                                                                 {r.job_name || '—'}
                                                             </td>
                                                             <td className="px-3 py-2 text-ink-2 hidden md:table-cell max-w-[14rem] truncate align-top" title={r.description || ''}>
@@ -429,7 +435,7 @@ export default function Subs() {
                                                             <td className="px-3 py-2 text-ink-2 hidden sm:table-cell align-top">
                                                                 {r.stage || '—'}
                                                             </td>
-                                                            <td className="px-3 py-2 text-ink-2 hidden lg:table-cell tabular-nums align-top">
+                                                            <td className="px-3 py-2 text-ink-2 hidden lg:table-cell font-mono tabular-nums align-top whitespace-nowrap">
                                                                 {fmtDate(r.start_install)}
                                                             </td>
                                                             <td className="px-3 py-2 align-top">
