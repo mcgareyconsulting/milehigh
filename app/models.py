@@ -442,6 +442,22 @@ class JobChangeLog(db.Model):
         return f"<JobChangeLog {self.job}-{self.release}: {self.from_value}→{self.to_value}>"
 
 
+# N1 release billing tags (stored values). Labels for UI live next to these.
+RELEASE_TAG_CONTRACTED = "contracted"
+RELEASE_TAG_CHANGE_ORDER = "change_order"
+RELEASE_TAG_MHMW_COST = "mhmw_cost"
+RELEASE_TAGS = frozenset({
+    RELEASE_TAG_CONTRACTED,
+    RELEASE_TAG_CHANGE_ORDER,
+    RELEASE_TAG_MHMW_COST,
+})
+RELEASE_TAG_LABELS = {
+    RELEASE_TAG_CONTRACTED: "Contracted",
+    RELEASE_TAG_CHANGE_ORDER: "Change Order",
+    RELEASE_TAG_MHMW_COST: "MHMW Cost",
+}
+
+
 class Releases(db.Model):
     __tablename__ = "releases"
     # Uniqueness is (job #, release #, project name). Job numbers wrap/reuse;
@@ -508,6 +524,10 @@ class Releases(db.Model):
     job_comp = db.Column(db.String(8))
     invoiced = db.Column(db.String(8))
     notes = db.Column(db.String(256))
+    # N1 billing classifier: contracted | change_order | mhmw_cost.
+    # Nullable so existing rows stay valid; required only on create (API/UI).
+    # Not shown on the job-log row — release hub Details only. See RELEASE_TAGS.
+    release_tag = db.Column(db.String(32), nullable=True)
 
     # Trello fields
     trello_card_id = db.Column(db.String(64), unique=True, nullable=True)
@@ -599,6 +619,7 @@ class Releases(db.Model):
             "job_comp": self.job_comp,
             "invoiced": self.invoiced,
             "notes": self.notes,
+            "release_tag": self.release_tag,
             "stage": self.stage,
             "trello_card_id": self.trello_card_id,
             "trello_card_name": self.trello_card_name,

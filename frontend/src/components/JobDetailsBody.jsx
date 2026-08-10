@@ -19,6 +19,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { HEADER_OVERRIDES } from '../constants/columnHeaders';
 import { stageTint, STAGE_LADDER, stageLadderIndex } from '../utils/stageTint';
+import { RELEASE_TAGS } from '../constants/releaseTags';
 
 // Label a field exactly as the Job Log table headers it, so the modal and the
 // table speak the same language ('Job Comp' reads "Install Prog" in both).
@@ -102,9 +103,17 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
     const [materialOrders, setMaterialOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(false);
     const materialsRef = useRef(null);
+    const [releaseTag, setReleaseTag] = useState(() => job?.release_tag || '');
+    const [tagSaving, setTagSaving] = useState(false);
+    const [tagError, setTagError] = useState(null);
 
     const jobId = job ? (job['Job #'] || job.job) : null;
     const relId = job ? (job['Release #'] || job.release) : null;
+
+    useEffect(() => {
+        setReleaseTag(job?.release_tag || '');
+        setTagError(null);
+    }, [job?.id, job?.release_tag, jobId, relId]);
 
     useEffect(() => {
         if (jobId == null) return;
@@ -137,6 +146,23 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
             if (onOrdersChanged) onOrdersChanged();
         } catch {
             // Leave the row unchanged (e.g. insufficient permissions).
+        }
+    };
+
+    const handleReleaseTagChange = async (next) => {
+        if (!jobId || relId == null) return;
+        const prev = releaseTag;
+        setReleaseTag(next);
+        setTagSaving(true);
+        setTagError(null);
+        try {
+            await jobsApi.updateJobFields(jobId, relId, { release_tag: next || null });
+            if (job) job.release_tag = next || null;
+        } catch (err) {
+            setReleaseTag(prev);
+            setTagError(err.message || 'Could not update billing tag');
+        } finally {
+            setTagSaving(false);
         }
     };
 
@@ -191,7 +217,33 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
                 </div>
 
                 <div className="min-w-0">
-                    <SectionLabel>Production</SectionLabel>
+                    <SectionLabel>Billing</SectionLabel>
+                    <div className="flex items-center justify-between gap-3 border-b border-hairline" style={{ padding: '8px 2px' }}>
+                        <span className="text-jl text-ink-2 shrink-0">Billing tag</span>
+                        <select
+                            value={releaseTag || ''}
+                            onChange={(e) => handleReleaseTagChange(e.target.value)}
+                            disabled={tagSaving}
+                            className="font-semibold text-right text-ink bg-transparent border border-hairline-strong rounded-md"
+                            style={{ fontSize: 13, padding: '4px 8px', minWidth: 140 }}
+                            title="Contracted / Change Order / MHMW Cost — not shown on the job log row"
+                        >
+                            <option value="">— unset —</option>
+                            {RELEASE_TAGS.map((t) => (
+                                <option key={t.value} value={t.value}>{t.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                    {tagError && (
+                        <p className="text-jl-2 text-red-600 dark:text-red-400" style={{ padding: '4px 2px' }}>{tagError}</p>
+                    )}
+                    {!releaseTag && (
+                        <p className="text-jl-2 text-ink-3 italic" style={{ padding: '4px 2px' }}>
+                            Not set (legacy row). Tag is required on new releases.
+                        </p>
+                    )}
+
+                    <SectionLabel stacked>Production</SectionLabel>
                     <Field
                         label={labelFor('Stage')}
                         mono={false}
