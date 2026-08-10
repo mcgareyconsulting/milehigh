@@ -17,6 +17,64 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.338',
+    date: 'August 9, 2026',
+    summary:
+      'The release hub grows an Attachments tab with a built-in drawing viewer and a plain-language change log, every new release gets a billing tag, fab estimates learn the shop\'s four-day week, Carmen can read out the EOS scorecard, and production now has proven offsite backups.',
+    changes: [
+      {
+        type: 'improved',
+        title: 'The release hub, round two',
+        detail:
+          'The hub modal is bigger and now has three tabs — Details, Attachments, and Change Log. Details leads with the date flow, lays the metadata out in three clean columns, and shows stage progress the only correct way: in bananas. The notes rail became a full activity feed, grouping notes together with stage, fab, and date updates by day, and + Note updates the Job Log row the moment you save.',
+      },
+      {
+        type: 'new',
+        title: 'Drawings without leaving the hub',
+        detail:
+          'The new Attachments tab puts documents and photos in a rail on the left and opens PDFs in a read-only viewer right beside them — fit, width, zoom, page nav, no new window. Carmen\'s drawing review lives here too, now open to drafters as well as admins, and when a finding cites a page, clicking it jumps the viewer straight there. An amber badge on the tab tells you there are findings worth a look.',
+      },
+      {
+        type: 'improved',
+        title: 'A change log that speaks English',
+        detail:
+          'The hub\'s Change Log tab shows what changed as plain-language field diffs grouped by day — no more update_stage internals — and undo works right from the entry. The Events page keeps its classic table for the people who like it raw.',
+      },
+      {
+        type: 'new',
+        title: 'Every release declares how it gets billed',
+        detail:
+          'Creating a release — pasted or verbal — now requires a billing tag: Contracted, Change Order, or MHMW Cost. The tag shows in the release hub under a new Billing section, where it can be changed later. Existing releases are untagged until someone sets them; the point is that from today forward, nothing enters the log without saying whose dime it\'s on.',
+      },
+      {
+        type: 'improved',
+        title: 'Fab estimates respect the four-day week',
+        detail:
+          'The shop works Monday through Thursday, but projected fab and install dates were counting Fridays as work days. Fab projections now spread hours across the real shop calendar — so a job that spans a weekend lands where it actually will — while install math keeps the Monday–Friday field calendar.',
+      },
+      {
+        type: 'new',
+        title: 'Carmen knows the scorecard',
+        detail:
+          'Ask Carmen for EOS scorecard numbers and she pulls them live from the Brain: hours released to production, fabrication hours, QC completed, fab backlog, yellow dates, T&M hours, and target dates met — each computed Monday–Sunday to match the scorecard columns. She knows whose metric is whose, so "David\'s numbers" or "my metrics" lands on the right ones.',
+      },
+      {
+        type: 'new',
+        title: 'Production backups, offsite and proven',
+        adminOnly: true,
+        detail:
+          'The production database is now dumped nightly and shipped to offsite object storage with daily, weekly, and monthly retention tiers. Every dump passes integrity gates before upload, and the whole path was proven with a real recovery drill — a production backup pulled down and restored on a laptop, completely off the hosting platform, all 47 tables intact.',
+      },
+      {
+        type: 'fixed',
+        title: 'Supplier-order attachments and lookahead PDFs survive deploys',
+        adminOnly: true,
+        detail:
+          'Two storage locations were silently falling back to a folder inside the deployed code, which gets wiped on every deploy — so supplier-order attachments and ingested lookahead PDFs could vanish while their records lived on. Both now live on the mounted disk with the photos and marked-up PDFs, which were never affected.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.334',
     date: 'August 6, 2026',
     summary:
