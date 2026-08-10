@@ -190,7 +190,7 @@ class TestReleaseCreationHandoff:
 
         resp = client.post(
             "/brain/job-log/release",
-            json={"csv_data": _release_csv(700, 300, install_hrs="8")},
+            json={"csv_data": _release_csv(700, 300, install_hrs="8"), "release_tag": "contracted"},
         )
 
         assert resp.status_code == 200
@@ -211,7 +211,7 @@ class TestReleaseCreationHandoff:
     def test_no_pending_is_noop(self, app, client):
         resp = client.post(
             "/brain/job-log/release",
-            json={"csv_data": _release_csv(701, 301)},
+            json={"csv_data": _release_csv(701, 301), "release_tag": "contracted"},
         )
 
         assert resp.status_code == 200
@@ -227,7 +227,7 @@ class TestReleaseCreationHandoff:
 
         resp = client.post(
             "/brain/job-log/release",
-            json={"csv_data": _release_csv(702, "V2")},
+            json={"csv_data": _release_csv(702, "V2"), "release_tag": "contracted"},
         )
 
         assert resp.status_code == 200
@@ -247,7 +247,7 @@ class TestReleaseCreationHandoff:
 
         resp = client.post(
             "/brain/job-log/release",
-            json={"csv_data": _release_csv(703, 303)},  # job 703, not the pending row's job 900
+            json={"csv_data": _release_csv(703, 303), "release_tag": "contracted"},  # job 703, not the pending row's job 900
         )
 
         assert resp.status_code == 200

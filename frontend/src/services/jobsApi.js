@@ -337,11 +337,15 @@ class JobsApi {
         }
     }
 
-    async releaseJobData(csvData, confirmDuplicates = false) {
+    async releaseJobData(csvData, confirmDuplicates = false, releaseTag = null) {
         try {
             const response = await axios.post(
                 `${API_BASE_URL}/brain/job-log/release`,
-                { csv_data: csvData, confirm_duplicates: confirmDuplicates }
+                {
+                    csv_data: csvData,
+                    confirm_duplicates: confirmDuplicates,
+                    release_tag: releaseTag,
+                }
             );
             return response.data;
         } catch (error) {

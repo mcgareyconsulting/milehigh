@@ -2121,20 +2121,23 @@ def get_expected_card_name(job_number, release_number, job_name, description):
     return expected_name
 
 
-def calculate_business_days_after(start_date, days):
+def calculate_business_days_after(start_date, days, calendar=None):
     """
     Calculate a date that is a certain number of business days after the start date.
 
     Args:
         start_date (datetime.date): The start date
         days (int): Number of business days to add
+        calendar: Optional N4 calendar (defaults to FIELD / Mon–Fri)
 
     Returns:
         datetime.date: The calculated due date
     """
-    from app.trello.utils import add_business_days
+    from app.trello.utils import CALENDAR_FIELD, add_business_days
 
-    return add_business_days(start_date, days)
+    return add_business_days(
+        start_date, days, calendar=calendar or CALENDAR_FIELD
+    )
 
 
 def update_card_date_range(card_short_link, start_date, due_date):

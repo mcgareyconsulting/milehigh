@@ -28,6 +28,7 @@ import { jobsApi } from '../services/jobsApi';
 import { checkAuth, userCanAccessKatieFilter } from '../utils/auth';
 import { generateJobLogReviewPdf } from '../utils/jobLogPdf';
 import { reviewSort, columnOrder, COLUMN_WIDTH_PERCENT, FILTERABLE_COLUMNS, DATE_COLUMNS } from '../utils/jobLogColumns';
+import { RELEASE_TAGS } from '../constants/releaseTags';
 
 // Friendly labels + display order for the active-filter chips (keys match the column-filter keys).
 const JL_FILTER_LABELS = {
@@ -64,6 +65,45 @@ const VERBAL_RELEASE_FIELDS = [
     { key: 'fabOrder', label: 'Fab Order', type: 'number', hidden: true },
 ];
 const emptyVerbalForm = () => Object.fromEntries(VERBAL_RELEASE_FIELDS.map(f => [f.key, '']));
+
+/** Shared radio group for Contracted / Change Order / MHMW Cost on create modals. */
+function ReleaseTagPicker({ value, onChange, disabled, accent = 'blue' }) {
+    const ring = accent === 'amber' ? 'focus:ring-amber-500' : 'focus:ring-accent-500';
+    return (
+        <fieldset className="mb-4" disabled={disabled}>
+            <legend className="block text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
+                Billing tag <span className="text-red-500">*</span>
+            </legend>
+            <div className="flex flex-wrap gap-2">
+                {RELEASE_TAGS.map((t) => {
+                    const selected = value === t.value;
+                    return (
+                        <label
+                            key={t.value}
+                            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium cursor-pointer transition-colors ${
+                                selected
+                                    ? accent === 'amber'
+                                        ? 'bg-amber-50 dark:bg-amber-900/30 border-amber-500 text-amber-900 dark:text-amber-100'
+                                        : 'bg-blue-50 dark:bg-blue-900/30 border-blue-600 text-blue-900 dark:text-blue-100'
+                                    : 'bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600'
+                            } ${ring}`}
+                        >
+                            <input
+                                type="radio"
+                                name="release_tag"
+                                value={t.value}
+                                checked={selected}
+                                onChange={() => onChange(t.value)}
+                                className="sr-only"
+                            />
+                            {t.label}
+                        </label>
+                    );
+                })}
+            </div>
+        </fieldset>
+    );
+}
 
 function csvEscapeCell(value) {
     const str = value === null || value === undefined ? '' : String(value);
@@ -164,8 +204,10 @@ function ReleasesLayout() {
     const [releasing, setReleasing] = useState(false);
     const [releaseError, setReleaseError] = useState(null);
     const [releaseSuccess, setReleaseSuccess] = useState(null);
+    const [bulkReleaseTag, setBulkReleaseTag] = useState('');
     const [showVerbalModal, setShowVerbalModal] = useState(false);
     const [verbalForm, setVerbalForm] = useState(emptyVerbalForm);
+    const [verbalReleaseTag, setVerbalReleaseTag] = useState('');
     const [verbalSubmitting, setVerbalSubmitting] = useState(false);
     const [verbalFetchingNumber, setVerbalFetchingNumber] = useState(false);
     const [verbalError, setVerbalError] = useState(null);
@@ -407,6 +449,7 @@ function ReleasesLayout() {
         setParsedPreview(null);
         setReleaseError(null);
         setReleaseSuccess(null);
+        setBulkReleaseTag('');
     };
 
     const handleCloseModal = () => {
@@ -415,6 +458,7 @@ function ReleasesLayout() {
         setParsedPreview(null);
         setReleaseError(null);
         setReleaseSuccess(null);
+        setBulkReleaseTag('');
     };
 
     const parsePreviewData = (data) => {
@@ -476,6 +520,10 @@ function ReleasesLayout() {
     };
 
     const handleReleaseSubmit = async (confirmDuplicates = false) => {
+        if (!bulkReleaseTag) {
+            setReleaseError('Select a billing tag (Contracted, Change Order, or MHMW Cost).');
+            return;
+        }
         if (!csvData.trim()) {
             setReleaseError('Please paste CSV data');
             return;
@@ -486,7 +534,7 @@ function ReleasesLayout() {
         setReleaseSuccess(null);
 
         try {
-            const result = await jobsApi.releaseJobData(csvData, confirmDuplicates);
+            const result = await jobsApi.releaseJobData(csvData, confirmDuplicates, bulkReleaseTag);
             setReleaseSuccess({
                 processed: result.processed_count || 0,
                 created: result.created_count || 0,
@@ -519,6 +567,7 @@ function ReleasesLayout() {
     const openVerbalModal = async () => {
         setShowVerbalModal(true);
         setVerbalForm(emptyVerbalForm());
+        setVerbalReleaseTag('');
         setVerbalError(null);
         setVerbalCollision(null);
         setVerbalSuccess(null);
@@ -540,6 +589,7 @@ function ReleasesLayout() {
     const closeVerbalModal = () => {
         setShowVerbalModal(false);
         setVerbalForm(emptyVerbalForm());
+        setVerbalReleaseTag('');
         setVerbalError(null);
         setVerbalCollision(null);
         setVerbalSuccess(null);
@@ -605,6 +655,10 @@ function ReleasesLayout() {
             setVerbalError('Job # and Release # are required');
             return;
         }
+        if (!verbalReleaseTag) {
+            setVerbalError('Select a billing tag (Contracted, Change Order, or MHMW Cost).');
+            return;
+        }
 
         setVerbalSubmitting(true);
         setVerbalError(null);
@@ -613,7 +667,11 @@ function ReleasesLayout() {
         setVerbalSuccess(null);
 
         try {
-            const result = await jobsApi.releaseJobData(buildVerbalCsvRow(verbalForm), confirmDuplicates);
+            const result = await jobsApi.releaseJobData(
+                buildVerbalCsvRow(verbalForm),
+                confirmDuplicates,
+                verbalReleaseTag,
+            );
 
             if (result.collisions && result.collisions.length > 0) {
                 // Same (job, release) combo already exists -- block the create and
@@ -1204,12 +1262,19 @@ function ReleasesLayout() {
                             </div>
 
                             <div className="p-6 flex-1 overflow-y-auto">
+                                <ReleaseTagPicker
+                                    value={bulkReleaseTag}
+                                    onChange={setBulkReleaseTag}
+                                    disabled={releasing}
+                                    accent="blue"
+                                />
                                 <div className="mb-4">
                                     <label className="block text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
                                         Paste Data (CSV or tab-separated from Google Sheets)
                                     </label>
                                     <p className="text-xs text-gray-600 dark:text-slate-400 mb-2">
-                                        Expected columns: Job #, Release #, Job, Description, Fab Hrs, Install HRS, Paint color, PM, BY, Released, Fab Order
+                                        Expected columns: Job #, Release #, Job, Description, Fab Hrs, Install HRS, Paint color, PM, BY, Released, Fab Order.
+                                        The billing tag above applies to every row in this paste.
                                     </p>
                                     <textarea
                                         value={csvData}
@@ -1325,8 +1390,8 @@ function ReleasesLayout() {
                                 </button>
                                 <button
                                     onClick={() => handleReleaseSubmit(false)}
-                                    disabled={releasing || !csvData.trim()}
-                                    className={`px-4 py-2 rounded-lg font-medium transition-all ${releasing || !csvData.trim()
+                                    disabled={releasing || !csvData.trim() || !bulkReleaseTag}
+                                    className={`px-4 py-2 rounded-lg font-medium transition-all ${releasing || !csvData.trim() || !bulkReleaseTag
                                         ? 'bg-gray-300 dark:bg-slate-600 text-gray-500 dark:text-slate-400 cursor-not-allowed'
                                         : 'bg-accent-500 text-white hover:bg-accent-600'
                                         }`}
@@ -1365,6 +1430,12 @@ function ReleasesLayout() {
                             </div>
 
                             <div className="p-6 flex-1 overflow-y-auto">
+                                <ReleaseTagPicker
+                                    value={verbalReleaseTag}
+                                    onChange={setVerbalReleaseTag}
+                                    disabled={verbalSubmitting}
+                                    accent="amber"
+                                />
                                 <div className="flex items-start justify-between gap-4 mb-4">
                                     <p className="text-xs text-gray-600 dark:text-slate-400">
                                         Quick-capture a release before drafting is done. Release # is prefilled
@@ -1506,8 +1577,8 @@ function ReleasesLayout() {
                                 </button>
                                 <button
                                     onClick={() => handleVerbalSubmit(false)}
-                                    disabled={verbalSubmitting || !verbalForm.job.trim() || !verbalForm.release.trim()}
-                                    className={`px-4 py-2 rounded-lg font-medium transition-all ${verbalSubmitting || !verbalForm.job.trim() || !verbalForm.release.trim()
+                                    disabled={verbalSubmitting || !verbalForm.job.trim() || !verbalForm.release.trim() || !verbalReleaseTag}
+                                    className={`px-4 py-2 rounded-lg font-medium transition-all ${verbalSubmitting || !verbalForm.job.trim() || !verbalForm.release.trim() || !verbalReleaseTag
                                         ? 'bg-gray-300 dark:bg-slate-600 text-gray-500 dark:text-slate-400 cursor-not-allowed'
                                         : 'bg-amber-600 text-white hover:bg-amber-700'
                                         }`}

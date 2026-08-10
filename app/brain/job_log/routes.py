@@ -26,7 +26,18 @@ from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
-from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, ReleasePhoto, Submittals, User, PendingStartInstall
+from app.models import (
+    Releases,
+    db,
+    ReleaseEvents,
+    ReleaseDrawingVersion,
+    ReleasePhoto,
+    Submittals,
+    User,
+    PendingStartInstall,
+    RELEASE_TAGS,
+    RELEASE_TAG_LABELS,
+)
 from app.auth.utils import (
     login_required,
     get_current_user,
@@ -661,6 +672,7 @@ def get_jobs():
                     'Job Comp': serialize_value(job.job_comp),
                     'Invoiced': serialize_value(job.invoiced),
                     'Notes': serialize_value(job.notes),
+                    'release_tag': serialize_value(job.release_tag),
                     'last_updated_at': serialize_value(job.last_updated_at),
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
@@ -1042,6 +1054,7 @@ def get_all_jobs():
                     'Job Comp': serialize_value(job.job_comp),
                     'Invoiced': serialize_value(job.invoiced),
                     'Notes': serialize_value(job.notes),
+                    'release_tag': serialize_value(job.release_tag),
                     'last_updated_at': serialize_value(job.last_updated_at),
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
@@ -2109,6 +2122,22 @@ def get_next_release_number():
     return jsonify({'next_release': str(suggestion)}), 200
 
 
+def _normalize_release_tag(raw) -> str | None:
+    """Return a canonical release_tag slug or None if empty/invalid."""
+    if raw is None:
+        return None
+    tag = str(raw).strip().lower().replace(" ", "_").replace("-", "_")
+    # Accept display labels too
+    label_map = {v.lower().replace(" ", "_"): k for k, v in RELEASE_TAG_LABELS.items()}
+    if tag in label_map:
+        tag = label_map[tag]
+    if tag in ("changeorder",):
+        tag = "change_order"
+    if tag in ("mhmwcost", "mhmw"):
+        tag = "mhmw_cost"
+    return tag if tag in RELEASE_TAGS else None
+
+
 @brain_bp.route("/job-log/release", methods=["POST"])
 @login_required
 def release_job_data():
@@ -2130,12 +2159,15 @@ def release_job_data():
     
     Supports both comma-separated (CSV) and tab-separated (TSV) formats.
     Automatically detects the delimiter based on the data.
+
+    ``release_tag`` is required on the request body (not a CSV column) and is
+    applied to every row created in this call: contracted | change_order | mhmw_cost.
     
     Request Body:
         {
-            "csv_data": "Job #,Release #,Job,Description,...\n123,1,Job Name,..."
-            or
-            "csv_data": "Job #\tRelease #\tJob\tDescription\t...\n123\t1\tJob Name\t..."
+            "csv_data": "...",
+            "release_tag": "contracted",
+            "confirm_duplicates": false
         }
     
     Returns:
@@ -2149,6 +2181,15 @@ def release_job_data():
         csv_data = data.get('csv_data')
         if not csv_data or not csv_data.strip():
             return jsonify({'error': 'csv_data cannot be empty'}), 400
+
+        release_tag = _normalize_release_tag(data.get('release_tag'))
+        if not release_tag:
+            return jsonify({
+                'error': (
+                    'release_tag is required: contracted, change_order, or mhmw_cost'
+                ),
+                'allowed': sorted(RELEASE_TAGS),
+            }), 400
 
         confirm_duplicates = bool(data.get('confirm_duplicates'))
 
@@ -2255,7 +2296,8 @@ def release_job_data():
                     'PM': row_values['pm'],
                     'BY': row_values['by'],
                     'Released': row_values['released'],
-                    'Fab Order': row_values['fab_order']
+                    'Fab Order': row_values['fab_order'],
+                    'release_tag': release_tag,
                 }
                 
                 # Create payload hash
@@ -2289,6 +2331,7 @@ def release_job_data():
                     fab_order=safe_float(row_values['fab_order']) or DEFAULT_FAB_ORDER,
                     stage='Released',
                     stage_group='FABRICATION',
+                    release_tag=release_tag,
                     last_updated_at=datetime.utcnow(),
                     source_of_update='Brain'
                 )
@@ -3597,6 +3640,7 @@ EDITABLE_FIELDS = {
     "pm": ("pm", str),
     "by": ("by", str),
     "released": ("released", "date"),
+    "release_tag": ("release_tag", "release_tag"),
 }
 
 
@@ -3645,6 +3689,16 @@ def _coerce_editable_field(field, value):
     db_field, type_converter = EDITABLE_FIELDS[field]
     if type_converter == "date":
         converted_value = datetime.strptime(value, "%Y-%m-%d").date() if value else None
+    elif type_converter == "release_tag":
+        # Empty clears (nullable). Non-empty must be a known tag.
+        if value is None or str(value).strip() == "":
+            converted_value = None
+        else:
+            converted_value = _normalize_release_tag(value)
+            if converted_value is None:
+                raise ValueError(
+                    f"release_tag must be one of: {', '.join(sorted(RELEASE_TAGS))}"
+                )
     elif type_converter == int:
         converted_value = int(value) if value is not None else None
     elif type_converter == float:
@@ -3751,6 +3805,7 @@ def update_job_fields(job, release):
         'PM': serialize_value(job_record.pm),
         'BY': serialize_value(job_record.by),
         'Released': serialize_value(job_record.released),
+        'release_tag': serialize_value(job_record.release_tag),
     }
 
     return jsonify(job_data), 200

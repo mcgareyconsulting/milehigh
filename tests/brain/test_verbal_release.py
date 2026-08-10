@@ -22,6 +22,17 @@ def _release_csv(job, release):
     return f"{_RELEASE_HEADER}\n{job},{release},Test Job,Desc,40,8,Black,PM1,BY1,,10"
 
 
+def _post_release(client, csv_data, release_tag="contracted", confirm_duplicates=False):
+    return client.post(
+        "/brain/job-log/release",
+        json={
+            "csv_data": csv_data,
+            "release_tag": release_tag,
+            "confirm_duplicates": confirm_duplicates,
+        },
+    )
+
+
 def _make_release(job, release):
     return Releases(job=int(job), release=str(release), job_name="Test Job", is_active=True, is_archived=False)
 
@@ -82,7 +93,7 @@ class TestVerbalReleaseDuplicateGuard:
 
         resp = non_admin_client.post(
             "/brain/job-log/release",
-            json={"csv_data": _release_csv(910, 500)},
+            json={"csv_data": _release_csv(910, 500), "release_tag": "contracted"},
         )
 
         assert resp.status_code == 200
@@ -108,9 +119,12 @@ class TestVerbalReleaseDuplicateGuard:
 
         resp = non_admin_client.post(
             "/brain/job-log/release",
-            json={"csv_data": _release_csv_named(
-                410, 108, "Lennar - Columbine Square"
-            )},
+            json={
+                "csv_data": _release_csv_named(
+                    410, 108, "Lennar - Columbine Square"
+                ),
+                "release_tag": "contracted",
+            },
         )
 
         assert resp.status_code == 200
@@ -132,7 +146,7 @@ class TestVerbalReleaseDuplicateGuard:
 
         resp = non_admin_client.post(
             "/brain/job-log/release",
-            json={"csv_data": _release_csv_named(410, 108, "Alta Metro")},
+            json={"csv_data": _release_csv_named(410, 108, "Alta Metro"), "release_tag": "contracted"},
         )
 
         assert resp.status_code == 200
@@ -165,9 +179,12 @@ class TestVerbalReleaseDuplicateGuard:
 
         resp = non_admin_client.post(
             "/brain/job-log/release",
-            json={"csv_data": _release_csv_named(
-                410, 108, "Lennar - Columbine Square"
-            )},
+            json={
+                "csv_data": _release_csv_named(
+                    410, 108, "Lennar - Columbine Square"
+                ),
+                "release_tag": "contracted",
+            },
         )
 
         body = json.loads(resp.data)
@@ -175,16 +192,27 @@ class TestVerbalReleaseDuplicateGuard:
         # Columbine's next free is 109 even though Alta already has 410-109.
         assert body["collisions"][0]["suggested_next"] == "109"
 
-    def test_non_colliding_release_is_created(self, non_admin_client):
+    def test_release_tag_required_on_create(self, non_admin_client):
         resp = non_admin_client.post(
             "/brain/job-log/release",
-            json={"csv_data": _release_csv(911, 501)},
+            json={"csv_data": _release_csv(930, 700)},
+        )
+        assert resp.status_code == 400
+        body = json.loads(resp.data)
+        assert "release_tag" in body["error"].lower()
+
+    def test_non_colliding_release_is_created(self, non_admin_client, app):
+        resp = non_admin_client.post(
+            "/brain/job-log/release",
+            json={"csv_data": _release_csv(911, 501), "release_tag": "change_order"},
         )
 
         assert resp.status_code == 200
         body = json.loads(resp.data)
         assert body["created_count"] == 1
-        assert Releases.query.filter_by(job=911, release="501").first() is not None
+        row = Releases.query.filter_by(job=911, release="501").first()
+        assert row is not None
+        assert row.release_tag == "change_order"
 
 
 class TestNearDuplicateGuard:
@@ -202,7 +230,7 @@ class TestNearDuplicateGuard:
 
         resp = non_admin_client.post(
             "/brain/job-log/release",
-            json={"csv_data": _release_csv(920, 601)},
+            json={"csv_data": _release_csv(920, 601), "release_tag": "contracted"},
         )
 
         assert resp.status_code == 200
@@ -225,7 +253,7 @@ class TestNearDuplicateGuard:
 
         resp = non_admin_client.post(
             "/brain/job-log/release",
-            json={"csv_data": _release_csv(921, 601), "confirm_duplicates": True},
+            json={"csv_data": _release_csv(921, 601), "confirm_duplicates": True, "release_tag": "contracted"},
         )
 
         assert resp.status_code == 200
@@ -242,13 +270,13 @@ class TestNearDuplicateGuard:
 
         first = non_admin_client.post(
             "/brain/job-log/release",
-            json={"csv_data": blank_row.format(release=600)},
+            json={"csv_data": blank_row.format(release=600), "release_tag": "contracted"},
         )
         assert json.loads(first.data)["created_count"] == 1
 
         second = non_admin_client.post(
             "/brain/job-log/release",
-            json={"csv_data": blank_row.format(release=601)},
+            json={"csv_data": blank_row.format(release=601), "release_tag": "contracted"},
         )
         body = json.loads(second.data)
         assert body["created_count"] == 1

@@ -15,7 +15,7 @@ from app.brain.lookahead.schedule_builder import (
 )
 from app.brain.lookahead.pipeline import get_project_pipeline
 from app.models import Releases, Submittals, db
-from app.trello.utils import calculate_business_days_before
+from app.trello.utils import CALENDAR_FIELD, CALENDAR_SHOP, calculate_business_days_before
 
 
 TODAY = date(2026, 7, 25)
@@ -107,23 +107,33 @@ def test_hard_date_release_builds_full_cascade():
     assert by_phase[PHASE_INSTALLATION]["end"] == "2026-08-11"
     assert by_phase[PHASE_INSTALLATION]["date_source"] == SOURCE_HARD
 
-    # Ship = 1 business day before 2026-08-10 (Mon) → Fri 2026-08-07
-    expected_ship = calculate_business_days_before(date(2026, 8, 10), 1)
+    # Ship = 1 *field* business day before 2026-08-10 (Mon) → Fri 2026-08-07
+    expected_ship = calculate_business_days_before(
+        date(2026, 8, 10), 1, calendar=CALENDAR_FIELD
+    )
     assert by_phase[PHASE_SHIPPING]["start"] == expected_ship.isoformat()
     assert by_phase[PHASE_SHIPPING]["date_source"] == SOURCE_ESTIMATED
 
-    # Paint: 3 business days ending day before ship
-    paint_end = calculate_business_days_before(expected_ship, 1)
-    paint_start = calculate_business_days_before(expected_ship, PAINT_BUSINESS_DAYS)
+    # Paint: 3 *shop* days (Mon–Thu) ending the shop day before ship
+    paint_end = calculate_business_days_before(
+        expected_ship, 1, calendar=CALENDAR_SHOP
+    )
+    paint_start = calculate_business_days_before(
+        expected_ship, PAINT_BUSINESS_DAYS, calendar=CALENDAR_SHOP
+    )
     assert by_phase[PHASE_PAINT]["start"] == paint_start.isoformat()
     assert by_phase[PHASE_PAINT]["end"] == paint_end.isoformat()
     assert by_phase[PHASE_PAINT]["date_source"] == SOURCE_ESTIMATED
     assert "provisional" in by_phase[PHASE_PAINT]["note"].lower()
+    # Shop calendar never lands paint bars on Friday
+    assert date.fromisoformat(by_phase[PHASE_PAINT]["start"]).weekday() < 4
+    assert date.fromisoformat(by_phase[PHASE_PAINT]["end"]).weekday() < 4
 
     assert PHASE_FABRICATION in by_phase
     assert by_phase[PHASE_FABRICATION]["end"] <= by_phase[PHASE_PAINT]["start"]
     # Back-chained fab is estimated, never "projected from production schedule".
     assert by_phase[PHASE_FABRICATION]["date_source"] == SOURCE_ESTIMATED
+    assert out["assumptions"]["shop_calendar"].startswith("Mon")
 
 
 def test_hard_ship_date_used_when_present():

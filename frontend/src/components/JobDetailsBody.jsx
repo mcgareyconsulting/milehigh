@@ -13,8 +13,8 @@
  *   - Owns its own material-orders fetch when mounted
  *   - Reads display keys ('Ship Date') with raw-key fallback ('ship_date')
  *   - External links live in the host header; Activity rail is host-owned
- *   - UI only: no new write paths except existing mark-received on orders
- * updated_by_agent: 2026-08-08T00:00:00Z
+ *   - UI only: no new write paths except mark-received on orders and release_tag PATCH
+ * updated_by_agent: 2026-08-09T00:00:00Z
  */
 import React, { useState, useEffect, useRef } from 'react';
 
@@ -22,6 +22,7 @@ import { jobsApi } from '../services/jobsApi';
 import { HEADER_OVERRIDES } from '../constants/columnHeaders';
 import { stageTint } from '../utils/stageTint';
 import { StageIconRow } from './StageIconRow';
+import { RELEASE_TAGS } from '../constants/releaseTags';
 
 /** Slightly larger than the table column so the icons read at modal scale. */
 const MODAL_BANANA_ICON_SIZE = 36;
@@ -180,9 +181,17 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
     const [ordersLoading, setOrdersLoading] = useState(false);
     const [markAllBusy, setMarkAllBusy] = useState(false);
     const materialsRef = useRef(null);
+    const [releaseTag, setReleaseTag] = useState(() => job?.release_tag || '');
+    const [tagSaving, setTagSaving] = useState(false);
+    const [tagError, setTagError] = useState(null);
 
     const jobId = job ? (job['Job #'] || job.job) : null;
     const relId = job ? (job['Release #'] || job.release) : null;
+
+    useEffect(() => {
+        setReleaseTag(job?.release_tag || '');
+        setTagError(null);
+    }, [job?.id, job?.release_tag, jobId, relId]);
 
     useEffect(() => {
         if (jobId == null) return;
@@ -243,6 +252,23 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
             }
         } finally {
             setMarkAllBusy(false);
+        }
+    };
+
+    const handleReleaseTagChange = async (next) => {
+        if (!jobId || relId == null) return;
+        const prev = releaseTag;
+        setReleaseTag(next);
+        setTagSaving(true);
+        setTagError(null);
+        try {
+            await jobsApi.updateJobFields(jobId, relId, { release_tag: next || null });
+            if (job) job.release_tag = next || null;
+        } catch (err) {
+            setReleaseTag(prev);
+            setTagError(err.message || 'Could not update billing tag');
+        } finally {
+            setTagSaving(false);
         }
     };
 
@@ -387,6 +413,25 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
 
                 <div className="min-w-0">
                     <SectionLabel>Production</SectionLabel>
+                    <div className="flex items-center justify-between gap-3 border-b border-hairline" style={{ padding: '8px 2px' }}>
+                        <span className="text-jl text-ink-2 shrink-0">Billing tag</span>
+                        <select
+                            value={releaseTag || ''}
+                            onChange={(e) => handleReleaseTagChange(e.target.value)}
+                            disabled={tagSaving}
+                            className="font-semibold text-right text-ink bg-transparent border border-hairline-strong rounded-md"
+                            style={{ fontSize: 13, padding: '4px 8px', minWidth: 140 }}
+                            title="Contracted / Change Order / MHMW Cost — not shown on the job log row"
+                        >
+                            <option value="">— unset —</option>
+                            {RELEASE_TAGS.map((t) => (
+                                <option key={t.value} value={t.value}>{t.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                    {tagError && (
+                        <p className="text-jl-2 text-red-600 dark:text-red-400" style={{ padding: '4px 2px' }}>{tagError}</p>
+                    )}
                     <Field
                         label={labelFor('Stage')}
                         mono={false}
