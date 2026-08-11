@@ -2,7 +2,7 @@
 
 > ### 📌 Superseded on four points — 2026-08-06, later the same day
 >
-> **[`roadmap.md`](roadmap.md) §1b and §3 are now the authority.** Written the
+> **[`roadmap-2026-08-06.md`](roadmap-2026-08-06.md) §1b and §3 are now the authority** (status itself lives in [`ROADMAP.md`](ROADMAP.md)). Written the
 > same morning, this document predates the afternoon's decisions and disagrees
 > with the roadmap on:
 >

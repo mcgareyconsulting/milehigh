@@ -51,3 +51,6 @@ app/storage/
 # Refresh staging db script
 refresh_staging_db.sh
 prod.dump
+
+# DannyOS roadmap build artifact (derived from docs/ROADMAP.md)
+roadmap.json

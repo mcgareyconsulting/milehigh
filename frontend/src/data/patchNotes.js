@@ -17,6 +17,42 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.339',
+    date: 'August 10, 2026',
+    summary:
+      'The Subs Invoice Paid tab was rebuilt around what the office actually does with it — one aligned table you can search, a progress percentage and invoice numbers on every sub release, archived work that stays put until the sub is settled up, and Oscar off a subcontractor list he was never part of.',
+    changes: [
+      {
+        type: 'improved',
+        title: 'The sub invoice table, rebuilt',
+        adminOnly: true,
+        detail:
+          'Every installer now shares one table instead of a separate one each, so the columns line up no matter whose work you are reading, with crews still grouped together. Job, release, job name, description, stage, start install, and status sit side by side, and a search box across the top filters on job number, job name, description, installer, or invoice number.',
+      },
+      {
+        type: 'new',
+        title: 'Progress and invoice numbers on every sub release',
+        adminOnly: true,
+        detail:
+          'Each row takes a 0–100% progress figure toward the sub invoice and a free-text field for one or more invoice numbers, both saved as you type and recorded as events. These are deliberately their own numbers: separate from the customer-facing Invoicing tab, separate from Job Log Invoiced, and separate from the yes/no Invoiced complete toggle beside them.',
+      },
+      {
+        type: 'improved',
+        title: 'Archived work stays until the sub is paid',
+        adminOnly: true,
+        detail:
+          'The list used to show live releases only, so archiving a release quietly dropped it even with an outstanding sub balance on it. Archived releases that still have an installer now stay on the list, marked Archived, and leave only when you mark them invoiced complete.',
+      },
+      {
+        type: 'fixed',
+        title: 'Oscar is not a subcontractor',
+        adminOnly: true,
+        detail:
+          'Oscar crew work was showing up on a page meant for outside subs. Oscar stays fully assignable everywhere else — job log, scheduling, the installer dropdowns — but no longer appears on Invoice Paid, and filtering by that crew will not bring it back.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.338',
     date: 'August 9, 2026',
     summary:

@@ -56,14 +56,22 @@ Test layering: pure unit (no Flask/DB) → service (real logic, in-memory DB or 
 
 ## Roadmap and requirements
 
-**`docs/feature-catalog.md` is the source of truth for what is being built and
-why.** Every feature discussed with the client, with its current codebase state,
-a plan, dependencies, effort, and rank. Read it before planning new work — it
-records scope decisions (what was deferred, dropped, or already exists) that are
-not derivable from the code. `docs/ops-planning.md` is the meeting-level rollup
-behind it.
+**`docs/ROADMAP.md` is the source of truth for what is being built, in what
+order, and where each item stands.** One entry per item — status, effort,
+dependencies, owner, source citation, and an append-only trail of every decision
+that moved it. Read it before planning new work, and land status changes there
+rather than in prose elsewhere. Its front matter carries the working queue and
+the horizon the schedule is derived against.
 
-Both cite source meetings by date and transcript line, e.g. `[L121–136]`. **Those
+Two documents sit behind it and are retained for reasoning, not for status:
+`docs/feature-catalog.md` (every feature discussed with the client, with
+codebase state, plan, dependencies, effort, rank — the historical record of what
+was deferred, dropped, or already exists) and `docs/roadmap-2026-08-06.md` (the
+prose roadmap `ROADMAP.md` superseded). `docs/ops-planning.md` is the
+meeting-level rollup. When any of these disagrees with `docs/ROADMAP.md`, the
+roadmap wins.
+
+All of them cite source meetings by date and transcript line, e.g. `[L121–136]`. **Those
 transcripts are deliberately not in this repo** — they live locally at
 `~/Desktop/Transcripts/MHMW/`, with per-meeting findings in `processed/`. A
 citation you cannot open is expected, not a missing file.

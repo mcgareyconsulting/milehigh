@@ -2,7 +2,7 @@
 
 > ### 📌 Superseded as the working roadmap — 2026-08-06
 >
-> **[`roadmap.md`](roadmap.md) is now what we are building and in what order.** It
+> **[`ROADMAP.md`](ROADMAP.md) is now what we are building and in what order.** It
 > folds in the 2026-08-06 Bill session, Daniel's 8/4 and 8/6 notes, and this
 > catalog — adding new items and collapsing overlapping ones (see roadmap §7 for
 > what happened to each entry here).
