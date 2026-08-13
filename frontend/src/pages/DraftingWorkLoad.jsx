@@ -283,7 +283,7 @@ function DraftingWorkLoad() {
         <>
             <style>{columnWidthStyles}</style>
             <div
-                className="w-full h-[calc(100vh_-_var(--app-chrome-h))] flex flex-col bg-canvas"
+                className="dwl-type w-full h-[calc(100vh_-_var(--app-chrome-h))] flex flex-col bg-canvas"
                 style={{
                     width: '100%',
                     minWidth: '100%',

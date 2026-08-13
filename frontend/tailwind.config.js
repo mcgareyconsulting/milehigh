@@ -68,15 +68,24 @@ export default {
                 ],
             },
             fontSize: {
-                // The handoff's table scale. Tailwind's text-xs (12px) and text-sm
-                // (14px) straddle it, and rounding to either visibly breaks the
-                // match to the print, so the exact steps get their own names.
-                'jl': ['12.5px', { lineHeight: '1.2' }],
-                'jl-compact': ['12px', { lineHeight: '1.2' }],
-                'jl-2': ['11.5px', { lineHeight: '1.2' }],
-                'jl-3': ['10.5px', { lineHeight: '1.15' }],
-                'jl-head': ['12px', { lineHeight: '1.15' }],
-                'jl-label': ['11px', { lineHeight: '1.2', letterSpacing: '.06em' }],
+                // Default Tailwind xs is 0.75rem (12px at a 16px root, ~12.75
+                // at our 17px root). Calibri reads smaller than the old stack,
+                // so chrome that was authored as text-xs (toolbars, chips,
+                // page chrome on Projects / Meetings / Board / To-Dos / …)
+                // sits at a hard 13.5px instead.
+                'xs': ['13.5px', { lineHeight: '1.25' }],
+                // Table scale, +1px from the handoff. Calibri/Carlito read
+                // smaller than IBM Plex at the same px (lighter stroke, tighter
+                // counters), so the steps sit one pixel above the print-matched
+                // 12.5 / 12 / 11.5 / 10.5 / 12 / 11 values. Tailwind's text-xs
+                // and text-sm still straddle the body size, which is why these
+                // stay named tokens rather than rounding to either.
+                'jl': ['13.5px', { lineHeight: '1.2' }],
+                'jl-compact': ['13px', { lineHeight: '1.2' }],
+                'jl-2': ['12.5px', { lineHeight: '1.2' }],
+                'jl-3': ['11.5px', { lineHeight: '1.15' }],
+                'jl-head': ['13px', { lineHeight: '1.15' }],
+                'jl-label': ['12px', { lineHeight: '1.2', letterSpacing: '.06em' }],
             },
             colors: {
                 // Design tokens from src/styles/tokens.css. Each resolves through a

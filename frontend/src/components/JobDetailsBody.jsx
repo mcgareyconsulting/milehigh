@@ -99,7 +99,7 @@ function Field({ label, value, mono = true, flag = null }) {
                 {flag}
                 <span
                     className={`font-semibold text-right break-words ${mono ? 'font-mono' : ''} ${blank ? 'text-ink-3' : 'text-ink'}`}
-                    style={{ fontSize: 13 }}
+                    style={{ fontSize: 14 }}
                 >
                     {blank ? '—' : value}
                 </span>
@@ -114,7 +114,7 @@ function MiniFlag({ kind }) {
     return (
         <span
             className={`${cls} font-bold uppercase`}
-            style={{ fontSize: 10, letterSpacing: '.05em', padding: '2px 6px', borderRadius: 4 }}
+            style={{ fontSize: 11, letterSpacing: '.05em', padding: '2px 6px', borderRadius: 4 }}
         >
             {kind}
         </span>
@@ -149,7 +149,7 @@ function FlowCell({ label, value, flag = null, accent = false }) {
             <div
                 className="font-bold uppercase flex items-center flex-wrap"
                 style={{
-                    fontSize: 10,
+                    fontSize: 11,
                     letterSpacing: '.04em',
                     color: 'var(--text-3)',
                     gap: 6,
@@ -162,7 +162,7 @@ function FlowCell({ label, value, flag = null, accent = false }) {
             <div
                 className="font-mono font-semibold truncate"
                 style={{
-                    fontSize: 15,
+                    fontSize: 16,
                     fontWeight: 600,
                     color: blank
                         ? '#9aa3b2'
@@ -337,7 +337,7 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
                                     )}
                                     <span
                                         className="inline-block font-semibold"
-                                        style={{ padding: '2px 8px', borderRadius: 5, fontSize: 11.5, background: pill.bg, color: pill.fg }}
+                                        style={{ padding: '2px 8px', borderRadius: 5, fontSize: 12.5, background: pill.bg, color: pill.fg }}
                                     >
                                         {badgeLabel}
                                     </span>
@@ -420,7 +420,7 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
                             onChange={(e) => handleReleaseTagChange(e.target.value)}
                             disabled={tagSaving}
                             className="font-semibold text-right text-ink bg-transparent border border-hairline-strong rounded-md"
-                            style={{ fontSize: 13, padding: '4px 8px', minWidth: 140 }}
+                            style={{ fontSize: 14, padding: '4px 8px', minWidth: 140 }}
                             title="Contracted / Change Order / MHMW Cost — not shown on the job log row"
                         >
                             <option value="">— unset —</option>
@@ -438,7 +438,7 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
                         value={stage ? (
                             <span
                                 className="inline-block font-semibold"
-                                style={{ padding: '3px 9px', borderRadius: 5, fontSize: 11.5, background: tint.bg, color: tint.fg }}
+                                style={{ padding: '3px 9px', borderRadius: 5, fontSize: 12.5, background: tint.bg, color: tint.fg }}
                             >
                                 {stage}
                             </span>
@@ -459,7 +459,7 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
                                 onClick={handleMarkAllReceived}
                                 disabled={markAllBusy}
                                 className="text-brand font-semibold bg-transparent border-0 cursor-pointer disabled:opacity-50 shrink-0"
-                                style={{ fontSize: 11.5 }}
+                                style={{ fontSize: 12.5 }}
                             >
                                 {markAllBusy ? 'Marking…' : 'Mark all received'}
                             </button>

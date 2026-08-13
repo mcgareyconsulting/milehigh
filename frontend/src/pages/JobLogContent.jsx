@@ -184,7 +184,7 @@ function JobLogContent() {
                                         return (
                                             <th
                                                 key={column}
-                                                className={`${isReleaseNumber ? 'px-0.5' : 'px-1'} ${isOldMan ? 'py-2 text-[13px]' : 'py-1.5 text-jl-head'} align-middle text-center font-bold text-ink bg-head-bg leading-tight`}
+                                                className={`${isReleaseNumber ? 'px-0.5' : 'px-1'} ${isOldMan ? 'py-2' : 'py-1.5'} text-jl-head align-middle text-center font-bold text-ink bg-head-bg leading-tight`}
                                                 style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                             >
                                                 {isFilterable ? (

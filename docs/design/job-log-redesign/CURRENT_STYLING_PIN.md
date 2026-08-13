@@ -37,12 +37,12 @@ jsPDF names: `IBMPlexSans`, `IBMPlexMono`. CSS: `"IBM Plex Sans"`, `"IBM Plex Mo
 
 | Token | Size | Use |
 |-------|------|-----|
-| `text-jl` | 12.5px / 1.2 | Body cells |
-| `text-jl-compact` | 12px / 1.2 | Compact density |
-| `text-jl-2` | 11.5px / 1.2 | Job name, paint, PM, BY |
-| `text-jl-3` | 10.5px / 1.15 | Installer sub-line |
-| `text-jl-head` | 12px / 1.15 | Column headers |
-| `text-jl-label` | 11px / 1.2 + `.06em` | Modal section labels |
+| `text-jl` | 13.5px / 1.2 | Body cells |
+| `text-jl-compact` | 13px / 1.2 | Compact density |
+| `text-jl-2` | 12.5px / 1.2 | Job name, paint, PM, BY |
+| `text-jl-3` | 11.5px / 1.15 | Installer sub-line |
+| `text-jl-head` | 13px / 1.15 | Column headers |
+| `text-jl-label` | 12px / 1.2 + `.06em` | Modal section labels |
 
 Print PDF body ~9pt, header ~9.5pt bold (denser; same families).
 
@@ -297,7 +297,7 @@ not required to match staff Job Log chrome.
 
 | Area | Screen | Print |
 |------|--------|-------|
-| Type size | ~12.5px body | ~9pt body |
+| Type size | ~13.5px body | ~9pt body |
 | Header fill | `--head-bg` `#e9edf4` | `#e0e0e0` |
 | Grid | Token lattice + separate borders | Darker solid 0.5pt lines |
 | Description | Brand link into hub | Plain bold text |

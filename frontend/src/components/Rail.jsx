@@ -124,7 +124,7 @@ function RailItem({ icon, label, active, onClick, badge = 0, trigger, open, onHo
                 <RailIcon d={icon} />
             </span>
             {open && (
-                <span className="truncate" style={{ fontSize: 12.5, fontWeight: 600 }}>{label}</span>
+                <span className="truncate" style={{ fontSize: 13.5, fontWeight: 600 }}>{label}</span>
             )}
             {open && <span className="flex-1" />}
             {badge > 0 && (
@@ -133,7 +133,7 @@ function RailItem({ icon, label, active, onClick, badge = 0, trigger, open, onHo
                     style={{
                         background: '#e0483c',
                         borderRadius: 999,
-                        fontSize: 10,
+                        fontSize: 11,
                         minWidth: 17,
                         height: 17,
                         padding: '0 5px',
@@ -277,10 +277,10 @@ export default function Rail({
                     </span>
                     {open && (
                         <span className="min-w-0 text-left">
-                            <span className="block truncate text-white" style={{ fontSize: 13, fontWeight: 700 }}>
+                            <span className="block truncate text-white" style={{ fontSize: 14, fontWeight: 700 }}>
                                 MHMW Brain
                             </span>
-                            <span className="block truncate" style={{ fontSize: 10.5, color: 'var(--rail-fg)' }}>
+                            <span className="block truncate" style={{ fontSize: 11.5, color: 'var(--rail-fg)' }}>
                                 {CURRENT_VERSION} · patch notes
                             </span>
                         </span>
@@ -347,7 +347,7 @@ export default function Rail({
                         position: 'fixed', left: RAIL_COLLAPSED + 6, top: tip.top,
                         transform: 'translateY(-50%)', background: '#0b1220', color: '#fff',
                         border: '1px solid #2a3550', borderRadius: 7, padding: '6px 10px',
-                        fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap',
+                        fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap',
                         pointerEvents: 'none', boxShadow: '0 8px 22px rgba(0,0,0,.35)', zIndex: 60,
                     }}
                     role="tooltip"
@@ -403,7 +403,7 @@ export default function Rail({
 function ThemeToggleRow({ label, on, onToggle, amber = false }) {
     return (
         <div className="flex items-center justify-between gap-3">
-            <span className="text-ink" style={{ fontSize: 12.5, fontWeight: 600 }}>{label}</span>
+            <span className="text-ink" style={{ fontSize: 13.5, fontWeight: 600 }}>{label}</span>
             <button
                 type="button"
                 onClick={onToggle}

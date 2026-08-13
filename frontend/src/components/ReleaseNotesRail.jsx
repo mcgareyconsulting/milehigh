@@ -84,7 +84,7 @@ function DayDivider({ label }) {
         <div className="flex items-center" style={{ gap: 8, margin: '14px 0 10px' }}>
             <span
                 className="font-bold uppercase shrink-0"
-                style={{ fontSize: 10, letterSpacing: '.04em', color: 'var(--text-3)' }}
+                style={{ fontSize: 11, letterSpacing: '.04em', color: 'var(--text-3)' }}
             >
                 {label}
             </span>
@@ -101,7 +101,7 @@ function Avatar({ name }) {
                 width: 26,
                 height: 26,
                 borderRadius: '50%',
-                fontSize: 10.5,
+                fontSize: 11.5,
                 background: 'var(--accent-soft)',
                 color: 'var(--accent)',
             }}
@@ -114,10 +114,10 @@ function Avatar({ name }) {
 function EntryHeader({ author, at }) {
     return (
         <div className="flex items-baseline flex-wrap" style={{ gap: 7 }}>
-            <span className="font-bold text-ink" style={{ fontSize: 12.5 }}>
+            <span className="font-bold text-ink" style={{ fontSize: 13.5 }}>
                 {author || 'Unknown'}
             </span>
-            <span className="font-mono text-ink-3" style={{ fontSize: 10.5 }}>
+            <span className="font-mono text-ink-3" style={{ fontSize: 11.5 }}>
                 {formatTime(at)}
             </span>
         </div>
@@ -129,7 +129,7 @@ function Chip({ children, bg, fg, mono = false }) {
         <span
             className={`inline-block font-semibold ${mono ? 'font-mono' : ''}`}
             style={{
-                fontSize: 11,
+                fontSize: 12,
                 padding: '2px 7px',
                 borderRadius: 5,
                 background: bg,
@@ -161,7 +161,7 @@ function NoteEntry({ author, at, body, cleared }) {
                         <span
                             className="font-bold uppercase inline-block"
                             style={{
-                                fontSize: 9.5,
+                                fontSize: 10.5,
                                 letterSpacing: '.05em',
                                 padding: '1px 5px',
                                 borderRadius: 4,
@@ -174,7 +174,7 @@ function NoteEntry({ author, at, body, cleared }) {
                         </span>
                         <div
                             className={`whitespace-pre-wrap break-words ${cleared ? 'text-ink-3 italic' : 'text-ink'}`}
-                            style={{ fontSize: 12.5, lineHeight: 1.45 }}
+                            style={{ fontSize: 13.5, lineHeight: 1.45 }}
                         >
                             {cleared ? 'Note cleared' : body}
                         </div>
@@ -197,11 +197,11 @@ function StageEntry({ author, at, from, to, alsoFab }) {
                         {from != null && from !== '' && (
                             <Chip bg="var(--head-bg)" fg="var(--text-2)">{String(from)}</Chip>
                         )}
-                        <span className="text-ink-3" style={{ fontSize: 12 }}>→</span>
+                        <span className="text-ink-3" style={{ fontSize: 13 }}>→</span>
                         <Chip bg={toTint.bg} fg={toTint.fg}>{String(to || '—')}</Chip>
                     </div>
                     {alsoFab && (
-                        <div className="text-ink-3" style={{ marginTop: 4, fontSize: 11.5 }}>
+                        <div className="text-ink-3" style={{ marginTop: 4, fontSize: 12.5 }}>
                             also Fab Order {alsoFab.from ?? '—'} → {alsoFab.to ?? '—'}
                         </div>
                     )}
@@ -218,7 +218,7 @@ function FabEntry({ author, at, from, to }) {
                 <Avatar name={author} />
                 <div className="min-w-0 flex-1">
                     <EntryHeader author={author} at={at} />
-                    <div className="flex items-center flex-wrap text-ink-2" style={{ gap: 6, marginTop: 5, fontSize: 12.5 }}>
+                    <div className="flex items-center flex-wrap text-ink-2" style={{ gap: 6, marginTop: 5, fontSize: 13.5 }}>
                         <span>Fab Order</span>
                         <Chip bg="var(--head-bg)" fg="var(--text-2)" mono>{String(from ?? '—')}</Chip>
                         <span className="text-ink-3">→</span>
@@ -237,7 +237,7 @@ function DateEntry({ author, at, label, valueLabel, hard, cleared }) {
                 <Avatar name={author} />
                 <div className="min-w-0 flex-1">
                     <EntryHeader author={author} at={at} />
-                    <div className="flex items-center flex-wrap" style={{ gap: 6, marginTop: 5, fontSize: 12.5 }}>
+                    <div className="flex items-center flex-wrap" style={{ gap: 6, marginTop: 5, fontSize: 13.5 }}>
                         <span className="text-ink-2">{cleared ? `${label} cleared` : `${label} set to`}</span>
                         {!cleared && valueLabel != null && (
                             <Chip bg="var(--st-green-bg)" fg="var(--st-green-fg)" mono>{valueLabel}</Chip>
@@ -245,7 +245,7 @@ function DateEntry({ author, at, label, valueLabel, hard, cleared }) {
                         {hard && (
                             <span
                                 className="jl-flag-green font-bold uppercase"
-                                style={{ fontSize: 10, letterSpacing: '.05em', padding: '2px 6px', borderRadius: 4 }}
+                                style={{ fontSize: 11, letterSpacing: '.05em', padding: '2px 6px', borderRadius: 4 }}
                             >
                                 HARD
                             </span>
@@ -558,7 +558,7 @@ export function ReleaseNotesRail({
                 <span
                     className="font-mono font-semibold"
                     style={{
-                        fontSize: 10.5,
+                        fontSize: 11.5,
                         padding: '1px 6px',
                         borderRadius: 999,
                         background: 'var(--head-bg)',
@@ -568,13 +568,13 @@ export function ReleaseNotesRail({
                     {items.length}
                 </span>
                 <div className="flex-1" />
-                <span className="text-ink-3" style={{ fontSize: 10.5 }}>Newest first</span>
+                <span className="text-ink-3" style={{ fontSize: 11.5 }}>Newest first</span>
                 <button
                     type="button"
                     onClick={openComposer}
                     className="font-semibold border-0 cursor-pointer"
                     style={{
-                        fontSize: 11.5,
+                        fontSize: 12.5,
                         padding: '4px 9px',
                         borderRadius: 999,
                         background: 'var(--accent-soft)',
@@ -595,7 +595,7 @@ export function ReleaseNotesRail({
                         placeholder="Overwrite Job Log notes…"
                         disabled={saving}
                         className="w-full text-ink bg-surface-2 border border-hairline rounded-md resize-y"
-                        style={{ fontSize: 12.5, padding: '8px 10px', lineHeight: 1.4 }}
+                        style={{ fontSize: 13.5, padding: '8px 10px', lineHeight: 1.4 }}
                     />
                     {saveError && (
                         <p className="text-jl-2" style={{ color: 'var(--fl-red-fg)', marginTop: 6 }}>{saveError}</p>
@@ -625,7 +625,7 @@ export function ReleaseNotesRail({
                             {saving ? 'Saving…' : 'Save note'}
                         </button>
                     </div>
-                    <p className="text-ink-3" style={{ fontSize: 10.5, marginTop: 6, lineHeight: 1.35 }}>
+                    <p className="text-ink-3" style={{ fontSize: 11.5, marginTop: 6, lineHeight: 1.35 }}>
                         Saves replace the Job Log Notes field (same as editing the cell).
                     </p>
                 </div>

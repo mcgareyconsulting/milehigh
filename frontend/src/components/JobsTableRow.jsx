@@ -456,7 +456,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // Lattice borders come from .job-log-table in tokens.css (border-right /
     // border-bottom on td) — no per-cell shadow classes.
     const cellPy = isOldMan ? 'py-2' : 'py-0.5';
-    const cellText = isOldMan ? 'text-[13px]' : 'text-jl';
+    const cellText = 'text-jl';
     // Numbers, dates and ids keep the handoff's `font-mono` marker. It is no
     // longer a second typeface — Calibri is the whole app now — but Calibri's
     // digits sit on one fixed advance, so these columns still stack.

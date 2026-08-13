@@ -154,12 +154,12 @@ function Metrics() {
             background: isDark ? '#1a1a19' : '#ffffff',
             border: `1px solid ${gridColor}`,
             borderRadius: 8,
-            fontSize: 12,
+            fontSize: 13,
             color: isDark ? '#fff' : '#0b0b0b',
         },
         labelStyle: { color: axisColor },
     };
-    const axisProps = { stroke: axisColor, tick: { fill: axisColor, fontSize: 11 } };
+    const axisProps = { stroke: axisColor, tick: { fill: axisColor, fontSize: 12 } };
 
     const s = data?.summary;
     const ai = data?.ai;

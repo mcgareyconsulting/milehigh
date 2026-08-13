@@ -287,7 +287,7 @@ function DiffChip({ value, variant = 'old', stageName = null }) {
         <span
             className="inline-block font-mono font-semibold"
             style={{
-                fontSize: 11,
+                fontSize: 12,
                 padding: '2px 7px',
                 borderRadius: 5,
                 background: bg,
@@ -323,7 +323,7 @@ function HubSourceChip({ source }) {
         <span
             className="inline-block font-semibold"
             style={{
-                fontSize: 11,
+                fontSize: 12,
                 padding: '2px 7px',
                 borderRadius: 5,
                 background: bg,
@@ -340,7 +340,7 @@ function HubDayDivider({ label }) {
         <div className="flex items-center" style={{ gap: 8, margin: '14px 0 6px' }}>
             <span
                 className="font-bold uppercase shrink-0"
-                style={{ fontSize: 10, letterSpacing: '.04em', color: 'var(--text-3)' }}
+                style={{ fontSize: 11, letterSpacing: '.04em', color: 'var(--text-3)' }}
             >
                 {label}
             </span>
@@ -381,19 +381,19 @@ function HubChangeRow({
                     gridTemplateColumns: '66px 118px minmax(0,1fr) 64px 64px',
                 }}
             >
-                <span className="font-mono text-ink-3" style={{ fontSize: 11.5 }}>
+                <span className="font-mono text-ink-3" style={{ fontSize: 12.5 }}>
                     {formatTimeOnly(event.created_at)}
                 </span>
-                <span className="text-ink truncate font-medium" style={{ fontSize: 12.5 }} title={event.user_name || ''}>
+                <span className="text-ink truncate font-medium" style={{ fontSize: 13.5 }} title={event.user_name || ''}>
                     {event.user_name || '—'}
                 </span>
                 <div className="min-w-0">
                     <div className="flex items-center flex-wrap" style={{ gap: 6 }}>
-                        <span className="text-ink-2 shrink-0" style={{ fontSize: 12 }}>{field}</span>
+                        <span className="text-ink-2 shrink-0" style={{ fontSize: 13 }}>{field}</span>
                         {!longNotes && (
                             <>
                                 <DiffChip value={from} variant="old" />
-                                <span className="text-ink-3" style={{ fontSize: 12 }}>→</span>
+                                <span className="text-ink-3" style={{ fontSize: 13 }}>→</span>
                                 <DiffChip
                                     value={to}
                                     variant="new"
@@ -406,7 +406,7 @@ function HubChangeRow({
                                 type="button"
                                 onClick={() => onTogglePayload(uniqueKey)}
                                 className="font-mono text-brand bg-transparent border-0 cursor-pointer"
-                                style={{ fontSize: 11 }}
+                                style={{ fontSize: 12 }}
                             >
                                 payload {expanded ? '▴' : '▾'}
                             </button>
@@ -415,7 +415,7 @@ function HubChangeRow({
                             <span
                                 className="font-semibold uppercase"
                                 style={{
-                                    fontSize: 9.5,
+                                    fontSize: 10.5,
                                     padding: '1px 5px',
                                     borderRadius: 4,
                                     background: 'var(--st-amber-bg)',
@@ -427,7 +427,7 @@ function HubChangeRow({
                         )}
                     </div>
                     {longNotes && !expanded && (
-                        <div className="text-ink-2 truncate" style={{ fontSize: 12, marginTop: 3 }} title={displayValue(to)}>
+                        <div className="text-ink-2 truncate" style={{ fontSize: 13, marginTop: 3 }} title={displayValue(to)}>
                             {displayValue(to)}
                         </div>
                     )}
@@ -443,7 +443,7 @@ function HubChangeRow({
                         title={canUndo ? 'Revert this change' : reason}
                         className="font-semibold border cursor-pointer disabled:cursor-not-allowed"
                         style={{
-                            fontSize: 11,
+                            fontSize: 12,
                             padding: '3px 7px',
                             borderRadius: 6,
                             background: canUndo ? 'var(--surface)' : 'var(--surface-2)',
@@ -464,7 +464,7 @@ function HubChangeRow({
                         marginLeft: 66 + 8 + 118 + 8,
                         padding: 10,
                         borderRadius: 8,
-                        fontSize: 11,
+                        fontSize: 12,
                         lineHeight: 1.4,
                         maxHeight: 200,
                     }}
@@ -479,7 +479,7 @@ function HubChangeRow({
                         type="button"
                         onClick={() => onTogglePayload(uniqueKey)}
                         className="font-mono text-ink-3 bg-transparent border-0 cursor-pointer hover:text-brand"
-                        style={{ fontSize: 10.5, padding: 0 }}
+                        style={{ fontSize: 11.5, padding: 0 }}
                     >
                         {expanded ? 'hide payload ▴' : 'payload ▾'}
                     </button>
@@ -520,7 +520,7 @@ function HubChangeLog({
                         </span>
                     ) : null}
                 </span>
-                <span className="text-ink-3" style={{ fontSize: 10.5 }}>Newest first</span>
+                <span className="text-ink-3" style={{ fontSize: 11.5 }}>Newest first</span>
             </div>
 
             {groups.map((group) => (

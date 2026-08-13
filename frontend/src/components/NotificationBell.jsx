@@ -601,7 +601,7 @@ export default function NotificationBell({
                         )}
                     </span>
                     {expanded && (
-                        <span className="truncate" style={{ fontSize: 12.5, fontWeight: 600 }}>Notifications</span>
+                        <span className="truncate" style={{ fontSize: 13.5, fontWeight: 600 }}>Notifications</span>
                     )}
                     {expanded && <span className="flex-1" />}
                     {/* Expanded rail: badge sits at the end of the row label. */}

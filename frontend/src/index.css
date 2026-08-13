@@ -43,8 +43,9 @@ body {
 
 html {
   scroll-behavior: smooth;
-  font-size: 16px;
-  /* Ensure consistent base font size */
+  /* 17px so rem-based Tailwind (text-sm / text-xs / text-base) compensates
+     for Calibri reading smaller than the previous system / Plex stack. */
+  font-size: 17px;
 }
 
 /* Calibri is app-wide, not Job-Log-only: the redesigned rail is chrome on
@@ -69,9 +70,21 @@ html.old-man:not(.dark) body {
   background-color: #f0f4f8;
 }
 
-html.old-man .text-\[10px\] { font-size: 12px !important; }
-html.old-man .text-xs        { font-size: 13px !important; }
-html.old-man .text-sm        { font-size: 14px !important; }
+/* Arbitrary 10/11px utilities are absolute, so they missed the 17px root
+   bump. Lift them one step app-wide (Projects, Meetings, Board, Gantt…). */
+.text-\[10px\] { font-size: 12px; }
+.text-\[11px\] { font-size: 13px; }
+
+html.old-man .text-\[10px\] { font-size: 14px !important; }
+html.old-man .text-\[11px\] { font-size: 14.5px !important; }
+html.old-man .text-xs        { font-size: 15.5px !important; }
+html.old-man .text-sm        { font-size: 16px !important; }
+html.old-man .text-jl         { font-size: 15px !important; }
+html.old-man .text-jl-compact { font-size: 14.5px !important; }
+html.old-man .text-jl-2       { font-size: 14px !important; }
+html.old-man .text-jl-3       { font-size: 13px !important; }
+html.old-man .text-jl-head    { font-size: 14px !important; }
+html.old-man .text-jl-label   { font-size: 13px !important; }
 
 html.old-man table td {
   padding-top: 8px !important;
@@ -82,7 +95,18 @@ html.old-man:not(.dark) .bg-blue-100 { background-color: #bfdbfe !important; }
 html.old-man:not(.dark) .bg-gray-300 { background-color: #9ca3af !important; }
 
 html.old-man nav a,
-html.old-man nav button { font-size: 15px !important; }
+html.old-man nav button { font-size: 16px !important; }
+
+/* Drafting Work Load sits one step above the Job Log scale. Calibri still
+   reads tight on this denser submittal grid; Job Log tokens stay unchanged. */
+.dwl-type .text-jl         { font-size: 15px; }
+.dwl-type .text-jl-2       { font-size: 14px; }
+.dwl-type .text-jl-head    { font-size: 14.5px; }
+.dwl-type .text-\[0\.65rem\] { font-size: 12px; }
+
+html.old-man .dwl-type .text-jl      { font-size: 16.5px !important; }
+html.old-man .dwl-type .text-jl-2    { font-size: 15.5px !important; }
+html.old-man .dwl-type .text-jl-head { font-size: 16px !important; }
 
 #root {
   width: 100%;

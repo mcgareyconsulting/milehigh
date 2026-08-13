@@ -99,7 +99,7 @@ export function ReleaseHubModal({
     const trelloUrl = job.trello_card_id ? `https://trello.com/c/${job.trello_card_id}` : null;
 
     const linkCls = 'inline-flex items-center border border-hairline-strong rounded-[7px] bg-surface text-ink-2 font-semibold hover:bg-surface-2 hover:text-ink transition-colors';
-    const linkStyle = { height: 28, padding: '0 11px', fontSize: 12 };
+    const linkStyle = { height: 28, padding: '0 11px', fontSize: 13 };
     const deadStyle = { ...linkStyle, opacity: 0.45, cursor: 'not-allowed' };
 
     const context = [jobName, pm ? `PM ${pm}` : null, by ? `Detailed by ${by}` : null]
@@ -139,7 +139,7 @@ export function ReleaseHubModal({
                             <div className="flex items-center gap-2.5 flex-wrap">
                                 <span
                                     className="font-mono font-semibold text-brand bg-brand-soft"
-                                    style={{ fontSize: 12, padding: '3px 8px', borderRadius: 5 }}
+                                    style={{ fontSize: 13, padding: '3px 8px', borderRadius: 5 }}
                                 >
                                     {label}
                                 </span>
@@ -149,7 +149,7 @@ export function ReleaseHubModal({
                                 {stage && (
                                     <span
                                         className="inline-block font-semibold"
-                                        style={{ padding: '3px 9px', borderRadius: 5, fontSize: 11.5, background: tint.bg, color: tint.fg }}
+                                        style={{ padding: '3px 9px', borderRadius: 5, fontSize: 12.5, background: tint.bg, color: tint.fg }}
                                     >
                                         {stage}
                                     </span>
@@ -217,7 +217,7 @@ export function ReleaseHubModal({
                                         <span
                                             className="font-mono font-semibold"
                                             style={{
-                                                fontSize: 10.5,
+                                                fontSize: 11.5,
                                                 padding: '1px 6px',
                                                 borderRadius: 999,
                                                 background: '#fef3c7',

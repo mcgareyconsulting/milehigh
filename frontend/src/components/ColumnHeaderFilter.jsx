@@ -37,7 +37,7 @@ const AUTOWIDTH_CHROME = 76;
 // Measure with the same face as the table (Calibri, or metric-compatible
 // Carlito) so autoWidth popovers match live header/cell metrics instead of a
 // system UI stack.
-const AUTOWIDTH_FONT = '12px Calibri, Carlito, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+const AUTOWIDTH_FONT = '13px Calibri, Carlito, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
 // Lazily reused canvas for measuring label widths (only used when autoWidth is on).
 let _measureCanvas = null;
