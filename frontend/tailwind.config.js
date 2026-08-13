@@ -25,11 +25,14 @@ export default {
                 'slide-out-right': 'slideOutRight 0.3s ease-in forwards',
             },
             fontFamily: {
-                // Matches the Job Log print PDF (jsPDF embeds IBMPlexSans / IBMPlexMono
-                // from frontend/public/fonts/*.ttf). body already sets Plex in index.css;
-                // these theme keys make font-sans / font-mono utilities use the same faces.
+                // Matches the Job Log print PDF (jsPDF embeds Carlito / IBMPlexMono
+                // from frontend/public/fonts/*.ttf). body already sets the stack in
+                // index.css; these theme keys make font-sans / font-mono utilities use
+                // the same faces. Carlito is the metric-compatible stand-in for Calibri
+                // on machines that don't have it — see the note in index.css.
                 sans: [
-                    'IBM Plex Sans',
+                    'Calibri',
+                    'Carlito',
                     '-apple-system',
                     'BlinkMacSystemFont',
                     'Segoe UI',

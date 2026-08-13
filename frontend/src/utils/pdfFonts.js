@@ -1,10 +1,10 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Registers IBM Plex Sans/Mono with a jsPDF document so exported PDFs are set in the same faces as the on-screen tables, falling back to the built-in cores if the font files can't be fetched.
+ * purpose: Registers Carlito (the metric-compatible stand-in for Calibri) and IBM Plex Mono with a jsPDF document so exported PDFs are set in the same faces as the on-screen tables, falling back to the built-in cores if the font files can't be fetched.
  * exports:
- *   ensurePlexFonts: async (doc) => { sans, mono } — jsPDF family names to pass as styles.font
- *   PLEX_FALLBACK: the { sans, mono } pair used when the fonts are unavailable
+ *   ensureTableFonts: async (doc) => { sans, mono } — jsPDF family names to pass as styles.font
+ *   TABLE_FONT_FALLBACK: the { sans, mono } pair used when the fonts are unavailable
  * imports_from: []
  * imported_by: [frontend/src/utils/jobLogPdf.js]
  * invariants:
@@ -16,18 +16,22 @@
 
 // Served from frontend/public/fonts (Vite copies public/ into dist/, and Flask
 // serves any file that exists under dist/, same as /icons/*.png).
+//
+// Calibri itself is Microsoft-licensed and can't be embedded in a PDF we ship,
+// so the export embeds Carlito: same advance widths, same shapes, OFL. A print
+// set in Carlito and one set in Calibri lay out line-for-line identically.
 const FACES = [
-    { file: 'ibm-plex-sans-400.ttf', family: 'IBMPlexSans', style: 'normal' },
-    { file: 'ibm-plex-sans-700.ttf', family: 'IBMPlexSans', style: 'bold' },
+    { file: 'carlito-400.ttf', family: 'Carlito', style: 'normal' },
+    { file: 'carlito-700.ttf', family: 'Carlito', style: 'bold' },
     { file: 'ibm-plex-mono-400.ttf', family: 'IBMPlexMono', style: 'normal' },
     { file: 'ibm-plex-mono-700.ttf', family: 'IBMPlexMono', style: 'bold' },
 ];
 
 // jsPDF's Standard-14 cores. Helvetica is what this export used before the
-// screen moved to Plex, so falling back here reproduces the old output exactly
-// rather than producing something broken.
-export const PLEX_FALLBACK = { sans: 'helvetica', mono: 'courier' };
-const PLEX = { sans: 'IBMPlexSans', mono: 'IBMPlexMono' };
+// screen moved off the system stack, so falling back here produces a plain but
+// correct document rather than something broken.
+export const TABLE_FONT_FALLBACK = { sans: 'helvetica', mono: 'courier' };
+const EMBEDDED = { sans: 'Carlito', mono: 'IBMPlexMono' };
 
 function toBase64(buffer) {
     const bytes = new Uint8Array(buffer);
@@ -64,7 +68,7 @@ function loadFaces() {
                 return { ...face, base64: toBase64(buf) };
             }),
         ).catch((err) => {
-            console.warn('[pdf] IBM Plex unavailable, falling back to Helvetica:', err.message);
+            console.warn('[pdf] table fonts unavailable, falling back to Helvetica:', err.message);
             // Don't cache the failure as a rejected promise — a later export
             // (after a deploy, or once back online) should get to retry.
             _facesPromise = null;
@@ -75,21 +79,21 @@ function loadFaces() {
 }
 
 /**
- * Register IBM Plex with `doc` and return the family names to set as
- * `styles.font`. Returns PLEX_FALLBACK if the fonts could not be loaded, so
- * callers can use the result unconditionally.
+ * Register the table faces with `doc` and return the family names to set as
+ * `styles.font`. Returns TABLE_FONT_FALLBACK if the fonts could not be loaded,
+ * so callers can use the result unconditionally.
  */
-export async function ensurePlexFonts(doc) {
+export async function ensureTableFonts(doc) {
     const faces = await loadFaces();
-    if (!faces) return PLEX_FALLBACK;
+    if (!faces) return TABLE_FONT_FALLBACK;
     try {
         for (const { file, family, style, base64 } of faces) {
             doc.addFileToVFS(file, base64);
             doc.addFont(file, family, style);
         }
-        return PLEX;
+        return EMBEDDED;
     } catch (err) {
-        console.warn('[pdf] could not register IBM Plex with jsPDF:', err.message);
-        return PLEX_FALLBACK;
+        console.warn('[pdf] could not register table fonts with jsPDF:', err.message);
+        return TABLE_FONT_FALLBACK;
     }
 }

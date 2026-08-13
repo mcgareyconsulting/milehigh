@@ -1,10 +1,24 @@
-/* IBM Plex — self-hosted via @fontsource so the bundle makes no external font
-   request (works offline and under a strict CSP). Sans carries the UI; Mono
-   carries numbers, dates, ids and version strings per the design handoff. */
-@import '@fontsource/ibm-plex-sans/400.css';
-@import '@fontsource/ibm-plex-sans/500.css';
-@import '@fontsource/ibm-plex-sans/600.css';
-@import '@fontsource/ibm-plex-sans/700.css';
+/* Carlito — self-hosted via @fontsource so the bundle makes no external font
+   request (works offline and under a strict CSP).
+
+   The client asked for Calibri, which is Microsoft-licensed and cannot be
+   shipped with the app. Carlito is its metric-compatible open twin (same
+   advance widths, same glyph shapes), so it stands in wherever Calibri is not
+   installed. Every sans stack therefore reads 'Calibri', 'Carlito', … — Windows
+   and Office-on-Mac machines use the real Calibri; everyone else gets Carlito
+   and the layout measures identically either way.
+
+   Carlito ships 400 and 700 only. CSS font matching resolves font-medium (500)
+   to the 400 face and font-semibold (600) to the 700 face, which is the same
+   split Calibri gets on Windows.
+
+   Mono still carries numbers, dates, ids and version strings per the design
+   handoff — Calibri is proportional and cannot hold a column of digits in
+   line. */
+@import '@fontsource/carlito/400.css';
+@import '@fontsource/carlito/400-italic.css';
+@import '@fontsource/carlito/700.css';
+@import '@fontsource/carlito/700-italic.css';
 @import '@fontsource/ibm-plex-mono/400.css';
 @import '@fontsource/ibm-plex-mono/500.css';
 @import '@fontsource/ibm-plex-mono/600.css';
@@ -35,11 +49,12 @@ html {
   /* Ensure consistent base font size */
 }
 
-/* IBM Plex Sans is app-wide, not Job-Log-only: the redesigned rail is chrome on
+/* Calibri is app-wide, not Job-Log-only: the redesigned rail is chrome on
    every page, so scoping the typeface to three surfaces would leave the app
-   visibly half-converted. System stack stays as the fallback. */
+   visibly half-converted. Carlito covers machines without Calibri; the system
+   stack stays behind both. */
 body {
-  font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  font-family: 'Calibri', 'Carlito', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;

@@ -10,12 +10,13 @@
  *   - Page format is tabloid landscape (17in x 11in = 1224pt x 792pt)
  *   - Each PM section starts on a fresh page; non-final PMs are padded to even page count
  *   - Urgency cells render a rasterized 7-icon Banana Code row keyed by stage name
- *   - Type mirrors the screen: IBM Plex Sans body, IBM Plex Mono on MONO_COLUMNS,
+ *   - Type mirrors the screen: Calibri (embedded as metric-compatible Carlito) body,
+ *     IBM Plex Mono on MONO_COLUMNS,
  *     sans header throughout. MONO_COLUMNS must track JobsTableRow.jsx.
  */
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { ensurePlexFonts } from './pdfFonts';
+import { ensureTableFonts } from './pdfFonts';
 import { formatDateShort, formatCellValue } from './formatters';
 import {
     isCompleteStage,
@@ -337,7 +338,7 @@ function startInstallState(job) {
 // innerWidths[i] is the usable text width (pt) of column i, used to pre-cap
 // cell text to two lines so all rows share the same height.
 //
-// `fonts` is the { sans, mono } pair from ensurePlexFonts. The measurement font
+// `fonts` is the { sans, mono } pair from ensureTableFonts. The measurement font
 // has to match the font the cell will actually be drawn in — mono is much wider
 // than sans at the same size, so measuring everything in one face would let
 // mono columns overflow and sans columns truncate early.
@@ -399,7 +400,7 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
 
     // Match the screen's faces. Falls back to Helvetica/Courier rather than
     // failing the export if the .ttf files aren't reachable.
-    const fonts = await ensurePlexFonts(doc);
+    const fonts = await ensureTableFonts(doc);
 
     const tableTopY = MARGIN_PT;
     const startInstallIdx = columnHeaders.indexOf('Start install');
