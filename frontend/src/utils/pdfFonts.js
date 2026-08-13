@@ -1,14 +1,14 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Registers Carlito (the metric-compatible stand-in for Calibri) and IBM Plex Mono with a jsPDF document so exported PDFs are set in the same faces as the on-screen tables, falling back to the built-in cores if the font files can't be fetched.
+ * purpose: Registers Carlito (the metric-compatible stand-in for Calibri) with a jsPDF document so exported PDFs are set in the same face as the on-screen tables, falling back to a built-in core if the font files can't be fetched.
  * exports:
- *   ensureTableFonts: async (doc) => { sans, mono } — jsPDF family names to pass as styles.font
- *   TABLE_FONT_FALLBACK: the { sans, mono } pair used when the fonts are unavailable
+ *   ensureTableFonts: async (doc) => family name to pass as styles.font
+ *   TABLE_FONT_FALLBACK: the family used when the fonts are unavailable
  * imports_from: []
  * imported_by: [frontend/src/utils/jobLogPdf.js]
  * invariants:
- *   - Never throws. A failed fetch degrades to Helvetica/Courier and still produces a PDF.
+ *   - Never throws. A failed fetch degrades to Helvetica and still produces a PDF.
  *   - The .ttf files are generated from the @fontsource WOFFs by scripts/build_pdf_fonts.py;
  *     they are not checked-in third-party binaries to edit by hand.
  *   - Base64 payloads are cached per page load — a second export re-registers from memory.
@@ -23,15 +23,13 @@
 const FACES = [
     { file: 'carlito-400.ttf', family: 'Carlito', style: 'normal' },
     { file: 'carlito-700.ttf', family: 'Carlito', style: 'bold' },
-    { file: 'ibm-plex-mono-400.ttf', family: 'IBMPlexMono', style: 'normal' },
-    { file: 'ibm-plex-mono-700.ttf', family: 'IBMPlexMono', style: 'bold' },
 ];
 
 // jsPDF's Standard-14 cores. Helvetica is what this export used before the
 // screen moved off the system stack, so falling back here produces a plain but
 // correct document rather than something broken.
-export const TABLE_FONT_FALLBACK = { sans: 'helvetica', mono: 'courier' };
-const EMBEDDED = { sans: 'Carlito', mono: 'IBMPlexMono' };
+export const TABLE_FONT_FALLBACK = 'helvetica';
+const EMBEDDED = 'Carlito';
 
 function toBase64(buffer) {
     const bytes = new Uint8Array(buffer);
@@ -79,7 +77,7 @@ function loadFaces() {
 }
 
 /**
- * Register the table faces with `doc` and return the family names to set as
+ * Register the table face with `doc` and return the family name to set as
  * `styles.font`. Returns TABLE_FONT_FALLBACK if the fonts could not be loaded,
  * so callers can use the result unconditionally.
  */

@@ -109,7 +109,7 @@ export default function JobsiteMap() {
                 new maplibregl.Popup({ maxWidth: '240px' })
                     .setLngLat(e.lngLat)
                     .setHTML(`
-                        <div style="font-family:sans-serif;padding:4px 2px">
+                        <div style="font-family:Calibri,Carlito,-apple-system,'Segoe UI',sans-serif;padding:4px 2px">
                             <strong style="font-size:14px">${p.job_name}</strong>
                             ${p.address ? `<p style="margin:6px 0 2px;color:#555;font-size:13px">${p.address}</p>` : ''}
                             ${p.pm_name ? `<p style="margin:4px 0;font-size:13px">PM: ${p.pm_name}</p>` : ''}

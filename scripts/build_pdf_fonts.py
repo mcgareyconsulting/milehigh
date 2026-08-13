@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """Rebuild the TTFs the Job Log PDF export embeds, from the @fontsource WOFFs.
 
-The screen table is set in Calibri / IBM Plex Mono. Calibri is Microsoft-licensed
-and cannot be redistributed, so the PDF embeds Carlito - its metric-compatible
-open twin, same advance widths and shapes - and the print lays out line-for-line
-the same whether the reader's screen showed Calibri or Carlito.
+The app is set in Calibri throughout. Calibri is Microsoft-licensed and cannot
+be redistributed, so the PDFs embed Carlito - its metric-compatible open twin,
+same advance widths and shapes - and a print lays out line-for-line the same
+whether the reader's screen showed Calibri or Carlito.
 
-Both faces arrive via `@fontsource/*` as WOFF and WOFF2. jsPDF can only embed a
-plain sfnt (TTF), so the printed table used to fall back to Helvetica and look
-like a different document. A WOFF *is* an sfnt: the same table directory, each
-table zlib-deflated, behind a 44-byte header. Undoing that needs nothing but
-zlib, so this converts rather than pulling in a second copy of the fonts.
+Carlito arrives via `@fontsource/carlito` as WOFF and WOFF2. jsPDF (and reportlab
+on the server) can only embed a plain sfnt (TTF), so the printed table used to
+fall back to Helvetica and look like a different document. A WOFF *is* an sfnt:
+the same table directory, each table zlib-deflated, behind a 44-byte header.
+Undoing that needs nothing but zlib, so this converts rather than pulling in a
+second copy of the fonts.
 
 The WOFFs are the Google-Fonts `latin` subset, which is the right size for a job
 log: ASCII plus the ellipsis and em dash the PDF builder inserts when it
@@ -19,7 +20,7 @@ truncates a cell.
     python scripts/build_pdf_fonts.py            # writes frontend/public/fonts/
     python scripts/build_pdf_fonts.py --check    # verify only, no writes
 
-Re-run after bumping @fontsource/carlito or @fontsource/ibm-plex-mono.
+Re-run after bumping @fontsource/carlito.
 """
 
 import argparse
@@ -32,14 +33,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 FONTSOURCE = REPO_ROOT / "frontend" / "node_modules" / "@fontsource"
 OUT_DIR = REPO_ROOT / "frontend" / "public" / "fonts"
 
-# (package, source woff, emitted ttf). Regular + bold of each face: the table
-# sets Job Comp, Invoiced, Start install and Release # in semibold mono, and the
-# header row in bold sans, so both weights of both faces get used.
+# (package, source woff, emitted ttf). The Job Log table sets its header row and
+# its Job Comp / Invoiced / Start install / Release # cells bold, and the
+# look-ahead PDF sets its empty-state line italic, so all three faces get used.
 FACES = [
     ("carlito", "carlito-latin-400-normal.woff", "carlito-400.ttf"),
     ("carlito", "carlito-latin-700-normal.woff", "carlito-700.ttf"),
-    ("ibm-plex-mono", "ibm-plex-mono-latin-400-normal.woff", "ibm-plex-mono-400.ttf"),
-    ("ibm-plex-mono", "ibm-plex-mono-latin-700-normal.woff", "ibm-plex-mono-700.ttf"),
+    ("carlito", "carlito-latin-400-italic.woff", "carlito-400-italic.ttf"),
 ]
 
 WOFF_HEADER = struct.Struct(">4sIIHHIHHIIIII")  # 44 bytes
