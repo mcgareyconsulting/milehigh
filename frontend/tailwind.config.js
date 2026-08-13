@@ -25,11 +25,14 @@ export default {
                 'slide-out-right': 'slideOutRight 0.3s ease-in forwards',
             },
             fontFamily: {
-                // Matches the Job Log print PDF (jsPDF embeds IBMPlexSans / IBMPlexMono
-                // from frontend/public/fonts/*.ttf). body already sets Plex in index.css;
-                // these theme keys make font-sans / font-mono utilities use the same faces.
+                // Calibri is the only typeface in the app, and it matches the print
+                // PDFs (both embed it as Carlito from frontend/public/fonts/*.ttf).
+                // body already sets the stack in index.css; this theme key makes the
+                // font-sans utility use the same one. Carlito is the metric-compatible
+                // stand-in for machines without Calibri — see the note in index.css.
                 sans: [
-                    'IBM Plex Sans',
+                    'Calibri',
+                    'Carlito',
                     '-apple-system',
                     'BlinkMacSystemFont',
                     'Segoe UI',
@@ -40,8 +43,29 @@ export default {
                     'Helvetica Neue',
                     'sans-serif',
                 ],
-                // Numbers, dates, ids and version strings, per the design handoff.
-                mono: ['IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+                // `font-mono` is no longer a second typeface — it resolves to Calibri
+                // like everything else. The ~100 call sites keep the class as the
+                // marker for the role the design handoff gave it (numbers, dates, ids,
+                // version strings), which is why it stays a distinct key rather than
+                // being stripped out of the components.
+                //
+                // What that role actually needed was digits on one fixed advance so
+                // columns of numbers stack. Calibri and Carlito already draw them that
+                // way; `tnum` only matters if the reader has neither and falls through
+                // to a system face with proportional figures.
+                mono: [
+                    [
+                        'Calibri',
+                        'Carlito',
+                        '-apple-system',
+                        'BlinkMacSystemFont',
+                        'Segoe UI',
+                        'Roboto',
+                        'Helvetica Neue',
+                        'sans-serif',
+                    ],
+                    { fontFeatureSettings: '"tnum"' },
+                ],
             },
             fontSize: {
                 // The handoff's table scale. Tailwind's text-xs (12px) and text-sm

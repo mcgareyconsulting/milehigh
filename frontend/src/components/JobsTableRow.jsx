@@ -457,7 +457,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // border-bottom on td) — no per-cell shadow classes.
     const cellPy = isOldMan ? 'py-2' : 'py-0.5';
     const cellText = isOldMan ? 'text-[13px]' : 'text-jl';
-    // Numbers, dates and ids ride IBM Plex Mono per the handoff's type spec.
+    // Numbers, dates and ids keep the handoff's `font-mono` marker. It is no
+    // longer a second typeface — Calibri is the whole app now — but Calibri's
+    // digits sit on one fixed advance, so these columns still stack.
     const cellMono = 'font-mono';
     // Editors read as plain text at rest and only show their box on hover/focus.
     // This is styling only — every input keeps the exact behavior it had, which
@@ -924,8 +926,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     const shouldWrap = column === 'Notes';
                     const whitespaceClass = shouldWrap ? 'whitespace-normal' : 'whitespace-nowrap';
 
-                    // Prose columns keep the UI face; everything reaching the generic
-                    // cell below is a number, date or code and takes IBM Plex Mono.
+                    // Prose columns opt out; everything reaching the generic cell
+                    // below is a number, date or code and takes the tabular treatment.
                     const isTextColumn = column === 'PM' || column === 'BY';
 
                     // Reduce padding for tight numeric columns so values like

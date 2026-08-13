@@ -5,7 +5,7 @@ purpose: Render a GC-facing multi-phase look-ahead schedule to a print-ready lan
   (Gantt only). Phase color legend sits under the header; page chrome in the footer.
 exports:
   render_schedule_pdf(schedule) -> bytes
-imports_from: [io, datetime, reportlab]
+imports_from: [io, datetime, reportlab, app.pdf_fonts]
 imported_by: [app.brain.lookahead.artifacts, tests]
 invariants:
   - Deterministic for a fixed schedule payload.
@@ -13,6 +13,8 @@ invariants:
   - ROW_H must leave room for code + title + stage without adjacent-row overlap.
   - Gantt-only output — no multi-page date appendix.
   - Every page shows the phase color legend (Drafting / Fab / Paint / Ship / Install).
+  - Type matches the app: Calibri, embedded as metric-compatible Carlito. Falls back to
+    Helvetica (same call signature, different metrics) if the .ttf files are missing.
 """
 from __future__ import annotations
 
@@ -36,6 +38,12 @@ from app.brain.lookahead.schedule_builder import (
     SOURCE_MISSING,
     SOURCE_PROJECTED,
 )
+from app.pdf_fonts import register_pdf_fonts
+
+# Calibri, embedded as Carlito. Resolved once at import — every stringWidth call below
+# has to be measured in the face the text is actually drawn in, so these must not drift
+# apart mid-render.
+FONT, FONT_BOLD, FONT_ITALIC = register_pdf_fonts()
 
 # Landscape letter — prints cleanly and emails well; tabloid can land later if denser jobs need it.
 PAGE = landscape(letter)  # 792 x 612
@@ -194,7 +202,7 @@ def render_schedule_pdf(schedule: dict[str, Any]) -> bytes:
         y -= ROW_H
 
     if not rows:
-        c.setFont("Helvetica-Oblique", 10)
+        c.setFont(FONT_ITALIC, 10)
         c.setFillColor(colors.grey)
         c.drawString(chart_left, y - 14, "No active releases or open drafting packages for this job.")
 
@@ -205,9 +213,9 @@ def render_schedule_pdf(schedule: dict[str, Any]) -> bytes:
 
 def _draw_header(c, page_w, page_h, title, subtitle):
     c.setFillColor(colors.Color(0.12, 0.16, 0.22))
-    c.setFont("Helvetica-Bold", 12)
+    c.setFont(FONT_BOLD, 12)
     c.drawString(MARGIN, page_h - MARGIN - 12, title)
-    c.setFont("Helvetica", 7.5)
+    c.setFont(FONT, 7.5)
     c.setFillColor(colors.Color(0.35, 0.37, 0.40))
     c.drawString(MARGIN, page_h - MARGIN - 26, subtitle)
     c.setStrokeColor(colors.Color(0.78, 0.80, 0.84))
@@ -223,13 +231,13 @@ def _draw_phase_legend(c, x, y, width):
     Drawn on every page under the header so a GC can read the chart without
     hunting for a footer strip.
     """
-    c.setFont("Helvetica-Bold", 7)
+    c.setFont(FONT_BOLD, 7)
     c.setFillColor(colors.Color(0.28, 0.30, 0.34))
     label = "Phase colors:"
     c.drawString(x, y + 2, label)
-    cx = x + c.stringWidth(label, "Helvetica-Bold", 7) + 10
+    cx = x + c.stringWidth(label, FONT_BOLD, 7) + 10
 
-    c.setFont("Helvetica", 7)
+    c.setFont(FONT, 7)
     for phase, name in PHASE_LEGEND_ITEMS:
         if cx + 90 > x + width:
             break
@@ -239,19 +247,19 @@ def _draw_phase_legend(c, x, y, width):
         c.roundRect(cx, y, 10, 10, 1.5, fill=1, stroke=1)
         c.setFillColor(colors.Color(0.22, 0.24, 0.28))
         c.drawString(cx + 13, y + 2, name)
-        cx += c.stringWidth(name, "Helvetica", 7) + 28
+        cx += c.stringWidth(name, FONT, 7) + 28
 
     # Date-source edge key (border of each bar) — sits after the phase swatches.
     source_note = "Border: green=committed · navy=projected · amber=estimated (hatched)"
-    c.setFont("Helvetica", 6)
-    note_w = c.stringWidth(source_note, "Helvetica", 6)
+    c.setFont(FONT, 6)
+    note_w = c.stringWidth(source_note, FONT, 6)
     if cx + note_w + 8 <= x + width:
         c.setFillColor(colors.Color(0.42, 0.44, 0.48))
         c.drawString(cx + 6, y + 2, source_note)
 
 
 def _draw_day_axis(c, left, top, day_w, range_start, total_days):
-    c.setFont("Helvetica", 6)
+    c.setFont(FONT, 6)
     c.setFillColor(colors.Color(0.35, 0.35, 0.40))
     for i in range(total_days + 1):
         d = range_start + timedelta(days=i)
@@ -281,12 +289,12 @@ def _draw_row_label(c, x, y, width, row):
     stage_baseline = y - 28
 
     c.setFillColor(colors.Color(0.15, 0.15, 0.18))
-    c.setFont("Helvetica-Bold", 7)
+    c.setFont(FONT_BOLD, 7)
     c.drawString(x, code_baseline, code)
 
-    c.setFont("Helvetica", 6.5)
+    c.setFont(FONT, 6.5)
     c.setFillColor(colors.Color(0.28, 0.28, 0.32))
-    while c.stringWidth(title, "Helvetica", 6.5) > width and len(title) > 4:
+    while c.stringWidth(title, FONT, 6.5) > width and len(title) > 4:
         title = title[:-2] + "…" if len(title) > 5 else title[:-1]
     # Avoid double ellipsis if we already shortened awkwardly
     if title.endswith("……"):
@@ -295,8 +303,8 @@ def _draw_row_label(c, x, y, width, row):
 
     if stage:
         c.setFillColor(colors.Color(0.42, 0.44, 0.48))
-        c.setFont("Helvetica", 5.5)
-        while c.stringWidth(stage, "Helvetica", 5.5) > width and len(stage) > 4:
+        c.setFont(FONT, 5.5)
+        while c.stringWidth(stage, FONT, 5.5) > width and len(stage) > 4:
             stage = stage[:-1]
         c.drawString(x, stage_baseline, stage)
 
@@ -363,7 +371,7 @@ def _draw_footer(c, page_w, page_num):
     c.line(MARGIN, MARGIN + 16, page_w - MARGIN, MARGIN + 16)
 
     c.setFillColor(colors.Color(0.48, 0.48, 0.52))
-    c.setFont("Helvetica", 5.5)
+    c.setFont(FONT, 5.5)
     c.drawString(
         MARGIN,
         y_note,
