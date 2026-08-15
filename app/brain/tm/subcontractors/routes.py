@@ -55,6 +55,11 @@ def create_subcontractor():
             invited_by_email=user.username,
             invited_by_name=_display_name(user),
         ).execute()
+    except command.OutboundLinkNotConfiguredError as exc:
+        # Misconfiguration, not a mail-server failure — say so, because "email
+        # send failed" sends the admin looking in entirely the wrong place.
+        logger.error("subcontractor_invite_misconfigured", email=email, error=str(exc), exc_info=True)
+        return jsonify({'error': str(exc)}), 500
     except Exception as exc:
         logger.error("subcontractor_invite_failed", email=email, error=str(exc), exc_info=True)
         return jsonify({'error': 'Subcontractor could not be invited (email send failed)'}), 502
@@ -90,6 +95,9 @@ def resend_subcontractor_invite(sub_id):
     user = get_current_user()
     try:
         command.resend_invite(sub, resent_by_email=user.username, resent_by_name=_display_name(user))
+    except command.OutboundLinkNotConfiguredError as exc:
+        logger.error("subcontractor_resend_misconfigured", subcontractor_id=sub_id, error=str(exc), exc_info=True)
+        return jsonify({'error': str(exc)}), 500
     except Exception as exc:
         logger.error("subcontractor_resend_invite_failed", subcontractor_id=sub_id, error=str(exc), exc_info=True)
         return jsonify({'error': 'Resend failed (email send error)'}), 502

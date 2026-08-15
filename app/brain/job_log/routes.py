@@ -46,6 +46,7 @@ from app.auth.utils import (
 )
 from app.route_utils import handle_errors, require_json, get_or_404, get_release_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER, active_releases_filter
+from app.brain.job_log.features.fab_order.tier import apply_fab_order_for_stage
 from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
 from app.brain.job_log.features.start_install.assign_installer import AssignInstallerCommand
 from app.brain.job_log.features.start_install.neutralize_install_date_cascade import neutralize_install_date_cascade
@@ -1598,14 +1599,21 @@ def update_job_comp(job, release):
     old_was_x = old_job_comp and old_job_comp.strip().upper() == 'X'
     new_is_x = job_comp_str and job_comp_str.upper() == 'X'
 
+    # Both branches below re-tier fab_order through the shared rule set
+    # (features/fab_order/tier.py) rather than deciding for themselves. Before
+    # BUG-9 the percentage branch left fab_order untouched — so a release
+    # arriving at Install Start kept the paint deck's tier 2 — and the 'X'
+    # branch cleared it to NULL, disagreeing with UpdateStageCommand, which
+    # gives the same stage tier 0. Same stage, two answers, depending on which
+    # control the office used.
     if new_is_pct:
         # Entering a percentage moves the release to 'Install Start'. Does NOT
-        # clear the hard start-install date or fab_order — install has begun,
-        # not finished.
+        # clear the hard start-install date — install has begun, not finished.
         current_stage = job_record.stage or 'Released'
         if current_stage != 'Install Start':
+            old_stage_group = job_record.stage_group
             update_job_stage_fields(job_record, 'Install Start')
-            JobEventService.create_and_close(
+            stage_event = JobEventService.create_and_close(
                 job=job, release=release,
                 action='update_stage', source='Brain',
                 payload={'from': current_stage, 'to': 'Install Start', 'reason': 'job_comp_pct_set'},
@@ -1614,11 +1622,20 @@ def update_job_comp(job, release):
             from app.api.helpers import get_stage_group_from_stage
             response_extras['stage_group'] = get_stage_group_from_stage('Install Start')
 
+            fab_plan = apply_fab_order_for_stage(
+                job_record, 'Install Start', old_stage_group,
+                parent_event_id=stage_event.id if stage_event else None,
+                stage_reason='job_comp_pct_set',
+            )
+            if fab_plan is not None:
+                response_extras['fab_order'] = fab_plan.fab_order
+
     if new_is_x:
         current_stage = job_record.stage or 'Released'
         if current_stage != 'Install Complete':
+            old_stage_group = job_record.stage_group
             update_job_stage_fields(job_record, 'Install Complete')
-            JobEventService.create_and_close(
+            stage_event = JobEventService.create_and_close(
                 job=job, release=release,
                 action='update_stage', source='Brain',
                 payload={'from': current_stage, 'to': 'Install Complete', 'reason': 'job_comp_set_to_x'},
@@ -1627,17 +1644,13 @@ def update_job_comp(job, release):
             from app.api.helpers import get_stage_group_from_stage
             response_extras['stage_group'] = get_stage_group_from_stage('Install Complete')
 
-        if job_record.fab_order is not None:
-            old_fab = job_record.fab_order
-            job_record.fab_order = None
-            fab_event = JobEventService.create(
-                job=job, release=release,
-                action='update_fab_order', source='Brain',
-                payload={'from': old_fab, 'to': None, 'reason': 'job_comp_complete'},
+            fab_plan = apply_fab_order_for_stage(
+                job_record, 'Install Complete', old_stage_group,
+                parent_event_id=stage_event.id if stage_event else None,
+                stage_reason='job_comp_set_to_x',
             )
-            if fab_event:
-                JobEventService.close(fab_event.id)
-            response_extras['fab_order'] = None
+            if fab_plan is not None:
+                response_extras['fab_order'] = fab_plan.fab_order
 
     if new_is_x and not old_was_x and primary_event is not None:
         if neutralize_install_date_cascade(

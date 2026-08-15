@@ -14,8 +14,8 @@ classes:                      # what KIND of work an item is — orthogonal to e
   deferred: off the active path, with a stated re-check trigger
 queue:                        # agent-maintained, set by agreement in session
   now: T1
-  next: [T2, BUG-9, BUG-10, AUD1]
-  awaiting: [A1, N11]
+  next: [T2, AUD1]             # BUG-8/BUG-9 built 2026-08-15; BUG-10's code half built
+  awaiting: [A1, N11, BUG-10]  # BUG-10 awaits the Render APP_BASE_URL change, and A1 awaits BUG-10
 ---
 
 # MHMW · ROADMAP
@@ -59,11 +59,14 @@ big. They are independent — a fix can be L, a build can be S.
 Small, self-contained, no client sign-off. Entry points included so a session can
 start cold (phone included) without exploring first.
 
+**All three cleared 2026-08-15** (branch `claude/roadmap-review-bugs-uinik2`).
+One of them is not finished by the code alone — see BUG-10's Owed line.
+
 | ID | Fix | Entry point | Pri |
 |---|---|---|---|
-| BUG-9 | Fab order not flipping 2→1 at paint → complete; order cleared inconsistently | `app/brain/job_log/features/fab_order/` (tier logic: Complete=NULL, 1, 2, dynamic 3+) | **high** |
-| BUG-10 | Sub invite email ships a `localhost:5173` link — `APP_BASE_URL` unset | `app/config.py:60`, `app/brain/tm/subcontractors/command.py:52`. Config fix (set in Render), + make the fallback loud outside local | **high — unblocks A1** |
-| BUG-8 | DWL release-number generator doesn't check the archive; job log rejects the number later | DWL number request path; JL guard is already correct | med |
+| BUG-9 | ~~Fab order not flipping 2→1 at paint → complete; order cleared inconsistently~~ **built** | `app/brain/job_log/features/fab_order/tier.py` (tier logic: Complete=NULL, 0, 1, 2, dynamic 3+) | **high** |
+| BUG-10 | Sub invite email ships a `localhost:5173` link — `APP_BASE_URL` unset | `app/config.py:76`, `app/brain/tm/subcontractors/command.py`. Code half **built** (loud fallback); **the Render config change is still owed** | **high — unblocks A1** |
+| BUG-8 | ~~DWL release-number generator doesn't check the archive; job log rejects the number later~~ **built** | `app/procore/procore.py` (`_archived_rel_numbers_for_job`) | med |
 
 **BUG-8 note:** shipping this as a **fix** ahead of its own audit (AUD2) is a
 deliberate call — it makes the generator agree with a rule that is already
@@ -767,30 +770,99 @@ wider distribution.
 - 2026-08-15 · decision · src — — reframed as the Release Modal: one canonical surface, distributed to other pages, refined in place; invoicing is the first target
 
 ### BUG-8 · DWL release-number generator skips the archive
-*W3 · not-started · class fix · due — · deps — · owner daniel · src bill-2026-08-15#L177 · upd 2026-08-15*
+*W3 · built · class fix · due — · deps — · owner daniel · src bill-2026-08-15#L177 · upd 2026-08-15*
 
-Effort S. See the Fix queue and AUD2. Ships **ahead of** its audit deliberately:
+Effort S. See the Fix queue and AUD2. Shipped **ahead of** its audit deliberately:
 it closes a gap against a rule already enforced and already confirmed correct.
 
-### BUG-9 · Fab order clunk at paint → complete
-*W3 · not-started · class fix · due — · deps — · owner daniel · src bill-2026-08-15#L201 · upd 2026-08-15*
+**Built 2026-08-15.** `_globally_taken_rel_numbers` drew its release half from
+`active_releases_filter()`, so archiving a release silently handed its number
+back to the generator — and the job log, whose constraint is
+`(job, release, job_name)` *including archived rows*, rejected it later, after
+someone had done the work. `_archived_rel_numbers_for_job` now adds every Rel
+that job has ever used to the taken set, and both entry points pass the job:
+`next_rel_number(job_number=…)` (resolved in the `/rel/next` route from the
+submittal's `project_number`) and `assign_rel_manual`, which reports the archive
+collision in its own words rather than claiming an active release holds it.
 
-Effort S. *"When we're getting to the paint department and then complete, it's
-not flipping the two and the one… the fab order is being cleared and not
-cleared — there's just some clunkiness to the back end"* [#L201].
+**Scoped to the job on purpose.** Reserving archived numbers *globally* would
+burn the 101–998 range down over a few years — that exhaustion is exactly why
+the archive was excluded originally. Scoping to the job number closes the gap the
+job log actually enforces and costs nothing (a job holds a handful of releases).
+Another job's archived 108 is still fair game. Tests:
+`tests/procore/test_rel_assignment.py` (BUG-8 block) + two route tests in
+`tests/dwl/test_dwl_routes.py`.
+
+**Unchanged, and still AUD2's:** collision still **blocks and suggests** rather
+than auto-advancing — Bill wants advance [#L173] and that is a client decision,
+not a bug fix. Long-term identity likewise.
+
+**Trail**
+- 2026-08-15 · build · src — — archive-aware generator, scoped to the job number; block-vs-auto-advance deliberately left to AUD2
+
+### BUG-9 · Fab order clunk at paint → complete
+*W3 · built · class fix · due — · deps — · owner daniel · src bill-2026-08-15#L201 · upd 2026-08-15*
+
+Effort S (**came in larger than S — it was structural, not a tweak**). *"When
+we're getting to the paint department and then complete, it's not flipping the
+two and the one… the fab order is being cleared and not cleared — there's just
+some clunkiness to the back end"* [#L201].
 
 **Bill twice called it a non-issue; Daniel overrode to high priority — "I want
-this clean." Do not wait on Bill to confirm.** Suspected surface is the unified
-`fab_order` tier logic (Complete = NULL, tier 1, tier 2, dynamic 3+) at the end
-of the fab lifecycle — the same values the FABRICATION renumber tool operates on,
-so tier drift drags renumber and the shop's ordering with it.
+this clean." Do not wait on Bill to confirm.** The override was right: the
+suspicion (tier drift dragging renumber and the shop's ordering with it) was
+correct, and the cause was worse than a tier bug.
+
+**Built 2026-08-15. Root cause: the tier rules were implemented once and skipped
+three times.** They lived inline inside `UpdateStageCommand`, so they only ran
+when a stage change came through that one command. Three other paths write a
+stage, and each answered differently:
+
+1. **The inbound Trello sync** (`TrelloListMapper.apply_trello_list_to_db`) —
+   *how the shop actually moves work* — set stage and `stage_group` and touched
+   `fab_order` not at all. A card dragged out of the paint list kept its tier-2
+   value forever. **That is Bill's "not flipping the two and the one" exactly**,
+   and it explains why it looked intermittent: the same move made in the Brain
+   worked, the same move made in Trello did not.
+2. **`update_job_comp` with a percentage** → `Install Start` (a tier-0 stage) via
+   `update_job_stage_fields`, leaving whatever the paint deck left behind — so a
+   dynamic-band value like 10 sat on a fixed-tier stage and sorted itself in
+   among live fab work.
+3. **`update_job_comp` with `X`** → `Install Complete`, and it *cleared*
+   `fab_order` to NULL — while `UpdateStageCommand` gives that same stage tier 0.
+   **One stage, two answers, chosen by which control the office pressed. That is
+   the "cleared and not cleared."**
+
+`app/brain/job_log/features/fab_order/tier.py` is now the single rule set
+(`plan_fab_order_for_stage` / `apply_fab_order_for_stage`) and all four paths
+call it. The rules themselves were never in dispute — they are stated identically
+in `FIXED_TIER_STAGES` and in `migrate_unified.py`'s invariants; this makes the
+code say them once. Two behavior changes worth naming:
+
+- **Backward moves are repaired.** A release landing on a dynamic stage while
+  holding a reserved value (< 3) or NULL — came back down from shipping, or was
+  reopened after Complete — used to keep it and sort in front of the entire shop.
+  It now goes to the back of that stage's deck (`Released` → the 80.555
+  placeholder, matching `fix_null_fab_orders`).
+- **The DB field is written even when the audit event deduplicates.** The old
+  inline code wrote `fab_order` only inside `if event:`, so a dropped event left
+  the release on a stale tier — a second, quieter source of the same symptom.
+
+**One prior decision was overruled, deliberately:** the comment on the job_comp
+percentage path said fab_order was left alone on purpose, and a test asserted it
+(`test_job_comp_percent_does_not_clear`). It contradicted the invariant written
+down in three places, so the invariant won and the test was rewritten to the
+unified rule. Worth a line to Bill only if Install Start ordering looks odd —
+it should look *more* correct, not less. Tests:
+`tests/brain/test_fab_order_tier.py` (rules, then each write path).
 
 **Trail**
 - 2026-08-15 · transcript · src bill-2026-08-15#L201 — reported and self-deprioritized as "really kind of a non-issue"
 - 2026-08-15 · decision · src — — elevated to high priority by Daniel over Bill's framing
+- 2026-08-15 · build · src — — root cause was scatter, not the tier values: rules extracted to `features/fab_order/tier.py` and applied by the Trello inbound sync and both job_comp paths, which had never applied them; backward tier drift repaired; field write decoupled from event dedup; job_comp-percentage exception overruled in favour of the documented invariant
 
 ### BUG-10 · Sub invite email ships a localhost link
-*W3 · not-started · class fix · due — · deps — · owner daniel · src bill-2026-08-15#L81 · upd 2026-08-15*
+*W3 · in-progress · class fix · due — · deps — · owner daniel · src bill-2026-08-15#L81 · upd 2026-08-15 · owed daniel/set-APP_BASE_URL-in-render*
 
 Effort S — **config, not code.** Bill: *"I did try to do one and I sent it to my
 Gmail, and **the link that it sends is like a broken link. It did not work.**"*
@@ -811,9 +883,30 @@ localhost outside the local environment, so it cannot fail silently twice.
 **Blocks A1** (Bill cannot test T&M without a sub in the system) and gates sub
 enrollment generally.
 
+**Rider built 2026-08-15; the config change is NOT done and cannot be done from
+a session — it is a Render dashboard edit.** The fallback is no longer silent:
+every outbound link now goes through `_external_link` in
+`app/brain/tm/subcontractors/command.py`, which **refuses to send** and logs an
+ERROR when it would build a link against the localhost default outside a local
+environment (`is_local_environment()` in `app/config.py`; anything unrecognised
+counts as deployed, so an odd `ENVIRONMENT` value cannot buy a pass). The invite
+and resend paths check *before* they write, so a misconfigured environment costs
+neither a dead `Subcontractor` row nor a rotated-away token, and the routes
+return a 500 that names the actual problem instead of a 502 blaming the mail
+server. The ticket-assignment link is covered by the same guard; there the send
+is best-effort, so it logs the ERROR and the assignment still stands. Tests:
+`tests/tm/test_outbound_link_config.py`.
+
+> ⚠️ **Still owed: set `APP_BASE_URL` to the Brain's public domain in Render**
+> (per deployed environment). Until that lands, invites now **fail loudly**
+> instead of mailing a dead link — which is the correct failure, but it is still
+> a failure, and **A1 stays blocked**. Re-test by sending Bill an invite and
+> confirming the link opens.
+
 **Trail**
 - 2026-08-15 · transcript · src bill-2026-08-15#L81 — invite link broken on a real send to an external mailbox
 - 2026-08-15 · note · src — — root cause found in code: unset `APP_BASE_URL` → localhost fallback; same var breaks the ticket-assignment link
+- 2026-08-15 · build · src — — rider shipped: outbound links refuse to build against the localhost default outside local, checked before any write; config change in Render still owed, so A1 remains blocked
 
 **The items W3 already carried, unchanged by the 8/15 pass:**
 

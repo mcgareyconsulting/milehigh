@@ -77,7 +77,37 @@ class RelAssignmentError(Exception):
         self.message = message
 
 
-def _globally_taken_rel_numbers(exclude_submittal_id=None):
+def _archived_rel_numbers_for_job(job_number):
+    """Rel numbers already used by ANY release of one job number, archived included.
+
+    BUG-8. The job log's uniqueness constraint is (job, release, job_name) and it
+    counts archived rows — an archived 410-108 permanently blocks a new 410-108
+    on the same project. The DWL generator only ever looked at ACTIVE releases,
+    so archiving a release silently handed its number back, the DWL reissued it,
+    and the job log rejected the release later, at the point where someone had
+    already done the work. Bill diagnosed it himself: "it should have caught that
+    when it got to 108."
+
+    Scoped to one job number on purpose. Reserving every archived number globally
+    and forever would burn the 101..998 range down over a few years, which is why
+    ``_globally_taken_rel_numbers`` excluded the archive in the first place;
+    scoping to the job closes the gap the job log actually enforces and costs
+    nothing, since a single job holds a handful of releases. Long-term identity
+    (and whether to auto-advance rather than block) is AUD2's question, not this
+    fix's.
+
+    Returns an empty set when ``job_number`` is None or isn't a clean integer —
+    a suggestion made with no job in hand simply gets no archive scoping.
+    """
+    job = _to_int_or_none(job_number)
+    if job is None:
+        return set()
+
+    rows = db.session.query(Releases.release).filter(Releases.job == job).all()
+    return {n for n in (_to_int_or_none(value) for (value,) in rows) if n is not None}
+
+
+def _globally_taken_rel_numbers(exclude_submittal_id=None, job_number=None):
     """Rel numbers that are unavailable system-wide, keyed on the value alone.
 
     Uniqueness is locked on the 3-digit Rel value (job-agnostic). A number is
@@ -93,8 +123,13 @@ def _globally_taken_rel_numbers(exclude_submittal_id=None):
     is intentionally not reserved here -- otherwise every historical Closed DRR
     would hold its number forever and exhaust the 101..998 range. Values that
     aren't clean integers are ignored. Returns the set of taken integers.
+
+    ``job_number`` adds a third source: every Rel already used by that job,
+    archived rows included (see ``_archived_rel_numbers_for_job``). Callers that
+    know which job they are numbering for should always pass it -- without it the
+    suggestion can land on a number the job log will refuse (BUG-8).
     """
-    taken = set()
+    taken = set(_archived_rel_numbers_for_job(job_number))
 
     release_rows = (
         db.session.query(Releases.release)
@@ -126,7 +161,7 @@ def _globally_taken_rel_numbers(exclude_submittal_id=None):
     return taken
 
 
-def next_rel_number(exclude_submittal_id=None):
+def next_rel_number(exclude_submittal_id=None, job_number=None):
     """Return the suggested next Rel number (used to prefill the manual popup).
 
     Assignment is "semi-chronological": the sequence climbs to the next highest
@@ -136,17 +171,19 @@ def next_rel_number(exclude_submittal_id=None):
     >= 653 and the next suggestion is 654, never a low/freed number like 101.
     (Nothing above the max is taken, so ``max + 1`` is always free.)
 
-    Freed numbers -- archived releases and never-used gaps below the max -- are
-    NOT reused until the sequence rolls over. Rollover happens only once REL_MAX
-    is occupied: the suggestion then drops to the lowest free value from REL_MIN
-    up, recycling the freed low numbers.
+    Freed numbers -- never-used gaps below the max, and numbers freed by
+    archiving a release on some OTHER job -- are NOT reused until the sequence
+    rolls over. Rollover happens only once REL_MAX is occupied: the suggestion
+    then drops to the lowest free value from REL_MIN up, recycling those freed
+    low numbers. ``job_number``'s own archived Rels are never recycled at all --
+    the job log would reject the release later (BUG-8).
 
     "Taken" is the union in ``_globally_taken_rel_numbers``.
     ``exclude_submittal_id`` lets the submittal being edited ignore its own
     current Rel. Returns REL_MIN when nothing is taken. Raises RuntimeError only
     in the pathological case where every number in [REL_MIN, REL_MAX] is taken.
     """
-    taken = _globally_taken_rel_numbers(exclude_submittal_id)
+    taken = _globally_taken_rel_numbers(exclude_submittal_id, job_number=job_number)
     in_range = [n for n in taken if REL_MIN <= n <= REL_MAX]
     if not in_range:
         return REL_MIN
@@ -185,8 +222,20 @@ def assign_rel_manual(submittal, desired_rel):
         raise RelAssignmentError(
             "range", f"Rel must be a whole number from {REL_MIN} to {REL_MAX}."
         )
-    taken = _globally_taken_rel_numbers(exclude_submittal_id=submittal.submittal_id)
+    taken = _globally_taken_rel_numbers(
+        exclude_submittal_id=submittal.submittal_id,
+        job_number=submittal.project_number,
+    )
     if number in taken:
+        if number in _archived_rel_numbers_for_job(submittal.project_number):
+            # Say which wall they hit — "already assigned to an active release"
+            # is actively misleading when the holder is an archived release the
+            # user cannot see from the DWL.
+            raise RelAssignmentError(
+                "collision",
+                f"Rel {number} was already used on job {submittal.project_number} "
+                f"(the release is archived). The job log will not accept it again.",
+            )
         raise RelAssignmentError(
             "collision",
             f"Rel {number} is already assigned to an active release or pending DRR.",

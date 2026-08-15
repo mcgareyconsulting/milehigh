@@ -799,12 +799,20 @@ def get_next_rel():
     """Suggest the next available Rel number, used to prefill the assign popup.
 
     Optional ``submittal_id`` query param excludes that submittal's own current
-    Rel from the suggestion (for reassignment)."""
+    Rel from the suggestion (for reassignment) and, via the submittal's project
+    number, scopes out Rels that job already burned — including on archived
+    releases the DWL cannot see (BUG-8)."""
     from app.procore.procore import next_rel_number
 
     submittal_id = request.args.get('submittal_id') or None
+    job_number = None
+    if submittal_id:
+        submittal = Submittals.query.filter_by(submittal_id=str(submittal_id)).first()
+        if submittal is not None:
+            job_number = submittal.project_number
+
     try:
-        suggestion = next_rel_number(exclude_submittal_id=submittal_id)
+        suggestion = next_rel_number(exclude_submittal_id=submittal_id, job_number=job_number)
     except RuntimeError:
         return jsonify({"next_rel": None}), 200
     return jsonify({"next_rel": suggestion}), 200

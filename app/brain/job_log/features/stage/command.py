@@ -5,10 +5,10 @@ purpose: Encapsulate the full stage update workflow (DB write, stage_group sync,
 exports:
   UpdateStageCommand: Dataclass command that executes a stage update with all side effects
   StageUpdateResult: Dataclass result with event_id, job_comp/fab_order extras
-imports_from: [app.models, app.services.outbox_service, app.services.job_event_service, app.api.helpers, app.brain.job_log.scheduling.service, app.brain.job_log.features.start_install.neutralize_install_date_cascade, app.brain.job_log.features.start_install.shipping_stage_date_discipline]
+imports_from: [app.models, app.services.outbox_service, app.services.job_event_service, app.api.helpers, app.brain.job_log.scheduling.service, app.brain.job_log.features.fab_order.tier, app.brain.job_log.features.start_install.neutralize_install_date_cascade, app.brain.job_log.features.start_install.shipping_stage_date_discipline]
 imported_by: [app/brain/job_log/routes.py]
 invariants:
-  - Fixed-tier stages (Ready-to-Ship / Complete groups) auto-assign fab_order via get_fixed_tier
+  - fab_order re-tiering is delegated to features/fab_order/tier.py, shared with the Trello sync and job_comp paths
   - Setting stage='Complete' cascades job_comp='X'; leaving Complete clears job_comp='X'
   - Paint Complete + hard start_install auto-rolls to Ship Planning (N5; generalizes ASAP intercept)
   - Ship Planning / Ship Complete apply N5 date discipline (formula blank or hard-date wash)
@@ -18,12 +18,12 @@ invariants:
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, Any
-import math
 
 from app.models import Releases, db
 from app.services.job_event_service import JobEventService
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
+from app.brain.job_log.features.fab_order.tier import apply_fab_order_for_stage
 from app.brain.job_log.features.start_install.neutralize_install_date_cascade import neutralize_install_date_cascade
 from app.brain.job_log.features.start_install.shipping_stage_date_discipline import (
     apply_shipping_stage_date_discipline,
@@ -107,7 +107,7 @@ class UpdateStageCommand:
     undone_event_id: Optional[int] = None
 
     def execute(self) -> StageUpdateResult:
-        from app.api.helpers import get_stage_group_from_stage, get_fixed_tier, STAGE_PROGRESSION_RANK
+        from app.api.helpers import get_stage_group_from_stage, STAGE_PROGRESSION_RANK
 
         job_record: Releases = Releases.resolve(self.job_id, self.release)
         if not job_record:
@@ -198,46 +198,6 @@ class UpdateStageCommand:
             from_stage=old_stage,
             to_stage=self.stage,
         )
-
-        fab_order_to_set = None
-        old_fab_order_for_update = job_record.fab_order
-        tier = get_fixed_tier(self.stage)
-        if tier is not None:
-            fab_order_to_set = tier
-            logger.debug(
-                "fab_order_fixed_tier_planned",
-                job=self.job_id,
-                release=self.release,
-                stage=self.stage,
-                tier=tier,
-                old=old_fab_order_for_update,
-                new=fab_order_to_set,
-            )
-        elif self.stage == "Welded QC" and old_stage_group != "READY_TO_SHIP":
-            # Department handoff: Fab → Paint. Land at the back of the paint
-            # deck so the fresh arrival doesn't jump the line on existing
-            # Welded QC / Paint Start work. Tiers 1-2 are reserved, so floor
-            # the max at 2 — minimum result is 3.
-            from sqlalchemy import func, or_
-            current_max = db.session.query(func.max(Releases.fab_order)).filter(
-                Releases.stage.in_(["Welded QC", "Paint Start"]),
-                Releases.fab_order.isnot(None),
-                Releases.is_archived != True,  # noqa: E712
-                or_(
-                    Releases.job != self.job_id,
-                    Releases.release != self.release,
-                ),
-            ).scalar()
-            base = current_max if current_max is not None and current_max >= 2 else 2
-            fab_order_to_set = base + 1
-            logger.debug(
-                "fab_order_paint_handoff_planned",
-                job=self.job_id,
-                release=self.release,
-                old=old_fab_order_for_update,
-                new=fab_order_to_set,
-                current_max=current_max,
-            )
 
         # Apply stage + stage_group
         job_record.stage = self.stage
@@ -352,67 +312,18 @@ class UpdateStageCommand:
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = self.source_of_update
 
-        # Complete is terminal — fab_order is always NULL.
-        if self.stage == 'Complete' and old_fab_order_for_update is not None:
-            payload_from = (
-                None if (isinstance(old_fab_order_for_update, float) and math.isnan(old_fab_order_for_update))
-                else old_fab_order_for_update
-            )
-            fab_order_event = JobEventService.create(
-                job=self.job_id,
-                release=self.release,
-                action='update_fab_order',
-                source=self.source,
-                payload={
-                    'from': payload_from,
-                    'to': None,
-                    'reason': 'stage_change_complete_clears_fab_order',
-                    'parent_event_id': event.id,
-                },
-            )
-            if fab_order_event is None:
-                logger.debug(
-                    "fab_order_clear_deduplicated",
-                    job=self.job_id,
-                    release=self.release,
-                )
-            else:
-                job_record.fab_order = None
-                JobEventService.close(fab_order_event.id)
-                extras['fab_order'] = None
-
-        # fab_order auto-assign for fixed-tier stages
-        if fab_order_to_set is not None and fab_order_to_set != old_fab_order_for_update:
-            payload_from = (
-                None if (isinstance(old_fab_order_for_update, float) and math.isnan(old_fab_order_for_update))
-                else old_fab_order_for_update
-            )
-            payload_to = (
-                None if (isinstance(fab_order_to_set, float) and math.isnan(fab_order_to_set))
-                else fab_order_to_set
-            )
-            fab_order_event = JobEventService.create(
-                job=self.job_id,
-                release=self.release,
-                action='update_fab_order',
-                source=self.source,
-                payload={
-                    'from': payload_from,
-                    'to': payload_to,
-                    'reason': 'stage_change_unified',
-                    'parent_event_id': event.id,
-                },
-            )
-            if fab_order_event is None:
-                logger.debug(
-                    "fab_order_update_deduplicated",
-                    job=self.job_id,
-                    release=self.release,
-                )
-            else:
-                job_record.fab_order = fab_order_to_set
-                JobEventService.close(fab_order_event.id)
-                extras['fab_order'] = fab_order_to_set
+        # fab_order re-tiering. One rule set, shared with the Trello inbound sync
+        # and the job_comp routes — see features/fab_order/tier.py (BUG-9).
+        fab_order_plan = apply_fab_order_for_stage(
+            job_record,
+            self.stage,
+            old_stage_group,
+            source=self.source,
+            parent_event_id=event.id,
+            stage_reason='stage_change_unified',
+        )
+        if fab_order_plan is not None:
+            extras['fab_order'] = fab_order_plan.fab_order
 
         # Trello outbox — push only when the DB stage's forward-mapped Trello list
         # actually differs from the card's current list. This avoids redundant API

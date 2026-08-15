@@ -4,7 +4,7 @@ schema_version: 1
 purpose: Processes inbound Trello webhooks by reconciling card changes (moves, edits, due-date updates) with the DB and creating JobEvents for the audit trail.
 exports:
   sync_from_trello: Main webhook handler that fetches card data, updates the Job record, and emits JobEvents.
-imports_from: [app.trello.api, app.trello.utils, app.trello.operations, app.trello.context, app.trello.logging, app.trello.list_mapper, app.models, app.services.job_event_service, app.config]
+imports_from: [app.trello.api, app.trello.utils, app.trello.operations, app.trello.context, app.trello.logging, app.trello.list_mapper, app.models, app.services.job_event_service, app.brain.job_log.features.fab_order.tier, app.config]
 imported_by: [app/trello/__init__.py]
 invariants:
   - Echo webhooks from Brain's own outbox calls are detected and skipped (90-second window, content-matched).
@@ -44,6 +44,7 @@ from datetime import datetime, date, timezone, time, timedelta
 from zoneinfo import ZoneInfo
 from app.logging_config import get_logger, SyncContext, log_sync_operation
 from app.services.job_event_service import JobEventService
+from app.brain.job_log.features.fab_order.tier import apply_fab_order_for_stage
 import uuid
 import re
 from app.config import Config as cfg
@@ -558,6 +559,10 @@ def sync_from_trello(event_info):
             
             # Capture old stage value before applying list mapping
             old_stage_before_list_move = rec.stage
+            # stage_group is overwritten by the apply below, and the fab_order
+            # re-tier needs the pre-move value (it decides the Fab → Paint
+            # department handoff).
+            old_stage_group_before_list_move = rec.stage_group
 
             # Apply list mapping to database. Returns True only if the rank gate
             # actually advanced rec.stage; False means the inbound was skipped
@@ -598,6 +603,33 @@ def sync_from_trello(event_info):
                     payload={"from": from_stage, "to": stage},
                     external_user_id=trello_user_id,
                 )
+
+                # Re-tier fab_order for the new stage (BUG-9). The inbound sync
+                # is how the shop actually advances work — a card dragged from
+                # the paint list to a shipping list used to keep its tier-2
+                # fab_order forever, because only UpdateStageCommand knew the
+                # tier rules. Applied off rec.stage (what apply_trello_list_to_db
+                # actually set), not the raw Trello list name.
+                fab_plan = apply_fab_order_for_stage(
+                    rec,
+                    rec.stage,
+                    old_stage_group_before_list_move,
+                    source=trello_source,
+                    parent_event_id=event.id if event else None,
+                    stage_reason="trello_list_move",
+                )
+                if fab_plan is not None:
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "Re-tiered fab_order for inbound Trello list move",
+                        job=rec.job,
+                        release=rec.release,
+                        new_stage=rec.stage,
+                        fab_order=fab_plan.fab_order,
+                        reason=fab_plan.reason,
+                    )
+
                 if event:
                     created_events.append(event)
                     safe_log_sync_event(
