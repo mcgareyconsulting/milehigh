@@ -1,15 +1,21 @@
 ---
 project: MHMW
-updated: 2026-08-10
-verified: origin/main @ 89c565f — v2.0.339
+updated: 2026-08-15
+verified: origin/main @ 4c048ca (PR #340 font wave)
 config:                       # inputs to derived math — store inputs, never results
   horizon:
-    - 2026-10-31 Procore contract lapses
+    - 2027-10 Procore absolute dead date (renewed 2026-08-15)
   effort_midpoints: {S: 0.5, M: 3, L: 7.5, XL: 15}
+classes:                      # what KIND of work an item is — orthogonal to effort
+  fix: discrete, shippable, no client sign-off needed
+  audit: document current → agree target with client → change
+  build: structural, multi-week
+  lane: ongoing, never "done"
+  deferred: off the active path, with a stated re-check trigger
 queue:                        # agent-maintained, set by agreement in session
-  now: K3
-  next: [P11, P1, P0]
-  awaiting: [A2]
+  now: T1
+  next: [T2, BUG-9, BUG-10, AUD1]
+  awaiting: [A1, N11]
 ---
 
 # MHMW · ROADMAP
@@ -25,15 +31,45 @@ detail; Bill's written spec
 deliverable, not a repo artifact. Procore integration teardown (webhooks, outbox,
 `fc_retry_worker`) is tracked on a separate map, not here.
 
-**Tier key (workstreams — the project's forcing logic):**
+**Tier key.** Tier numbers are stable identifiers, **not** priority order —
+priority is the order-of-work line below. W5 was added 2026-08-15; W1 was
+deferred the same day.
 
 | Tier | Workstream |
 |---|---|
 | W0 | Preconditions — everything else sits on these |
-| W1 | Procore exit — October-critical; outranks everything unshipped |
-| W2 | Money — the release valve; allowed to slip |
-| W3 | Daily use — cheap, unblocked, currently costing time |
+| W1 | Procore exit — **deferred 2026-08-15**; horizon moved to Oct 2027 |
+| W2 | Money — ongoing cost lane, sits behind W5 |
+| W3 | Daily use — the tool everyone is in; fixes and audits live here |
 | W4 | Carmen |
+| W5 | **Trello exit — the front lane** (added 2026-08-15) |
+
+**Order of work as of 2026-08-15:** W5 → W3 (fixes, then audits) → W2 → W0 → W1 deferred.
+
+**Class key.** Every item carries a class in its status line (`config.classes`):
+**fix** (discrete, shippable, no sign-off) · **audit** (document current → agree
+target with client → change) · **build** (structural, multi-week) · **lane**
+(ongoing) · **deferred**. Class says what *kind* of work it is; effort says how
+big. They are independent — a fix can be L, a build can be S.
+
+---
+
+## 🔧 Fix queue — pick-up-and-go
+
+Small, self-contained, no client sign-off. Entry points included so a session can
+start cold (phone included) without exploring first.
+
+| ID | Fix | Entry point | Pri |
+|---|---|---|---|
+| BUG-9 | Fab order not flipping 2→1 at paint → complete; order cleared inconsistently | `app/brain/job_log/features/fab_order/` (tier logic: Complete=NULL, 1, 2, dynamic 3+) | **high** |
+| BUG-10 | Sub invite email ships a `localhost:5173` link — `APP_BASE_URL` unset | `app/config.py:60`, `app/brain/tm/subcontractors/command.py:52`. Config fix (set in Render), + make the fallback loud outside local | **high — unblocks A1** |
+| BUG-8 | DWL release-number generator doesn't check the archive; job log rejects the number later | DWL number request path; JL guard is already correct | med |
+
+**BUG-8 note:** shipping this as a **fix** ahead of its own audit (AUD2) is a
+deliberate call — it makes the generator agree with a rule that is already
+enforced and already confirmed correct, so it is closing a gap, not introducing
+behavior that needs sign-off. Block-vs-auto-advance and long-term identity stay
+in AUD2.
 
 **Redaction:** MHMW staff first names (Bill, Colton, Katie, David, Dalton) may
 appear. GC/customer companies appear only as job numbers (e.g. 500-998) or
@@ -41,18 +77,153 @@ project names already in the record (660 Fox Hill, 645). No contract dollar
 values are committed to this file.
 
 **Effort key:** S = under a day · M = 2–4 days · L = 1–2 weeks · XL = 3+ weeks.
-Each item states its effort letter in its Now paragraph. **Fit is derived, not
-stored:** sum open W0+W1 item efforts via `config.effort_midpoints` against
-`config.horizon`. As of 2026-08-06 that arithmetic did not fit the window even
-at the reduced scope — which of P3 / P5 / P6 / P8 gets lost, what gets thinner,
-or whether the date moves is Bill's call (Owed, row 1). Recompute at render;
-do not trust remembered totals.
+Each item states its effort letter in its Now paragraph. **Fit is no longer the
+binding constraint** — the October window it was computed against is gone (see
+below). The `effort_midpoints` stay for sizing a lane, not for proving a date.
 
-**The 2026-08-09/10 wave did not change that picture.** N4 closed and K4's
-Postgres half closed, which shrinks W0 — but **no W1 item moved**, and W1 is
-what the horizon is made of. Everything that shipped on 8/9–8/10 came from W2,
-W3, W4, and the parked lane. Eleven weeks remain and Workstream 1 has not
-started; the cut-list decision is more overdue than it was, not less.
+## The 2026-08-15 reset
+
+**Procore was renewed. October 2026 is dead as a deadline; the absolute Procore
+dead date is October 2027.** Bill volunteered why, unprompted: he was nervous
+about the *cutover*, not the capability — *"not that we wouldn't be functional…
+but I would worry that we would have a lot of growing pains and adaptation of
+the fine details"* [bill-2026-08-15#L31]. He bought time to do it properly.
+
+Two consequences, both large:
+
+1. **The entire Procore ecosystem is deferred** (Daniel's call, 2026-08-15) —
+   P0, P1, P2, P4, P7, P10, P11, C3-narrow and D1-minimal come off the active
+   path as one block, joining the already-parked P3/P5/P6/P8. The October
+   cut-list decision — the top Owed row since 2026-08-06 — is **dissolved**: the
+   window it was cutting against no longer exists.
+2. **Trello takes the front.** Bill named the replacement priorities in one
+   sentence: *"revamp the **Trello** focus and **subcontractor integration** into
+   the Brain **for the invoicing**, and just completing all of the back end
+   connections"* [#L31]. Trello is **dead, not read-only** — decommission
+   expedited (Daniel's call; Bill's literal words were *"abandon Trello, except
+   for read only to some extent"* [#L69], which makes read-only an available
+   staging step, not the goal).
+
+**One flag carried, not re-litigated:** P11 (Procore document export) is inside
+the deferred block and is the only item whose deferral is **irreversible** — our
+hosted PDFs, markups and correspondence die at the lapse and there is no second
+attempt. It must resurface with real lead time, not in September 2027.
+
+**A governing principle came out of the same meeting** and now applies past the
+item that produced it: **lean on user control; do not automate out user agency
+in the short term.** Users have a clear ruleset — the system should not infer
+commitments on their behalf (see AUD1).
+
+---
+
+## Workstream 5 — Trello exit *(the front lane)*
+
+Opened 2026-08-15. **End state is Trello dead**, not Trello read-only. Bill
+described the current state as *"kind of brutal"* — *"we have so much like things
+that are disconnected because it was causing this data overload and bad data
+information coming through… we just left this thing behind"* [#L69] — plus a
+one-way sync gap: *"if we change something on Trello, it's not updating to the
+job log"* [#L69]. His workaround is weekly retraining of the crew onto the job
+log. T1 is the gate: the timeline has to do Trello's job before Trello can go.
+
+### T1 · Timeline assignment — drag, assign, unassigned lane
+*W5 · not-started · class build · due — · deps — · owner daniel · src bill-2026-08-15#L75 · upd 2026-08-15*
+
+Effort L. **Priority 1 of the whole lane** and Bill's top ask, stated twice:
+*"being able to **move the cards around and assign them**, and then **the vertical
+column of unassigned so we can plug and play**"* [#L61]; *"**we're so close already
+with the timeline view**… getting the **mirror cards**, and then being able to
+**assign the cards and the dates into those individual people, is going to be the
+most critical bit of it**"* [#L75].
+
+The job it must do, in his words: see what's ready to ship, see what's **stored at
+Mile High**, grab anything **past paint complete** and drop it where it goes —
+*"use that for visual planning for the guys."* **Base is confirmed:
+`feature/jay-view` (day-bucket timeline) + `feature/mirror-cards` (installer lanes
+as gantt range bars).** **Un-parks D4**, which dissolves into this item.
+
+**Drag is a real scheduling write** (confirmed intent, 2026-08-15) — dropping a
+card writes the installer field that drives `comp_eta` / `num_guys`, not a
+view-local arrangement. That is the point of the feature, not a side effect.
+
+**Trail**
+- 2026-08-15 · transcript · src bill-2026-08-15#L61 — move/assign cards + a vertical unassigned lane to plug and play from
+- 2026-08-15 · transcript · src bill-2026-08-15#L75 — mirror cards + assigning cards and dates to individual people is "the most critical bit"; purpose is visual planning off ready-to-ship / stored-at-Mile-High / past-paint-complete
+- 2026-08-15 · decision · src — — priority 1 of W5; base = jay-view + mirror-cards; drag writes the real schedule; absorbs parked D4
+
+### T2 · Admin member management — permissions + onboarding, consolidated
+*W5 · not-started · class build · due — · deps — · owner daniel · src bill-2026-08-15#L83 · upd 2026-08-15*
+
+Effort M–L. **Runs in tandem with T1**, not queued behind it. The problem is
+scatter: sub invites live in the subs/T&M surface, staff roles are boolean flags
+on `User` (`is_admin` / `is_drafter` / `is_active`) set by Daniel on request, and
+there is no single place showing who has what. Bill's ask [#L83]: *"an **admin
+view for users**… add people to the Brain and then **assign their permissions**,
+and it just sends them an invite… **we can see all the users**… **reset their
+password and block them**"* — motive stated plainly: *"I'm not having to ask you
+to add this guy at this permission."*
+
+**One page, one surface.** **Sub invite moves out of subs/T&M and into member
+management** — a sub is just another member being onboarded. Permission *rules*
+must be legible to admins, who can elevate or lower access themselves. There is
+room to collapse other scattered admin surfaces into it. Whether `Subcontractor`
+folds into the `User`/role table is a build-time call, not a roadmap decision.
+
+**Bill self-deprioritized the page** (*"I'm not too concerned with that piece
+yet, but long term I think that's a deal"*); it is elevated here because the
+permission model underneath it is load-bearing for T3.
+
+**Trail**
+- 2026-08-15 · transcript · src bill-2026-08-15#L83 — admin user view: add, assign permissions, invite, see all users, reset password, block
+- 2026-08-15 · decision · src — — one page covering staff + subs; sub invite relocates here; admins own elevation/deferral; consolidation of scattered admin surfaces invited; runs in tandem with T1
+
+### T3 · Subcontractor visibility — short-term scope
+*W5 · not-started · class build · due — · deps T2 · owner daniel · src bill-2026-08-15#L93 · upd 2026-08-15*
+
+Effort M. **Short term:** subs see their **T&M tickets plus the relevant data for
+that job release**, pulled into the sub view. **Mid term this item dissolves into
+T2** — visibility becomes a property of a role (sub / drafter / PM / admin),
+not a per-surface decision.
+
+**Do not build release-wide sub visibility now.** Bill's *"mostly the fab hour is
+the only thing they don't actually see"* [#L93] is his eventual posture, not the
+short-term scope. His written scope arrives with the Trello doc (Owed).
+
+**Trail**
+- 2026-08-15 · transcript · src bill-2026-08-15#L93 — "give them everything that they need, but not show them what they shouldn't see"; fab hours named as the main exclusion; scope to be detailed in his doc
+- 2026-08-15 · decision · src — — short term = T&M + that job release's data; mid term collapses into the T2 role model
+
+### T4 · Trello teardown
+*W5 · not-started · class build · due — · deps T1 · owner daniel · src bill-2026-08-15#L69 · upd 2026-08-15*
+
+Effort M, unknown until T1 lands. The actual decommission: mirror cards, the
+board sync, `TrelloOutbox`, the list mapper, the webhook queue and its drainer.
+Read-only is available as a staging step. Sequenced after T1 because the timeline
+must be doing Trello's job before the plug comes out.
+
+**Trail**
+- 2026-08-15 · decision · src — — end state is dead, not read-only; expedited; teardown waits on T1
+
+### A1 · T&M package — gated, then elevated
+*W5 · blocked · class build · due — · deps BUG-10 · owner daniel · src bill-2026-08-15#L145 · upd 2026-08-15 · blocked-on BUG-10 since 2026-08-15*
+
+Effort M. **Blocked on the invite link** — Bill cannot evaluate the sub side
+without a sub in the system: *"I still can't get a sub added to it to see how it
+looks on the back end yet"* [#L145]. **Elevates the moment BUG-10 lands**, which
+makes that config fix the pivot for two lanes.
+
+**Delivery constraint, stated deliberately:** one package, not piecemeal —
+*"there's definitely some things that we saw in the initial run through that we
+kind of wanted to change, but [I want to] try and deliver it as one package…
+instead of piecemealing it together"* [#L145]. **His change notes are lost**
+(*"I did, but I don't know where they went"* [#L155]); he promised to reproduce
+them, against three all-day meetings and a flight. Sentiment is positive: *"the
+overall concept is right there… excited about being able to track that well."*
+
+**Trail**
+- 2026-08-15 · transcript · src bill-2026-08-15#L145 — blocked on sub enrollment; deliver as one package, not piecemeal
+- 2026-08-15 · note · src bill-2026-08-15#L155 — Bill's original change notes lost; reproduction promised, treat as unlikely near-term
+- 2026-08-15 · decision · src — — gated on BUG-10, elevates on landing
 
 ---
 
@@ -153,15 +324,30 @@ handed over per the usual split (Daniel writes, client runs).
 
 ---
 
-## Workstream 1 — Procore exit (October)
+## Workstream 1 — Procore exit ~~(October)~~ · **DEFERRED 2026-08-15**
 
-The forcing function: the Procore contract lapses in October
-(`config.horizon`). Bill drew the boundary himself — *"brain projects, brain
-submittal handling, and ball-in-court workflow is the absolute core need to
-have before October"* [bill-2026-08-06#L802] — and invited-user access to
-customers' Procore survives the lapse [#L811], which keeps plan-document
-hosting off the critical path. Full data model in
-`docs/procore-decommission-plan.md`.
+> **Every item in this section carries `class deferred` as of 2026-08-15.**
+> Procore was renewed; the absolute dead date is **October 2027**. The whole
+> ecosystem comes off the active path as one block — P0, P1, P2, P4, P7, P10,
+> P11, plus C3-narrow and D1-minimal below. Item bodies are retained unedited
+> for when the lane reopens; their `upd` dates are deliberately left at
+> 2026-08-06 because nothing about the *work* changed, only its timing.
+>
+> **Re-check trigger:** W5 substantially complete, or Q1 2027 — whichever comes
+> first. **P11 is the exception that cannot wait for either** (see its entry).
+>
+> The 2026-08-06 framing, retained: Bill drew the boundary himself — *"brain
+> projects, brain submittal handling, and ball-in-court workflow is the absolute
+> core need to have before October"* [bill-2026-08-06#L802] — and invited-user
+> access to customers' Procore survives the lapse [#L811], which keeps
+> plan-document hosting off the critical path. Full data model in
+> `docs/procore-decommission-plan.md`.
+>
+> **One open thread the deferral does not stop:** submittals and releases are
+> converging in practice. P1 (extend `Submittals` into the native record) was
+> this roadmap's vehicle for that unification, and it is now inside the deferred
+> block — but the convergence continues as a direction anyway, which is why AUD2
+> is scoped to survive the merge rather than hard-code today's two-model split.
 
 ### P1 · Extend Submittals — contract_scope_id, parent_id, phase, state, source
 *W1 · not-started · due — · deps — · owner daniel · src bill-2026-08-06#notes · upd 2026-08-06*
@@ -282,6 +468,16 @@ must be **verified complete before the lapse**. First in `queue.next`.
 current drawing sets reachable through the GC's environment — our own document
 history is what this rescues.)
 
+> ⚠️ **Deferred 2026-08-15 with the rest of W1 — but this is the one item whose
+> deferral is irreversible.** Every other Procore item can start late and still
+> finish; this one has a cliff. Our hosted PDFs, drawing sets, returned markups
+> and correspondence are deleted at the lapse and there is no second attempt,
+> the pull is paced by rate limits, and the acceptance bar is *verified complete
+> before the date*. **Resurface with real lead time — not in September 2027.**
+> The cheap insurance remains what it always was: the read-only delta inventory
+> (~1d) that sizes the pull. Deciding to skip the export is a legitimate call;
+> discovering in month twelve that nobody decided is not.
+
 **Trail**
 - 2026-08-06 · transcript · src bill-2026-08-06#L811 — invited-user access to customers' Procore survives the lapse; our own hosted documents do not
 - 2026-08-06 · decision · src — — week-1 read-only delta inventory sizes the pull; effort unknowable until it runs; verified-complete-before-lapse is the acceptance bar
@@ -322,8 +518,19 @@ page moves after October.
 
 ## Workstream 2 — Money
 
-One thread across both meetings, sequenced (collapse ⑤). **Not
-October-critical** — the natural release valve if Workstream 1 needs the room.
+One thread across both meetings, sequenced (collapse ⑤).
+
+**Re-tiered 2026-08-15: an ongoing cost lane, sitting behind W5.** It was
+described as "the release valve — allowed to slip" while W1 owned a deadline;
+with W1 deferred, that framing is void. W2 is not a thing that finishes, and it
+is not the thing being cut. It runs behind Trello in the short term.
+
+**The strongest evidence in the file that it is under-tiered rather than over:**
+I4 shipped 2026-08-10 out of order — skipping I3 and N2b — and within five days
+caught **~$15k of premature-or-duplicate sub payment** [bill-2026-08-15#L33],
+cash-flow harm rather than accounting noise. *"Lexi was just loving it"* [#L41].
+Logged as signal; explicitly **not** treated as a re-tiering trigger (Daniel,
+2026-08-15).
 
 ### N1 · Release tags — Contracted / Change Order / MHMW Cost
 *W2 · built · due — · deps — · owner daniel · src bill-2026-08-06#notes · upd 2026-08-09*
@@ -453,8 +660,162 @@ assumed.
 
 The bug pile, DP, N6, N5, and the N7 core all cleared 2026-08-06/08 (PRs
 #323–#334; in-app patch notes at v2.0.334) — see the Resolved log. **N7's
-remainder cleared 2026-08-09** (PRs #336–#338, v2.0.338). Workstream 3 is now
-down to two items, neither of them blocking anything in October:
+remainder cleared 2026-08-09** (PRs #336–#338, v2.0.338).
+
+**Re-stocked 2026-08-15.** With W1 deferred, this tier is where the *quality* of
+the daily tool gets paid down: three fixes (see the Fix queue at the top) and
+two audits. The audits share one shape, set by Daniel on 2026-08-15 —
+**document current behavior → agree the target with the client → then change**.
+Neither is a code-first task.
+
+### AUD1 · End-of-lifecycle audit — staging semantics + date handling
+*W3 · not-started · class audit · due — · deps — · owner daniel · src bill-2026-08-15#L115 · upd 2026-08-15*
+
+Effort M–L. **One item, not two.** Install Complete / Complete / `job_comp` /
+`invoiced` all describe *how a release ends*, and the date-color cascades fire
+off exactly those transitions — auditing them separately produces two rulesets
+that disagree again, which is how we got here.
+
+**The defect that opened it:** assigning an installer [#L115] *and* changing
+stage [#L119] both silently convert a soft date into a **hard date**, including
+on past-due rows [#L123]. Reported by Katie and Bill independently the same
+morning. A hard date is a commitment; this manufactures commitments nobody made,
+on exactly the rows PMs are being told to clean up. **Rule set 2026-08-15:
+assigning an installer natively assigns nothing.** Bill's ask follows —
+*"we should have to toggle hard date on or off"* [#L127].
+
+**Why it is an audit and not a fix:** N5's install-start/install-complete
+coloring rules are recent, the comp / ship-comp rules are older, and nothing ever
+reconciled them — so the trickle-down is inconsistent and inference fills the
+gaps. **Governing principle: lean on user control, do not automate out user
+agency in the short term.**
+
+**Also in scope — Katie's staging question** [#L211]: why doesn't `invoiced = X`
+move a row off Install Complete to Complete? Daniel's live read, still to be
+verified: no such cascade exists — `neutralize_install_date_cascade` fires in
+that zone but only strips date color, it does not advance stage. Likely a
+cascade never built rather than one that broke. Bill's own model, hedged twice
+[#L207]: Install Complete means *we physically installed on site*; **drop-shipped
+work should be marked Complete, never Install Complete** — a distinction nothing
+currently enforces. Katie's written feedback is an **input** to this audit, not a
+separate ticket, and had not arrived as of 2026-08-15.
+
+**Deliverable is two things:** corrected behavior, **and a legible statement of
+the date rules for distribution back to the client.**
+
+**Banked as working:** the N5 shipping-stage rule (ship planning / ship complete
+→ dump the color, keep the hard date) is confirmed correct in production
+[#L127]; Bill hedged only about *"some old outliers"* [#L131].
+
+**Trail**
+- 2026-08-15 · transcript · src bill-2026-08-15#L115 — installer assignment and stage change both silently create hard dates; two independent reports the same morning
+- 2026-08-15 · transcript · src bill-2026-08-15#L207 — Install Complete = physically installed; drop-ship should read Complete; "Complete = invoice marked off" was discussed and never built
+- 2026-08-15 · decision · src — — merged the date-handling and staging questions into one audit; assigning an installer assigns no date; user agency over automation; client-facing ruleset is a deliverable
+
+### AUD2 · Release-number uniqueness ruleset
+*W3 · not-started · class audit · due — · deps — · owner daniel · src bill-2026-08-15#L177 · upd 2026-08-15*
+
+Effort M. Same shape: confirm current behavior, confirm the updated behavior
+**with the client**, then change. **Early read: the job-log enforcement (the
+BUG-3 rule) is correct and the gap is DWL-side**, so the fix may be entirely
+one-sided — BUG-8 in the Fix queue carries that half.
+
+Bill independently restated the rule and matched what shipped: *"it needs to have
+a must-stop if the job number and release number match… **we just can't have the
+full match ever**"* [#L167], while job-number rollover across years is fine.
+
+**Open for the client conversation:** on collision, auto-advance to the next free
+number or keep block-and-suggest? Bill wants advance — *"is it not just 'give me
+a new number and move it to the next one' in the sequence at that point?"*
+[#L173]. Today it blocks and suggests.
+
+**Rejected, with a reason that must be given back to him:** Bill proposed
+carrying the start year as project metadata (`340-26`) to disambiguate the
+archive [#L185]. **Not needed — the record already carries date handling that
+accomplishes the same comparison**, so the year would be a display-number
+encoding of data we already hold. He proposed it himself, so the confirm step
+has to *explain* the rejection, not silently drop it. **Replaces it:**
+best-practice research on long-term uniqueness handling.
+
+**Scope constraint:** submittals and releases are converging (see the W1 banner).
+Write the ruleset to survive that merge; do not hard-code today's two-model split.
+
+**Trail**
+- 2026-08-15 · transcript · src bill-2026-08-15#L159 — DWL issued a number already in use; worst case was the same job *and* the same release number
+- 2026-08-15 · transcript · src bill-2026-08-15#L177 — Bill diagnosed it himself: the DWL side never checks the archive, the job log catches it later; "it should have caught that when it got to 108"
+- 2026-08-15 · transcript · src bill-2026-08-15#L173 — instances 410-108 (archived twin Columbine Square) and 500-140 (Novel Flatirons); asks for auto-advance over blocking
+- 2026-08-15 · decision · src — — full audit with client confirmation; year-as-metadata rejected (dates already in the record) with the reason owed back to Bill; uniqueness research replaces it
+
+### N12 · Release Modal — distribute the one-stop surface
+*W3 · in-progress · class build · due — · deps — · owner daniel · src bill-2026-08-15#L49 · upd 2026-08-15*
+
+Effort M, incremental. **Reframed 2026-08-15 from "invoicing detail modal" to
+what it actually is:** the **Release Modal** is the one-stop surface for all data
+on a release, and it gets **distributed wherever a release is referenced**.
+Invoicing is the first redistribution target, not a separate build. N7's
+`ReleaseHubModal` is already that object — this makes *distribute and refine in
+place* the standing pattern instead of per-page modal variants.
+
+First round of tweaks is already filed: Lexi's notes in the bug tracker [#L47] —
+*"additional information in this column… and then having the overall modal pop up
+to give us more of the details"* [#L49], plus unspecified job-log modal tweaks
+[#L53]. Signal from Bill: the data storage is right, the surface needs tweaks and
+wider distribution.
+
+**Trail**
+- 2026-08-15 · transcript · src bill-2026-08-15#L49 — Lexi wants column enrichment + a detail modal on the invoicing surface; notes filed in the bug tracker
+- 2026-08-15 · decision · src — — reframed as the Release Modal: one canonical surface, distributed to other pages, refined in place; invoicing is the first target
+
+### BUG-8 · DWL release-number generator skips the archive
+*W3 · not-started · class fix · due — · deps — · owner daniel · src bill-2026-08-15#L177 · upd 2026-08-15*
+
+Effort S. See the Fix queue and AUD2. Ships **ahead of** its audit deliberately:
+it closes a gap against a rule already enforced and already confirmed correct.
+
+### BUG-9 · Fab order clunk at paint → complete
+*W3 · not-started · class fix · due — · deps — · owner daniel · src bill-2026-08-15#L201 · upd 2026-08-15*
+
+Effort S. *"When we're getting to the paint department and then complete, it's
+not flipping the two and the one… the fab order is being cleared and not
+cleared — there's just some clunkiness to the back end"* [#L201].
+
+**Bill twice called it a non-issue; Daniel overrode to high priority — "I want
+this clean." Do not wait on Bill to confirm.** Suspected surface is the unified
+`fab_order` tier logic (Complete = NULL, tier 1, tier 2, dynamic 3+) at the end
+of the fab lifecycle — the same values the FABRICATION renumber tool operates on,
+so tier drift drags renumber and the shop's ordering with it.
+
+**Trail**
+- 2026-08-15 · transcript · src bill-2026-08-15#L201 — reported and self-deprioritized as "really kind of a non-issue"
+- 2026-08-15 · decision · src — — elevated to high priority by Daniel over Bill's framing
+
+### BUG-10 · Sub invite email ships a localhost link
+*W3 · not-started · class fix · due — · deps — · owner daniel · src bill-2026-08-15#L81 · upd 2026-08-15*
+
+Effort S — **config, not code.** Bill: *"I did try to do one and I sent it to my
+Gmail, and **the link that it sends is like a broken link. It did not work.**"*
+[#L81]
+
+**Root cause confirmed in the code:** the invite link is built as
+`f"{cfg.APP_BASE_URL}/sub/accept-invite/{raw_token}"`
+(`app/brain/tm/subcontractors/command.py:52`), and `APP_BASE_URL` falls back to
+`http://localhost:5173` when unset (`app/config.py:60`) — so Bill's Gmail
+received a localhost link. Everything else on the path is fine: the frontend
+route exists (`App.jsx:91`), the token is hashed with a TTL. **The same variable
+builds the T&M ticket-assignment link (`/sub/tickets/<id>`) — broken identically,
+just not hit yet.** Fix is setting `APP_BASE_URL` to the real domain in Render;
+the prod value is unverified from here. **Rider worth taking: make the fallback
+loud** — refuse to send, or log ERROR, when a link would be built against
+localhost outside the local environment, so it cannot fail silently twice.
+
+**Blocks A1** (Bill cannot test T&M without a sub in the system) and gates sub
+enrollment generally.
+
+**Trail**
+- 2026-08-15 · transcript · src bill-2026-08-15#L81 — invite link broken on a real send to an external mailbox
+- 2026-08-15 · note · src — — root cause found in code: unset `APP_BASE_URL` → localhost fallback; same var breaks the ticket-assignment link
+
+**The items W3 already carried, unchanged by the 8/15 pass:**
 
 ### N5 · Shipping-stage date discipline
 *W3 · built · due — · deps — · owner daniel · src bill-2026-08-06#L1322 · upd 2026-08-08*
@@ -581,13 +942,48 @@ tool-calling. **Bill has the metrics list in hand; it needs walking** (Owed).
 - 2026-08-09 · build · src pr#338 — seven Mon–Sun metrics shipped as Carmen tools (`get_eos_metric`, `get_eos_metrics_for_owner`), owner-aware across David/Bill/Luis/Doug; C10 phase two still parked
 - 2026-08-09 · note · src — — the non-derivable metrics were never written down as findings; the gap the method was supposed to produce is currently unrecorded
 
+### N11 · Carmen prompts the PM on a yellow date
+*W4 · not-started · class build · due — · deps — · owner daniel · src bill-2026-08-15#L137 · upd 2026-08-15 · awaiting bill/distribution-channel*
+
+Effort S–M — **most of the infrastructure already exists.** Bill's ask [#L137]:
+*"when a yellow date comes up, that **Carmen sends an email to the project
+manager** with a summary of: here's the project, here's the stage changes, and
+this is the current install date. **What are we going to do here?**"*
+
+Note the shape — **a prompt, not an alert.** It states the situation and asks the
+PM to decide, which matches the Carmen-asks-questions direction from July and the
+AUD1 agency principle: it prompts a human rather than adjusting the date itself.
+
+Why it is cheap: **N8 already computes the yellow-dates EOS metric** (the
+detection half), G1 ships the notification stack, and Carmen's mailer is live. Why
+it matters: PMs are in the field, so **G1's in-app notification is foreground-only
+and never reaches them** — and *"one of our metrics for our **L10s** is yellow
+dates on the job log"* [#L139], so this drives a number Bill is already scored on.
+
+**Open before build — confirm with Bill: the distribution channel** (email,
+in-app, or both). Carried into that conversation: **trigger discipline** —
+on-transition-to-yellow versus a daily digest of everything currently yellow,
+which is really a channel question in disguise.
+
+**Trail**
+- 2026-08-15 · transcript · src bill-2026-08-15#L137 — Carmen emails the PM a project/stage/install-date summary and asks what to do
+- 2026-08-15 · transcript · src bill-2026-08-15#L139 — yellow dates are a scored L10/EOS metric; PMs are in the field where in-app notification does not reach
+- 2026-08-15 · decision · src — — deferred pending Bill's channel confirmation; trigger discipline rides along
+
 ---
 
-## Parked — real work, not October
+## Parked — real work, off the path
+
+**Read "October" in this section as the old W1 window.** These blocks were parked
+against a deadline that no longer exists (2026-08-15), so their re-check triggers
+are still valid as *dependency* statements — "after P2 ships" — but their urgency
+language is historical. Anything whose trigger is a W1 item is now gated behind
+that lane reopening.
 
 Each block states its re-check trigger. Also parked without blocks here
 (reasoning retained in `docs/feature-catalog.md`): **D2** personal page ·
-**D4** timeline view · **A3** punch list · **A4** lookahead upload + markup ·
+~~**D4** timeline view~~ *(un-parked 2026-08-15 — dissolved into **T1**)* ·
+**A3** punch list · **A4** lookahead upload + markup ·
 **F1** meeting extraction bands · **E1–E3** tee-time (**N4 gate cleared
 2026-08-09** — now parked on October scope alone, not on a dependency) · **L1**
 styling v3 (unambiguous: not before October) · **I1** OCIP remainder (argued
@@ -663,32 +1059,44 @@ not before October.
 
 | ID | Blocked on | Since | The explicit ask |
 |---|---|---|---|
-| P2 | bill/workflow-template-export | 2026-08-06 | Export or screenshots of the Procore workflow templates (the 8-step, per-PM list) — we are replicating them |
+| **A1** | **BUG-10** *(ours, not Bill's)* | 2026-08-15 | Set `APP_BASE_URL` so the sub invite link resolves. Bill cannot test T&M until a sub is enrolled — *"I still can't get a sub added to it"* [bill-2026-08-15#L145]. **Elevates the moment this lands.** |
+| N11 | bill/yellow-date-channel | 2026-08-15 | Which channel the yellow-date prompt uses — email, in-app, or both |
+| P2 | bill/workflow-template-export | 2026-08-06 | Export or screenshots of the Procore workflow templates (the 8-step, per-PM list) — we are replicating them. **Dormant with W1 from 2026-08-15** |
 | A2 | bill/co-log-excel-and-sample-email | 2026-07-22 | The change order log Excel + one sample CO email |
 
 ---
 
 ## Owed
 
-External dependencies, all Bill's. Transcribed from the 2026-08-06 roadmap §9.
+External dependencies, all Bill's unless noted.
+
+**Live — these block or shape current work:**
 
 | Owed | Blocks | Since |
 |---|---|---|
-| **The October cut-list decision** — even the reduced scope overruns the window; which of P3 / P5 / P6 / P8 he loses, what gets thinner, or the date moves — his pick, made early, not discovered in week seven | The scope contract for everything above | 2026-08-06 |
-| **Procore workflow template export / screenshots** (the 8-step, per-PM list) | P2 — we are replicating them | 2026-08-06 |
-| **Trigger on 500-998 going to FC** (committed) | P5 design | 2026-08-06 |
+| **Trello phase-1 spec doc** — *"I'm gonna do like a chat this weekend… we should have something for you for early next week"* [#L59, #L263]. Also carries the **sub visibility scope** [#L93] | **Nothing — treated as a gap filler, not a gate** (decided 2026-08-15). T1 proceeds without it; his detail folds in on arrival, backed by his own *"we probably already have pretty good working understanding"* | 2026-08-15 |
+| **T&M change notes** — *"if I can get you something today"*; originals lost [#L155] | A1's shape (not its start — that's BUG-10) | 2026-08-15 |
+| **Katie's staging feedback** *(from Katie, not Bill)* | An input to AUD1, not a gate | 2026-08-15 |
+| **Distribution channel for the yellow-date prompt** — email, in-app, or both | N11 | 2026-08-15 |
+| **Confirm the updated uniqueness ruleset** — including *why* `340-26` is not needed | AUD2's change step | 2026-08-15 |
+| **Confirm the corrected date/stage ruleset**, then take the written version | AUD1's change step | 2026-08-15 |
+| Stage weight approval · Carmen avatar | E2 · C9 cosmetics | 2026-07-22 |
+| Change order log Excel + sample CO email | A2 | 2026-07-22 |
 | **Sample release Excel (billing sheet)** | N2 | 2026-08-06 |
 | **Carmen "best project engineer" chat doc** | Workstream 4 framing | 2026-08-06 |
-| **Confirmation that Mission Brief is out of October scope** — it contradicts his own written spec; he should confirm it, not discover it | P0 scope | 2026-08-06 |
-| **What happens to in-flight Procore projects when the subscription lapses** — possibly a contract-renewal question, not a build one | Open question 1 / P10 | 2026-08-06 |
-| Procore bulk-export request; customer-Procore question to his rep | P10, B1/B4 | 2026-07-22 |
-| Change order log Excel + sample CO email | A2 | 2026-07-22 |
-| Stage weight approval · Carmen avatar | E2 · C9 cosmetics | 2026-07-22 |
+
+**Dormant — attached to deferred W1 items; do not chase until that lane reopens:**
+Procore workflow template export (P2) · 500-998 FC trigger (P5) · Mission Brief
+scope confirmation (P0) · in-flight Procore projects at the lapse (P10) · Procore
+bulk-export request and the customer-Procore question to his rep (P10, B1/B4).
+
+**Dissolved 2026-08-15: the October cut-list decision.** It was the top row from
+2026-08-06 — which of P3/P5/P6/P8 gets lost against an eleven-week window. The
+window is gone, so the question is void. Nothing was decided; it stopped being a
+question.
 
 **Delivered since 2026-08-06:** the EOS metrics list — walked 2026-08-09, N8
-built against it. Everything else above is still outstanding, including the
-October cut-list decision, which is now four days older against an eleven-week
-window.
+built against it.
 
 ---
 
@@ -697,8 +1105,11 @@ window.
 Nine were asked 2026-08-06; seven are resolved (see Resolved log). These
 remain:
 
-1. **In-flight Procore projects at the October line** *(source §10.1 — new,
-   unanswered)*. Gates **P10** (and the cut-over posture generally). The gate
+1. **In-flight Procore projects at the ~~October~~ line** — **DORMANT
+   2026-08-15**, deferred with W1. It stops being urgent and starts being a
+   normal design question, to be answered when the lane reopens against the Oct
+   2027 date. *(source §10.1)*. Gates **P10** (and the cut-over posture
+   generally). The gate
    is *new projects originate in the Brain* — but the subscription lapses with
    projects mid-flight. Pulled over then, a read-only subscription tail, or
    forced across early? Likely cheaper than it sounds: `Submittals` already
@@ -753,6 +1164,20 @@ Append-only log — never edited, never pruned.
 - 2026-08-10 · **I4** · closed — un-parked and shipped (PR #339) without I3/N2b clearing; installer invoice progress % + invoice numbers on the admin Subs page. src pr#339
 - 2026-08-10 · **MIG** · note — three migrations confirmed run (`releases_unique_job_release_name.py`, `add_release_tag.py`, `add_installer_invoice_progress_and_numbers.py`); named backlog clear, A1-era five still unverified. src —
 - 2026-08-10 · **doc** · moved — this file moved from repo root `ROADMAP.md` to the canonical `docs/ROADMAP.md`; the 2026-08-06 prose roadmap renamed `docs/roadmap.md` → `docs/roadmap-2026-08-06.md` to free the name. CLAUDE.md updated to name this file as the source of truth. src —
+- 2026-08-15 · **horizon** · replaced — Procore renewed; `2026-10-31 lapse` → **October 2027 absolute dead date**. The forcing function this file was built around no longer exists. src bill-2026-08-15#L31
+- 2026-08-15 · **W1** · deferred — the entire Procore ecosystem off the active path as one block (P0/P1/P2/P4/P7/P10/P11 + C3-narrow + D1-minimal), re-check at W5-substantially-complete or Q1 2027. **P11 exempted from "wait and see"** — its deferral is irreversible at the cliff. Daniel's call; Bill confirmed only the renewal, not the sequencing. src bill-2026-08-15#L31
+- 2026-08-15 · **October cut-list** · dissolved — the top Owed row since 2026-08-06; void with the window it cut against. src —
+- 2026-08-15 · **W5** · opened — Trello exit becomes the front lane: T1 timeline assignment (priority 1), T2 admin member management (in tandem), T3 sub visibility, T4 teardown, A1 T&M. End state is **Trello dead, not read-only**; decommission expedited. src bill-2026-08-15#L69
+- 2026-08-15 · **D4** · dissolved — into T1; the parked timeline view is the front-lane item now. src —
+- 2026-08-15 · **classes** · added — every item carries fix / audit / build / lane / deferred alongside its effort letter, plus a Fix queue at the top of the file carrying entry points, so small work can be picked up cold (mobile included). src —
+- 2026-08-15 · question · is ball-in-court benched or just un-deadlined? → **benched with the rest of W1**. Raised because Daniel said "benching" in session [#L63] and Bill answered only the Trello half — resolved by Daniel's deferral decision, not by Bill. src bill-2026-08-15#L63
+- 2026-08-15 · question · Trello read-only or dead? → **dead**, expedited. src bill-2026-08-15#L69
+- 2026-08-15 · question · sub visibility scope → **short term** T&M + that job release's data; **mid term** it dissolves into T2's role model. Bill's "fab hours is the only exclusion" is his eventual posture, not the short-term scope. src bill-2026-08-15#L93
+- 2026-08-15 · question · project number + year (`340-26`) → **rejected**: the record already carries dates that make the same comparison; replaced by uniqueness research inside AUD2. Reason is owed back to Bill, who proposed it. src bill-2026-08-15#L185
+- 2026-08-15 · **N1/N2/N2b/N10/A2/J1/I4** · re-tiered — W2 confirmed as an **ongoing cost lane behind W5**, not the release valve it was when W1 owned a deadline. The I4 subs tab caught ~$15k of early-or-double sub payment within five days of shipping [#L33] — the first hard ROI number in the record, logged as signal, explicitly **not** a re-tiering trigger. src bill-2026-08-15#L33
+- 2026-08-15 · **Calibri** · standard — Calibri is the MHMW font standard; belongs in the design docs, not here. Bill's "for other customers too / your future builds" [#L105] is his suggestion, not adopted as a cross-project default. src bill-2026-08-15#L105
+- 2026-08-15 · **Carmen invites** · approved — invite mail sends as Carmen [#L89], now covering staff onboarding as well as subs. Wider flag from Daniel: Carmen is the primary email inlet **and** outlet for external data. Thread to reconcile later: `bb@mhmw.com` owns the ingestion inlet today, and the invite design explicitly rejected sending *as* bb@ because replies hit those pollers. src bill-2026-08-15#L89
+- 2026-08-15 · **Procore AR / 3D views · Brain 2.0 side hustle** · dropped — raised in session [#L231, #L241], judged not relevant to MHMW work. No item, no trail. src —
 
 ---
 
@@ -760,6 +1185,7 @@ Append-only log — never edited, never pruned.
 
 | Slug | Path | Role |
 |---|---|---|
+| bill-2026-08-15 | `~/Desktop/Transcripts/MHMW/Bill-8-15-2026-clean.md` | Friday standup (Bill) — **the reset**: Procore renewed, Trello promoted. `#LNNN` anchors are line numbers in the **cleaned** transcript, not the raw (`Bill-8-15-2026.txt` is too interleaved to cite). Findings: `processed/Bill-8-15-2026.md` |
 | bill-2026-08-06 | `~/Desktop/Transcripts/MHMW/processed/Bill-8-6-2026.md` | Submittal-system working session (Bill, Colton) — primary transcript; `#LNNN` anchors are its line numbers |
 | bill-2026-07-22 | `~/Desktop/Transcripts/MHMW/processed/Bill-7-22-2026.md` | Ops/roadmap review — the October deadline surfaces; A2, C3-origin, N8, J1-drop |
 | notes-2026-08-04 | daily notes (no transcript) | Daniel's 2026-08-04 notes — N5 origin, N4 symptom |
