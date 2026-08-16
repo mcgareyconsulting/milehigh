@@ -2122,13 +2122,19 @@ def get_next_release_number():
     popup (next_rel_number), but -- unlike that popup's route -- is open to
     any logged-in user (not just drafter/admin), since a PM pushing a verbal
     release through needs it too. The suggestion is editable in the form; the
-    real duplicate guard is the (job, release) collision check the release
-    endpoint already runs on submit.
+    real duplicate guard is the (job, release, job_name) collision check the
+    release endpoint already runs on submit.
+
+    Optional ``job`` query param scopes out release numbers that job has already
+    used, archived rows included (BUG-8) — the paste path knows the job number
+    before it asks for a suggestion, so it passes it. Opening the empty modal
+    does not know it yet and stays unscoped; the submit-time guard is still the
+    backstop there.
     """
     from app.procore.procore import next_rel_number
 
     try:
-        suggestion = next_rel_number()
+        suggestion = next_rel_number(job_number=request.args.get('job') or None)
     except RuntimeError:
         return jsonify({'next_release': None}), 200
     return jsonify({'next_release': str(suggestion)}), 200

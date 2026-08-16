@@ -799,12 +799,39 @@ Another job's archived 108 is still fair game. Tests:
 `tests/procore/test_rel_assignment.py` (BUG-8 block) + two route tests in
 `tests/dwl/test_dwl_routes.py`.
 
+**A second caller was found on verification and fixed the same day:**
+`/job-log/release/next-number` — the **Verbal Release form's** prefill, open to
+any logged-in user — shares `next_rel_number` with the DWL popup and was calling
+it unscoped. The paste path already knows the job number, so it now passes it;
+opening the empty modal still can't, and stays unscoped with the submit-time
+guard as the backstop. Worth noting because the entry point named in the fix
+queue ("DWL number request path") was accurate but not exhaustive.
+
+**The two sides do not enforce the same rule, and should not.** Verified and
+pinned in `tests/procore/test_rel_vs_joblog_agreement.py`:
+
+| | rule |
+|---|---|
+| Job log | (job, release, normalized job_name), archived included |
+| DWL | the Rel **value alone** across all active releases (job-agnostic) + pending DRRs + every number **this job** has used, archived included |
+
+The property that matters is containment, not equality: **anything the job log
+would reject, the DWL already refuses.** Two deliberate disagreements survive —
+the DWL is stricter across jobs on active work (pre-existing design), and it
+skips a number an archived row on the same job used even when a *different*
+project name would make the job log accept it. That second one is a conscious
+trade: `Submittals.project_name` and `Releases.job_name` come from different
+sources, so name-matching at suggestion time would miss collisions exactly where
+the data is fuzzy. Being stricter costs a skipped number; being looser costs a
+rejected release after the work is done.
+
 **Unchanged, and still AUD2's:** collision still **blocks and suggests** rather
 than auto-advancing — Bill wants advance [#L173] and that is a client decision,
 not a bug fix. Long-term identity likewise.
 
 **Trail**
 - 2026-08-15 · build · src — — archive-aware generator, scoped to the job number; block-vs-auto-advance deliberately left to AUD2
+- 2026-08-15 · build · src — — verification pass found the Verbal Release prefill (`/job-log/release/next-number`) calling the same generator unscoped; job now passed on the paste path. DWL/job-log containment pinned by cross-check tests, including the two places they deliberately disagree
 
 ### BUG-9 · Fab order clunk at paint → complete
 *W3 · built · class fix · due — · deps — · owner daniel · src bill-2026-08-15#L201 · upd 2026-08-15*
@@ -853,6 +880,14 @@ code say them once. Two behavior changes worth naming:
 - **The DB field is written even when the audit event deduplicates.** The old
   inline code wrote `fab_order` only inside `if event:`, so a dropped event left
   the release on a stale tier — a second, quieter source of the same symptom.
+
+**Verified through the real webhook path, not just the helper**
+(`tests/test_trello_stage_sync.py::TestInboundListMoveRetiersFabOrder` drives
+`sync_from_trello` itself). Re-run against the pre-fix `sync.py`, a paint →
+shipping card move leaves `fab_order` at **2.0** and writes no `update_fab_order`
+event; with the fix it flips to 1 and records the event. The rank gate still
+holds — a backward drag changes neither stage nor fab_order, so the sync never
+half-applies an inbound it rejected.
 
 **One prior decision was overruled, deliberately:** the comment on the job_comp
 percentage path said fab_order was left alone on purpose, and a test asserted it

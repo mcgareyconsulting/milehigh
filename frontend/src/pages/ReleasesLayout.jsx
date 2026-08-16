@@ -633,7 +633,10 @@ function ReleasesLayout() {
         if (!fields.release) {
             setVerbalFetchingNumber(true);
             try {
-                const nextRelease = await jobsApi.getNextReleaseNumber();
+                // The pasted row carries the job #, so the suggestion can skip
+                // numbers that job already burned (archived rows included) —
+                // otherwise the submit guard rejects a number we just handed out.
+                const nextRelease = await jobsApi.getNextReleaseNumber(fields.job);
                 setVerbalForm(prev => ({ ...prev, release: nextRelease || '' }));
             } catch (error) {
                 setVerbalError(error.message || 'Could not fetch the next release number — enter one manually.');
