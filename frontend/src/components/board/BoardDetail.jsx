@@ -10,7 +10,8 @@
  *   - onUpdate(null) signals the item was deleted; parent must handle removal
  *   - After posting a comment, the full item is re-fetched to get server-rendered activity
  *   - The Photos section (BoardPhotos) owns its own state/fetch; it is not driven by the item payload
- * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ *   - Long descriptions scroll in a capped pane; photos stay visible below so attachments are not buried
+ * updated_by_agent: 2026-08-16T00:00:00Z
  */
 import { useState, useEffect } from 'react';
 import { updateBoardItem, addComment, deleteBoardItem, fetchBoardItem, fetchMentionableUsers } from '../../services/boardApi';
@@ -97,7 +98,7 @@ export default function BoardDetail({ item, onUpdate, onClose }) {
     };
 
     return (
-        <div className="flex flex-col h-full overflow-hidden">
+        <div className="flex flex-col flex-1 h-full min-h-0 overflow-hidden">
             {/* Header: title + close */}
             <div className="shrink-0 flex items-start gap-2 pb-3 border-b border-gray-200 dark:border-slate-700">
                 <h2 className="text-sm font-bold text-gray-900 dark:text-slate-100 leading-tight flex-1">{item.title}</h2>
@@ -128,25 +129,27 @@ export default function BoardDetail({ item, onUpdate, onClose }) {
                 by {item.author_name} &middot; {formatDate(item.created_at)}
             </div>
 
-            {/* Body */}
+            {/* Description only — long writeups scroll here so photos and activity stay on screen. */}
             {item.body && (
-                <div className="shrink-0 text-xs text-gray-700 dark:text-slate-300 whitespace-pre-wrap bg-gray-50 dark:bg-slate-750 rounded p-2.5 mb-2 border border-gray-100 dark:border-slate-600">
+                <div className="min-h-0 overflow-y-auto overscroll-contain max-h-[min(22vh,11rem)] text-xs text-gray-700 dark:text-slate-300 whitespace-pre-wrap bg-gray-50 dark:bg-slate-750 rounded p-2.5 mb-2 border border-gray-100 dark:border-slate-600">
                     {item.body}
                 </div>
             )}
 
-            {/* Photos / screenshots */}
-            <BoardPhotos itemId={item.id} />
+            {/* Photos stay pinned — not inside the description scroller. */}
+            <div className="shrink-0">
+                <BoardPhotos itemId={item.id} />
+            </div>
 
-            {/* Activity thread — scrollable, takes remaining space */}
-            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            {/* Activity thread — remaining space, always a real reading pane */}
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden pt-1">
                 <h4 className="shrink-0 text-[11px] font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-2">Activity</h4>
-                <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+                <div className="flex-1 overflow-y-auto overscroll-contain space-y-2 pr-1">
                     {(!item.activity || item.activity.length === 0) && (
                         <div className="text-xs text-gray-400 dark:text-slate-500 py-2">No activity yet.</div>
                     )}
                     {item.activity?.map((a) => (
-                        <div key={a.id} className={`text-xs rounded-lg px-2.5 py-1.5 ${
+                        <div key={a.id} className={`text-xs rounded-lg px-2.5 py-2 ${
                             a.type === 'status_change'
                                 ? 'bg-gray-50 dark:bg-slate-750 text-gray-500 dark:text-slate-400 italic border-l-2 border-gray-300 dark:border-slate-600'
                                 : 'bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600'
