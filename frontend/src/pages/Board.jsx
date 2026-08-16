@@ -402,7 +402,7 @@ export default function Board() {
 
                 {/* Right detail panel */}
                 {selectedItem && (
-                    <div className="w-[40%] border-l border-hairline bg-surface p-4 overflow-hidden">
+                    <div className="w-[40%] border-l border-hairline bg-surface p-4 overflow-hidden flex flex-col min-h-0">
                         <BoardDetail key={selectedItem.id} item={selectedItem} onUpdate={handleItemUpdate} onClose={() => setSelectedItem(null)} />
                     </div>
                 )}
