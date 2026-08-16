@@ -14,8 +14,8 @@ classes:                      # what KIND of work an item is — orthogonal to e
   deferred: off the active path, with a stated re-check trigger
 queue:                        # agent-maintained, set by agreement in session
   now: T1
-  next: [T2, AUD1]             # BUG-8/BUG-9 built 2026-08-15; BUG-10's code half built
-  awaiting: [A1, N11, BUG-10]  # BUG-10 awaits the Render APP_BASE_URL change, and A1 awaits BUG-10
+  next: [T2, A1, AUD1]  # fix queue cleared 2026-08-15; A1 elevated when BUG-10 landed
+  awaiting: [N11]
 ---
 
 # MHMW · ROADMAP
@@ -59,13 +59,13 @@ big. They are independent — a fix can be L, a build can be S.
 Small, self-contained, no client sign-off. Entry points included so a session can
 start cold (phone included) without exploring first.
 
-**All three cleared 2026-08-15** (branch `claude/roadmap-review-bugs-uinik2`).
-One of them is not finished by the code alone — see BUG-10's Owed line.
+**Queue cleared 2026-08-15** (branch `claude/roadmap-review-bugs-uinik2`).
+BUG-10's config half landed the same day and **elevated A1**.
 
 | ID | Fix | Entry point | Pri |
 |---|---|---|---|
 | BUG-9 | ~~Fab order not flipping 2→1 at paint → complete; order cleared inconsistently~~ **built** | `app/brain/job_log/features/fab_order/tier.py` (tier logic: Complete=NULL, 0, 1, 2, dynamic 3+) | **high** |
-| BUG-10 | Sub invite email ships a `localhost:5173` link — `APP_BASE_URL` unset | `app/config.py:76`, `app/brain/tm/subcontractors/command.py`. Code half **built** (loud fallback); **the Render config change is still owed** | **high — unblocks A1** |
+| BUG-10 | ~~Sub invite email ships a `localhost:5173` link — `APP_BASE_URL` unset~~ **built** (code + Render config) | `app/config.py:76`, `app/brain/tm/subcontractors/command.py`. Acceptance test — one real invite to Bill — still to run | **high — unblocked A1** |
 | BUG-8 | ~~DWL release-number generator doesn't check the archive; job log rejects the number later~~ **built** | `app/procore/procore.py` (`_archived_rel_numbers_for_job`) | med |
 
 **BUG-8 note:** shipping this as a **fix** ahead of its own audit (AUD2) is a
@@ -208,12 +208,17 @@ must be doing Trello's job before the plug comes out.
 - 2026-08-15 · decision · src — — end state is dead, not read-only; expedited; teardown waits on T1
 
 ### A1 · T&M package — gated, then elevated
-*W5 · blocked · class build · due — · deps BUG-10 · owner daniel · src bill-2026-08-15#L145 · upd 2026-08-15 · blocked-on BUG-10 since 2026-08-15*
+*W5 · not-started · class build · due — · deps BUG-10 · owner daniel · src bill-2026-08-15#L145 · upd 2026-08-15*
 
-Effort M. **Blocked on the invite link** — Bill cannot evaluate the sub side
-without a sub in the system: *"I still can't get a sub added to it to see how it
-looks on the back end yet"* [#L145]. **Elevates the moment BUG-10 lands**, which
-makes that config fix the pivot for two lanes.
+Effort M. **Unblocked 2026-08-15 — BUG-10 landed and this elevates with it, as
+planned.** It was blocked on the invite link, since Bill cannot evaluate the sub
+side without a sub in the system: *"I still can't get a sub added to it to see how
+it looks on the back end yet"* [#L145]. `APP_BASE_URL` is now set in Render to the
+service's public URL, so invites build a reachable link.
+
+**One step stands between "unblocked" and "confirmed":** nobody has yet watched a
+real invite arrive and open. Send Bill one before treating sub enrollment as
+working — that is also the acceptance test for BUG-10.
 
 **Delivery constraint, stated deliberately:** one package, not piecemeal —
 *"there's definitely some things that we saw in the initial run through that we
@@ -227,6 +232,7 @@ overall concept is right there… excited about being able to track that well."*
 - 2026-08-15 · transcript · src bill-2026-08-15#L145 — blocked on sub enrollment; deliver as one package, not piecemeal
 - 2026-08-15 · note · src bill-2026-08-15#L155 — Bill's original change notes lost; reproduction promised, treat as unlikely near-term
 - 2026-08-15 · decision · src — — gated on BUG-10, elevates on landing
+- 2026-08-15 · note · src — — unblocked: `APP_BASE_URL` set in Render; first real invite send is still the confirmation
 
 ---
 
@@ -862,7 +868,7 @@ it should look *more* correct, not less. Tests:
 - 2026-08-15 · build · src — — root cause was scatter, not the tier values: rules extracted to `features/fab_order/tier.py` and applied by the Trello inbound sync and both job_comp paths, which had never applied them; backward tier drift repaired; field write decoupled from event dedup; job_comp-percentage exception overruled in favour of the documented invariant
 
 ### BUG-10 · Sub invite email ships a localhost link
-*W3 · in-progress · class fix · due — · deps — · owner daniel · src bill-2026-08-15#L81 · upd 2026-08-15 · owed daniel/set-APP_BASE_URL-in-render*
+*W3 · built · class fix · due — · deps — · owner daniel · src bill-2026-08-15#L81 · upd 2026-08-15*
 
 Effort S — **config, not code.** Bill: *"I did try to do one and I sent it to my
 Gmail, and **the link that it sends is like a broken link. It did not work.**"*
@@ -883,8 +889,14 @@ localhost outside the local environment, so it cannot fail silently twice.
 **Blocks A1** (Bill cannot test T&M without a sub in the system) and gates sub
 enrollment generally.
 
-**Rider built 2026-08-15; the config change is NOT done and cannot be done from
-a session — it is a Render dashboard edit.** The fallback is no longer silent:
+**Both halves done 2026-08-15.** The config change landed:
+`APP_BASE_URL=https://mile-high-metal-works-trello-onedrive.onrender.com` is set
+in Render, so invites now build
+`…onrender.com/sub/accept-invite/<token>` — verified against the link builder,
+and the Flask catch-all serves that React route (`App.jsx:91`,
+`app/__init__.py:697`), so the deep link resolves on a cold open.
+
+The rider is what keeps it fixed. The fallback is no longer silent:
 every outbound link now goes through `_external_link` in
 `app/brain/tm/subcontractors/command.py`, which **refuses to send** and logs an
 ERROR when it would build a link against the localhost default outside a local
@@ -897,16 +909,20 @@ server. The ticket-assignment link is covered by the same guard; there the send
 is best-effort, so it logs the ERROR and the assignment still stands. Tests:
 `tests/tm/test_outbound_link_config.py`.
 
-> ⚠️ **Still owed: set `APP_BASE_URL` to the Brain's public domain in Render**
-> (per deployed environment). Until that lands, invites now **fail loudly**
-> instead of mailing a dead link — which is the correct failure, but it is still
-> a failure, and **A1 stays blocked**. Re-test by sending Bill an invite and
-> confirming the link opens.
+**Acceptance test not yet run:** nobody has watched a real invite land and open.
+Send Bill one — that closes both this and A1's confirmation step. **Two riders
+worth carrying:** the guard only fires when `ENVIRONMENT` (or `FLASK_ENV`) is set
+to something non-local on the deployed service, so if that variable is ever unset
+in a new environment the localhost default goes quiet again; and the current value
+is the `onrender.com` host — **when a custom domain arrives, this variable moves
+with it**, since the link lands on a subcontractor's phone and outlives the
+sending session.
 
 **Trail**
 - 2026-08-15 · transcript · src bill-2026-08-15#L81 — invite link broken on a real send to an external mailbox
 - 2026-08-15 · note · src — — root cause found in code: unset `APP_BASE_URL` → localhost fallback; same var breaks the ticket-assignment link
-- 2026-08-15 · build · src — — rider shipped: outbound links refuse to build against the localhost default outside local, checked before any write; config change in Render still owed, so A1 remains blocked
+- 2026-08-15 · build · src — — rider shipped: outbound links refuse to build against the localhost default outside local, checked before any write
+- 2026-08-15 · build · src — — `APP_BASE_URL` set in Render to the service's public onrender.com URL; A1 unblocked; first real invite send is still the acceptance test, and the variable moves with any future custom domain
 
 **The items W3 already carried, unchanged by the 8/15 pass:**
 
