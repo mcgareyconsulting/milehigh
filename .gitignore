@@ -5,6 +5,11 @@ venv
 instance/
 .vscode/
 
+# Node artifacts anywhere in the tree. frontend/.gitignore already covers the
+# real one; this catches a stray npm/npx run from the repo root, which leaves a
+# node_modules/.vite cache next to a package-lock.json that has no package.json.
+node_modules/
+
 # Test / coverage artifacts
 .pytest_cache/
 .coverage
