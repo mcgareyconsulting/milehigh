@@ -13,6 +13,8 @@ invariants:
   - Live assigned releases appear; archived assigned releases stay until invoiced complete.
   - Oscar is MHMW staff (still in INSTALLER_TEAMS for scheduling) — hidden from this tab.
   - installer_invoice_* fields are independent of Releases.invoiced (customer billing).
+  - Rows carry the raw job-log fields the release hub modal reads, so the tab can
+    open the same modal the Job Log opens (archived rows never reach /brain/jobs).
   - No Trello / outbox / scheduling cascade.
 """
 from datetime import datetime
@@ -37,7 +39,20 @@ def _is_subs_excluded_installer(name: Optional[str]) -> bool:
     return name.strip().casefold() in _SUBS_EXCLUDED_INSTALLERS
 
 
-def _serialize_release(rel: Releases) -> dict:
+def _iso(value):
+    return value.isoformat() if value else None
+
+
+def _serialize_release(rel: Releases, procore_ref: Optional[dict] = None) -> dict:
+    """Row payload for the Invoice Paid table.
+
+    Carries the table's own columns plus the raw job-log fields the release hub
+    modal reads, so clicking a row opens the same modal the Job Log opens
+    (JobDetailsBody falls back to raw keys when the display keys are absent).
+    Archived rows are included here too, and they never reach the Job Log's
+    /brain/jobs feed — so the fields have to travel on this response.
+    """
+    ref = procore_ref or {}
     return {
         "id": rel.id,
         "job": rel.job,
@@ -46,12 +61,36 @@ def _serialize_release(rel: Releases) -> dict:
         "description": rel.description,
         "installer": rel.installer,
         "stage": rel.stage,
-        "start_install": rel.start_install.isoformat() if rel.start_install else None,
+        "start_install": _iso(rel.start_install),
         "job_comp": rel.job_comp,
+        "install_hrs": rel.install_hrs,
         "is_archived": bool(rel.is_archived),
         "installer_invoice_paid": bool(rel.installer_invoice_paid),
         "installer_invoice_progress": rel.installer_invoice_progress,
         "installer_invoice_numbers": rel.installer_invoice_numbers or "",
+        # --- release hub modal fields (raw keys; see docstring) --------------
+        "stage_group": rel.stage_group,
+        "pm": rel.pm,
+        "by": rel.by,
+        "num_guys": rel.num_guys,
+        "fab_hrs": rel.fab_hrs,
+        "fab_order": rel.fab_order,
+        "paint_color": rel.paint_color,
+        "released": _iso(rel.released),
+        "ship_date": _iso(rel.ship_date),
+        "comp_eta": _iso(rel.comp_eta),
+        "start_install_asap": rel.start_install_asap,
+        "start_install_no_color": rel.start_install_no_color,
+        "start_install_formulaTF": rel.start_install_formulaTF,
+        "invoiced": rel.invoiced,
+        "notes": rel.notes,
+        "release_tag": rel.release_tag,
+        "viewer_url": rel.viewer_url,
+        "trello_card_id": rel.trello_card_id,
+        "procore_submittal_id": ref.get("procore_submittal_id"),
+        "procore_project_id": ref.get("procore_project_id"),
+        "last_updated_at": _iso(rel.last_updated_at),
+        "source_of_update": rel.source_of_update,
     }
 
 
@@ -140,11 +179,19 @@ def list_subs_releases(
         Releases.release.asc(),
     ).all()
 
-    releases = [
-        _serialize_release(r)
-        for r in rows
-        if not _is_subs_excluded_installer(r.installer)
-    ]
+    shown = [r for r in rows if not _is_subs_excluded_installer(r.installer)]
+
+    # Procore deep-link IDs for the hub header, batched the same way the Job Log
+    # feed does it (pure regex over viewer_url — no extra query).
+    try:
+        from app.brain.job_log.routes import _procore_submittal_refs_for_releases
+
+        procore_refs = _procore_submittal_refs_for_releases(shown)
+    except Exception:  # pragma: no cover - link is cosmetic, never fail the list
+        logger.warning("subs_procore_refs_failed", exc_info=True)
+        procore_refs = {}
+
+    releases = [_serialize_release(r, procore_refs.get(r.id)) for r in shown]
     installers = sorted(installer_names)
 
     return {"releases": releases, "installers": installers}

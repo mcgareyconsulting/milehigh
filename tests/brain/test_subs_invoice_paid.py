@@ -364,3 +364,100 @@ class TestInstallerInvoiceNumbers:
             json={},
         )
         assert resp.status_code == 400
+
+
+class TestReleaseHubFields:
+    """The tab renders Install Prog / Budget and opens the Job Log release hub,
+    so the list payload has to carry job_comp, install_hrs, and the raw job-log
+    fields JobDetailsBody reads (archived rows never reach /brain/jobs)."""
+
+    def test_list_carries_job_comp_and_install_hrs(self, admin_client, app):
+        _seed(app)
+        with app.app_context():
+            r = Releases.query.filter_by(job=100, release="1").one()
+            r.install_hrs = 12.5
+            db.session.commit()
+
+        by_job = {
+            row["job"]: row
+            for row in admin_client.get("/brain/subs/releases").get_json()["releases"]
+        }
+        # Install Prog column reads job_comp straight off the Job Log.
+        assert by_job[100]["job_comp"] == "X"
+        assert by_job[150]["job_comp"] is None
+        # Budget column is Install Hrs x $55 client-side.
+        assert by_job[100]["install_hrs"] == 12.5
+        assert by_job[150]["install_hrs"] is None
+
+    def test_list_carries_release_hub_fields(self, admin_client, app):
+        _seed(app)
+        with app.app_context():
+            r = Releases.query.filter_by(job=100, release="1").one()
+            r.pm = "Bill"
+            r.by = "Katie"
+            r.num_guys = 3
+            r.fab_hrs = 40
+            r.paint_color = "Black"
+            r.released = date(2026, 5, 1)
+            r.ship_date = date(2026, 5, 28)
+            r.comp_eta = date(2026, 6, 4)
+            r.invoiced = "X"
+            r.notes = "watch the embeds"
+            r.trello_card_id = "abc123"
+            db.session.commit()
+
+        by_job = {
+            row["job"]: row
+            for row in admin_client.get("/brain/subs/releases").get_json()["releases"]
+        }
+        row = by_job[100]
+        assert row["pm"] == "Bill"
+        assert row["by"] == "Katie"
+        assert row["num_guys"] == 3
+        assert row["fab_hrs"] == 40
+        assert row["paint_color"] == "Black"
+        assert row["released"] == "2026-05-01"
+        assert row["ship_date"] == "2026-05-28"
+        assert row["comp_eta"] == "2026-06-04"
+        assert row["invoiced"] == "X"
+        assert row["notes"] == "watch the embeds"
+        assert row["trello_card_id"] == "abc123"
+        assert row["stage_group"] == "FABRICATION"
+        assert row["fab_order"] == 10
+
+    def test_archived_row_carries_hub_fields_too(self, admin_client, app):
+        _seed(app)
+        with app.app_context():
+            r = Releases.query.filter_by(job=450, release="7").one()
+            r.install_hrs = 8
+            r.pm = "Bill"
+            db.session.commit()
+
+        by_job = {
+            row["job"]: row
+            for row in admin_client.get("/brain/subs/releases").get_json()["releases"]
+        }
+        assert by_job[450]["is_archived"] is True
+        assert by_job[450]["install_hrs"] == 8
+        assert by_job[450]["pm"] == "Bill"
+
+    def test_procore_deep_link_ids_when_viewer_url_present(self, admin_client, app):
+        _seed(app)
+        with app.app_context():
+            r = Releases.query.filter_by(job=100, release="1").one()
+            r.procore_submittal_id = "987"
+            r.viewer_url = (
+                "https://app.procore.com/webclients/host/companies/18521"
+                "/projects/55512/tools/submittals/987"
+            )
+            db.session.commit()
+
+        by_job = {
+            row["job"]: row
+            for row in admin_client.get("/brain/subs/releases").get_json()["releases"]
+        }
+        assert by_job[100]["procore_submittal_id"] == "987"
+        assert by_job[100]["procore_project_id"] == "55512"
+        # No viewer_url -> no deep link, but the keys still exist.
+        assert by_job[150]["procore_submittal_id"] is None
+        assert by_job[150]["procore_project_id"] is None

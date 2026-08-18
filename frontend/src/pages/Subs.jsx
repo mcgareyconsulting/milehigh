@@ -7,15 +7,25 @@
  *   "Invoicing" and from Job Log "Invoiced".
  * exports:
  *   Subs: Page component (admin-gated).
- * imports_from: [react, ../utils/auth, ../services/subsApi]
+ * imports_from: [react, ../utils/auth, ../services/subsApi,
+ *   ../components/ReleaseHubModal, ../components/JobDetailsBody]
  * imported_by: [App.jsx via SubsLayout at /subs/invoice-paid]
  * invariants:
  *   - Renders an access message (no fetch) unless the authenticated user is_admin.
  *   - Server enforces admin; optimistic edits revert on error.
  *   - Styling matches Subs sibling pages (SubcontractorAdmin / T&M token shell).
+ *   - Job name / Description open the same ReleaseHubModal the Job Log opens; the
+ *     API row carries the raw job-log fields that modal reads.
+ *   - "Install Prog" mirrors the Job Log (job_comp) and is READ-ONLY here; the
+ *     editable "Progress" column is the separate installer_invoice_progress field.
+ *   - Budget = Install Hrs x $55; Est. Billable = Install Prog % x Budget. Both are
+ *     derived on render (never stored), and blank rather than $0 when an input is
+ *     missing — an unknown progress is not the same claim as zero work done.
  */
 import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { checkAuth } from '../utils/auth';
+import { ReleaseHubModal } from '../components/ReleaseHubModal';
+import { formatInstallProg } from '../components/JobDetailsBody';
 import {
     fetchSubsReleases,
     updateInstallerInvoicePaid,
@@ -31,6 +41,55 @@ const PAID_FILTERS = [
 
 const inputClass =
     'rounded border border-hairline-strong bg-input-bg text-ink focus:outline-none focus:ring-1 focus:ring-accent-500';
+
+/** Sub install rate. Budget = Install Hrs x this. */
+const INSTALL_RATE_PER_HOUR = 55;
+
+/** Install Hrs -> budget dollars. Null when hours are missing/non-numeric. */
+function installBudget(installHrs) {
+    const n = Number(installHrs);
+    if (installHrs == null || installHrs === '' || !Number.isFinite(n)) return null;
+    return n * INSTALL_RATE_PER_HOUR;
+}
+
+/**
+ * Job Log install progress (job_comp) as a 0–1 fraction for billing math.
+ *   "90" / "90%" / "90.5%" -> 0.9 / 0.9 / 0.905
+ *   "X"                    -> 1 (the Job Log's complete marker)
+ *   blank / "O" / junk     -> null (unknown, not zero — caller renders an em dash)
+ *
+ * The percent sign is part of the stored value on real rows (job_comp is free
+ * text typed on the Job Log, e.g. "90%"), so it has to be tolerated, not just
+ * bare digits. Over-100 entries clamp to 100% — a release cannot bill more than
+ * its budget on progress alone.
+ */
+function installProgFraction(jobComp) {
+    if (jobComp == null || jobComp === false) return null;
+    const s = String(jobComp).trim();
+    if (!s || s.toUpperCase() === 'O') return null;
+    if (s.toUpperCase() === 'X') return 1;
+    const m = /^(\d+(?:\.\d+)?)\s*%?$/.exec(s);
+    if (!m) return null;
+    return Math.min(Number(m[1]) / 100, 1);
+}
+
+/** Budget earned so far: install progress % x budget. Null if either is unknown. */
+function estimatedBillable(jobComp, installHrs) {
+    const budget = installBudget(installHrs);
+    const fraction = installProgFraction(jobComp);
+    if (budget == null || fraction == null) return null;
+    return budget * fraction;
+}
+
+const fmtUsd = (amount) =>
+    amount == null
+        ? '—'
+        : amount.toLocaleString('en-US', {
+              style: 'currency',
+              currency: 'USD',
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+          });
 
 const fmtDate = (iso) => {
     if (!iso) return '—';
@@ -191,6 +250,9 @@ export default function Subs() {
     const [searchInput, setSearchInput] = useState('');
     const [searchQ, setSearchQ] = useState('');
     const [busyKey, setBusyKey] = useState(null);
+    // Release hub modal — same component the Job Log opens from its Description
+    // cell. Held by row key (not the object) so the open modal tracks list edits.
+    const [hubKey, setHubKey] = useState(null);
 
     useEffect(() => {
         checkAuth().then((user) => setAuthorized(!!(user && user.is_admin)));
@@ -233,6 +295,10 @@ export default function Subs() {
     }, [releases]);
 
     const rowKey = (r) => `${r.job}-${r.release}`;
+    const hubRow = useMemo(
+        () => (hubKey == null ? null : releases.find((r) => rowKey(r) === hubKey) || null),
+        [hubKey, releases],
+    );
 
     const patchRow = (key, partial) => {
         setReleases((list) =>
@@ -333,7 +399,7 @@ export default function Subs() {
 
     return (
         <div className="w-full min-h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas">
-            <div className="flex-1 p-4 md:p-6 max-w-[1400px] mx-auto w-full">
+            <div className="flex-1 p-4 md:p-6 max-w-[1600px] mx-auto w-full">
                 {/* Header — matches SubcontractorAdmin / T&M */}
                 <div className="flex items-start sm:items-center justify-between gap-3 mb-4 flex-wrap">
                     <div className="min-w-0">
@@ -420,18 +486,21 @@ export default function Subs() {
                 ) : (
                     /* One table for all installers so columns share one layout (no drift). */
                     <div className="overflow-x-auto rounded-xl border border-hairline bg-surface">
-                        <table className="w-full text-sm table-fixed min-w-[1080px]">
+                        <table className="w-full text-sm table-fixed min-w-[1240px]">
                             <colgroup>
-                                <col style={{ width: '4.5%' }} />
-                                <col style={{ width: '4.5%' }} />
-                                <col style={{ width: '14%' }} />
-                                <col style={{ width: '14%' }} />
+                                <col style={{ width: '3.5%' }} />
+                                <col style={{ width: '3.5%' }} />
+                                <col style={{ width: '11%' }} />
+                                <col style={{ width: '12.5%' }} />
+                                <col style={{ width: '8%' }} />
+                                <col style={{ width: '8%' }} />
+                                <col style={{ width: '6%' }} />
+                                <col style={{ width: '6.5%' }} />
+                                <col style={{ width: '8%' }} />
+                                <col style={{ width: '8.5%' }} />
+                                <col style={{ width: '6.5%' }} />
                                 <col style={{ width: '10%' }} />
                                 <col style={{ width: '8%' }} />
-                                <col style={{ width: '7%' }} />
-                                <col style={{ width: '7%' }} />
-                                <col style={{ width: '14%' }} />
-                                <col style={{ width: '11%' }} />
                             </colgroup>
                             <thead className="bg-head-bg">
                                 <tr>
@@ -440,11 +509,29 @@ export default function Subs() {
                                     <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle">Job name</th>
                                     <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle">Description</th>
                                     <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle">Stage</th>
-                                    <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle whitespace-nowrap">Start install</th>
+                                    <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle">Start install</th>
                                     <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle whitespace-nowrap">Status</th>
+                                    <th
+                                        className="px-2 py-2 text-center font-semibold text-ink-3 align-middle"
+                                        title="Install progress from the Job Log (Job Comp) — read-only here"
+                                    >
+                                        Install Prog
+                                    </th>
+                                    <th
+                                        className="px-2 py-2 text-center font-semibold text-ink-3 align-middle whitespace-nowrap"
+                                        title={`Install Hrs × $${INSTALL_RATE_PER_HOUR.toFixed(2)}`}
+                                    >
+                                        Budget
+                                    </th>
+                                    <th
+                                        className="px-2 py-2 text-center font-semibold text-ink-3 align-middle"
+                                        title="Install Prog % × Budget — what the release has earned so far"
+                                    >
+                                        Est. Billable
+                                    </th>
                                     <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle whitespace-nowrap">Progress</th>
                                     <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle whitespace-nowrap">Invoice #</th>
-                                    <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle whitespace-nowrap">Invoiced complete</th>
+                                    <th className="px-2 py-2 text-center font-semibold text-ink-3 align-middle">Invoiced complete</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -454,7 +541,7 @@ export default function Subs() {
                                         <Fragment key={installer}>
                                             <tr className="bg-canvas border-t border-hairline">
                                                 <td
-                                                    colSpan={10}
+                                                    colSpan={13}
                                                     className="px-3 py-2 align-middle"
                                                 >
                                                     <div className="flex items-baseline justify-between gap-2">
@@ -472,6 +559,8 @@ export default function Subs() {
                                                 const busyPaid = busyKey === `${key}:paid`;
                                                 const busyProgress = busyKey === `${key}:progress`;
                                                 const busyNumbers = busyKey === `${key}:numbers`;
+                                                const budget = installBudget(r.install_hrs);
+                                                const billable = estimatedBillable(r.job_comp, r.install_hrs);
                                                 return (
                                                     <tr
                                                         key={key}
@@ -483,11 +572,21 @@ export default function Subs() {
                                                         <td className="px-2 py-2 font-mono tabular-nums text-ink-2 text-center align-middle">
                                                             {r.release}
                                                         </td>
-                                                        <td className="px-2 py-2 text-ink text-center align-middle" title={r.job_name || ''}>
+                                                        <td
+                                                            className="px-2 py-2 text-ink text-center align-middle cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors"
+                                                            title={r.job_name ? `${r.job_name} — click to open` : 'Click to open'}
+                                                            onClick={() => setHubKey(rowKey(r))}
+                                                        >
                                                             <span className="line-clamp-2 break-words">{r.job_name || '—'}</span>
                                                         </td>
-                                                        <td className="px-2 py-2 text-ink-2 text-center align-middle" title={r.description || ''}>
-                                                            <span className="line-clamp-2 break-words">{r.description || '—'}</span>
+                                                        <td
+                                                            className="px-2 py-2 text-center align-middle cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors"
+                                                            title={r.description ? `${r.description} — click to open` : 'Click to open'}
+                                                            onClick={() => setHubKey(rowKey(r))}
+                                                        >
+                                                            <span className="line-clamp-2 break-words font-medium text-accent-600 dark:text-accent-300 hover:underline">
+                                                                {r.description || '—'}
+                                                            </span>
                                                         </td>
                                                         <td className="px-2 py-2 text-ink-2 text-center align-middle">
                                                             <span className="line-clamp-2 break-words">{r.stage || '—'}</span>
@@ -505,6 +604,29 @@ export default function Subs() {
                                                                     Live
                                                                 </span>
                                                             )}
+                                                        </td>
+                                                        <td className="px-2 py-2 text-center align-middle font-mono tabular-nums text-ink-2 whitespace-nowrap">
+                                                            {formatInstallProg(r.job_comp) || '—'}
+                                                        </td>
+                                                        <td
+                                                            className="px-2 py-2 text-center align-middle font-mono tabular-nums text-ink whitespace-nowrap"
+                                                            title={
+                                                                budget == null
+                                                                    ? 'No install hours on this release'
+                                                                    : `${r.install_hrs} hrs × $${INSTALL_RATE_PER_HOUR.toFixed(2)}`
+                                                            }
+                                                        >
+                                                            {fmtUsd(budget)}
+                                                        </td>
+                                                        <td
+                                                            className="px-2 py-2 text-center align-middle font-mono tabular-nums text-ink whitespace-nowrap"
+                                                            title={
+                                                                billable == null
+                                                                    ? 'Needs both install hours and a Job Log install progress'
+                                                                    : `${formatInstallProg(r.job_comp)} of ${fmtUsd(budget)}`
+                                                            }
+                                                        >
+                                                            {fmtUsd(billable)}
                                                         </td>
                                                         <td className="px-2 py-2 text-center align-middle">
                                                             <div className="inline-flex justify-center">
@@ -544,6 +666,19 @@ export default function Subs() {
                     </div>
                 )}
             </div>
+
+            {/* Same release hub the Job Log opens — Details / Attachments / Change Log. */}
+            <ReleaseHubModal
+                isOpen={hubRow != null}
+                onClose={() => setHubKey(null)}
+                job={hubRow}
+                releaseId={hubRow?.id}
+                viewerUrl={hubRow?.viewer_url}
+                initialTab="details"
+                onNotesChanged={(notes) => {
+                    if (hubKey != null) patchRow(hubKey, { notes });
+                }}
+            />
         </div>
     );
 }
