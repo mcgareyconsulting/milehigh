@@ -21,6 +21,7 @@ from app.procore.procore import (
     REL_MIN,
     REL_MAX,
     next_rel_number,
+    _archived_rel_numbers_for_job,
     assign_rel_manual,
     RelAssignmentError,
     create_submittal_from_webhook,
@@ -326,3 +327,84 @@ def test_create_webhook_does_not_assign_rel_for_non_drr(app):
         assert created is True
         assert record.rel is None
         assert record.rel_assigned_at is None
+
+
+# --- BUG-8: the generator must see the archive for its own job ---------------------
+# The job log's uniqueness constraint is (job, release, job_name) and counts
+# ARCHIVED rows, so an archived 410-108 blocks a new 410-108 forever. The
+# generator only looked at active releases, so it reissued the number and the
+# job log rejected the release later. Scoped to the job: another job's archived
+# 108 is still fair game, or the 101..998 range would burn down over time.
+
+def test_suggestion_skips_a_number_this_job_already_burned(app):
+    with app.app_context():
+        # Bill's case: archived 410-108 (the Columbine Square twin). Active work
+        # has climbed to 107, so the old code suggested 108 -- "it should have
+        # caught that when it got to 108."
+        db.session.add(_make_release(410, 107))
+        db.session.add(_make_release(410, 108, is_archived=True))
+        db.session.commit()
+
+        assert next_rel_number(job_number=410) == 109
+        # Unscoped (no job in hand) keeps the old, job-agnostic answer.
+        assert next_rel_number() == 108
+
+
+def test_suggestion_ignores_another_jobs_archive(app):
+    with app.app_context():
+        db.session.add(_make_release(410, 107))
+        db.session.add(_make_release(500, 108, is_archived=True))
+        db.session.commit()
+        # 500's archived 108 does not constrain job 410 -- the constraint
+        # includes the job number, so reserving it globally would be a
+        # self-inflicted exhaustion of the range.
+        assert next_rel_number(job_number=410) == 108
+
+
+def test_rollover_does_not_recycle_this_jobs_archived_number(app):
+    with app.app_context():
+        db.session.add(_make_release(998, REL_MAX))                    # forces rollover
+        db.session.add(_make_release(410, REL_MIN, is_archived=True))  # burned on 410
+        db.session.commit()
+        assert next_rel_number(job_number=410) == REL_MIN + 1
+        assert next_rel_number(job_number=500) == REL_MIN  # free for a different job
+
+
+def test_inactive_release_on_the_same_job_also_blocks(app):
+    with app.app_context():
+        # is_active=False is invisible to active_releases_filter too, and the
+        # unique constraint does not care about the flag either.
+        db.session.add(_make_release(410, 300, is_active=False))
+        db.session.commit()
+        assert 300 in _archived_rel_numbers_for_job(410)
+
+
+def test_assign_manual_rejects_a_number_archived_on_the_same_job(app):
+    with app.app_context():
+        db.session.add(_make_release(410, 108, is_archived=True))
+        drr = _make_submittal("bug8a", DRR_TYPE, status="Open", project_number="410")
+        db.session.add(drr)
+        db.session.commit()
+
+        with pytest.raises(RelAssignmentError) as exc:
+            assign_rel_manual(drr, 108)
+        assert exc.value.code == "collision"
+        assert "archived" in exc.value.message  # tells them which wall they hit
+        assert drr.rel is None
+
+
+def test_assign_manual_allows_a_number_archived_on_another_job(app):
+    with app.app_context():
+        db.session.add(_make_release(500, 108, is_archived=True))
+        drr = _make_submittal("bug8b", DRR_TYPE, status="Open", project_number="410")
+        db.session.add(drr)
+        db.session.commit()
+        assert assign_rel_manual(drr, 108) == 108
+
+
+def test_unknown_job_number_scopes_nothing(app):
+    with app.app_context():
+        db.session.add(_make_release(410, 108, is_archived=True))
+        db.session.commit()
+        assert _archived_rel_numbers_for_job(None) == set()
+        assert _archived_rel_numbers_for_job("not-a-number") == set()

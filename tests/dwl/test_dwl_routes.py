@@ -753,3 +753,36 @@ class TestGetNextRel:
         assert json.loads(with_self.data)['next_rel'] == 251
         without = client.get('/brain/drafting-work-load/rel/next')
         assert json.loads(without.data)['next_rel'] == 301
+
+
+class TestNextRelRoute:
+    """BUG-8: /rel/next resolves the submittal's job so the suggestion can skip
+    Rels that job already burned on archived releases the DWL cannot see."""
+
+    def _seed(self):
+        from datetime import datetime
+        from app.models import Releases, Submittals, db
+
+        db.session.add(Releases(job=410, release="107", job_name="Columbine Square"))
+        db.session.add(Releases(job=410, release="108", job_name="Columbine Square",
+                                is_archived=True))
+        db.session.add(Submittals(
+            submittal_id="dwl-bug8", procore_project_id="1", project_number="410",
+            type="Drafting Release Review", status="Open", created_at=datetime.utcnow(),
+        ))
+        db.session.commit()
+
+    def test_suggestion_skips_the_jobs_archived_number(self, app, client):
+        with app.app_context():
+            self._seed()
+            resp = client.get('/brain/drafting-work-load/rel/next',
+                              query_string={'submittal_id': 'dwl-bug8'})
+            assert resp.status_code == 200
+            assert resp.get_json()['next_rel'] == 109
+
+    def test_without_a_submittal_the_suggestion_is_unscoped(self, app, client):
+        with app.app_context():
+            self._seed()
+            resp = client.get('/brain/drafting-work-load/rel/next')
+            assert resp.status_code == 200
+            assert resp.get_json()['next_rel'] == 108

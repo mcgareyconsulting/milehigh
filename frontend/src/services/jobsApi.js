@@ -353,9 +353,20 @@ class JobsApi {
         }
     }
 
-    async getNextReleaseNumber() {
+    /**
+     * Fetch the suggested next release number for the Verbal Release form.
+     * @param {string|number} [job] - job #, when known. Scopes the suggestion
+     *   past numbers that job already used (archived releases included), which
+     *   the submit-time collision guard would otherwise reject.
+     */
+    async getNextReleaseNumber(job) {
         try {
-            const response = await axios.get(`${API_BASE_URL}/brain/job-log/release/next-number`);
+            const params = (job !== undefined && job !== null && `${job}`.trim() !== '')
+                ? { job }
+                : {};
+            const response = await axios.get(
+                `${API_BASE_URL}/brain/job-log/release/next-number`, { params }
+            );
             return response.data.next_release;
         } catch (error) {
             throw this._handleError(error, 'Failed to fetch next release number');

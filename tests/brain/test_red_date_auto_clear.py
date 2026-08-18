@@ -323,7 +323,7 @@ class TestJobCompCascade:
             # (consistent with: "only clear when the user marks it complete now").
             assert r2.start_install_formulaTF is False
 
-    def test_job_comp_percent_does_not_clear(self, app, admin_client):
+    def test_job_comp_percent_does_not_clear_the_date_but_does_re_tier(self, app, admin_client):
         with app.app_context():
             r = _make_release(
                 1, "A",
@@ -342,7 +342,11 @@ class TestJobCompCascade:
             r2 = Releases.query.filter_by(job=1, release="A").first()
             assert r2.start_install_formulaTF is False  # not cleared
             assert r2.stage == "Install Start"  # a percentage means install has begun
-            assert r2.fab_order == 10  # fab_order untouched on percentage
+            # BUG-9: this route used to leave fab_order alone, so a release could
+            # sit on a fixed-tier stage holding a dynamic-band value (10) and sort
+            # itself in among live fab work. Install Start is tier 0 no matter
+            # which control put it there — same rule UpdateStageCommand applies.
+            assert r2.fab_order == 0
 
     def test_job_comp_non_numeric_leaves_stage_unchanged(self, app, admin_client):
         with app.app_context():

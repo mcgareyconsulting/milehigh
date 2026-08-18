@@ -29,6 +29,31 @@ load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 FRONTEND_BUILD_DIR = Path(__file__).parent.parent / "frontend" / "dist"
 
 
+#: The APP_BASE_URL value that means "nobody configured this". Named so the
+#: outbound-link builders can recognise it and refuse to mail it out (BUG-10:
+#: an unset APP_BASE_URL shipped a localhost invite link to a real inbox).
+LOCAL_APP_BASE_URL = "http://localhost:5173"
+
+
+def current_environment():
+    """Return the normalised environment name ('local' / 'sandbox' / 'production' / …).
+
+    Reads the same FLASK_ENV / ENVIRONMENT pair get_config() does, but lowercases
+    whichever one wins rather than only the ENVIRONMENT branch.
+    """
+    return (os.environ.get("FLASK_ENV") or os.environ.get("ENVIRONMENT") or "local").strip().lower()
+
+
+def is_local_environment():
+    """True when the app is running on a developer machine.
+
+    Anything that is not recognisably local is treated as deployed — an
+    unrecognised ENVIRONMENT value must not buy a pass on the checks that only
+    make sense locally (e.g. a localhost link in an outbound email).
+    """
+    return current_environment() in ("local", "development", "dev", "test", "testing")
+
+
 def _carmen_env(suffix, default=None):
     """Read CARMEN_<suffix>, falling back to the legacy BB_<suffix> name.
 
@@ -52,12 +77,15 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
 
-    # Base URL for links embedded in outbound email (e.g. a subcontractor
-    # invite-accept link). Nothing built a frontend link into an email before
-    # this feature — no other code path reads this var. No real prod/test
-    # domain is live yet, so this defaults to the local Vite dev server;
-    # override via .env once a real domain exists.
-    APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:5173")
+    # Base URL for links embedded in outbound email (the subcontractor
+    # invite-accept link and the T&M ticket-assignment link — both read this
+    # var and nothing else does). Defaults to the local Vite dev server so a
+    # developer checkout works with no .env entry. Deployed environments MUST
+    # set APP_BASE_URL to the real domain: leaving it unset once shipped a
+    # localhost invite link to a client's Gmail (BUG-10). The default is no
+    # longer silent — app/brain/tm/subcontractors/command.py refuses to build a
+    # link against it outside a local environment.
+    APP_BASE_URL = os.environ.get("APP_BASE_URL", LOCAL_APP_BASE_URL)
 
     # Trello configuration
     TRELLO_API_KEY = os.environ.get("TRELLO_API_KEY")

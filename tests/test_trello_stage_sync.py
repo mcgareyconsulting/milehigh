@@ -10,6 +10,8 @@ Two layers:
   has been replaced with target-list-differs, and that Hold transitions skip
   the outbox entirely.
 """
+from datetime import datetime, timedelta
+
 import pytest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -329,3 +331,91 @@ class TestUpdateStageCommandOutbound:
                 cmd.execute()
 
             assert m_add.called, "DB stage 'Store at MHMW' must push to its canonical Trello list"
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: the real inbound webhook path re-tiers fab_order (BUG-9)
+# ---------------------------------------------------------------------------
+
+class TestInboundListMoveRetiersFabOrder:
+    """Drives sync_from_trello itself, not the helper it calls.
+
+    This is the path the shop actually uses — a card dragged between lists on
+    the board. Before BUG-9 it advanced `stage` and left `fab_order` untouched,
+    so a release leaving the paint list kept tier 2 forever while the same move
+    made in the Brain flipped it to 1. That split is why it read as
+    "clunkiness" rather than a clean reproducible bug.
+    """
+
+    def _drive(self, app, to_list, from_list):
+        from app.models import Releases
+        from app.trello.sync import sync_from_trello
+
+        event_time = datetime.utcnow() + timedelta(hours=1)  # must beat last_updated_at
+        card = {"id": "card-1", "name": "500-101", "desc": "", "idList": "list-after", "due": None}
+        event_info = {
+            "handled": True,
+            "card_id": "card-1",
+            "time": event_time.isoformat() + "Z",
+            "event": "card_updated",
+            "change_types": ["list_change"],
+            "has_list_move": True,
+            "from": from_list,
+            "list_id_before": "list-before",
+            "list_id_after": "list-after",
+            "trello_user_id": None,
+        }
+
+        with patch("app.trello.sync.get_trello_card_by_id", return_value=card), \
+             patch("app.trello.sync.get_list_name_by_id", return_value=to_list), \
+             patch("app.trello.sync._is_brain_echo_webhook", return_value=False), \
+             patch("app.trello.sync.update_trello_card_description"), \
+             patch("app.brain.job_log.scheduling.service.recalculate_all_jobs_scheduling"):
+            sync_from_trello(event_info)
+
+        db.session.expire_all()
+        return Releases.query.filter_by(trello_card_id="card-1").first()
+
+    def test_paint_list_to_shipping_flips_two_to_one(self, app):
+        """Bill's exact report: 'it's not flipping the two and the one'."""
+        with app.app_context():
+            make_release(500, "101", "Paint Complete", "READY_TO_SHIP", 2,
+                         trello_card_id="card-1", trello_list_name="Paint complete",
+                         last_updated_at=datetime.utcnow())
+            db.session.commit()
+
+            rec = self._drive(app, to_list="Shipping completed", from_list="Paint complete")
+
+            assert rec.stage == "Ship Complete"   # the move landed
+            assert rec.fab_order == 1             # ...and the tier came with it
+
+    def test_the_move_also_records_the_fab_order_event(self, app):
+        with app.app_context():
+            from app.models import ReleaseEvents
+
+            make_release(500, "101", "Paint Complete", "READY_TO_SHIP", 2,
+                         trello_card_id="card-1", trello_list_name="Paint complete",
+                         last_updated_at=datetime.utcnow())
+            db.session.commit()
+
+            self._drive(app, to_list="Shipping completed", from_list="Paint complete")
+
+            fab_events = ReleaseEvents.query.filter_by(action="update_fab_order").all()
+            assert len(fab_events) == 1
+            assert fab_events[0].source == "Trello"
+            assert fab_events[0].payload["from"] == 2
+            assert fab_events[0].payload["to"] == 1
+
+    def test_rank_gated_move_leaves_fab_order_alone(self, app):
+        """A backward drag is refused by the rank gate; fab_order must not move
+        either, or the sync would half-apply an inbound it explicitly rejected."""
+        with app.app_context():
+            make_release(500, "101", "Ship Complete", "COMPLETE", 1,
+                         trello_card_id="card-1", trello_list_name="Shipping completed",
+                         last_updated_at=datetime.utcnow())
+            db.session.commit()
+
+            rec = self._drive(app, to_list="Paint complete", from_list="Shipping completed")
+
+            assert rec.stage == "Ship Complete"  # gate held
+            assert rec.fab_order == 1            # untouched
