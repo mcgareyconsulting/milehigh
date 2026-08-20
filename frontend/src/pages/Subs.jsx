@@ -7,7 +7,7 @@
  *   "Invoicing" and from Job Log "Invoiced".
  * exports:
  *   Subs: Page component (admin-gated).
- * imports_from: [react, ../utils/auth, ../services/subsApi,
+ * imports_from: [react, ../utils/auth, ../utils/formatters, ../services/subsApi,
  *   ../components/ReleaseHubModal, ../components/JobDetailsBody]
  * imported_by: [App.jsx via SubsLayout at /subs/invoice-paid]
  * invariants:
@@ -18,6 +18,7 @@
  *     API row carries the raw job-log fields that modal reads.
  *   - "Install Prog" mirrors the Job Log (job_comp) and is READ-ONLY here; the
  *     editable "Progress" column is the separate installer_invoice_progress field.
+ *   - "Install Hrs" mirrors the Job Log (install_hrs) and is READ-ONLY here.
  *   - Budget = Install Hrs x $55; Est. Billable = Install Prog % x Budget. Both are
  *     derived on render (never stored), and blank rather than $0 when an input is
  *     missing — an unknown progress is not the same claim as zero work done.
@@ -26,6 +27,7 @@ import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'rea
 import { checkAuth } from '../utils/auth';
 import { ReleaseHubModal } from '../components/ReleaseHubModal';
 import { formatInstallProg } from '../components/JobDetailsBody';
+import { formatCellValue } from '../utils/formatters';
 import {
     fetchSubsReleases,
     updateInstallerInvoicePaid,
@@ -486,20 +488,21 @@ export default function Subs() {
                 ) : (
                     /* One table for all installers so columns share one layout (no drift). */
                     <div className="overflow-x-auto rounded-xl border border-hairline bg-surface">
-                        <table className="w-full text-sm table-fixed min-w-[1240px]">
+                        <table className="w-full text-sm table-fixed min-w-[1320px]">
                             <colgroup>
                                 <col style={{ width: '3.5%' }} />
                                 <col style={{ width: '3.5%' }} />
-                                <col style={{ width: '11%' }} />
-                                <col style={{ width: '12.5%' }} />
-                                <col style={{ width: '8%' }} />
+                                <col style={{ width: '10%' }} />
+                                <col style={{ width: '11.5%' }} />
+                                <col style={{ width: '7.5%' }} />
+                                <col style={{ width: '7.5%' }} />
+                                <col style={{ width: '5.5%' }} />
+                                <col style={{ width: '6%' }} />
+                                <col style={{ width: '6%' }} />
+                                <col style={{ width: '7.5%' }} />
                                 <col style={{ width: '8%' }} />
                                 <col style={{ width: '6%' }} />
-                                <col style={{ width: '6.5%' }} />
-                                <col style={{ width: '8%' }} />
-                                <col style={{ width: '8.5%' }} />
-                                <col style={{ width: '6.5%' }} />
-                                <col style={{ width: '10%' }} />
+                                <col style={{ width: '9.5%' }} />
                                 <col style={{ width: '8%' }} />
                             </colgroup>
                             <thead className="bg-head-bg">
@@ -516,6 +519,12 @@ export default function Subs() {
                                         title="Install progress from the Job Log (Job Comp) — read-only here"
                                     >
                                         Install Prog
+                                    </th>
+                                    <th
+                                        className="px-2 py-2 text-center font-semibold text-ink-3 align-middle whitespace-nowrap"
+                                        title="Install hours from the Job Log — read-only here"
+                                    >
+                                        Install Hrs
                                     </th>
                                     <th
                                         className="px-2 py-2 text-center font-semibold text-ink-3 align-middle whitespace-nowrap"
@@ -541,7 +550,7 @@ export default function Subs() {
                                         <Fragment key={installer}>
                                             <tr className="bg-canvas border-t border-hairline">
                                                 <td
-                                                    colSpan={13}
+                                                    colSpan={14}
                                                     className="px-3 py-2 align-middle"
                                                 >
                                                     <div className="flex items-baseline justify-between gap-2">
@@ -607,6 +616,12 @@ export default function Subs() {
                                                         </td>
                                                         <td className="px-2 py-2 text-center align-middle font-mono tabular-nums text-ink-2 whitespace-nowrap">
                                                             {formatInstallProg(r.job_comp) || '—'}
+                                                        </td>
+                                                        <td
+                                                            className="px-2 py-2 text-center align-middle font-mono tabular-nums text-ink-2 whitespace-nowrap"
+                                                            title="Install hours from the Job Log — read-only here"
+                                                        >
+                                                            {formatCellValue(r.install_hrs, 'Install HRS')}
                                                         </td>
                                                         <td
                                                             className="px-2 py-2 text-center align-middle font-mono tabular-nums text-ink whitespace-nowrap"

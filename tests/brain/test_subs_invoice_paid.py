@@ -367,9 +367,9 @@ class TestInstallerInvoiceNumbers:
 
 
 class TestReleaseHubFields:
-    """The tab renders Install Prog / Budget and opens the Job Log release hub,
-    so the list payload has to carry job_comp, install_hrs, and the raw job-log
-    fields JobDetailsBody reads (archived rows never reach /brain/jobs)."""
+    """The tab renders Install Prog / Install Hrs / Budget and opens the Job Log
+    release hub, so the list payload has to carry job_comp, install_hrs, and the
+    raw job-log fields JobDetailsBody reads (archived rows never reach /brain/jobs)."""
 
     def test_list_carries_job_comp_and_install_hrs(self, admin_client, app):
         _seed(app)
