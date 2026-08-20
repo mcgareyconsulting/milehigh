@@ -1073,7 +1073,7 @@ function ReleasesLayout() {
                             </div>
                             <div className="p-6 overflow-y-auto flex-1">
                                 {archivePreview.count === 0 ? (
-                                    <p className="text-gray-600 dark:text-slate-300">No releases are eligible for archival. Releases need both Job Comp and Invoiced set to &apos;X&apos;.</p>
+                                    <p className="text-gray-600 dark:text-slate-300">No releases are eligible for archival. Releases need Stage set to &apos;Complete&apos; with both Install Prog and Invoiced set to &apos;X&apos;.</p>
                                 ) : (
                                     <>
                                         <p className="mb-4 text-sm text-gray-700 dark:text-slate-300">
