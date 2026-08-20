@@ -3834,8 +3834,17 @@ def update_job_fields(job, release):
 # ==============================================================================
 
 def _archivable_query():
-    """Return query for active, non-archived releases where both job_comp='X' and invoiced='X'."""
+    """Return query for active, non-archived releases fully done: stage='Complete'
+    AND job_comp (Install Prog) = 'X' AND invoiced = 'X'.
+
+    Stage is required so 'Install Complete' rows are NOT swept up: setting Install
+    Prog to 'X' cascades the stage to 'Install Complete' (see update_job_comp), so
+    job_comp + invoiced alone pulls installed-but-not-closed-out releases. 'Complete'
+    is the terminal stage a human moves the release to, and it keeps job_comp='X'
+    (the complete zone in UpdateStageCommand), so it is the real archive signal.
+    """
     return Releases.query.filter(
+        db.func.upper(db.func.trim(db.func.coalesce(Releases.stage, ''))) == 'COMPLETE',
         db.func.upper(db.func.trim(db.func.coalesce(Releases.job_comp, ''))) == 'X',
         db.func.upper(db.func.trim(db.func.coalesce(Releases.invoiced, ''))) == 'X',
         db.or_(Releases.is_archived == False, Releases.is_archived == None),
@@ -3846,7 +3855,7 @@ def _archivable_query():
 @brain_bp.route("/archive-preview", methods=["GET"])
 @admin_required
 def archive_preview():
-    """Preview releases eligible for archival (both job_comp and invoiced = 'X', not yet archived)."""
+    """Preview releases eligible for archival (stage='Complete', job_comp and invoiced = 'X', not yet archived)."""
     try:
         releases = _archivable_query().order_by(Releases.job, Releases.release).all()
         items = []
@@ -3856,7 +3865,7 @@ def archive_preview():
                 'release': r.release,
                 'job_name': r.job_name,
                 'description': r.description,
-                'stage': r.stage or 'Released',
+                'stage': r.stage,
                 'job_comp': r.job_comp,
                 'invoiced': r.invoiced,
             })
@@ -3897,7 +3906,7 @@ def unarchive_release(job, release):
 @admin_required
 @handle_errors("archive releases", raw_error=True)
 def archive_confirm():
-    """Archive all eligible releases (both job_comp and invoiced = 'X', not yet archived)."""
+    """Archive all eligible releases (stage='Complete', job_comp and invoiced = 'X', not yet archived)."""
 
     releases = _archivable_query().all()
     count = 0
