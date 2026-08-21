@@ -8,11 +8,17 @@ Usage:
   python scripts/fix_release_pm.py --env sandbox --execute         # apply, sandbox
 """
 import argparse
+import os
+import sys
+
 import psycopg2
 import psycopg2.extras
 
-PROD_URL = "postgresql://mile_high_metal_works_trello_onedrive_user:G97rTBCFgwUubIokFMf85i7f4hwOCNUR@dpg-d3in27ogjchc73efo2l0-a.oregon-postgres.render.com/mile_high_metal_works_trello_onedrive"
-SANDBOX_URL = "postgresql://sandbox_mhmw_db_user:SLnOrx7QQXDrWmXhKgQx9Dm84dqQZEqJ@dpg-d51h1uemcj7s73c31p20-a.oregon-postgres.render.com/sandbox_mhmw_db"
+try:  # allow both `python -m scripts.fix_release_pm` and direct execution
+    from scripts._db_urls import mask, prod_url, sandbox_url
+except ImportError:  # pragma: no cover - path fixup for direct execution
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from scripts._db_urls import mask, prod_url, sandbox_url
 
 TARGET_JOB = 999
 TARGET_RELEASE = "598"
@@ -26,9 +32,10 @@ def main():
     parser.add_argument("--env", choices=["prod", "sandbox"], default="prod", help="Target database (default: prod)")
     args = parser.parse_args()
 
-    db_url = PROD_URL if args.env == "prod" else SANDBOX_URL
+    db_url = prod_url() if args.env == "prod" else sandbox_url()
     mode = "EXECUTE" if args.execute else "DRY RUN"
-    print(f"=== {mode} [{args.env.upper()}] — updating releases.pm for job={TARGET_JOB} release={TARGET_RELEASE} ===\n")
+    print(f"=== {mode} [{args.env.upper()}] — updating releases.pm for job={TARGET_JOB} release={TARGET_RELEASE} ===")
+    print(f"target: {mask(db_url)}\n")
 
     conn = psycopg2.connect(db_url)
     try:
