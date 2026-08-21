@@ -1,5 +1,5 @@
 """The read-only tools: ball-in-court submittal search, to-dos by owner, lifecycle."""
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from unittest.mock import patch
 
 from app.brain.carmen_chat import tools
@@ -89,18 +89,19 @@ def test_execute_tool_dispatch_and_unknown(app):
 
 def test_get_project_pipeline_and_lookahead_tools(app):
     with app.app_context():
+        today = date.today()
         make_release(
             500, "615", stage="Weld Complete", job_name="Novel Flatiron",
             description="SE Canopy", fab_hrs=40.0, install_hrs=8.0, fab_order=4.0,
-            start_install=date(2026, 8, 12), start_install_formulaTF=False,
-            ship_date=date(2026, 8, 11), comp_eta=date(2026, 8, 13),
+            start_install=today + timedelta(days=8), start_install_formulaTF=False,
+            ship_date=today + timedelta(days=7), comp_eta=today + timedelta(days=9),
             is_active=True, is_archived=False,
             start_install_asap=False, start_install_no_color=False,
         )
         _submittal(
             "drr-500", "500", project_name="Novel Flatiron", title="Open DRR",
             status="Open", type="Drafting Release Review",
-            rel=400, due_date=date(2026, 8, 5),
+            rel=400, due_date=today + timedelta(days=3),
         )
 
         pipe = tools.execute_tool("get_project_pipeline", {"job": 500})
@@ -121,6 +122,14 @@ def test_get_project_pipeline_and_lookahead_tools(app):
         assert schedule["summary"]["drafting_count"] == 1
         kinds = {r["kind"] for r in schedule["rows"]}
         assert "release" in kinds and "drafting" in kinds
+        # Today-forward: nothing the model sees may be dated before today, and the
+        # headline names a department (BUG-12).
+        assert schedule["window"]["today"] == today.isoformat()
+        assert schedule["summary"]["next_activity"]["label"]
+        assert schedule["summary"]["next_activity"]["next_date"] >= today.isoformat()
+        for row in schedule["rows"]:
+            assert row["next_activity"]["next_date"] >= today.isoformat()
+            assert all(p["status"] in ("active", "upcoming") for p in row["phases"])
         # PDF is on by default so the chat card can appear even if the model
         # only called build_project_lookahead (not render_*).
         assert schedule.get("pdf_included") is True

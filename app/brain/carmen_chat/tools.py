@@ -232,7 +232,12 @@ TOOL_DEFINITIONS = [
             "include_pdf=false — only set include_pdf=false when the user explicitly says no PDF / "
             "chat-only / summary-only. Resolve project names to a job number first. Never invent "
             "dates not in the tool result. Prefer this tool (or render_project_lookahead_pdf) over "
-            "get_project_pipeline for schedule questions."
+            "get_project_pipeline for schedule questions. READ IT FORWARD: the result is already "
+            "today-forward — lead with summary.next_activity, and describe each row by its "
+            "next_activity (department label + next_date). Every bar carries status "
+            "past|active|upcoming; an 'active' bar started earlier and is still running, so quote "
+            "its next_date, never its start. Do not report a date before window.today as when "
+            "something is happening."
         ),
         "input_schema": {
             "type": "object",
@@ -625,7 +630,13 @@ def get_project_pipeline(job: int) -> dict[str, Any]:
 
 
 def _compact_schedule_for_agent(schedule: dict[str, Any]) -> dict[str, Any]:
-    """Shrink row payload so the model can summarize without huge tool results."""
+    """Shrink row payload so the model can summarize without huge tool results.
+
+    Rows arrive today-forward (``past_rows`` is dropped here — it exists for
+    provenance, and handing it to the model is what made the look-ahead read as
+    starting in May). Each bar keeps its ``status`` and each row its
+    ``next_activity`` so the summary names a department and a date ahead.
+    """
     compact_rows = []
     for row in schedule.get("rows") or []:
         compact_rows.append({
@@ -634,6 +645,7 @@ def _compact_schedule_for_agent(schedule: dict[str, Any]) -> dict[str, Any]:
             "title": row.get("title"),
             "stage_label": row.get("stage_label"),
             "date_kind": row.get("date_kind"),
+            "next_activity": row.get("next_activity"),
             "flags": row.get("flags") or [],
             "phases": [
                 {
@@ -641,6 +653,7 @@ def _compact_schedule_for_agent(schedule: dict[str, Any]) -> dict[str, Any]:
                     "label": p.get("label"),
                     "start": p.get("start"),
                     "end": p.get("end"),
+                    "status": p.get("status"),
                     "date_source": p.get("date_source"),
                 }
                 for p in (row.get("phases") or [])

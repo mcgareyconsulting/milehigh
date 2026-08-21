@@ -195,7 +195,12 @@ def test_paint_complete_stage_omits_fab_and_paint():
     assert PHASE_INSTALLATION in phases
 
 
-def test_complete_release_still_listed():
+def test_complete_release_lands_in_past_rows_not_the_look_ahead():
+    """A release installed in June is history on a July look-ahead (BUG-12).
+
+    It stays in the envelope for provenance, but out of ``rows`` — leaving it there
+    is what made Carmen open a Novel Flatirons look-ahead with a May date.
+    """
     out = build_lookahead_schedule(
         _pipeline(releases=[_release_row(
             release="50",
@@ -213,9 +218,103 @@ def test_complete_release_still_listed():
         today=TODAY,
     )
     assert out["summary"]["release_count"] == 1
-    row = out["rows"][0]
+    assert out["rows"] == []
+    assert out["summary"]["row_count"] == 0
+    assert out["summary"]["past_row_count"] == 1
+    assert out["summary"]["next_activity"] is None
+
+    row = out["past_rows"][0]
     assert row["stage_label"] == "Complete"
     assert row["is_complete"] is True
+    assert row["next_activity"] is None
+    assert all(p["status"] == "past" for p in row["phases"])
+
+
+def test_active_bar_reports_next_date_not_its_start():
+    """Work under way since before today reports when it *next* matters."""
+    out = build_lookahead_schedule(
+        _pipeline(releases=[_release_row(
+            release="615",
+            code="500-615",
+            description="SE Canopy",
+            stage="Released",
+            released="2026-05-01",
+            fab_hrs=1600.0,  # long enough that the fab bar opened before today
+            start_install="2026-08-10",
+            comp_eta="2026-08-11",
+        )]),
+        weeks=3,
+        today=TODAY,
+    )
+    row = out["rows"][0]
+    fab = next(p for p in row["phases"] if p["phase"] == PHASE_FABRICATION)
+    assert fab["start"] < TODAY.isoformat()   # long fab bar opened before today
+    assert fab["status"] == "active"
+
+    nxt = row["next_activity"]
+    assert nxt["phase"] == PHASE_FABRICATION
+    assert nxt["label"] == "Fabrication"
+    assert nxt["start"] == fab["start"]        # the real bar is not rewritten
+    assert nxt["next_date"] == TODAY.isoformat()  # ...but the reported date is forward
+
+
+def test_past_row_does_not_set_the_headline():
+    """The job-level next_activity skips finished work and names the department."""
+    done = _release_row(
+        release="50",
+        code="500-50",
+        description="Installed in June",
+        stage="Complete",
+        is_complete=True,
+        start_install="2026-06-01",
+        comp_eta="2026-06-03",
+        date_kind="neutral",
+        start_install_no_color=True,
+    )
+    upcoming = _release_row(
+        release="900",
+        code="500-900",
+        description="Next package",
+        start_install="2026-09-14",
+        comp_eta="2026-09-15",
+    )
+    out = build_lookahead_schedule(
+        _pipeline(releases=[done, upcoming]),
+        weeks=3,
+        today=TODAY,
+    )
+    assert [r["code"] for r in out["rows"]] == ["500-900"]
+    assert [r["code"] for r in out["past_rows"]] == ["500-50"]
+
+    headline = out["summary"]["next_activity"]
+    assert headline["code"] == "500-900"
+    assert headline["label"] in ("Fabrication", "Paint", "Shipping", "Installation")
+    assert headline["next_date"] >= TODAY.isoformat()
+    assert out["window"]["today"] == TODAY.isoformat()
+
+
+def test_undated_row_is_not_treated_as_past():
+    """No bars at all means unscheduled, not finished — it must still reach the GC."""
+    out = build_lookahead_schedule(
+        _pipeline(releases=[_release_row(
+            release="700",
+            code="500-700",
+            description="No install date yet",
+            start_install=None,
+            comp_eta=None,
+            ship_date=None,
+            date_kind="missing",
+            stage="Paint Complete",  # nothing left to back-chain a bar from
+        )]),
+        weeks=3,
+        today=TODAY,
+    )
+    assert [r["code"] for r in out["rows"]] == ["500-700"]
+    assert out["past_rows"] == []
+    row = out["rows"][0]
+    assert row["phases"] == []
+    assert row["next_activity"] is None
+    assert "missing_install_date" in row["flags"]
 
 
 def test_open_drr_drafting_bar():
@@ -312,6 +411,9 @@ def test_all_active_work_included_not_window_filtered():
     assert out["window"]["end"] == "2026-08-15"  # +21 days
     assert out["rows"][0]["code"] == "500-900"
     assert any(p["phase"] == PHASE_INSTALLATION for p in out["rows"][0]["phases"])
+    # Beyond the window is still ahead of us — never filed as past.
+    assert out["past_rows"] == []
+    assert out["rows"][0]["next_activity"]["next_date"] > out["window"]["end"]
 
 
 def test_build_project_lookahead_db(app):

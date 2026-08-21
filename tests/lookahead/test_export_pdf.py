@@ -106,8 +106,8 @@ def test_dense_schedule_paginates_gantt_without_crashing():
             "num_guys": 2.0,
             "fab_order": float(i + 1),
             "unqueued": False,
-            "released": "2026-04-01",
-            "start_install": f"2026-04-{(i % 20) + 1:02d}" if i % 20 + 1 <= 28 else "2026-05-05",
+            "released": "2026-07-01",
+            "start_install": None,
             "start_install_formulaTF": False,
             "start_install_asap": False,
             "start_install_no_color": False,
@@ -115,11 +115,11 @@ def test_dense_schedule_paginates_gantt_without_crashing():
             "ship_date": None,
             "comp_eta": None,
         })
-    # Fix invalid days in start_install for simplicity
+    # Installs spread forward of TODAY — a look-ahead only charts work still ahead.
     for i, r in enumerate(releases):
         day = (i % 25) + 1
-        r["start_install"] = f"2026-05-{day:02d}"
-        r["comp_eta"] = f"2026-05-{min(day + 2, 28):02d}"
+        r["start_install"] = f"2026-08-{day:02d}"
+        r["comp_eta"] = f"2026-08-{min(day + 2, 28):02d}"
 
     schedule = build_lookahead_schedule(
         {

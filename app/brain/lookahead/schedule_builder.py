@@ -9,7 +9,7 @@ purpose: Deterministic GC-facing multi-phase lookahead schedule from a project p
 exports:
   build_lookahead_schedule(pipeline, weeks=3, today=None): schedule envelope for PDF/agent
   build_project_lookahead(job_number, weeks=3, today=None): pipeline + schedule convenience
-  PAINT_BUSINESS_DAYS, PHASES
+  PAINT_BUSINESS_DAYS, PHASES, BAR_PAST/BAR_ACTIVE/BAR_UPCOMING
 imports_from: [datetime, app.trello.utils, app.brain.job_log.scheduling.*, app.brain.lookahead.pipeline]
 imported_by: [tests, (future) bb_chat tools]
 invariants:
@@ -19,7 +19,11 @@ invariants:
   - N4 calendars: fab + paint use SHOP (Mon–Thu); ship + drafting use FIELD (Mon–Fri).
   - Install/ship anchors come only from stored dates (or ship = install-1bd field). Never invent
     install from a job-local fab queue — that understates hours_in_front vs the full shop.
-  - All active pipeline rows are included; window is metadata for the Gantt viewport.
+  - Read forward from today: every bar carries status in {past, active, upcoming} and every row
+    carries next_activity (the next phase to happen, by department, with its today-forward date).
+  - Rows whose every bar already ended move to `past_rows` — present for provenance, never charted
+    and never the headline. Rows with no bars at all stay in `rows` (unscheduled, not finished).
+  - Future work beyond the window still lands in `rows`; window is the Gantt viewport, not a filter.
 """
 from __future__ import annotations
 
@@ -79,6 +83,13 @@ SOURCE_HARD = "hard"
 SOURCE_PROJECTED = "projected"
 SOURCE_ESTIMATED = "estimated"
 SOURCE_MISSING = "missing"
+
+# Where a bar sits relative to today. A look-ahead is read forward, so the agent and the
+# PDF need this on the bar itself — otherwise a release installed in May reads as the
+# start of the schedule (BUG-12).
+BAR_PAST = "past"          # ended before today
+BAR_ACTIVE = "active"      # spans today — under way right now
+BAR_UPCOMING = "upcoming"  # starts after today
 
 LEGEND = {
     SOURCE_HARD: "Committed date",
@@ -224,6 +235,58 @@ def _install_source(date_kind: str) -> str:
     if date_kind == KIND_NEUTRAL:
         return SOURCE_HARD  # retained date, color suppressed
     return SOURCE_MISSING
+
+
+def _bar_status(start: Optional[date], end: Optional[date], today: date) -> str:
+    if end is not None and end < today:
+        return BAR_PAST
+    if start is not None and start > today:
+        return BAR_UPCOMING
+    return BAR_ACTIVE
+
+
+def _annotate_status(phases: list[dict[str, Any]], today: date) -> list[dict[str, Any]]:
+    """Stamp every bar with its position relative to today (in place)."""
+    for bar in phases:
+        bar["status"] = _bar_status(
+            _parse_date(bar.get("start")), _parse_date(bar.get("end")), today
+        )
+    return phases
+
+
+def _next_activity(phases: list[dict[str, Any]], today: date) -> Optional[dict[str, Any]]:
+    """The next thing to happen on this row, named by department.
+
+    ``next_date`` is clamped to today so an in-progress bar that began weeks ago
+    reports when it *next* matters, not when it started.
+    """
+    live = [p for p in phases if p.get("status") != BAR_PAST]
+    if not live:
+        return None
+
+    def _key(p):
+        return (_parse_date(p.get("start")) or date.max, PHASES.index(p["phase"]))
+
+    bar = min(live, key=_key)
+    start = _parse_date(bar.get("start"))
+    return {
+        "phase": bar["phase"],
+        "label": bar["label"],
+        "status": bar["status"],
+        "start": bar.get("start"),
+        "end": bar.get("end"),
+        "next_date": _iso(max(start, today) if start else today),
+        "date_source": bar.get("date_source"),
+    }
+
+
+def _row_is_past(phases: list[dict[str, Any]]) -> bool:
+    """Row is behind us only if it has bars and every one of them already ended.
+
+    A row with no bars at all is unscheduled, not finished — it stays in ``rows``
+    so the missing-date flags reach the GC.
+    """
+    return bool(phases) and all(p.get("status") == BAR_PAST for p in phases)
 
 
 def _build_release_phases(
@@ -423,9 +486,13 @@ def build_lookahead_schedule(
 ) -> dict[str, Any]:
     """Turn a ``get_project_pipeline`` envelope into a GC-facing multi-phase schedule.
 
-    Includes **all** active releases and open drafting packages from the pipeline.
-    ``window`` is the Gantt viewport (default 3 weeks from ``today``); bars outside
-    the window are still present with full dates for the PDF table appendix.
+    Read forward from ``today``: ``rows`` carries the work that still has something
+    left to happen, each with a ``next_activity`` naming the department and the
+    today-forward date. Work whose every bar already ended is kept in ``past_rows``
+    so nothing is lost, but it never leads the schedule or reaches the Gantt.
+
+    ``window`` is the Gantt viewport (default 3 weeks from ``today``); future bars
+    beyond it stay in ``rows`` with full dates.
     """
     today = today or date.today()
     try:
@@ -446,9 +513,11 @@ def build_lookahead_schedule(
                 "start": _iso(today),
                 "end": _iso(window_end),
                 "weeks": weeks,
+                "today": _iso(today),
             },
             "generated_on": _iso(today),
             "rows": [],
+            "past_rows": [],
             "summary": {
                 "release_count": 0,
                 "drafting_count": 0,
@@ -458,6 +527,8 @@ def build_lookahead_schedule(
                 "projected_install_dates": 0,
                 "missing_install_dates": 0,
                 "row_count": 0,
+                "past_row_count": 0,
+                "next_activity": None,
             },
             "legend": LEGEND,
             "phase_order": list(PHASES),
@@ -476,11 +547,15 @@ def build_lookahead_schedule(
     drafting = list(pipeline.get("drafting") or [])
 
     rows: list[dict[str, Any]] = []
+    past_rows: list[dict[str, Any]] = []
+
+    def _file(row: dict[str, Any]) -> None:
+        (past_rows if _row_is_past(row["phases"]) else rows).append(row)
 
     # Drafting first (upstream of fab), then releases by install date then code.
     for d in drafting:
-        phases = _build_drafting_phases(d, today=today)
-        rows.append({
+        phases = _annotate_status(_build_drafting_phases(d, today=today), today)
+        _file({
             "kind": "drafting",
             "code": d.get("code"),
             "title": d.get("title") or d.get("code"),
@@ -489,6 +564,7 @@ def build_lookahead_schedule(
             "rel": d.get("rel"),
             "submittal_id": d.get("submittal_id"),
             "phases": phases,
+            "next_activity": _next_activity(phases, today),
             "flags": _row_flags(d, phases),
         })
 
@@ -497,8 +573,8 @@ def build_lookahead_schedule(
         return (r.get("is_complete") is True, si, r.get("code") or "")
 
     for r in sorted(releases, key=_release_sort_key):
-        phases = _build_release_phases(r, today=today)
-        rows.append({
+        phases = _annotate_status(_build_release_phases(r, today=today), today)
+        _file({
             "kind": "release",
             "code": r.get("code"),
             "title": r.get("description") or r.get("code"),
@@ -510,6 +586,7 @@ def build_lookahead_schedule(
             "comp_eta": r.get("comp_eta"),
             "is_complete": r.get("is_complete"),
             "phases": phases,
+            "next_activity": _next_activity(phases, today),
             "flags": _row_flags(r, phases),
         })
 
@@ -521,6 +598,18 @@ def build_lookahead_schedule(
     )
     phase_bar_count = sum(len(row["phases"]) for row in rows)
 
+    # Headline: the single next thing to happen on this job, by department.
+    next_up = min(
+        (row for row in rows if row.get("next_activity")),
+        key=lambda row: (row["next_activity"]["next_date"], row.get("code") or ""),
+        default=None,
+    )
+    schedule_next = (
+        {**next_up["next_activity"], "code": next_up.get("code"), "title": next_up.get("title")}
+        if next_up
+        else None
+    )
+
     return {
         "found": True,
         "job": pipeline.get("job"),
@@ -530,9 +619,11 @@ def build_lookahead_schedule(
             "start": _iso(today),
             "end": _iso(window_end),
             "weeks": weeks,
+            "today": _iso(today),
         },
         "generated_on": _iso(today),
         "rows": rows,
+        "past_rows": past_rows,
         "summary": {
             "release_count": len(releases),
             "drafting_count": len(drafting),
@@ -542,6 +633,8 @@ def build_lookahead_schedule(
             "projected_install_dates": proj_n,
             "missing_install_dates": miss_n,
             "row_count": len(rows),
+            "past_row_count": len(past_rows),
+            "next_activity": schedule_next,
         },
         "legend": LEGEND,
         "phase_order": list(PHASES),
