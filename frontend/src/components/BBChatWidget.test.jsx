@@ -69,4 +69,14 @@ describe('BBChatWidget', () => {
 
         expect(parseFloat(panel.style.height)).toBeGreaterThan(startH);
     });
+
+    it('double-clicking the height handle fills the remaining viewport', () => {
+        render(<BBChatWidget enabled isAdmin={false} open onClose={() => {}} />);
+        const panel = document.querySelector('[data-carmen="panel"]');
+        const grip = screen.getByRole('separator', { name: 'Resize Carmen chat' });
+        const startH = parseFloat(panel.style.height) || 420;
+
+        fireEvent.doubleClick(grip);
+        expect(parseFloat(panel.style.height)).toBeGreaterThan(startH);
+    });
 });

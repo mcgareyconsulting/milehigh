@@ -190,11 +190,19 @@ body>#root>div>div {
 
 /* Carmen chat: drop down from the upper-right CM bubble. */
 @keyframes carmen-drop {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .carmen-drop {
-  animation: carmen-drop 160ms ease-out;
+  transform-origin: top right;
+  animation: carmen-drop 180ms ease-out;
+}
+.carmen-resizing {
+  cursor: inherit;
+  user-select: none;
+}
+.carmen-resizing * {
+  user-select: none !important;
 }
 
 /* Custom scrollbar */

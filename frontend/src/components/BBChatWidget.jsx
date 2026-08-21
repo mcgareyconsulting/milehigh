@@ -156,6 +156,50 @@ function clampSize({ w, h }, anchor = fallbackAnchor()) {
     };
 }
 
+function HeaderIcon({ d }) {
+    return (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d={d} />
+        </svg>
+    );
+}
+
+function ResizeHandles({ active, onBegin, onSnapHeight, onSnapMax }) {
+    const wash = active ? 'bg-accent-500/15' : 'hover:bg-accent-500/10';
+    const edge = `absolute z-10 touch-none transition-colors ${wash}`;
+    // Inset bars so the hover is an L along the frame, not a filled square over the input.
+    const cornerL = active
+        ? 'shadow-[inset_8px_0_0_0_rgba(47,95,208,0.15),inset_0_-8px_0_0_rgba(47,95,208,0.15)]'
+        : 'hover:shadow-[inset_8px_0_0_0_rgba(47,95,208,0.10),inset_0_-8px_0_0_rgba(47,95,208,0.10)]';
+    return (
+        <>
+            <div
+                role="separator"
+                aria-label="Resize Carmen chat"
+                aria-orientation="horizontal"
+                data-carmen="resize-s"
+                title="Drag to change height · double-click to fill"
+                onPointerDown={onBegin('resize-s')}
+                onDoubleClick={(e) => { e.preventDefault(); onSnapHeight(); }}
+                className={`${edge} left-8 right-0 bottom-0 h-2 cursor-ns-resize rounded-br-2xl`}
+            />
+            <div
+                aria-hidden="true"
+                title="Drag to change width"
+                onPointerDown={onBegin('resize-w')}
+                className={`${edge} top-0 bottom-8 left-0 w-2 cursor-ew-resize rounded-tl-2xl`}
+            />
+            <div
+                data-carmen="resize-sw"
+                title="Drag to resize · double-click to fill"
+                onPointerDown={onBegin('resize-sw')}
+                onDoubleClick={(e) => { e.preventDefault(); onSnapMax(); }}
+                className={`absolute bottom-0 left-0 z-20 h-8 w-8 cursor-nesw-resize touch-none rounded-bl-2xl transition-shadow ${cornerL}`}
+            />
+        </>
+    );
+}
+
 /** Circular CM launcher — lives to the right of the notification bell. */
 export const CarmenButton = forwardRef(function CarmenButton({ onClick, open = false, size = 36, className = '' }, ref) {
     return (
@@ -183,12 +227,25 @@ export default function BBChatWidget({ enabled, isAdmin, open = false, onClose, 
     const [busy, setBusy] = useState(false);
     const [size, setSize] = useState(() => ({ w: DEFAULT_W, h: defaultHeight() }));
     const [anchor, setAnchor] = useState(fallbackAnchor);
+    const [resizing, setResizing] = useState(false);
     const scrollRef = useRef(null);
     const panelRef = useRef(null);
     const inputRef = useRef(null);
     const dragRef = useRef(null);
+    const sizeRef = useRef(size);
     const anchorBoxRef = useRef(anchor);
+    const restoringRef = useRef(null);
     anchorBoxRef.current = anchor;
+
+    const commitSize = useCallback((next) => {
+        sizeRef.current = next;
+        setSize(next);
+        const el = panelRef.current;
+        if (el) {
+            el.style.width = `${next.w}px`;
+            el.style.height = `${next.h}px`;
+        }
+    }, []);
 
     useEffect(() => {
         if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -203,12 +260,12 @@ export default function BBChatWidget({ enabled, isAdmin, open = false, onClose, 
         const apply = () => {
             const next = measureAnchor(anchorRef);
             setAnchor(next);
-            setSize((prev) => clampSize(prev, next));
+            commitSize(clampSize(sizeRef.current, next));
         };
         apply();
         window.addEventListener('resize', apply);
         return () => window.removeEventListener('resize', apply);
-    }, [open, anchorRef]);
+    }, [open, anchorRef, commitSize]);
 
     useEffect(() => {
         const onMove = (e) => {
@@ -218,15 +275,28 @@ export default function BBChatWidget({ enabled, isAdmin, open = false, onClose, 
             const box = anchorBoxRef.current;
             const dx = e.clientX - d.startX;
             const dy = e.clientY - d.startY;
+            let next = d.orig;
             if (d.mode === 'resize-s') {
-                setSize(clampSize({ w: d.orig.w, h: d.orig.h + dy }, box));
+                next = clampSize({ w: d.orig.w, h: d.orig.h + dy }, box);
             } else if (d.mode === 'resize-w') {
-                setSize(clampSize({ w: d.orig.w - dx, h: d.orig.h }, box));
+                next = clampSize({ w: d.orig.w - dx, h: d.orig.h }, box);
             } else if (d.mode === 'resize-sw') {
-                setSize(clampSize({ w: d.orig.w - dx, h: d.orig.h + dy }, box));
+                next = clampSize({ w: d.orig.w - dx, h: d.orig.h + dy }, box);
+            }
+            sizeRef.current = next;
+            const el = panelRef.current;
+            if (el) {
+                el.style.width = `${next.w}px`;
+                el.style.height = `${next.h}px`;
             }
         };
-        const onUp = () => { dragRef.current = null; };
+        const onUp = () => {
+            if (!dragRef.current) return;
+            dragRef.current = null;
+            setSize(sizeRef.current);
+            setResizing(false);
+            document.body.classList.remove('carmen-resizing');
+        };
         document.addEventListener('pointermove', onMove, { passive: false });
         document.addEventListener('pointerup', onUp);
         document.addEventListener('pointercancel', onUp);
@@ -234,6 +304,7 @@ export default function BBChatWidget({ enabled, isAdmin, open = false, onClose, 
             document.removeEventListener('pointermove', onMove);
             document.removeEventListener('pointerup', onUp);
             document.removeEventListener('pointercancel', onUp);
+            document.body.classList.remove('carmen-resizing');
         };
     }, []);
 
@@ -263,11 +334,36 @@ export default function BBChatWidget({ enabled, isAdmin, open = false, onClose, 
         if (e.button != null && e.button !== 0) return;
         e.preventDefault();
         e.stopPropagation();
+        e.currentTarget.setPointerCapture?.(e.pointerId);
         const rect = panelRef.current?.getBoundingClientRect();
         const orig = (rect && rect.width > 0 && rect.height > 0)
             ? { w: rect.width, h: rect.height }
-            : size;
+            : sizeRef.current;
         dragRef.current = { mode, startX: e.clientX, startY: e.clientY, orig };
+        setResizing(true);
+        document.body.classList.add('carmen-resizing');
+    };
+
+    const snapHeight = () => {
+        const box = measureAnchor(anchorRef);
+        const cur = sizeRef.current;
+        const max = clampSize({ w: cur.w, h: 1e5 }, box);
+        const atMax = cur.h >= max.h - 16;
+        if (!atMax) restoringRef.current = { ...cur };
+        commitSize(atMax
+            ? clampSize({ w: cur.w, h: restoringRef.current?.h || defaultHeight() }, box)
+            : max);
+    };
+
+    const snapMax = () => {
+        const box = measureAnchor(anchorRef);
+        const cur = sizeRef.current;
+        const max = clampSize({ w: 1e5, h: 1e5 }, box);
+        const atMax = cur.h >= max.h - 16 && cur.w >= max.w - 16;
+        if (!atMax) restoringRef.current = { ...cur };
+        commitSize(atMax
+            ? clampSize(restoringRef.current || { w: DEFAULT_W, h: defaultHeight() }, box)
+            : max);
     };
 
     const send = useCallback(async () => {
@@ -317,7 +413,7 @@ export default function BBChatWidget({ enabled, isAdmin, open = false, onClose, 
                 role="dialog"
                 aria-label="Carmen chat"
                 data-carmen="panel"
-                className="carmen-drop fixed z-[61] bg-white dark:bg-slate-800 shadow-2xl border border-gray-200 dark:border-slate-600 flex flex-col overflow-hidden rounded-2xl"
+                className="carmen-drop fixed z-[61] bg-surface border border-hairline flex flex-col overflow-hidden rounded-2xl"
                 style={{
                     top: anchor.top,
                     right: anchor.right,
@@ -325,25 +421,36 @@ export default function BBChatWidget({ enabled, isAdmin, open = false, onClose, 
                     height: size.h,
                     maxWidth: `calc(100vw - ${anchor.right + VIEW_MARGIN}px)`,
                     maxHeight: `calc(100dvh - ${anchor.top + VIEW_MARGIN}px)`,
+                    boxShadow: resizing
+                        ? '0 0 0 2px rgba(47, 95, 208, 0.35), var(--shadow)'
+                        : 'var(--shadow)',
                 }}
             >
-                <div className="shrink-0 flex items-center justify-between pl-4 pr-3 py-3 border-b border-gray-200 dark:border-slate-600 bg-gradient-to-r from-accent-500 to-accent-600 text-white">
+                <div className="shrink-0 flex items-center justify-between pl-3.5 pr-2 py-2 bg-gradient-to-r from-accent-500 to-accent-600 text-white">
                     <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-bold">{showAccess ? 'Carmen Chat access' : 'Carmen'}</span>
-                        {!showAccess && <span className="text-xs opacity-80 hidden sm:inline">read-only data assistant</span>}
+                        <span className="font-semibold text-sm">{showAccess ? 'Carmen Chat access' : 'Carmen'}</span>
+                        {!showAccess && <span className="text-[11px] opacity-80 hidden sm:inline">read-only</span>}
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-0.5">
                         {showAccess ? (
-                            <button type="button" onClick={() => setShowAccess(false)} title="Back to chat" aria-label="Back to chat" className="p-1.5 rounded hover:bg-white/20 text-sm">←</button>
+                            <button type="button" onClick={() => setShowAccess(false)} title="Back to chat" aria-label="Back to chat" className="grid place-items-center w-7 h-7 rounded-md hover:bg-white/15">
+                                <HeaderIcon d="M15 19l-7-7 7-7" />
+                            </button>
                         ) : (
                             <>
-                                <button type="button" onClick={newChat} title="New chat" aria-label="New chat" className="p-1.5 rounded hover:bg-white/20 text-sm">✎</button>
+                                <button type="button" onClick={newChat} title="New chat" aria-label="New chat" className="grid place-items-center w-7 h-7 rounded-md hover:bg-white/15">
+                                    <HeaderIcon d="M12 5v14M5 12h14" />
+                                </button>
                                 {isAdmin && (
-                                    <button type="button" onClick={() => setShowAccess(true)} title="Manage access" aria-label="Manage access" className="p-1.5 rounded hover:bg-white/20 text-sm">⚙</button>
+                                    <button type="button" onClick={() => setShowAccess(true)} title="Manage access" aria-label="Manage access" className="grid place-items-center w-7 h-7 rounded-md hover:bg-white/15">
+                                        <HeaderIcon d="M12 15a3 3 0 100-6 3 3 0 000 6zM4 12h2M18 12h2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4" />
+                                    </button>
                                 )}
                             </>
                         )}
-                        <button type="button" onClick={closePanel} title="Close" aria-label="Close Carmen chat" className="p-1.5 rounded hover:bg-white/20 text-sm leading-none">✕</button>
+                        <button type="button" onClick={closePanel} title="Close" aria-label="Close Carmen chat" className="grid place-items-center w-7 h-7 rounded-md hover:bg-white/15">
+                            <HeaderIcon d="M6 6l12 12M18 6L6 18" />
+                        </button>
                     </div>
                 </div>
 
@@ -381,7 +488,7 @@ export default function BBChatWidget({ enabled, isAdmin, open = false, onClose, 
                                 )}
                             </div>
 
-                            <div className="shrink-0 border-t border-gray-200 dark:border-slate-600 p-2 flex items-end gap-2">
+                            <div className="shrink-0 border-t border-hairline p-2 pb-3 flex items-end gap-2">
                                 <textarea
                                     ref={inputRef}
                                     value={input}
@@ -403,28 +510,11 @@ export default function BBChatWidget({ enabled, isAdmin, open = false, onClose, 
                         </>
                     )}
 
-                    <div
-                        role="separator"
-                        aria-label="Resize Carmen chat"
-                        aria-orientation="horizontal"
-                        title="Drag to expand"
-                        data-carmen="resize-s"
-                        onPointerDown={beginResize('resize-s')}
-                        className="shrink-0 h-3 cursor-ns-resize touch-none flex items-center justify-center bg-gray-50 dark:bg-slate-900/40 hover:bg-gray-100 dark:hover:bg-slate-700"
-                    >
-                        <span className="block w-10 h-1 rounded-full bg-gray-300 dark:bg-slate-500" />
-                    </div>
-                    <div
-                        aria-hidden="true"
-                        title="Drag to widen"
-                        onPointerDown={beginResize('resize-w')}
-                        className="absolute top-10 left-0 bottom-3 w-2 cursor-ew-resize touch-none"
-                    />
-                    <div
-                        aria-hidden="true"
-                        title="Drag to expand"
-                        onPointerDown={beginResize('resize-sw')}
-                        className="absolute left-0 bottom-0 w-4 h-4 cursor-nesw-resize touch-none"
+                    <ResizeHandles
+                        active={resizing}
+                        onBegin={beginResize}
+                        onSnapHeight={snapHeight}
+                        onSnapMax={snapMax}
                     />
                 </div>
         </>,
