@@ -79,6 +79,34 @@ def test_dispatch_bot_omits_join_at_for_immediate(app):
     assert "join_at" not in captured["body"]
 
 
+def test_dispatch_bot_pins_transcription_to_english(app):
+    """An unset language_code let Recall autodetect, and it mis-detected a
+    production standup as Portuguese. Every dispatch must pin English."""
+    captured = {}
+
+    class _Resp:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"id": "bot-en"}
+
+    def _fake_post(url, headers=None, json=None, timeout=None):
+        captured["body"] = json
+        return _Resp()
+
+    with patch.object(recall, "cfg") as mcfg, patch.object(recall.requests, "post", _fake_post):
+        mcfg.RECALL_API_KEY = "k"
+        mcfg.RECALL_BASE_URL = "https://x.recall.ai/api/v1"
+        recall.dispatch_bot("https://teams.microsoft.com/x")
+
+    streaming = captured["body"]["recording_config"]["transcript"]["provider"]["recallai_streaming"]
+    assert streaming["language_code"] == "en"
+    # prioritize_low_latency would also force "en" but costs accuracy on transcripts
+    # we cite from, so the accuracy mode is pinned explicitly rather than defaulted.
+    assert streaming["mode"] == "prioritize_accuracy"
+
+
 # --------------------------------------------------------------------------- #
 # calendar.poll()
 # --------------------------------------------------------------------------- #

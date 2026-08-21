@@ -1,6 +1,6 @@
 ---
 project: MHMW
-updated: 2026-08-15
+updated: 2026-08-21
 verified: origin/main @ 4c048ca (PR #340 font wave)
 config:                       # inputs to derived math — store inputs, never results
   horizon:
@@ -14,7 +14,7 @@ classes:                      # what KIND of work an item is — orthogonal to e
   deferred: off the active path, with a stated re-check trigger
 queue:                        # agent-maintained, set by agreement in session
   now: T1
-  next: [T2, A1, AUD1]  # fix queue cleared 2026-08-15; A1 elevated when BUG-10 landed
+  next: [N9, T2, AUD1]  # 2026-08-21: N9 elevated by Bill ("short timeline"); A1 deliberately stalled behind T1 [bill-2026-08-21#L169]
   awaiting: [N11]
 ---
 
@@ -28,7 +28,11 @@ only — all state changes land here.
 `docs/procore-decommission-plan.md` holds the Workstream 1 data model and slice
 detail; Bill's written spec
 (`MHMW_Brain_Procore_Decommission_Submittal_System_Developer_Handoff.md`) is his
-deliverable, not a repo artifact. Procore integration teardown (webhooks, outbox,
+deliverable, not a repo artifact. Its W5 counterpart — the Trello-replacement /
+field-ops spec
+(`MHMW_Brain_Trello_Replacement_Subcontractor_Field_Operations_Build_Package.md`,
+delivered 2026-08-20) — is likewise a deliverable kept outside the repo; see the
+Sources table. Procore integration teardown (webhooks, outbox,
 `fc_retry_worker`) is tracked on a separate map, not here.
 
 **Tier key.** Tier numbers are stable identifiers, **not** priority order —
@@ -61,9 +65,16 @@ start cold (phone included) without exploring first.
 
 **Queue cleared 2026-08-15** (branch `claude/roadmap-review-bugs-uinik2`).
 BUG-10's config half landed the same day and **elevated A1**.
+**Re-stocked 2026-08-21** from the pre-Alaska standup (BUG-11 through BUG-15);
+BUG-15 shipped the same day.
 
 | ID | Fix | Entry point | Pri |
 |---|---|---|---|
+| BUG-11 | Hard-date color dump fires too early — moves from Shipping Planning to **Start Install** (Bill reversed his own 8/15 rule: *"I might have given you bad information"* [bill-2026-08-21#L109]; color survives ship stages, dumps once install starts [#L115]; yellow overdue must never silently disappear [#L113]). Open build call: trigger = the `Install Start` stage vs. the `start_install` date arriving — confirm against AUD1 | `app/brain/job_log/features/start_install/shipping_stage_date_discipline.py` (+ `stage/command.py` intercept); tests `tests/brain/test_shipping_stage_date_discipline.py` | **high — client-decided** |
+| BUG-15 | ~~Meeting-bot transcription autodetects language — mis-detected a production standup as Portuguese and translated a line [bill-2026-08-21#§2]~~ **built 2026-08-21**: `language_code: "en"` + explicit `prioritize_accuracy` mode pinned on every dispatch (covers the calendar poller and the on-demand route, which share `dispatch_bot`) | `app/brain/meetings/recall.py` (`TRANSCRIPT_LANGUAGE`); test `tests/brain/test_calendar_recall.py::test_dispatch_bot_pins_transcription_to_english` | med |
+| BUG-12 | Carmen lookahead tool returns a stale window — Novel Flatirons pull starts in May [bill-2026-08-21#L133]. Must be today-forward, upcoming project dates, labeled by department | `app/brain/carmen_chat/tools.py` (`build_project_lookahead`), `app/brain/lookahead/pipeline.py` | med |
+| BUG-13 | Backspace intermittently dead in the meeting-notes to-do input [bill-2026-08-21#L95]. Unreproduced — Bill and Daniel have both seen it; instrument before fixing | `frontend/src/pages/Meetings.jsx` (to-do note input) | low |
+| BUG-14 | iPad rotation dumps modal/scroll state — *"you're like, where was I?"* [bill-2026-08-21#L145]. Likely a remount on orientation change; fits the tablet-tuning lane (`docs/tablet-tuning.md`) | frontend, component TBD — reproduce on the physical iPad first | low |
 | BUG-9 | ~~Fab order not flipping 2→1 at paint → complete; order cleared inconsistently~~ **built** | `app/brain/job_log/features/fab_order/tier.py` (tier logic: Complete=NULL, 0, 1, 2, dynamic 3+) | **high** |
 | BUG-10 | ~~Sub invite email ships a `localhost:5173` link — `APP_BASE_URL` unset~~ **built** (code + Render config) | `app/config.py:76`, `app/brain/tm/subcontractors/command.py`. Acceptance test — one real invite to Bill — still to run | **high — unblocked A1** |
 | BUG-8 | ~~DWL release-number generator doesn't check the archive; job log rejects the number later~~ **built** | `app/procore/procore.py` (`_archived_rel_numbers_for_job`) | med |
@@ -129,6 +140,27 @@ one-way sync gap: *"if we change something on Trello, it's not updating to the
 job log"* [#L69]. His workaround is weekly retraining of the crew onto the job
 log. T1 is the gate: the timeline has to do Trello's job before Trello can go.
 
+**The written spec arrived 2026-08-20** — the Owed "Trello phase-1 spec doc,"
+delivered as the Manus-prepared field-ops build package (see Sources,
+`fieldops-2026-08-20`). It confirms T1–T4/A1 as scoped and adds net-new scope
+now carried as **T5–T8** below: field work foundation (assignments / My Work /
+mobile work package), punch + field issues + Safety Hold, subcontractor
+compliance profiles, and the sub work-authorization + invoicing workflow. Its
+phase order (A field foundation → B dispatch → C punch/issues → D T&M → "A.1"
+sub financial → F reporting) puts the field foundation *ahead of* the dispatch
+timeline — the reverse of Bill's spoken 8/15 priority (T1 first). That
+sequencing tension, the mislabeled "A.1" phase, and the cover-email items the
+doc doesn't contain are all in one Owed reconciliation row; **T1 stays
+`queue.now` until Bill says otherwise.**
+
+**Bill said: T1.** The sequencing thread resolved itself the next morning —
+*"it's still more important to get the scheduling piece for the timeline sorted
+out first. Just to kind of get out of the Trello piece"* [bill-2026-08-21#L169]
+— which also deliberately stalls A1 behind the timeline. The other two
+reconciliation threads (cover-email items, the "A.1" label) remain Owed.
+**Mobile target for the whole package: iPad first, phone gets "some function"**
+[bill-2026-08-21#L155].
+
 ### T1 · Timeline assignment — drag, assign, unassigned lane
 *W5 · not-started · class build · due — · deps — · owner daniel · src bill-2026-08-15#L75 · upd 2026-08-15*
 
@@ -153,6 +185,8 @@ view-local arrangement. That is the point of the feature, not a side effect.
 - 2026-08-15 · transcript · src bill-2026-08-15#L61 — move/assign cards + a vertical unassigned lane to plug and play from
 - 2026-08-15 · transcript · src bill-2026-08-15#L75 — mirror cards + assigning cards and dates to individual people is "the most critical bit"; purpose is visual planning off ready-to-ship / stored-at-Mile-High / past-paint-complete
 - 2026-08-15 · decision · src — — priority 1 of W5; base = jay-view + mirror-cards; drag writes the real schedule; absorbs parked D4
+- 2026-08-20 · spec · src fieldops-2026-08-20#§5 — written spec confirms the shape (Field Dispatch Timeline: crew/company lanes, unassigned plug-and-play, hard-date-first) and adds Phase-B detail for later: finite capacity baseline **3 installers / 24 labor-hrs per day per crew** (overridable per release via existing `num_guys`), drag restricted to PM/Field Super (a sub admin may only move cards between their own teams), look-ahead attachment, and per-card readiness flags (§12: FC / materials / shipping / equipment / site / crew)
+- 2026-08-21 · transcript · src bill-2026-08-21#L169 — priority reconfirmed over the spec's Phase-A-first ordering: the timeline scheduling piece comes first, "to kind of get out of the Trello piece"
 
 ### T2 · Admin member management — permissions + onboarding, consolidated
 *W5 · not-started · class build · due — · deps — · owner daniel · src bill-2026-08-15#L83 · upd 2026-08-15*
@@ -179,22 +213,30 @@ permission model underneath it is load-bearing for T3.
 **Trail**
 - 2026-08-15 · transcript · src bill-2026-08-15#L83 — admin user view: add, assign permissions, invite, see all users, reset password, block
 - 2026-08-15 · decision · src — — one page covering staff + subs; sub invite relocates here; admins own elevation/deferral; consolidation of scattered admin surfaces invited; runs in tandem with T1
+- 2026-08-20 · spec · src fieldops-2026-08-20#§3.2 — written spec confirms the Procore-style admin center (invite by email, first-time onboarding, role templates, checkbox permission overrides, MHMW/External/Vendor classification, audit log of who invited/changed what) and adds a load-bearing requirement: **one person may hold multiple roles** (e.g. PM + Field Super). Boolean flags on `User` cannot express that — the "build-time call" on whether `Subcontractor` folds into a `User`/role table now has a real constraint pushing toward an actual role model
 
 ### T3 · Subcontractor visibility — short-term scope
-*W5 · not-started · class build · due — · deps T2 · owner daniel · src bill-2026-08-15#L93 · upd 2026-08-15*
+*W5 · not-started · class build · due — · deps T2 · owner daniel · src bill-2026-08-15#L93 · upd 2026-08-20*
 
 Effort M. **Short term:** subs see their **T&M tickets plus the relevant data for
 that job release**, pulled into the sub view. **Mid term this item dissolves into
 T2** — visibility becomes a property of a role (sub / drafter / PM / admin),
 not a per-surface decision.
 
-**Do not build release-wide sub visibility now.** Bill's *"mostly the fab hour is
-the only thing they don't actually see"* [#L93] is his eventual posture, not the
-short-term scope. His written scope arrives with the Trello doc (Owed).
+**The written scope arrived 2026-08-20** and hardens the walls: a sub is limited
+to their company, assigned projects/releases, and explicitly shared documents;
+never other subs' work, MHMW labor rates, budgets, O&P, or margin; **FC is the
+default field drawing — DRR and internal review content are never exposed**;
+every access-sensitive record must carry a project link plus an
+assigned-user/crew/company link [fieldops-2026-08-20#§3.1]. Bill's *"mostly the
+fab hour is the only thing they don't actually see"* [#L93] remains his eventual
+posture, not the short-term scope — the spec's full sub *portal* (My Work,
+mobile work package) is carried by T5, not here.
 
 **Trail**
 - 2026-08-15 · transcript · src bill-2026-08-15#L93 — "give them everything that they need, but not show them what they shouldn't see"; fab hours named as the main exclusion; scope to be detailed in his doc
 - 2026-08-15 · decision · src — — short term = T&M + that job release's data; mid term collapses into the T2 role model
+- 2026-08-20 · spec · src fieldops-2026-08-20#§3.1 — permission rules written: company/project/release scoping, no financial visibility, FC-only drawings, mandatory project + assignee linkage on sensitive records
 
 ### T4 · Trello teardown
 *W5 · not-started · class build · due — · deps T1 · owner daniel · src bill-2026-08-15#L69 · upd 2026-08-15*
@@ -233,6 +275,154 @@ overall concept is right there… excited about being able to track that well."*
 - 2026-08-15 · note · src bill-2026-08-15#L155 — Bill's original change notes lost; reproduction promised, treat as unlikely near-term
 - 2026-08-15 · decision · src — — gated on BUG-10, elevates on landing
 - 2026-08-15 · note · src — — unblocked: `APP_BASE_URL` set in Render; first real invite send is still the confirmation
+- 2026-08-20 · spec · src fieldops-2026-08-20#§10 — written spec restates the T&M shape unchanged (Draft → Submitted → GC Signed → Internal Approval → CO Request → Distributed → GC Approved → SOV → Invoiceable; finger/pen signature + typed name; O&P from contract, shown separately on the CO Request PDF, hidden from subs; 14-day Carmen follow-up) and adds field-side entry: opening a ticket from an assignment auto-populates project, release, GC contact, foreman, and location — that last part is T5/T8 ground, not a change to this package
+- 2026-08-21 · decision · src bill-2026-08-21#L169 — deliberately stalled behind T1 by Bill: *"the T&M ticket thing — I know we kind of just stalled out on where that's at. I think it's still more important to get the scheduling piece for the timeline sorted out first."* Demoted in `queue.next` accordingly; the one-package delivery constraint and the lost change notes stand
+
+### T5 · Field work foundation — assignments, My Work, mobile work package
+*W5 · not-started · class build · due — · deps T2 · owner daniel · src fieldops-2026-08-20#§6 · upd 2026-08-20*
+
+Effort L–XL. The spec's **Phase A** — its stated immediate priority — and the
+largest genuinely new surface in the package. Three pieces: **Installation
+Assignment** records (the field version of a Trello card: project + release +
+crew/company + scheduled dates + capacity slot + current FC package, with
+status Not Scheduled → Assigned → Confirmed → In Progress → Ready for
+Verification → Complete / Blocked / Rescheduled) [§4, §5.3]; a **My Work**
+queue (mobile-first: today / this week / overdue / blocked, same task engine as
+project to-dos so a person has one trusted queue) [§5.2]; and the **mobile
+release work package** (current FC or as-built — never a stale revision
+mistaken for current — site contacts, readiness state, photo upload,
+Job-Log-style low-friction status toggles that only prompt for hours/detail
+when it earns its keep: T&M, blockers, completion) [§6, §7].
+
+**Two rules worth pinning now:** a field "Complete" is a *request for
+verification*, not a billing event — PM/Field Super verify before the Job Log
+flips and the invoicing engine gets the completion signal [§7.2]; and
+assignment cards are **release-linked views of the Job Log, not separately
+maintained cards** [§2.1] — the exact one-way-sync disease Trello died of.
+
+**Sequencing tension, on the record:** the spec ranks this ahead of dispatch
+(T1 ≈ its Phase B); Bill's spoken 8/15 priority was T1 first. T1 holds
+`queue.now` until the reconciliation conversation says otherwise (Owed).
+
+**Trail**
+- 2026-08-20 · spec · src fieldops-2026-08-20#§5–7 — Phase A scope written: assignment records, My Work, mobile work package, low-friction updates, complete-is-a-request rule
+- 2026-08-20 · note · src — — spec's Phase-A-first order conflicts with Bill's spoken T1-first priority; parked in the Owed reconciliation row rather than silently reordered
+- 2026-08-21 · decision · src bill-2026-08-21#L169 — sequencing resolved: T1 first, this follows; the spec's Phase-A-first order does not override the spoken priority
+- 2026-08-21 · decision · src bill-2026-08-21#L155 — mobile target: **iPad first**, phone gets "some function"; Bill is pushing everyone to iPads (Procore's phone app is the cautionary tale). Field photo habit confirmed working: capture natively, upload after — keep the upload path first-class [#L147]
+
+### T6 · Punch, field issues, and Safety Hold
+*W5 · not-started · class build · due — · deps T5 · owner daniel · src fieldops-2026-08-20#§8 · upd 2026-08-20*
+
+Effort L. The spec's **Phase C**, plus the safety layer it threads through.
+**Punch items** get ownership (internal crew, sub company, or named worker),
+location, evidence, priority/due date, and a verified closeout: Created →
+Assigned → In Progress → Ready for Verification → Verified Closed, with
+rejection bouncing back to Assigned and overdue items going red in the owner's
+My Work [§8]. **Field issues** replace the phone-call/text black hole: ten
+categories (material, shipping, drawing discrepancy, field condition, site
+readiness, scope/T&M, quality, equipment, safety, other) with routing rules per
+type — drawing issues route to PM + Lead Drafter and can carry an FC markup as
+an as-built/clarification record [§9.1, §9.3]. **Un-parks A3** (punch list),
+which dissolves into this item when it starts.
+
+**Net-new and worth its own weight — Safety Hold** [§9.2]: *any* authorized
+user can raise a safety issue (linkable to a project, release, assignment, or
+person); accountability-chart roles are notified immediately; a stop-work
+condition flips the connected assignment/release to **Blocked / Safety Hold**
+across every view; **only a human leader clears it**, with resolution recorded
+— Carmen tracks overdue safety items but never closes one or releases a hold.
+
+**Trail**
+- 2026-08-20 · spec · src fieldops-2026-08-20#§8–9 — punch lifecycle, field-issue categories + routing, universal safety issue + Safety Hold written; absorbs parked A3
+- 2026-08-21 · decision · src bill-2026-08-21#L45 — **punch and field issues anchor to the RELEASE**, not the project ("any of that stuff should be to a release") — tightens the spec's "project required; release when applicable" for MHMW's actual use. Punch work on a finished release spawns a spliced work ticket — see T9
+
+### T7 · Subcontractor compliance profiles
+*W5 · not-started · class build · due — · deps T2 · owner daniel · src fieldops-2026-08-20#§3.3 · upd 2026-08-20*
+
+Effort M. Per-company profile holding work authorizations, insurance, workers'
+comp, safety documentation, and a flexible extra-document type — each with
+upload, effective/expiration dates, status, and renewal reminder. **Explicitly
+a tracking-and-follow-up system in the first release, not a scheduling block**:
+a PM sees the warning but is never prevented from assigning on an expired
+document. Carmen surfaces missing/expiring documents, prepares the reminder
+email, and logs the follow-up. Subs see and update only their own documents.
+
+**Trail**
+- 2026-08-20 · spec · src fieldops-2026-08-20#§3.3 — scope written: warn-don't-block, Carmen renewal follow-up, company-scoped visibility
+
+### T8 · Sub work authorization + invoicing workflow
+*W5 · not-started · class build · due — · deps T5,A1 · owner daniel · src fieldops-2026-08-20#§11 · upd 2026-08-20*
+
+Effort L. The spec's **"A.1" phase** (sits where E would — whether that label
+is a typo or a deliberate elevation behind Phase A is in the Owed
+reconciliation row). Two halves. **Work authorization:** no sub receives a
+release assignment without one — link an existing Sub Fab PO / subcontract or
+create a lightweight record carrying company, project/release/scope, work
+description, authorized value (visible only to authorized MHMW users + that
+company), schedule commitment, and status Draft → Issued → Accepted → Active →
+On Hold → Completed → Closed [§11.1]. **Invoicing:** sub drafts a payment
+request against the authorization → submits with evidence (invoice PDF, daily
+updates, photos, verified punch closeout, approved T&M) → PM + Field Super
+review against assigned work (approve / partial / return / dispute with
+reason) → Accounting sees the approved package and payment status. The system
+validates **claimed ≤ authorized + approved changes** absent an authorized
+override, and needs a **punch-work holdback** mechanism whose policy is still
+open (Open question 4) [§11.2]. Approved invoices feed actual sub spend on the
+project/release budget view.
+
+**Inherits the I4 surface** — `installer_invoice_paid` / `_progress` /
+`_numbers` on `Releases` (PR #339, plus the 2026-08-18 paid-behavior rework, `2ca3ff7`)
+already track sub payment per release and caught ~$15k in week one. This item
+is the structured workflow that surface was standing in for; reconcile rather
+than duplicate, the same way N2b must.
+
+**Trail**
+- 2026-08-20 · spec · src fieldops-2026-08-20#§11 — authorization + invoice workflow written: no assignment without authorization, claimed-vs-authorized validation, punch holdback needed (policy open), evidence-backed review chain
+- 2026-08-20 · note · src — — I4's Subs surface already covers the paid/progress slice; T8 formalizes the workflow around it
+- 2026-08-21 · transcript · src bill-2026-08-21#L57 — intent hardened: *"I kind of want to **eliminate their invoices altogether**… they have to do it through the company's piece first"* — subs invoice inside the Brain, same format for everyone; a private copy in their own software is their business. Confirms the cover email's "system-generated MHMW PDF" as the doc's missing piece
+- 2026-08-21 · transcript · src bill-2026-08-21#L51 — the remaining-value mechanic: at 90% progress the system offers "allocate remaining 10% of budget for this installation" against the spliced work ticket (T9), tying residual invoiceable value to whoever finishes the work
+
+### T9 · Release splicing — fractional work tickets for the field
+*W5 · not-started · class build · due — · deps T5,T6 · owner daniel · src bill-2026-08-21#L45 · upd 2026-08-21*
+
+Effort M–L. Bill's concept, volunteered when punch anchoring came up: a punch
+or remaining-work item *"produce[s] effectively a **fractional or splice of a
+release**"* [#L45] — an additional work ticket on the timeline carrying the
+residual scope and value. His driving cases: a balcony-rail package where
+floors 2–3 invoice while floor 1 waits; stair towers installed except the wall
+handrail — flagged complete/90% in May, handrails installed in August, and the
+last 10% of value needs an owner and an invoiceable number [#L51]. The splice
+ties back to the Subs invoice-progress surface (Lexi's percentages, I4) so
+"allocate remaining N%" is an offered action, not a spreadsheet.
+
+**Field/timeline only** — Bill was explicit there's *"not really a lot of
+function for that for the shop or anywhere else"* [#L45]. Design tension to
+resolve at build time: a splice must not collide with the release-number
+uniqueness ruleset (AUD2) or double-count value against the release's SOV line
+(N1/N2 tagging) — the fab-only/install-split precedent is P5's FC Separator,
+which stays parked but shares the apportionment shape.
+
+**Trail**
+- 2026-08-21 · transcript · src bill-2026-08-21#L45 — concept stated: punch/remaining work splices a fractional release as a field work ticket; balcony-rail and wall-handrail cases
+- 2026-08-21 · transcript · src bill-2026-08-21#L51 — residual-value allocation ("allocate remaining 10% of budget") tied to the sub invoice-paid surface
+
+### T10 · Job-log photos → Trello bridge *(interim)*
+*W5 · not-started · class fix · due — · deps — · owner daniel · src bill-2026-08-21#L171 · upd 2026-08-21*
+
+Effort S–M, feasibility check first. Doug's ask, relayed by Bill: push job-log
+release photos onto the matching Trello card *"in the meantime"* [#L171] — a
+per-photo **"add to Trello"** button is acceptable [#L175]. Not every photo:
+fit-up photos are noise; **paint-complete and ship photos** are the valuable
+ones, so the field guys see what they're looking for. The real motive is
+adoption: today's Trello card only carries job-site photos, and Bill is
+weaning the **shipping guy** onto the Brain — this bridges his gap until T1/T4
+retire the boards. Daniel owes Bill the feasibility answer (Trello attachment
+API via the existing outbox path looks plausible; unverified). **Deliberately
+throwaway** — dies with T4; do not gold-plate.
+
+**Trail**
+- 2026-08-21 · transcript · src bill-2026-08-21#L171 — Doug's ask; "in the meantime" framing; Daniel to check feasibility and get back
+- 2026-08-21 · transcript · src bill-2026-08-21#L175 — per-photo button acceptable; paint-complete/ship photos are the ones that matter; shipping-guy adoption is the motive
 
 ---
 
@@ -510,6 +700,7 @@ its binaries live.
 - 2026-08-06 · decision · src — — collapse ②: P9 folds in; building the submittal viewer separately ships two markup stacks and merges them later at full cost; C3 promoted into the October path
 - 2026-08-08 · decision · src — — all future PDF modal/viewing/review work generalizes the DWL viewer; "needs a brainstorm" retired — the brainstorm happened in production, by the client using it
 - 2026-08-09 · build · src pr#337 — a read-only in-modal PDF viewer (`PdfReadViewer.jsx`) shipped inside the release hub's Attachments tab, with Carmen's drawing review beside it. Not scoped as C3 and not the revision stack — but it is a second viewer in the codebase, which is the exact outcome collapse ② exists to prevent. C3-narrow should start by deciding whether it generalizes the DWL viewer or this one
+- 2026-08-21 · note · src bill-2026-08-21#L69 — demand accumulating while deferred: the field guys asked to **mark up on top of photos**, and Bill wants drawings markable on the Brain from the job log [#L87]. Photo markup is this tool's ground (one markup stack) — do not build it ad hoc inside N9
 
 ### D1 · Projects page
 *W1 · in-progress · due — · deps K2 · owner daniel · src bill-2026-08-06#L802 · upd 2026-08-06*
@@ -712,14 +903,20 @@ separate ticket, and had not arrived as of 2026-08-15.
 **Deliverable is two things:** corrected behavior, **and a legible statement of
 the date rules for distribution back to the client.**
 
-**Banked as working:** the N5 shipping-stage rule (ship planning / ship complete
+**Banked as working:** ~~the N5 shipping-stage rule (ship planning / ship complete
 → dump the color, keep the hard date) is confirmed correct in production
-[#L127]; Bill hedged only about *"some old outliers"* [#L131].
+[#L127]; Bill hedged only about *"some old outliers"* [#L131].~~ **Un-banked
+2026-08-21** — Bill reversed himself (*"I might have given you bad
+information"* [bill-2026-08-21#L109]): the color dump moves to **Start
+Install**, yellow never silently disappears [#L113–L115]. Carried as BUG-11;
+one more reason this audit's deliverable is a written ruleset Bill signs.
 
 **Trail**
 - 2026-08-15 · transcript · src bill-2026-08-15#L115 — installer assignment and stage change both silently create hard dates; two independent reports the same morning
 - 2026-08-15 · transcript · src bill-2026-08-15#L207 — Install Complete = physically installed; drop-ship should read Complete; "Complete = invoice marked off" was discussed and never built
 - 2026-08-15 · decision · src — — merged the date-handling and staging questions into one audit; assigning an installer assigns no date; user agency over automation; client-facing ruleset is a deliverable
+- 2026-08-20 · spec · src fieldops-2026-08-20#§5.4 — an input to the ruleset, in writing: **projected dates carry no color** (not yellow); **yellow = a hard green date now past due**; hard dates rank above projected on the same day. Verify the timeline and job-log renderers against this before the ruleset is distributed
+- 2026-08-21 · decision · src bill-2026-08-21#L109 — second input, and a reversal of a banked rule: hard-date color survives the ship stages and dumps at Start Install; yellow stays until then (EOS-scored, never silently dropped [#L113]); trigger ambiguity (Install Start stage vs `start_install` date) is this audit's to resolve; do NOT touch hard-date semantics until the trigger move is tried [#L115]. Bill also flagged the projected-vs-hard *font* distinction as too subtle once color is gone [#L109] — legibility belongs in the same ruleset
 
 ### AUD2 · Release-number uniqueness ruleset
 *W3 · not-started · class audit · due — · deps — · owner daniel · src bill-2026-08-15#L177 · upd 2026-08-15*
@@ -774,6 +971,22 @@ wider distribution.
 **Trail**
 - 2026-08-15 · transcript · src bill-2026-08-15#L49 — Lexi wants column enrichment + a detail modal on the invoicing surface; notes filed in the bug tracker
 - 2026-08-15 · decision · src — — reframed as the Release Modal: one canonical surface, distributed to other pages, refined in place; invoicing is the first target
+- 2026-08-21 · transcript · src bill-2026-08-21#L143 — sizing note: the modal could be bigger on desktop ("there's more space for it") but **do not disturb the iPad layout** — that's where most usage lives and it "looks really good" there. Photos should render in the modal's preview area rather than a new window [#L69] (also on N9)
+
+### N14 · FC pack on the Job Log modal
+*W3 · not-started · class fix · due — · deps — · owner daniel · src bill-2026-08-21#L87 · upd 2026-08-21*
+
+Effort S–M. The DWL attachments can pull the drawing down from Procore; Bill
+wants the same on the job log modal — *"or if it just automatically did it —
+whatever was uploaded as the FC just runs it"* [#L87]. Purpose is adoption:
+*"get the guys used to staying on the Brain and seeing the drawings there"*,
+with markup-on-the-Brain as the follow-on (C3's ground). The Attachments tab +
+`PdfReadViewer` already exist in the `ReleaseHubModal` (N7/PR #337), so this is
+plumbing the FC pack into a surface that's already built — auto-attach
+preferred over a manual pull.
+
+**Trail**
+- 2026-08-21 · transcript · src bill-2026-08-21#L87 — ask: replicate the DWL Procore pull on the job log, ideally auto-attaching the FC pack; markup to follow
 
 ### BUG-8 · DWL release-number generator skips the archive
 *W3 · built · class fix · due — · deps — · owner daniel · src bill-2026-08-15#L177 · upd 2026-08-15*
@@ -962,7 +1175,16 @@ sending session.
 **The items W3 already carried, unchanged by the 8/15 pass:**
 
 ### N5 · Shipping-stage date discipline
-*W3 · built · due — · deps — · owner daniel · src bill-2026-08-06#L1322 · upd 2026-08-08*
+*W3 · built · due — · deps — · owner daniel · src bill-2026-08-06#L1322 · upd 2026-08-21*
+
+> ⚠️ **The hard-date color half of this rule was reversed by Bill 2026-08-21**
+> — *"I might have given you bad information on where we wanted to change
+> that"* [bill-2026-08-21#L109]. Hard-date color now survives the ship stages
+> and dumps at **Start Install** instead; yellow overdue color must never
+> silently disappear (*"sweeping an issue under the rug"* [#L113] — it's a
+> scored EOS metric). Try the start-install trigger **before** touching
+> hard-date semantics [#L115]. Carried as **BUG-11** in the Fix queue; the
+> formula-date blanking and Paint-Complete intercept are untouched.
 
 Effort M (grew from S). Formula dates blank at ship stages; hard dates wash
 white; Paint Complete + hard date auto-rolls to Ship Planning (generalizes the
@@ -980,6 +1202,7 @@ Implementation: `shipping_stage_date_discipline.py` called from
 - 2026-08-06 · transcript · src bill-2026-08-06#L1322 — confirmed in session: scope is all dates at ship stages, not just ASAP red
 - 2026-08-08 · decision · src — — fork is hard vs formula date; hard wins, color washes white, auto-fill suppressed, Break on by default; Paint Complete intercept widens from ASAP-only to any hard date
 - 2026-08-08 · build · src pr#334 — `shipping_stage_date_discipline.py` + stage intercept + modal Break-default; tests green
+- 2026-08-21 · decision · src bill-2026-08-21#L109 — color-wash trigger reversed by Bill: moves from the ship stages to Start Install; yellow stays visible until then; supersedes the 8/15 "confirmed correct in production" banking → BUG-11
 
 ### N7 · Job log modal merge + redesign
 *W3 · built · due — · deps — · owner daniel · src — · upd 2026-08-09*
@@ -1009,8 +1232,38 @@ door — see C3's trail.
 - 2026-08-09 · build · src pr#337 — both remaining items shipped: Change Log tab (plain-language field diffs by day, undo on the entry) + activity feed; banana icon flow replaced the progress bar via one `StageIconRow` import
 - 2026-08-09 · build · src pr#337 — unplanned: Attachments tab + in-modal read-only PDF viewer (`PdfReadViewer.jsx`), Carmen drawing review inside it, opened to drafters; overlaps C3-narrow
 
-### N9 · Photo watermark + GPS
-*W3 · not-started · due — · deps — · owner daniel · src bill-2026-08-06#notes · upd 2026-08-06*
+### N9 · Photo stamp + GPS
+*W3 · not-started · class build · due — · deps — · owner daniel · src bill-2026-08-06#notes · upd 2026-08-21*
+
+**Elevated 2026-08-21 — Bill wants it "in the short timeline"** [bill-2026-08-21#L67],
+now second in `queue.next`. The 8/21 session pinned the spec down:
+
+- **It's a stamp, not a watermark** — a text string across or on the bottom;
+  placement is free, **consistency is mandatory** [#L73].
+- Content: **job number, release number, stage, who took the photo** [#L73] —
+  and the stage is the **stage at the time of the photo**, not the current one
+  [#L77], precisely so a "paint complete" claim can be checked against an
+  unpainted photo. The 8/6 list also carried **date + GPS**, and Bill pointed
+  back at it rather than replacing it (*"the notes on exactly what we wanted"*
+  [#L67]). **Resolved 2026-08-21 (Daniel): build to the union** — job, release,
+  stage-at-photo-time, who, date, GPS. Six fields is a long string, so the
+  render has to stay legible: that is a layout problem to solve, not a reason
+  to drop a field.
+- Purpose has sharpened: **invoicing evidence — Katie sends stamped photos
+  straight to customers** [#L77], which makes this J1's enabler explicitly.
+- The stage-vs-upload ordering race (photo uploaded before the stage flips):
+  **ship it, then see** — worst case the crews are told "change the stage
+  before you add the photos"; a stage-change **gate** ("did you add the
+  photos?") is the possible future fix [#L81].
+- Rider asks from the same session: photos should render in the modal's
+  existing **preview area** (bigger, contained in-system) with an
+  open-in-new-window escape hatch, and the field guys want to **mark up on top
+  of photos** [#L69] — the markup half is C3 ground (one markup stack, not
+  two), noted on C3's trail.
+
+**Open question 3 (shared-tablet attribution) is now urgent, not tidy** —
+"who took the photo" is on Bill's stamp list and the item is elevated; the
+question gates the render. Ask it before building.
 
 Effort M — the metadata is free, the rendering is not. Stamp uploaded job-log
 photos with date, who took it, current stage, plus GPS. Three of the four
@@ -1037,6 +1290,8 @@ it changes what is rendered onto the image. This is what makes J1 work.
 - 2026-08-06 · note · src — — EXIF test on a real field photo (Pixel 6a): Make/Model/DateTime survived, GPS IFD absent — re-encoded in transit; do not build on EXIF GPS
 - 2026-08-06 · decision · src — — browser geolocation primary, EXIF opportunistic; capture date from EXIF falling back to uploaded_at; provenance recorded per coordinate; denial never blocks upload; cellular-tablet standing purchase spec (company iPads confirmed cellular)
 - 2026-08-06 · question · src — — opened Open question 3: shared-tablet attribution; decide before the watermark is built
+- 2026-08-21 · decision · src bill-2026-08-21#L67 — elevated to the short timeline; stamp-not-watermark, content pinned (job/release/stage-at-photo-time/who), Katie-to-customer invoicing purpose, ship-then-tweak on the ordering race, stage-change photo gate as the future option; in-modal preview + photo-markup rider asks logged
+- 2026-08-21 · decision · src — — stamp field list is the **union** of the 8/6 and 8/21 lists (job, release, stage-at-photo-time, who, date, GPS); Daniel's call — Bill referenced the 8/6 notes rather than superseding them. Legibility of a six-field string is a layout problem, not grounds to cut a field
 
 ### H1 · Polish sweep
 *W3 · not-started · due — · deps N7 · owner daniel · src — · upd 2026-08-06*
@@ -1113,6 +1368,28 @@ which is really a channel question in disguise.
 - 2026-08-15 · transcript · src bill-2026-08-15#L137 — Carmen emails the PM a project/stage/install-date summary and asks what to do
 - 2026-08-15 · transcript · src bill-2026-08-15#L139 — yellow dates are a scored L10/EOS metric; PMs are in the field where in-app notification does not reach
 - 2026-08-15 · decision · src — — deferred pending Bill's channel confirmation; trigger discipline rides along
+- 2026-08-21 · note · src bill-2026-08-21#L113 — the metric's meaning reaffirmed while reversing the color rule: yellow dates must stay visible ("sweeping an issue under the rug" to hide them) — this item's detection input is unaffected by BUG-11's trigger move
+
+### N13 · Carmen prompt library — exposed in-app
+*W4 · not-started · class build · due — · deps — · owner daniel · src bill-2026-08-21#L119 · upd 2026-08-21*
+
+Effort S. Bill independently asked for *"canned prompts for Carmen… a prompt
+library to some extent"* [#L119] — which already exists server-side: Carmen
+routes queries against Daniel's prompt library, each prompt bound to a specific
+tool set (deliberately, for the audit trail once Carmen graduates from reading
+to writing). Agreed in session: **a button inside Carmen chat opening the
+library** (goal + prompt text), visible to anyone with Carmen access — the
+flag-gated handful. Daniel also sends Bill the current library directly.
+
+**Add-a-prompt stays restricted, by Bill's own caution:** a prompt without a
+data path behind it is worthless (*"you can't really add a prompt if we don't
+have the ability to find the information"* [#L125]) — he's hit "I'm not
+programmed to do that yet" already. New-data requests route through Daniel for
+now; self-serve prompt authoring waits until the tool surface is broader.
+
+**Trail**
+- 2026-08-21 · transcript · src bill-2026-08-21#L119 — prompt library asked for; already built server-side; expose read-only in chat
+- 2026-08-21 · decision · src bill-2026-08-21#L125 — add-permission restricted; new-data asks go through Daniel; Daniel to send Bill the current library
 
 ---
 
@@ -1127,7 +1404,9 @@ that lane reopening.
 Each block states its re-check trigger. Also parked without blocks here
 (reasoning retained in `docs/feature-catalog.md`): **D2** personal page ·
 ~~**D4** timeline view~~ *(un-parked 2026-08-15 — dissolved into **T1**)* ·
-**A3** punch list · **A4** lookahead upload + markup ·
+~~**A3** punch list~~ *(un-parked 2026-08-20 — dissolves into **T6**)* ·
+**A4** lookahead upload + markup *(the spec's §5.4 look-ahead attachment is T1
+Phase-B ground; A4's markup half stays parked)* ·
 **F1** meeting extraction bands · **E1–E3** tee-time (**N4 gate cleared
 2026-08-09** — now parked on October scope alone, not on a dependency) · **L1**
 styling v3 (unambiguous: not before October) · **I1** OCIP remainder (argued
@@ -1203,7 +1482,7 @@ not before October.
 
 | ID | Blocked on | Since | The explicit ask |
 |---|---|---|---|
-| **A1** | **BUG-10** *(ours, not Bill's)* | 2026-08-15 | Set `APP_BASE_URL` so the sub invite link resolves. Bill cannot test T&M until a sub is enrolled — *"I still can't get a sub added to it"* [bill-2026-08-15#L145]. **Elevates the moment this lands.** |
+| **A1** | ~~BUG-10~~ **cleared; now deliberately queued behind T1** | 2026-08-15 | BUG-10 landed 2026-08-15 (first real invite send still owed as the acceptance test). Then Bill re-sequenced 2026-08-21: *"still more important to get the scheduling piece for the timeline sorted out first"* [bill-2026-08-21#L169] — a stall by decision, not a blocker. |
 | N11 | bill/yellow-date-channel | 2026-08-15 | Which channel the yellow-date prompt uses — email, in-app, or both |
 | P2 | bill/workflow-template-export | 2026-08-06 | Export or screenshots of the Procore workflow templates (the 8-step, per-PM list) — we are replicating them. **Dormant with W1 from 2026-08-15** |
 | A2 | bill/co-log-excel-and-sample-email | 2026-07-22 | The change order log Excel + one sample CO email |
@@ -1218,7 +1497,9 @@ External dependencies, all Bill's unless noted.
 
 | Owed | Blocks | Since |
 |---|---|---|
-| **Trello phase-1 spec doc** — *"I'm gonna do like a chat this weekend… we should have something for you for early next week"* [#L59, #L263]. Also carries the **sub visibility scope** [#L93] | **Nothing — treated as a gap filler, not a gate** (decided 2026-08-15). T1 proceeds without it; his detail folds in on arrival, backed by his own *"we probably already have pretty good working understanding"* | 2026-08-15 |
+| **Field-ops spec reconciliation** — two threads remain: ① the cover email promises items the doc doesn't contain (mandatory hardware sign-off, safety plan in the work package, shipping photos, "concurrent vouch approval," system-generated MHMW invoice PDF — partly confirmed by Bill's subs-invoice-inside-the-Brain intent [bill-2026-08-21#L57], "Quick Work Authorizations" by name — §11.1's lightweight authorization is the closest match); ② is phase **"A.1"** (sub financial workflow where E should be) a typo or a deliberate elevation behind Phase A? ~~③ Phase-A-first vs T1-first~~ **resolved 2026-08-21: T1 first** [bill-2026-08-21#L169] | T5/T8 shape — not T1's start | 2026-08-20 |
+| **Katie's invoicing-tab feedback** *(from Katie, not Bill)* — she's *"trying to brainstorm what to do with the invoicing tab"* [bill-2026-08-21#§13] | N2b/N12 shape when they start | 2026-08-21 |
+| **Daniel's own notes on the 8/21 items** — to follow, layer onto the digest | Nothing — additive | 2026-08-21 |
 | **T&M change notes** — *"if I can get you something today"*; originals lost [#L155] | A1's shape (not its start — that's BUG-10) | 2026-08-15 |
 | **Katie's staging feedback** *(from Katie, not Bill)* | An input to AUD1, not a gate | 2026-08-15 |
 | **Distribution channel for the yellow-date prompt** — email, in-app, or both | N11 | 2026-08-15 |
@@ -1240,7 +1521,10 @@ window is gone, so the question is void. Nothing was decided; it stopped being a
 question.
 
 **Delivered since 2026-08-06:** the EOS metrics list — walked 2026-08-09, N8
-built against it.
+built against it. **The Trello phase-1 spec doc** — the top Owed row since
+2026-08-15, delivered 2026-08-20 as the Manus-prepared field-ops build package
+carrying the sub visibility scope [#L93] as promised; digested into T3, T5–T8,
+Open question 4, and the reconciliation row above.
 
 ---
 
@@ -1271,13 +1555,26 @@ remain:
    being tagged against a meaning nobody has fixed. Every day this stays open
    is rows to re-read later.
 3. **Shared-tablet photo attribution** *(source §10.3 — decide before N9
-   builds)*. Gates **N9**. The watermark stamps *who took the photo* from the
+   builds)*. Gates **N9** — **and N9 was elevated to the short timeline
+   2026-08-21 with "who took the photo" on Bill's stamp list
+   [bill-2026-08-21#L73], so this is now the first question to ask, not a tidy
+   one.** The stamp renders *who took the photo* from the
    logged-in Brain user; on a shared company iPad under a generic login every
    photo carries the same name — exactly the metadata Katie needs, made
    worthless. Options: individual logins on shared tablets · a "who is this"
    picker at capture · tablet photos carry no attribution while phone photos
    do. Changes what is rendered onto the image, so it precedes the build.
    **Answers: Bill.**
+4. **Punch items vs. completion, and the invoice holdback** *(source
+   fieldops-2026-08-20 §7.2 / §11.2 — opened 2026-08-20)*. Gates **T8's**
+   validation rules and T5/T6's completion semantics. The spec's §17 declares
+   every open decision resolved, but two of its own passages still point at the
+   deleted open-decisions section: whether open punch items **block** a final
+   installation-complete mark or allow a documented partial-completion approval
+   [§7.2], and how the **punch-work holdback** on a sub invoice is computed and
+   released when installation isn't 100% [§11.2]. Both are policy, not build
+   calls. **Answers: Bill.** Rides the field-ops reconciliation conversation
+   (Owed).
 
 ---
 
@@ -1322,6 +1619,11 @@ Append-only log — never edited, never pruned.
 - 2026-08-15 · **Calibri** · standard — Calibri is the MHMW font standard; belongs in the design docs, not here. Bill's "for other customers too / your future builds" [#L105] is his suggestion, not adopted as a cross-project default. src bill-2026-08-15#L105
 - 2026-08-15 · **Carmen invites** · approved — invite mail sends as Carmen [#L89], now covering staff onboarding as well as subs. Wider flag from Daniel: Carmen is the primary email inlet **and** outlet for external data. Thread to reconcile later: `bb@mhmw.com` owns the ingestion inlet today, and the invite design explicitly rejected sending *as* bb@ because replies hit those pollers. src bill-2026-08-15#L89
 - 2026-08-15 · **Procore AR / 3D views · Brain 2.0 side hustle** · dropped — raised in session [#L231, #L241], judged not relevant to MHMW work. No item, no trail. src —
+- 2026-08-20 · **field-ops spec** · delivered — the Owed Trello phase-1 spec arrived (Manus-prepared, `MHMW_Brain_Trello_Replacement_Subcontractor_Field_Operations_Build_Package.md`). T1–T4/A1 confirmed as scoped; **T5–T8 opened** (field foundation · punch/issues/Safety Hold · compliance profiles · sub authorization + invoicing); T3's walls written; AUD1 gains the date-color rule in writing (projected = no color, yellow = overdue hard date); **A3 dissolves into T6**. Opened Open question 4 (punch-vs-complete + invoice holdback — the spec's "§17 all resolved" claim is wrong for these two) and the reconciliation Owed row (cover-email items absent from the doc; the "A.1" phase label; Phase-A-first vs T1-first). Queue unchanged — T1 stays `now` pending that conversation. src fieldops-2026-08-20
+- 2026-08-20 · question · does the spec change W5's order? → **not yet** — its Phase-A-first sequencing and "A.1" elevation are treated as inputs to a Bill conversation, not decisions; T1 spoken priority [bill-2026-08-15#L75] stands until then. src —
+- 2026-08-21 · question · Phase-A-first or T1-first? → **T1 first, from Bill directly** — the timeline scheduling piece before everything, T&M (A1) deliberately stalled behind it. Closes thread ③ of the reconciliation row; threads ①/② remain. src bill-2026-08-21#L169
+- 2026-08-21 · **standup digest** — pre-Alaska session folded in: **T9 opened** (release splicing — punch/remaining work spawns a fractional field work ticket with residual invoiceable value), **T10 opened** (interim job-log-photos→Trello bridge, Doug's ask, dies with T4), **N13 opened** (Carmen prompt library exposed in-app), **N14 opened** (FC pack on the job log modal); **N9 elevated** to `queue.next` with its spec pinned (stamp text: job/release/stage-at-photo-time/who; Katie-to-customer purpose); **punch/field issues anchor to the release** (T6); **subs invoice inside the Brain** hardened (T8); **N5's color-dump rule reversed** → BUG-11 (dump at Start Install, yellow never silently dropped), plus BUG-12 (Carmen lookahead window), BUG-13 (backspace), BUG-14 (iPad rotation state). Mobile target: iPad first. src bill-2026-08-21
+- 2026-08-21 · question · punch and field issues — project or release? → **release**, always; punch on a finished release spawns a spliced work ticket (T9). src bill-2026-08-21#L45
 
 ---
 
@@ -1329,6 +1631,8 @@ Append-only log — never edited, never pruned.
 
 | Slug | Path | Role |
 |---|---|---|
+| bill-2026-08-21 | `~/Desktop/Transcripts/MHMW/Bill-8-21-2026-clean.md` | Thursday standup (Bill), pre-Alaska — T1-first confirmed, punch→release + splicing, N9 elevated + spec'd, N5 color rule reversed, prompt library, iPad-first. `#LNNN` anchors are line numbers in the **cleaned** transcript (raw `Bill-8-21-2026.txt` is too interleaved to cite). Findings: `processed/Bill-8-21-2026.md`. Daniel's own notes to follow |
+| fieldops-2026-08-20 | `~/Downloads/MHMW_Brain_Trello_Replacement_Subcontractor_Field_Operations_Build_Package.md` | The delivered Trello-replacement / subcontractor field-ops functional spec (Manus-prepared, Aug 2026) — the Owed W5 written scope. `#§N` anchors are its section numbers. **Lives in Downloads — fragile; move beside the transcripts if it's to be a durable citation source.** Its own cited sources (`BRAIN_KNOWLEDGE_BASE.md`, `07_TM_Module.md`, …) are the Procore-replacement package, also outside this repo |
 | bill-2026-08-15 | `~/Desktop/Transcripts/MHMW/Bill-8-15-2026-clean.md` | Friday standup (Bill) — **the reset**: Procore renewed, Trello promoted. `#LNNN` anchors are line numbers in the **cleaned** transcript, not the raw (`Bill-8-15-2026.txt` is too interleaved to cite). Findings: `processed/Bill-8-15-2026.md` |
 | bill-2026-08-06 | `~/Desktop/Transcripts/MHMW/processed/Bill-8-6-2026.md` | Submittal-system working session (Bill, Colton) — primary transcript; `#LNNN` anchors are its line numbers |
 | bill-2026-07-22 | `~/Desktop/Transcripts/MHMW/processed/Bill-7-22-2026.md` | Ops/roadmap review — the October deadline surfaces; A2, C3-origin, N8, J1-drop |
