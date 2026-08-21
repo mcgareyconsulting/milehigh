@@ -28,6 +28,16 @@ logger = get_logger(__name__)
 DONE_STATES = {"done", "call_ended", "analysis_done"}
 FAILED_STATES = {"fatal", "media_expired"}
 
+# Transcription language, pinned rather than autodetected: an unset `language_code`
+# leaves Recall detecting per meeting, and it mis-detected a production standup as
+# Portuguese and translated a line of it. Every MHMW meeting is in English.
+# `prioritize_accuracy` is Recall's current default for recallai_streaming and is
+# stated explicitly so a change on their side can't silently move us —
+# `prioritize_low_latency` would also force `language_code` to "en", but it trades
+# away the accuracy these transcripts are cited from.
+TRANSCRIPT_MODE = "prioritize_accuracy"
+TRANSCRIPT_LANGUAGE = "en"
+
 
 class RecallError(RuntimeError):
     """Recall is misconfigured or returned an error / not-ready response."""
@@ -68,7 +78,16 @@ def dispatch_bot(meeting_url, *, bot_name="Carmen Miranda", join_at=None):
         # realtime_endpoints — the finished transcript still lands on the recording
         # and we PULL it post-meeting. Swap to {"meeting_captions": {}} for the free,
         # platform-captions path if transcription cost matters more than reliability.
-        "recording_config": {"transcript": {"provider": {"recallai_streaming": {}}}},
+        "recording_config": {
+            "transcript": {
+                "provider": {
+                    "recallai_streaming": {
+                        "mode": TRANSCRIPT_MODE,
+                        "language_code": TRANSCRIPT_LANGUAGE,
+                    }
+                }
+            }
+        },
     }
     if join_at is not None:
         # Recall expects ISO-8601 UTC; our datetimes are naive UTC, so append Z.
