@@ -63,9 +63,9 @@ describe('BBChatWidget', () => {
         const grip = screen.getByRole('separator', { name: 'Resize Carmen chat' });
         const startH = parseFloat(panel.style.height) || 420;
 
-        fireEvent.pointerDown(grip, { clientX: 500, clientY: 400, button: 0 });
-        fireEvent.pointerMove(document, { clientX: 500, clientY: 480 });
-        fireEvent.pointerUp(document);
+        fireEvent.mouseDown(grip, { clientX: 500, clientY: 400, button: 0 });
+        fireEvent.mouseMove(document.body, { clientX: 500, clientY: 520, buttons: 1 });
+        fireEvent.mouseUp(document.body);
 
         expect(parseFloat(panel.style.height)).toBeGreaterThan(startH);
     });

@@ -151,8 +151,8 @@ function clampSize({ w, h }, anchor = fallbackAnchor()) {
     const maxW = Math.max(MIN_W, vw - anchor.right - VIEW_MARGIN);
     const maxH = Math.max(MIN_H, vh - anchor.top - VIEW_MARGIN);
     return {
-        w: clamp(w, MIN_W, maxW),
-        h: clamp(h, MIN_H, maxH),
+        w: clamp(Number.isFinite(w) ? w : MIN_W, MIN_W, maxW),
+        h: clamp(Number.isFinite(h) ? h : MIN_H, MIN_H, maxH),
     };
 }
 
@@ -180,6 +180,7 @@ function ResizeHandles({ active, onBegin, onSnapHeight, onSnapMax }) {
                 data-carmen="resize-s"
                 title="Drag to change height · double-click to fill"
                 onPointerDown={onBegin('resize-s')}
+                onMouseDown={onBegin('resize-s')}
                 onDoubleClick={(e) => { e.preventDefault(); onSnapHeight(); }}
                 className={`${edge} left-8 right-0 bottom-0 h-2 cursor-ns-resize rounded-br-2xl`}
             />
@@ -187,12 +188,14 @@ function ResizeHandles({ active, onBegin, onSnapHeight, onSnapMax }) {
                 aria-hidden="true"
                 title="Drag to change width"
                 onPointerDown={onBegin('resize-w')}
+                onMouseDown={onBegin('resize-w')}
                 className={`${edge} top-0 bottom-8 left-0 w-2 cursor-ew-resize rounded-tl-2xl`}
             />
             <div
                 data-carmen="resize-sw"
                 title="Drag to resize · double-click to fill"
                 onPointerDown={onBegin('resize-sw')}
+                onMouseDown={onBegin('resize-sw')}
                 onDoubleClick={(e) => { e.preventDefault(); onSnapMax(); }}
                 className={`absolute bottom-0 left-0 z-20 h-8 w-8 cursor-nesw-resize touch-none rounded-bl-2xl transition-shadow ${cornerL}`}
             />
@@ -271,10 +274,11 @@ export default function BBChatWidget({ enabled, isAdmin, open = false, onClose, 
         const onMove = (e) => {
             const d = dragRef.current;
             if (!d) return;
-            e.preventDefault();
+            if (e.cancelable) e.preventDefault();
             const box = anchorBoxRef.current;
             const dx = e.clientX - d.startX;
             const dy = e.clientY - d.startY;
+            if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
             let next = d.orig;
             if (d.mode === 'resize-s') {
                 next = clampSize({ w: d.orig.w, h: d.orig.h + dy }, box);
@@ -297,13 +301,18 @@ export default function BBChatWidget({ enabled, isAdmin, open = false, onClose, 
             setResizing(false);
             document.body.classList.remove('carmen-resizing');
         };
-        document.addEventListener('pointermove', onMove, { passive: false });
-        document.addEventListener('pointerup', onUp);
-        document.addEventListener('pointercancel', onUp);
+        const opts = { capture: true, passive: false };
+        window.addEventListener('pointermove', onMove, opts);
+        window.addEventListener('mousemove', onMove, opts);
+        window.addEventListener('pointerup', onUp, opts);
+        window.addEventListener('mouseup', onUp, opts);
+        window.addEventListener('pointercancel', onUp, opts);
         return () => {
-            document.removeEventListener('pointermove', onMove);
-            document.removeEventListener('pointerup', onUp);
-            document.removeEventListener('pointercancel', onUp);
+            window.removeEventListener('pointermove', onMove, opts);
+            window.removeEventListener('mousemove', onMove, opts);
+            window.removeEventListener('pointerup', onUp, opts);
+            window.removeEventListener('mouseup', onUp, opts);
+            window.removeEventListener('pointercancel', onUp, opts);
             document.body.classList.remove('carmen-resizing');
         };
     }, []);
@@ -331,15 +340,24 @@ export default function BBChatWidget({ enabled, isAdmin, open = false, onClose, 
     }, [open, onClose, anchorRef]);
 
     const beginResize = (mode) => (e) => {
-        if (e.button != null && e.button !== 0) return;
-        e.preventDefault();
+        if (e.button === 2) return;
+        if (e.cancelable) e.preventDefault();
         e.stopPropagation();
-        e.currentTarget.setPointerCapture?.(e.pointerId);
         const rect = panelRef.current?.getBoundingClientRect();
         const orig = (rect && rect.width > 0 && rect.height > 0)
             ? { w: rect.width, h: rect.height }
             : sizeRef.current;
-        dragRef.current = { mode, startX: e.clientX, startY: e.clientY, orig };
+        dragRef.current = {
+            mode,
+            startX: e.clientX,
+            startY: e.clientY,
+            orig,
+        };
+        try {
+            e.currentTarget.setPointerCapture?.(e.pointerId);
+        } catch {
+            /* jsdom throws on setPointerCapture without a real pointer id */
+        }
         setResizing(true);
         document.body.classList.add('carmen-resizing');
     };
