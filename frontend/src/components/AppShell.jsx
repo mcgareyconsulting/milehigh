@@ -4,7 +4,7 @@
  * purpose: Wraps all authenticated pages with nav chrome (top header by default; optional left rail at ≥1440px via Left Sidebar Mode), theme toggle, location controls, and notification bell. Collapses nav into a slide-in drawer below the 1440px breakpoint for iPad (incl. iPad Pro) and phone.
  * exports:
  *   AppShell: Layout shell with nav chrome, renders child routes via Outlet
- * imports_from: [react, react-router-dom, ../utils/auth, ../context/ThemeContext, ../context/LocationContext, ../context/ReleasesContext, ./QuickSearch, ./NotificationBell, ./MobileNavDrawer, ./Rail]
+ * imports_from: [react, react-router-dom, ../utils/auth, ../context/ThemeContext, ../context/LocationContext, ../context/ReleasesContext, ./QuickSearch, ./NotificationBell, ./MobileNavDrawer, ./Rail, ./BBChatWidget]
  * imported_by: [frontend/src/App.jsx]
  * invariants:
  *   - Admin-only nav items are gated on checkAuth result
@@ -14,8 +14,10 @@
  *   - Under 1440px always uses top bar + drawer regardless of isSidebarMode.
  *   - In Left Sidebar Mode at ≥1440px the notification control is the floating corner pod
  *     on <main> (not a rail row); topbar mode keeps the header bell. Only one mounts at a time.
+ *   - Carmen's circular CM launcher sits to the right of the notification bell
+ *     (header or upper-right pod); the chat drops down from that bubble.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { logout, checkAuth, userCanAccessInvoicing } from '../utils/auth';
 import { useTheme } from '../context/ThemeContext';
@@ -25,7 +27,7 @@ import QuickSearch from './QuickSearch';
 import NotificationBell from './NotificationBell';
 import MobileNavDrawer from './MobileNavDrawer';
 import Rail from './Rail';
-import BBChatWidget from './BBChatWidget';
+import BBChatWidget, { CarmenButton } from './BBChatWidget';
 import PatchNotesModal from './PatchNotesModal';
 import { CURRENT_VERSION } from '../data/patchNotes';
 
@@ -42,6 +44,9 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
   const [canSeeReport, setCanSeeReport] = useState(false);
   const [canUseBBChat, setCanUseBBChat] = useState(false);
   const [showPatchNotes, setShowPatchNotes] = useState(false);
+  const [carmenOpen, setCarmenOpen] = useState(false);
+  const carmenBtnRef = useRef(null);
+  const toggleCarmen = () => setCarmenOpen((o) => !o);
   // Rail chrome only applies at ≥1440px (matches AppShell header/rail CSS). Used so we
   // mount exactly one NotificationBell — never a hidden topbar instance polling in parallel
   // with the floating pod.
@@ -121,7 +126,7 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
     // `app-shell-topbar` keeps --app-chrome-h reserved whenever the top bar is
     // present at ≥1440px (default layout, subcontractors, or sidebar mode off).
     // Only sidebar mode on wide screens drops the bar and zeros chrome height.
-    <div className={`app-shell ${useRail ? '' : 'app-shell-topbar'} flex w-full min-h-screen bg-canvas`}>
+    <div className={`app-shell ${useRail ? '' : 'app-shell-topbar'} ${canUseBBChat ? 'app-shell-carmen' : ''} flex w-full min-h-screen bg-canvas`}>
       {/* Left rail — optional desktop nav (Left Sidebar Mode). Only mounts when
           the user opts in; still hidden under 1440px so iPad keeps the drawer. */}
       {useRail && (
@@ -227,8 +232,20 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
             </>
           )}
 
-          {/* Notification bell — topbar / narrow. Wide Left Sidebar Mode uses the pod on <main>. */}
-          {showTopbarBell && <NotificationBell />}
+          {/* Bell then CM — upper-right chrome. Wide Left Sidebar Mode uses the pod on <main>. */}
+          {showTopbarBell && (
+            <span className="inline-flex items-center gap-2">
+              <NotificationBell />
+              {canUseBBChat && (
+                <CarmenButton
+                  ref={carmenBtnRef}
+                  open={carmenOpen}
+                  onClick={toggleCarmen}
+                  size={36}
+                />
+              )}
+            </span>
+          )}
 
           {/* Theme picker (always visible) */}
           <div className="relative" data-theme-menu>
@@ -353,8 +370,16 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
       <main className="relative flex-1 w-full min-h-0 flex flex-col">
         {showNotifPod && (
           <div className="absolute top-2.5 right-3 z-50 pointer-events-none">
-            <div className="pointer-events-auto">
+            <div className="pointer-events-auto flex items-center gap-2">
               <NotificationBell variant="pod" />
+              {canUseBBChat && (
+                <CarmenButton
+                  ref={carmenBtnRef}
+                  open={carmenOpen}
+                  onClick={toggleCarmen}
+                  size={40}
+                />
+              )}
             </div>
           </div>
         )}
@@ -362,8 +387,16 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
       </main>
       </div>
 
-      {/* Floating read-only data assistant — flag-gated per user */}
-      {isAuthenticated && <BBChatWidget enabled={canUseBBChat} isAdmin={isAdmin} />}
+      {/* Carmen chat modal — launcher lives next to the notification bell */}
+      {isAuthenticated && (
+        <BBChatWidget
+          enabled={canUseBBChat}
+          isAdmin={isAdmin}
+          open={carmenOpen}
+          onClose={() => setCarmenOpen(false)}
+          anchorRef={carmenBtnRef}
+        />
+      )}
     </div>
   );
 }

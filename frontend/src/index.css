@@ -172,8 +172,12 @@ body>#root>div>div {
 @media (min-width: 1440px) {
   .app-shell:not(.app-shell-topbar) {
     --app-chrome-h: 0px;
-    /* Compact circular pod (~40px) + a little air so badges/hang styles clear. */
+    /* Compact circular pod (~40px) + a little air so badges/hang styles clear.
+       .app-shell-carmen adds the CM launcher beside the pod. */
     --notif-pod-gutter: 52px;
+  }
+  .app-shell.app-shell-carmen:not(.app-shell-topbar) {
+    --notif-pod-gutter: 104px;
   }
 }
 
@@ -182,6 +186,23 @@ body>#root>div>div {
    otherwise sit under the absolute top-right pill. */
 .notif-pod-reserve {
   margin-right: var(--notif-pod-gutter);
+}
+
+/* Carmen chat: drop down from the upper-right CM bubble. */
+@keyframes carmen-drop {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.carmen-drop {
+  transform-origin: top right;
+  animation: carmen-drop 180ms ease-out;
+}
+.carmen-resizing {
+  cursor: inherit;
+  user-select: none;
+}
+.carmen-resizing * {
+  user-select: none !important;
 }
 
 /* Custom scrollbar */
