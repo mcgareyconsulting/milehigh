@@ -10,6 +10,7 @@ imported_by: [app.brain.lookahead.artifacts, tests]
 invariants:
   - Deterministic for a fixed schedule payload.
   - Does not invent dates; draws only bars present on the schedule model.
+  - Gantt x-axis start is the declared window start; end may extend past the window.
   - ROW_H must leave room for code + title + stage without adjacent-row overlap.
   - Gantt-only output — no multi-page date appendix.
   - Every page shows the phase color legend (Drafting / Fab / Paint / Ship / Install).
@@ -97,7 +98,11 @@ def _parse_date(value) -> Optional[date]:
 
 
 def _chart_range(schedule: dict) -> tuple[date, date]:
-    """X-axis covers the declared window expanded to include every phase bar date."""
+    """X-axis starts at the declared window; end expands to later phase bar dates.
+
+    Past-dated bars stay on the schedule (window is a viewport, not a row filter)
+    but must not rewind start. Bars that run past the window still extend end.
+    """
     window = schedule.get("window") or {}
     start = _parse_date(window.get("start")) or date.today()
     end = _parse_date(window.get("end")) or (start + timedelta(days=21))
@@ -105,18 +110,14 @@ def _chart_range(schedule: dict) -> tuple[date, date]:
         for p in row.get("phases") or []:
             s = _parse_date(p.get("start"))
             e = _parse_date(p.get("end"))
-            if s and s < start:
-                start = s
             if e and e > end:
                 end = e
             if s and s > end:
                 end = s
-            if e and e < start:
-                start = e
     if end < start:
         end = start
-    # Pad one day on each side for readability.
-    return start - timedelta(days=1), end + timedelta(days=1)
+    # One-day pad past end for readability. Do not pad before the window start.
+    return start, end + timedelta(days=1)
 
 
 def _days_between(a: date, b: date) -> int:
@@ -331,8 +332,10 @@ def _draw_phase_bar(c, left, y, day_w, range_start, total_days, phase):
         return
     s = max(start, range_start)
     e = min(end, chart_end)
+    if e < s:
+        return
 
-    x0 = left + _days_between(range_start, s) * day_w
+    x0 = left + max(0, _days_between(range_start, s)) * day_w
     # Inclusive end day → at least one day width
     span_days = max(1, _days_between(s, e) + 1)
     w = span_days * day_w

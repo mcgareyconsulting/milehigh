@@ -4,7 +4,7 @@ from io import BytesIO
 
 from pypdf import PdfReader
 
-from app.brain.lookahead.export_pdf import render_schedule_pdf
+from app.brain.lookahead.export_pdf import _chart_range, render_schedule_pdf
 from app.brain.lookahead.schedule_builder import build_lookahead_schedule
 from app.brain.lookahead.artifacts import save_lookahead_pdf, read_lookahead_pdf, load_meta
 from app.models import Releases, db
@@ -146,6 +146,47 @@ def test_dense_schedule_paginates_gantt_without_crashing():
         page_text = page.extract_text() or ""
         assert "Phase colors" in page_text
         assert "Installation" in page_text
+
+
+def test_chart_range_does_not_rewind_start_for_past_bars():
+    """A still-open bar dated months ago must not pull the Gantt axis before the window."""
+    window_start = date(2026, 8, 18)
+    window_end = date(2026, 9, 8)
+    schedule = {
+        "found": True,
+        "job": 500,
+        "project_name": "Novel Flatirons",
+        "window": {
+            "start": window_start.isoformat(),
+            "end": window_end.isoformat(),
+            "weeks": 3,
+        },
+        "generated_on": window_start.isoformat(),
+        "rows": [{
+            "kind": "drafting",
+            "code": "500-DRR-400",
+            "title": "Open package",
+            "stage_label": "Open",
+            "phases": [{
+                "phase": "drafting",
+                "start": "2026-05-12",
+                "end": "2026-05-12",
+                "date_source": "hard",
+            }],
+        }],
+        "summary": {},
+        "assumptions": {},
+        "flags": [],
+    }
+
+    start, end = _chart_range(schedule)
+    assert start >= window_start
+    assert end >= window_end
+    # Viewport clamp only — the past-dated row stays on the schedule.
+    assert schedule["rows"][0]["phases"][0]["start"] == "2026-05-12"
+
+    pdf_bytes = render_schedule_pdf(schedule)
+    assert pdf_bytes[:4] == b"%PDF"
 
 
 def test_render_empty_schedule_still_pdf():
