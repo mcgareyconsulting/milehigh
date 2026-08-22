@@ -367,14 +367,14 @@ class TestAsapAutoAdvance:
 
 class TestAsapDropOnCompletion:
     def test_ship_complete_clears_flag_and_keeps_date(self, app):
-        """Reaching Ship Complete clears the ASAP flag but leaves the hard
+        """Reaching Install Start clears the ASAP flag but leaves the hard
         start_install / comp_eta set at ASAP-flag time untouched."""
         from datetime import date
 
         with app.app_context():
             r = _make_release(
                 1, "A",
-                stage="Ship Planning",
+                stage="Ship Complete",
                 fab_order=2,
                 start_install_asap=True,
                 start_install=date(2026, 7, 1),
@@ -387,29 +387,77 @@ class TestAsapDropOnCompletion:
             from app.brain.job_log.features.stage.command import UpdateStageCommand
             patches = _stage_command_patches()
             with patches[0], patches[1], patches[2]:
-                UpdateStageCommand(job_id=1, release="A", stage="Ship Complete").execute()
+                UpdateStageCommand(job_id=1, release="A", stage="Install Start").execute()
 
             db.session.refresh(r)
-            assert r.stage == "Ship Complete"
-            # ASAP drop: the rush marker goes, the hard date stays. BUG-11: the date is
-            # still COLOURED here (green, or yellow if overdue) — it only goes neutral
-            # once the release reaches Install Start.
+            assert r.stage == "Install Start"
+            # The rush marker goes and the colour dumps together — same trigger — while
+            # the date itself is kept.
             assert r.start_install_asap is False
             assert r.start_install == date(2026, 7, 1)
             assert r.comp_eta == date(2026, 7, 3)
             assert r.start_install_formulaTF is False
-            assert r.start_install_no_color is False
+            assert r.start_install_no_color is True
 
             # A child event records the ASAP drop, linked to the stage event, with no date.
             stage_event = ReleaseEvents.query.filter_by(action="update_stage").one()
             drop = [
                 e for e in ReleaseEvents.query.all()
                 if isinstance(e.payload, dict)
-                and e.payload.get("reason") == "asap_dropped_on_ship_complete"
+                and e.payload.get("reason") == "asap_dropped_on_install_start"
             ]
             assert len(drop) == 1
             assert drop[0].payload["parent_event_id"] == stage_event.id
             assert "start_install" not in drop[0].payload
+
+    def test_asap_survives_the_ship_stages(self, app):
+        """ASAP red rides through shipping — it lets go only when install starts."""
+        from datetime import date
+
+        with app.app_context():
+            r = _make_release(
+                1, "A",
+                stage="Store at MHMW",
+                fab_order=2,
+                start_install_asap=True,
+                start_install=date(2026, 7, 1),
+                start_install_formulaTF=False,
+            )
+            db.session.commit()
+
+            from app.brain.job_log.features.stage.command import UpdateStageCommand
+            for next_stage in ("Ship Planning", "Ship Complete"):
+                patches = _stage_command_patches()
+                with patches[0], patches[1], patches[2]:
+                    UpdateStageCommand(job_id=1, release="A", stage=next_stage).execute()
+                db.session.refresh(r)
+                assert r.start_install_asap is True, next_stage
+                assert r.start_install_no_color is False, next_stage
+
+    def test_asap_without_hard_date_still_drops_at_install_start(self, app):
+        """The colour dump no-ops without a hard date, so the ASAP drop stands alone."""
+        with app.app_context():
+            r = _make_release(
+                1, "A",
+                stage="Ship Complete",
+                fab_order=2,
+                start_install_asap=True,
+                start_install=None,
+                start_install_formulaTF=True,
+            )
+            db.session.commit()
+
+            from app.brain.job_log.features.stage.command import UpdateStageCommand
+            patches = _stage_command_patches()
+            with patches[0], patches[1], patches[2]:
+                result = UpdateStageCommand(
+                    job_id=1, release="A", stage="Install Start"
+                ).execute()
+
+            db.session.refresh(r)
+            assert r.start_install_asap is False
+            assert result.extras.get("asap_dropped") is True
+            assert result.extras.get("dates_washed") is None
 
     def test_non_asap_reaching_ship_complete_is_untouched(self, app):
         with app.app_context():
@@ -434,7 +482,7 @@ class TestAsapDropOnCompletion:
             assert r.start_install_formulaTF is False
             assert not any(
                 isinstance(e.payload, dict)
-                and e.payload.get("reason") == "asap_dropped_on_ship_complete"
+                and e.payload.get("reason", "").startswith("asap_dropped")
                 for e in ReleaseEvents.query.all()
             )
 

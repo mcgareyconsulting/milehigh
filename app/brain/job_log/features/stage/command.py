@@ -12,7 +12,7 @@ invariants:
   - Setting stage='Complete' cascades job_comp='X'; leaving Complete clears job_comp='X'
   - Paint Complete + hard start_install auto-rolls to Ship Planning (N5; generalizes ASAP intercept)
   - Ship Planning / Ship Complete blank stale formula dates; a hard date keeps its color there
-  - Install Start dumps a hard date's color, keeping the date (BUG-11)
+  - Install Start dumps a hard date's color, keeping the date, and drops the ASAP flag (BUG-11)
   - Deduplicated events raise ValueError (event_exists); caller decides whether to treat as success
   - Scheduling recalculation failure is logged but does not roll back the update
 """
@@ -28,6 +28,7 @@ from app.brain.job_log.features.fab_order.tier import apply_fab_order_for_stage
 from app.brain.job_log.features.start_install.neutralize_install_date_cascade import neutralize_install_date_cascade
 from app.brain.job_log.features.start_install.shipping_stage_date_discipline import (
     apply_shipping_stage_date_discipline,
+    is_at_or_past_color_dump,
 )
 
 logger = get_logger(__name__)
@@ -108,7 +109,7 @@ class UpdateStageCommand:
     undone_event_id: Optional[int] = None
 
     def execute(self) -> StageUpdateResult:
-        from app.api.helpers import get_stage_group_from_stage, STAGE_PROGRESSION_RANK
+        from app.api.helpers import get_stage_group_from_stage
 
         job_record: Releases = Releases.resolve(self.job_id, self.release)
         if not job_record:
@@ -206,15 +207,17 @@ class UpdateStageCommand:
 
         extras: dict = {}
 
-        # ASAP drop on completion: once an ASAP release reaches Ship Complete or any
-        # later stage, it is no longer a rush, so clear the ASAP flag. The start_install /
-        # comp_eta set at ASAP-flag time (and any subsequent mirror-card tweak) are LEFT
-        # intact — the PM owns the install date from then on. Hold (rank 99) is excluded.
-        SHIP_COMPLETE_RANK = STAGE_PROGRESSION_RANK['Ship Complete']
-        new_rank = STAGE_PROGRESSION_RANK.get(self.stage, -1)
+        # ASAP drop: once an ASAP release reaches Install Start (or later) it is no
+        # longer a rush, so clear the ASAP flag. This shares BUG-11's trigger — ASAP red
+        # is a colour, and every colour now rides through the ship stages and lets go
+        # when install actually begins. Hold (rank 99) is excluded.
+        # The start_install / comp_eta set at ASAP-flag time (and any subsequent
+        # mirror-card tweak) are LEFT intact — the PM owns the install date from then on.
+        # Runs before the colour dump below, which then sees ASAP already clear; for a
+        # release with no hard date the dump no-ops and this is the only thing that fires.
         if (
             bool(getattr(job_record, 'start_install_asap', False))
-            and SHIP_COMPLETE_RANK <= new_rank < 99
+            and is_at_or_past_color_dump(self.stage)
         ):
             job_record.start_install_asap = False
             JobEventService.create_and_close(
@@ -224,7 +227,7 @@ class UpdateStageCommand:
                     'field': 'start_install_asap',
                     'old_value': True,
                     'new_value': False,
-                    'reason': 'asap_dropped_on_ship_complete',
+                    'reason': 'asap_dropped_on_install_start',
                     'parent_event_id': event.id,
                 },
             )
