@@ -11,7 +11,8 @@ invariants:
   - fab_order re-tiering is delegated to features/fab_order/tier.py, shared with the Trello sync and job_comp paths
   - Setting stage='Complete' cascades job_comp='X'; leaving Complete clears job_comp='X'
   - Paint Complete + hard start_install auto-rolls to Ship Planning (N5; generalizes ASAP intercept)
-  - Ship Planning / Ship Complete apply N5 date discipline (formula blank or hard-date wash)
+  - Ship Planning / Ship Complete blank stale formula dates; a hard date keeps its color there
+  - Install Start dumps a hard date's color, keeping the date (BUG-11)
   - Deduplicated events raise ValueError (event_exists); caller decides whether to treat as success
   - Scheduling recalculation failure is logged but does not roll back the update
 """
@@ -298,9 +299,11 @@ class UpdateStageCommand:
             ):
                 extras['hard_date_cleared'] = True
 
-        # N5 shipping-stage date discipline: at Ship Planning / Ship Complete, blank
-        # stale formula dates (locked against re-estimation) or wash hard-date color.
-        # Independent of the complete-zone job_comp cascade above.
+        # N5 late-stage date discipline: blank stale formula dates at Ship Planning /
+        # Ship Complete, and dump a hard date's color at Install Start (BUG-11 — the
+        # stage arriving, not a start_install date being set). Independent of the
+        # complete-zone job_comp cascade above, which stays as the backstop for a
+        # release that jumps straight to Install Complete.
         shipping_extras = apply_shipping_stage_date_discipline(
             job_record,
             parent_event_id=event.id,

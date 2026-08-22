@@ -19,6 +19,7 @@ import { StartInstallDateModal } from './StartInstallDateModal';
 import { jobsApi } from '../services/jobsApi';
 import { setAsapAndAssign } from '../utils/asap';
 import { formatDateShort } from '../utils/formatters';
+import { isAtOrPastColorDump } from '../constants/stages';
 
 export default function StartInstallEditor({
     row,
@@ -34,12 +35,14 @@ export default function StartInstallEditor({
     const value = row['Start install'];
 
     const stage = row['Stage'] ?? row.stage;
-    const atShippingStage = stage === 'Ship Planning' || stage === 'Ship Complete';
-    // N5: shipping stages never show ASAP red / hard-date green-yellow.
-    const isAsap = !atShippingStage && row['start_install_asap'] === true;
-    // A no-color date (shipping wash / complete-zone neutralize) shows the date plainly —
+    // BUG-11: colour dumps at the Install Start STAGE, not at the ship stages and not
+    // when a date is set. Mirrors the backend so an optimistic save reads right before
+    // the refetch brings back start_install_no_color.
+    const pastColorDump = isAtOrPastColorDump(stage);
+    const isAsap = !pastColorDump && row['start_install_asap'] === true;
+    // A no-color date (Install Start dump / complete-zone neutralize) shows the date plainly —
     // neither the red ASAP nor the green/yellow hard-date treatment.
-    const isNoColor = atShippingStage || row['start_install_no_color'] === true;
+    const isNoColor = pastColorDump || row['start_install_no_color'] === true;
     const isHardDate = !isAsap && !isNoColor && row['start_install_formulaTF'] === false && !!value;
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;

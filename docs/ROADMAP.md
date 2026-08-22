@@ -70,7 +70,7 @@ BUG-15 and BUG-12 shipped the same day.
 
 | ID | Fix | Entry point | Pri |
 |---|---|---|---|
-| BUG-11 | Hard-date color dump fires too early — moves from Shipping Planning to **Start Install** (Bill reversed his own 8/15 rule: *"I might have given you bad information"* [bill-2026-08-21#L109]; color survives ship stages, dumps once install starts [#L115]; yellow overdue must never silently disappear [#L113]). Open build call: trigger = the `Install Start` stage vs. the `start_install` date arriving — confirm against AUD1 | `app/brain/job_log/features/start_install/shipping_stage_date_discipline.py` (+ `stage/command.py` intercept); tests `tests/brain/test_shipping_stage_date_discipline.py` | **high — client-decided** |
+| BUG-11 | ~~Hard-date color dump fires too early — moves from Shipping Planning to **Start Install**~~ **built 2026-08-21**. Open build call **closed by Daniel: the trigger is the `Install Start` STAGE**, not the `start_install` date arriving. Color (green / yellow-overdue / ASAP red) now rides through Ship Planning and Ship Complete untouched and dumps at Install Start and beyond; the formula-blank half and the Paint-Complete intercept are unchanged. Frontend carried its own copy of the rule (optimistic wash keyed on the ship stages) — moved in lock-step, else the color still vanished on screen | `app/brain/job_log/features/start_install/shipping_stage_date_discipline.py` (`COLOR_DUMP_STAGE`, `is_at_or_past_color_dump`), `start_install/command.py`, `frontend/src/constants/stages.js`; tests `tests/brain/test_shipping_stage_date_discipline.py` | **high — client-decided** |
 | BUG-15 | ~~Meeting-bot transcription autodetects language — mis-detected a production standup as Portuguese and translated a line [bill-2026-08-21#§2]~~ **built 2026-08-21**: `language_code: "en"` + explicit `prioritize_accuracy` mode pinned on every dispatch (covers the calendar poller and the on-demand route, which share `dispatch_bot`) | `app/brain/meetings/recall.py` (`TRANSCRIPT_LANGUAGE`); test `tests/brain/test_calendar_recall.py::test_dispatch_bot_pins_transcription_to_english` | med |
 | BUG-12 | ~~Carmen lookahead tool returns a stale window — Novel Flatirons pull starts in May [bill-2026-08-21#L133]. Must be today-forward, upcoming project dates, labeled by department~~ **built 2026-08-21**: the PDF x-axis half landed in PR #348; the model-facing half followed — every bar carries `status` past/active/upcoming, every row a `next_activity` (department label + `next_date` clamped forward), rows whose bars have all ended move to `past_rows` and never reach the model or the Gantt | `app/brain/lookahead/schedule_builder.py`, `app/brain/carmen_chat/tools.py` (`_compact_schedule_for_agent`); tests `tests/lookahead/test_schedule_builder.py` | med |
 | BUG-13 | Backspace intermittently dead in the meeting-notes to-do input [bill-2026-08-21#L95]. Unreproduced — Bill and Daniel have both seen it; instrument before fixing | `frontend/src/pages/Meetings.jsx` (to-do note input) | low |
@@ -1177,14 +1177,16 @@ sending session.
 ### N5 · Shipping-stage date discipline
 *W3 · built · due — · deps — · owner daniel · src bill-2026-08-06#L1322 · upd 2026-08-21*
 
-> ⚠️ **The hard-date color half of this rule was reversed by Bill 2026-08-21**
+> ✅ **The hard-date color half of this rule was reversed by Bill 2026-08-21**
 > — *"I might have given you bad information on where we wanted to change
-> that"* [bill-2026-08-21#L109]. Hard-date color now survives the ship stages
-> and dumps at **Start Install** instead; yellow overdue color must never
-> silently disappear (*"sweeping an issue under the rug"* [#L113] — it's a
-> scored EOS metric). Try the start-install trigger **before** touching
-> hard-date semantics [#L115]. Carried as **BUG-11** in the Fix queue; the
-> formula-date blanking and Paint-Complete intercept are untouched.
+> that"* [bill-2026-08-21#L109] — **and rebuilt the same day (BUG-11)**.
+> Hard-date color now survives the ship stages and dumps at the **Install
+> Start stage**; yellow overdue color never silently disappears
+> (*"sweeping an issue under the rug"* [#L113] — it's a scored EOS metric).
+> The stage-vs-date ambiguity [#L115] is settled: the **stage** is the
+> trigger. The formula-date blanking and Paint-Complete intercept are
+> untouched, so the paragraph below still describes the formula fork
+> correctly — only the hard-date branch moved.
 
 Effort M (grew from S). Formula dates blank at ship stages; hard dates wash
 white; Paint Complete + hard date auto-rolls to Ship Planning (generalizes the
@@ -1203,6 +1205,8 @@ Implementation: `shipping_stage_date_discipline.py` called from
 - 2026-08-08 · decision · src — — fork is hard vs formula date; hard wins, color washes white, auto-fill suppressed, Break on by default; Paint Complete intercept widens from ASAP-only to any hard date
 - 2026-08-08 · build · src pr#334 — `shipping_stage_date_discipline.py` + stage intercept + modal Break-default; tests green
 - 2026-08-21 · decision · src bill-2026-08-21#L109 — color-wash trigger reversed by Bill: moves from the ship stages to Start Install; yellow stays visible until then; supersedes the 8/15 "confirmed correct in production" banking → BUG-11
+- 2026-08-21 · decision · src daniel — open build call closed: the trigger is the **`Install Start` stage**, not the `start_install` date being set. A release can carry a hard date for weeks before install begins; the date arriving is not the event
+- 2026-08-21 · build · src — — BUG-11 shipped: `COLOR_DUMP_STAGE` / `is_at_or_past_color_dump` (Install Start and later, Hold excluded) replace the ship-stage wash. `apply_shipping_stage_date_discipline` now routes two rules with two triggers; hard dates return early at the ship stages. The frontend's own optimistic copy of the rule (`JobsTableRow`, `StartInstallEditor`) moved to a shared `isAtOrPastColorDump` helper in `constants/stages.js` — without it the color still vanished on screen regardless of the backend. Suite green (1289)
 
 ### N7 · Job log modal merge + redesign
 *W3 · built · due — · deps — · owner daniel · src — · upd 2026-08-09*

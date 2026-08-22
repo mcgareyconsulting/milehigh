@@ -9,7 +9,8 @@ imports_from: [app.models, app.services.job_event_service, app.trello.api (updat
 imported_by: [app/brain/job_log/routes.py]
 invariants:
   - Hard date sets start_install_formulaTF=False and clears start_install_formula
-  - At Ship Planning / Ship Complete (N5), hard dates stay washed white (start_install_no_color=True)
+  - At Install Start and later (BUG-11), a hard date is set colorless (start_install_no_color=True);
+    before that — the ship stages included — it keeps its green / yellow-overdue color
   - Trello due-date push is synchronous (matches the pre-extraction route behavior)
   - Deduplicated events raise ValueError, matching UpdateStageCommand / UpdateFabOrderCommand
   - This command does NOT cover the `clear_hard_date` flow — that remains in the route as it
@@ -24,7 +25,7 @@ from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
 from app.trello.api import update_trello_card
 from app.brain.job_log.features.start_install.shipping_stage_date_discipline import (
-    SHIPPING_STAGES,
+    is_at_or_past_color_dump,
 )
 
 logger = get_logger(__name__)
@@ -108,10 +109,11 @@ class UpdateStartInstallCommand:
         job_record.start_install = self.start_install
         job_record.start_install_formula = None
         job_record.start_install_formulaTF = False
-        # A user-set hard date is normally colored (green/yellow). N5: at Ship Planning /
-        # Ship Complete, hard dates stay washed white so a date set after formula blanking
-        # does not reintroduce alarm colors. Ship Date UI follows this same flag.
-        job_record.start_install_no_color = job_record.stage in SHIPPING_STAGES
+        # A user-set hard date is normally colored (green/yellow). BUG-11: color only
+        # dumps once the release reaches the Install Start stage, so a date entered at
+        # Ship Planning is still colored — an overdue one has to stay yellow right up
+        # until install actually begins. Ship Date UI follows this same flag.
+        job_record.start_install_no_color = is_at_or_past_color_dump(job_record.stage)
         # Setting an explicit hard date takes manual control of the date, so clear ASAP
         # (assigning an installer, by contrast, goes through AssignInstaller and keeps ASAP).
         job_record.start_install_asap = False

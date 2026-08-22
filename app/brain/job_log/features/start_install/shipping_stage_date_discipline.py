@@ -1,21 +1,25 @@
 """
 @milehigh-header
 schema_version: 1
-purpose: N5 shipping-stage date discipline — when a release enters Ship Planning or Ship Complete, blank stale formula/estimated dates (and lock against re-estimation) or wash hard-date color to white. Complete-zone job_comp cascade stays separate; this owns only date behavior at shipping stages.
+purpose: N5 late-stage date discipline — two rules with two different triggers. (1) Formula/estimated dates blank and lock when a release enters Ship Planning or Ship Complete: an estimate that survived to the truck is stale by definition. (2) A hard date's COLOR dumps when the release reaches the Install Start STAGE (BUG-11) — not when a start_install date is set, and not at the ship stages. Complete-zone job_comp cascade stays separate.
 exports:
-  apply_shipping_stage_date_discipline: Apply formula-blank or hard-date wash for Ship Planning / Ship Complete
-  SHIPPING_STAGES: Stages that trigger the discipline
-imports_from: [app.models, app.services.job_event_service, app.brain.job_log.features.start_install.neutralize_install_date_cascade]
-imported_by: [app/brain/job_log/features/stage/command.py]
+  apply_shipping_stage_date_discipline: Route a stage change to the formula blank or the hard-date color dump
+  SHIPPING_STAGES: Stages that blank stale formula dates
+  COLOR_DUMP_STAGE / is_at_or_past_color_dump: Where a hard date loses its color
+imports_from: [app.api.helpers, app.models, app.services.job_event_service, app.brain.job_log.features.start_install.neutralize_install_date_cascade]
+imported_by: [app/brain/job_log/features/stage/command.py, app/brain/job_log/features/start_install/command.py]
 invariants:
   - Fork is hard date vs formula: hard = start_install_formulaTF is False AND start_install is set
   - Formula path blanks start_install, ship_date, formula text, and comp_eta; sets formulaTF=False so scheduling never re-estimates
-  - Hard path keeps dates and washes color via neutralize_install_date_cascade (no ASAP red / green / yellow)
+  - A hard date KEEPS its color through Ship Planning and Ship Complete (BUG-11). Yellow overdue must
+    stay visible until install actually starts — it is a scored EOS metric, not something to sweep away.
+  - The color dump fires on the Install Start stage and anything past it, via neutralize_install_date_cascade
   - Idempotent: already-blank locked rows and already-neutral hard dates are no-ops
   - Child audit events carry parent_event_id for stage-undo bundling visibility
 """
 from datetime import datetime
 
+from app.api.helpers import STAGE_PROGRESSION_RANK
 from app.models import Releases
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
@@ -25,7 +29,25 @@ from app.brain.job_log.features.start_install.neutralize_install_date_cascade im
 
 logger = get_logger(__name__)
 
+# Stale formula/estimated dates blank here. Hard dates are NOT touched at these
+# stages — see COLOR_DUMP_STAGE.
 SHIPPING_STAGES = ("Ship Planning", "Ship Complete")
+
+# BUG-11: where a hard date loses its color. Bill reversed the 2026-08-15 rule that
+# dumped it at the ship stages — "I might have given you bad information on where we
+# wanted to change that". The trigger is the release reaching the Install Start STAGE,
+# which is a different event from a start_install DATE being set: a release can carry a
+# hard install date for weeks before install begins, and its color (green, or yellow once
+# overdue) has to stay readable that whole time.
+COLOR_DUMP_STAGE = "Install Start"
+_HOLD_RANK = 99
+_COLOR_DUMP_RANK = STAGE_PROGRESSION_RANK[COLOR_DUMP_STAGE]
+
+
+def is_at_or_past_color_dump(stage: str | None) -> bool:
+    """True once the release has reached Install Start (or later). Hold is not 'later'."""
+    rank = STAGE_PROGRESSION_RANK.get(stage, -1)
+    return _COLOR_DUMP_RANK <= rank < _HOLD_RANK
 
 
 def _is_hard_install(job_record: Releases) -> bool:
@@ -53,13 +75,37 @@ def apply_shipping_stage_date_discipline(
     stage: str,
     source: str = "Brain",
 ) -> dict:
-    """Apply N5 date rules when a release is at Ship Planning or Ship Complete.
+    """Route a stage change to the N5 date rule that owns it.
+
+    Two rules, two triggers:
+      - Install Start (BUG-11) → a hard date keeps its value but loses its color
+      - Ship Planning / Ship Complete → stale formula dates blank and lock
 
     Returns a small extras dict for the stage command response:
       - formula_dates_blanked: True when estimated dates were cleared
       - dates_washed: True when hard-date color was neutralized
     Empty dict on no-op / wrong stage. Caller commits.
     """
+    if stage == COLOR_DUMP_STAGE:
+        if not _is_hard_install(job_record):
+            return {}
+        washed = neutralize_install_date_cascade(
+            job_record,
+            parent_event_id=parent_event_id,
+            reason="stage_set_to_install_start",
+            source=source,
+        )
+        if washed:
+            logger.info(
+                "install_start_dates_washed",
+                job=job_record.job,
+                release=job_record.release,
+                stage=stage,
+                parent_event_id=parent_event_id,
+            )
+            return {"dates_washed": True}
+        return {}
+
     if stage not in SHIPPING_STAGES:
         return {}
 
@@ -69,22 +115,9 @@ def apply_shipping_stage_date_discipline(
         else "stage_set_to_ship_complete"
     )
 
+    # BUG-11: a hard date rides through the ship stages with its color intact. Only the
+    # estimate half of the fork is stale here, so a hard date is simply left alone.
     if _is_hard_install(job_record):
-        washed = neutralize_install_date_cascade(
-            job_record,
-            parent_event_id=parent_event_id,
-            reason=reason,
-            source=source,
-        )
-        if washed:
-            logger.info(
-                "shipping_stage_dates_washed",
-                job=job_record.job,
-                release=job_record.release,
-                stage=stage,
-                parent_event_id=parent_event_id,
-            )
-            return {"dates_washed": True}
         return {}
 
     # Formula / estimated (or empty formula-driven) path: blank and lock.

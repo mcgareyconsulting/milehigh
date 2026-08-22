@@ -27,9 +27,11 @@ CascadeReason = Literal[
     'stage_set_to_install_complete',
     'job_comp_set_to_x',
     'invoiced_set_to_x',
-    # N5 shipping-stage wash (hard dates keep their value; color only)
-    'stage_set_to_ship_planning',
-    'stage_set_to_ship_complete',
+    # BUG-11 color dump at the Install Start stage (the date keeps its value; color only).
+    # 'stage_set_to_ship_planning' / 'stage_set_to_ship_complete' were the 2026-08-15
+    # trigger and still appear on ReleaseEvents rows written before 2026-08-21; nothing
+    # emits them any more.
+    'stage_set_to_install_start',
 ]
 
 
