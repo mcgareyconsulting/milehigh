@@ -57,6 +57,11 @@ class UploadPhotoCommand:
             file_size_bytes=len(self.file_bytes),
             note=self.note,
             stage=self.stage,
+            # N9: the release's stage right now, captured once and never recomputed.
+            # `stage` above is the gate tag and is usually None; this is the evidence
+            # field the stamp renders. Read here rather than at render time so a
+            # re-rendered derivative can never claim a stage the photo didn't see.
+            stage_at_upload=release.stage,
             uploaded_by_user_id=self.uploaded_by_user_id,
             uploaded_at=datetime.utcnow(),
         )
@@ -81,6 +86,7 @@ class UploadPhotoCommand:
                         'filename': self.filename,
                         'note': self.note,
                         'stage': self.stage,
+                        'stage_at_upload': photo.stage_at_upload,
                     },
                 },
             )
@@ -92,7 +98,9 @@ class UploadPhotoCommand:
             raise
 
         logger.info(
-            "upload_photo complete",
-            extra={'release_id': self.release_id, 'photo_id': photo.id},
+            "release_photo_uploaded",
+            release_id=self.release_id,
+            photo_id=photo.id,
+            stage_at_upload=photo.stage_at_upload,
         )
         return photo

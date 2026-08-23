@@ -1134,8 +1134,17 @@ class ReleasePhoto(db.Model):
     note = db.Column(db.Text, nullable=True)
     # Optional stage tag. Set when a photo is uploaded to satisfy a stage gate
     # (e.g. "Welded QC", "Paint Complete") so the stage-change validation can
-    # require proof for that specific stage.
+    # require proof for that specific stage. This is PERMISSION, not evidence —
+    # see stage_at_upload below, and keep the two apart.
     stage = db.Column(db.String(64), nullable=True)
+    # The release's stage at the moment this photo was uploaded (N9 stamp).
+    # Evidence, not permission: it is what gets burned onto the stamped derivative,
+    # so a "paint complete" claim can be checked against an unpainted photo. Stored
+    # rather than only rendered, because the original is kept clean and derivatives
+    # are re-rendered — a re-render reading the *current* stage would manufacture
+    # the exact false evidence the stamp exists to catch. NULL for photos uploaded
+    # before the column existed; those render without a stage rather than guessing.
+    stage_at_upload = db.Column(db.String(64), nullable=True)
     uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     # Attribution for the most recent note edit. Photos are open to all users, so
@@ -1166,6 +1175,7 @@ class ReleasePhoto(db.Model):
             'file_size_bytes': self.file_size_bytes,
             'note': self.note,
             'stage': self.stage,
+            'stage_at_upload': self.stage_at_upload,
             'uploaded_by': {
                 'id': self.uploaded_by_user_id,
                 'name': self._display_name(self.uploaded_by),

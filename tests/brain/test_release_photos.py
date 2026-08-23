@@ -122,6 +122,62 @@ def test_upload_with_valid_stage_tag_is_stored(app, storage_root, release_id, pl
     assert resp.get_json()['stage'] == "Welded QC"
 
 
+def test_upload_records_stage_at_upload_from_the_release(app, storage_root, release_id, plain_user):
+    """N9: the stamp's stage field is captured at upload, independent of the gate tag."""
+    from app.models import Releases, db
+
+    release = db.session.get(Releases, release_id)
+    release.stage = "Weld Complete"
+    db.session.commit()
+
+    with _patch_get_current_user(plain_user):
+        client = app.test_client()
+        resp = _post_photo(client, release_id, PNG_MIN)
+
+    assert resp.status_code == 201, resp.data
+    body = resp.get_json()
+    assert body['stage_at_upload'] == "Weld Complete"
+    # The gate tag is a different field and stays unset for an ordinary upload.
+    assert body['stage'] is None
+
+
+def test_stage_at_upload_is_frozen_when_the_release_moves_on(app, storage_root, release_id, plain_user):
+    """The whole point: a photo taken pre-paint can't later claim it was painted."""
+    from app.models import ReleasePhoto, Releases, db
+
+    release = db.session.get(Releases, release_id)
+    release.stage = "Paint Start"
+    db.session.commit()
+
+    with _patch_get_current_user(plain_user):
+        client = app.test_client()
+        photo_id = _post_photo(client, release_id, PNG_MIN).get_json()['id']
+
+    release = db.session.get(Releases, release_id)
+    release.stage = "Paint Complete"
+    db.session.commit()
+
+    photo = db.session.get(ReleasePhoto, photo_id)
+    assert photo.stage_at_upload == "Paint Start"
+
+
+def test_gate_tag_and_stage_at_upload_are_independent(app, storage_root, release_id, plain_user):
+    """A gate photo records both: which gate it satisfies, and what it actually shows."""
+    from app.models import Releases, db
+
+    release = db.session.get(Releases, release_id)
+    release.stage = "Weld Complete"
+    db.session.commit()
+
+    with _patch_get_current_user(plain_user):
+        client = app.test_client()
+        resp = _post_photo(client, release_id, PNG_MIN, stage="Welded QC")
+
+    body = resp.get_json()
+    assert body['stage'] == "Welded QC"          # the gate it unlocks
+    assert body['stage_at_upload'] == "Weld Complete"  # what the release was actually at
+
+
 def test_upload_with_unknown_stage_returns_400(app, storage_root, release_id, plain_user):
     with _patch_get_current_user(plain_user):
         client = app.test_client()

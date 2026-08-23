@@ -516,10 +516,14 @@ shipped five unrun migrations — unverified per environment, worth an
 inventory pass rather than an assumption. Workstream 1 adds more. Scripts are
 handed over per the usual split (Daniel writes, client runs).
 
+**Unrun as of 2026-08-21:** `add_stage_at_upload_to_release_photos.py` (N9 —
+`release_photos.stage_at_upload`, nullable, no backfill).
+
 **Trail**
 - 2026-08-06 · note · src — — standing backlog established; A1 alone shipped five unrun migrations
 - 2026-08-06 · build · src pr#327 — bug wave added `releases_unique_job_release_name.py` (BUG-3 fix); run state to be verified per environment
 - 2026-08-10 · note · src — — three migrations confirmed run by Daniel: `releases_unique_job_release_name.py`, `add_release_tag.py`, `add_installer_invoice_progress_and_numbers.py`; the A1-era five remain unverified
+- 2026-08-21 · build · src — — `add_stage_at_upload_to_release_photos.py` added for N9; metadata-only nullable ADD COLUMN, cloned from the `add_start_install_to_dwl.py` reference (AUTOCOMMIT, `lock_timeout`, no reflection). Verified idempotent against SQLite. **Not yet run in any environment**
 
 ---
 
