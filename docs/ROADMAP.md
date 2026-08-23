@@ -1,6 +1,6 @@
 ---
 project: MHMW
-updated: 2026-08-21
+updated: 2026-08-21  # BUG-11/12 built, OQ3 closed, N9 GPS dropped
 verified: origin/main @ 4c048ca (PR #340 font wave)
 config:                       # inputs to derived math — store inputs, never results
   horizon:
@@ -1260,7 +1260,8 @@ now second in `queue.next`. The 8/21 session pinned the spec down:
   [#L67]). **Resolved 2026-08-21 (Daniel): build to the union** — job, release,
   stage-at-photo-time, who, date, GPS. Six fields is a long string, so the
   render has to stay legible: that is a layout problem to solve, not a reason
-  to drop a field.
+  to drop a field. **Superseded 2026-08-21 (Daniel): GPS is dropped** — see the
+  scope note below; the stamp is the five remaining fields.
 - Purpose has sharpened: **invoicing evidence — Katie sends stamped photos
   straight to customers** [#L77], which makes this J1's enabler explicitly.
 - The stage-vs-upload ordering race (photo uploaded before the stage flips):
@@ -1273,12 +1274,27 @@ now second in `queue.next`. The 8/21 session pinned the spec down:
   of photos** [#L69] — the markup half is C3 ground (one markup stack, not
   two), noted on C3's trail.
 
-**Open question 3 (shared-tablet attribution) is now urgent, not tidy** —
-"who took the photo" is on Bill's stamp list and the item is elevated; the
-question gates the render. Ask it before building.
+**Open question 3 (shared-tablet attribution) is RESOLVED and N9 is
+unblocked** — Daniel, 2026-08-21: users sign in as themselves, so
+`uploaded_by_user_id` is trustworthy attribution on any device and the stamp
+renders that name directly.
+
+**GPS dropped 2026-08-21 (Daniel).** The stamp is **job number, release
+number, stage-at-photo-time, who took it, date** — the four fields Bill pinned
+down on 8/21 [#L73] plus the date from the 8/6 list. Provenance of the cut, so
+it can be reversed knowingly: GPS traces to the **8/6 daily notes**
+(`bill-2026-08-06#notes`, recorded as a client ask in the superseded roadmap
+§N9), *not* to either of Bill's two written feature documents, and it is absent
+from the 8/21 session where he pinned the stamp contents down. The 8/20
+field-ops package digest (T5 §6–7, which covers the mobile work package and
+photo upload in detail) carries no photo-location requirement either.
+**Caveat on the record:** Bill's two spec documents live outside the repo, so
+this was checked against the digests and the notes, not the documents
+themselves — if GPS turns up in one of them the capture standard below is
+preserved verbatim and the work is re-openable.
 
 Effort M — the metadata is free, the rendering is not. Stamp uploaded job-log
-photos with date, who took it, current stage, plus GPS. Three of the four
+photos with date, who took it, and the stage at the time of the photo. Three of the four
 fields already exist on `ReleasePhoto` (`app/models.py:1053`); only GPS is a
 new column. But there is **no image library in this codebase** — watermarking
 adds an image pipeline (Pillow) plus **`pillow-heif`** (iPhones/iPads shoot
@@ -1293,9 +1309,21 @@ source each coordinate came from; the geofence
 silently degraded; a location denial never blocks the upload; personal phones
 get gesture-only prompts, never background location; cellular tablets are a
 **standing purchase spec** (Wi-Fi-only iPads have no GNSS). Pitch as site
-verification (5–20 m), not position tracking. **Gated by Open question 3
-(shared-tablet attribution) — decide before building the watermark**, because
-it changes what is rendered onto the image. This is what makes J1 work.
+verification (5–20 m), not position tracking. **Everything in this paragraph is
+retained as settled research, not active scope** — GPS is out as of 2026-08-21.
+
+**One correction to the "only GPS is a new column" line above:** with GPS gone
+it is still not zero new columns. `ReleasePhoto.stage` is the *gate* tag — set
+only when a photo is uploaded to satisfy a stage gate, NULL otherwise
+(`app/models.py:1138`) — so it cannot carry stage-at-photo-time for an ordinary
+photo, and overloading it would let a stamp tag satisfy a gate it was never
+meant to. Stage-at-photo-time gets its own column. It has to be **stored**, not
+merely burned into the pixels: the plan keeps the original clean and renders a
+derivative, so a re-render (layout fix, restyle) reading the *current* stage
+would silently manufacture exactly the false evidence Bill wants to be able to
+catch.
+
+This is what makes J1 work.
 
 **Trail**
 - 2026-08-06 · transcript · src bill-2026-08-06#notes — client ask: stamp date, who took it, current stage, GPS coordinates
@@ -1566,17 +1594,11 @@ remain:
    N1 shipped 2026-08-09 with MHMW Cost as a selectable value, so releases are
    being tagged against a meaning nobody has fixed. Every day this stays open
    is rows to re-read later.
-3. **Shared-tablet photo attribution** *(source §10.3 — decide before N9
-   builds)*. Gates **N9** — **and N9 was elevated to the short timeline
-   2026-08-21 with "who took the photo" on Bill's stamp list
-   [bill-2026-08-21#L73], so this is now the first question to ask, not a tidy
-   one.** The stamp renders *who took the photo* from the
-   logged-in Brain user; on a shared company iPad under a generic login every
-   photo carries the same name — exactly the metadata Katie needs, made
-   worthless. Options: individual logins on shared tablets · a "who is this"
-   picker at capture · tablet photos carry no attribution while phone photos
-   do. Changes what is rendered onto the image, so it precedes the build.
-   **Answers: Bill.**
+3. ~~**Shared-tablet photo attribution**~~ — **RESOLVED 2026-08-21 (Daniel):
+   there is no shared generic login. Users sign in as themselves, so every
+   upload traces to its own `uploaded_by_user_id` and the stamp renders that
+   name directly.** No "who is this" picker, no per-device attribution split.
+   **N9 is unblocked.** See the Resolved log.
 4. **Punch items vs. completion, and the invoice holdback** *(source
    fieldops-2026-08-20 §7.2 / §11.2 — opened 2026-08-20)*. Gates **T8's**
    validation rules and T5/T6's completion semantics. The spec's §17 declares
@@ -1636,6 +1658,9 @@ Append-only log — never edited, never pruned.
 - 2026-08-21 · question · Phase-A-first or T1-first? → **T1 first, from Bill directly** — the timeline scheduling piece before everything, T&M (A1) deliberately stalled behind it. Closes thread ③ of the reconciliation row; threads ①/② remain. src bill-2026-08-21#L169
 - 2026-08-21 · **standup digest** — pre-Alaska session folded in: **T9 opened** (release splicing — punch/remaining work spawns a fractional field work ticket with residual invoiceable value), **T10 opened** (interim job-log-photos→Trello bridge, Doug's ask, dies with T4), **N13 opened** (Carmen prompt library exposed in-app), **N14 opened** (FC pack on the job log modal); **N9 elevated** to `queue.next` with its spec pinned (stamp text: job/release/stage-at-photo-time/who; Katie-to-customer purpose); **punch/field issues anchor to the release** (T6); **subs invoice inside the Brain** hardened (T8); **N5's color-dump rule reversed** → BUG-11 (dump at Start Install, yellow never silently dropped), plus BUG-12 (Carmen lookahead window), BUG-13 (backspace), BUG-14 (iPad rotation state). Mobile target: iPad first. src bill-2026-08-21
 - 2026-08-21 · question · punch and field issues — project or release? → **release**, always; punch on a finished release spawns a spliced work ticket (T9). src bill-2026-08-21#L45
+
+- 2026-08-21 · **Open question 3** · closed — shared-tablet photo attribution: there is no shared generic login. Users sign in as themselves, so `uploaded_by_user_id` is trustworthy on any device and the stamp renders that name directly. No "who is this" picker, no phone-vs-tablet attribution split. **Unblocks N9.** src daniel
+- 2026-08-21 · **N9 scope** · GPS dropped — the stamp is job number, release number, stage-at-photo-time, who took it, date. GPS traced only to the 8/6 daily notes, not to either of Bill's written feature documents, and was absent from the 8/21 session that pinned the stamp contents; the 8/20 field-ops digest carries no photo-location requirement. Checked against digests and notes — the two spec documents live outside the repo — so the capture standard is retained verbatim in N9 and the work is re-openable if GPS surfaces in one of them. src daniel
 
 ---
 
