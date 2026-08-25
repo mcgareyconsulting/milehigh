@@ -21,6 +21,7 @@
  */
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
+import { compressImage } from '../utils/imageCompress';
 
 axios.defaults.withCredentials = true;
 const BASE = `${API_BASE_URL}/brain/tm-tickets`;
@@ -68,7 +69,7 @@ export async function listTicketAttachments(ticketId) {
 
 export async function uploadTicketAttachment(ticketId, file) {
     const fd = new FormData();
-    fd.append('file', file);
+    fd.append('file', await compressImage(file));
     const { data } = await axios.post(`${BASE}/${ticketId}/attachments`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
     });

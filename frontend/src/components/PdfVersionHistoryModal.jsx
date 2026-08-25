@@ -16,6 +16,7 @@ import { BBReviewPanel } from './BBReviewPanel';
 import { PdfReadViewer } from './PdfReadViewer';
 import { actionableCount } from './bbReview/urgency';
 import MentionInput from './shared/MentionInput';
+import { compressImage } from '../utils/imageCompress';
 
 const isPdfFile = (file) =>
     (file?.type || '').toLowerCase() === 'application/pdf' ||
@@ -266,8 +267,10 @@ export function PdfVersionHistoryModal({
         setPhotoBusy(true);
         setError(null);
         try {
+            // Shrink phone-camera shots before they hit LTE; see utils/imageCompress.js.
+            const payload = await compressImage(file);
             const fd = new FormData();
-            fd.append('file', file);
+            fd.append('file', payload);
             if (stageTag) fd.append('stage', stageTag);
             const resp = await fetch(`${API_BASE_URL}/brain/releases/${releaseId}/photos`, {
                 method: 'POST',
