@@ -24,6 +24,7 @@
  */
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
+import { compressImage } from '../utils/imageCompress';
 
 axios.defaults.withCredentials = true;
 
@@ -84,7 +85,7 @@ export async function fetchBoardPhotos(itemId) {
 
 export async function uploadBoardPhoto(itemId, file) {
     const fd = new FormData();
-    fd.append('file', file);
+    fd.append('file', await compressImage(file));
     const { data } = await axios.post(`${BASE}/items/${itemId}/photos`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
     });
