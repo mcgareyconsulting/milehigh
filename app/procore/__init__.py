@@ -27,7 +27,12 @@ from app.procore.procore import (
     comprehensive_health_scan,
 )
 
-from app.procore.helpers import resolve_webhook_user_ids, is_duplicate_webhook, create_submittal_event as _create_submittal_event_helper
+from app.procore.helpers import (
+    resolve_webhook_user_ids,
+    is_duplicate_webhook,
+    create_submittal_event as _create_submittal_event_helper,
+    drop_drafting_status_for_bic_change,
+)
 from app.procore.reconcile import ProcoreReconcileService
 
 from app.logging_config import get_logger
@@ -762,6 +767,22 @@ def health_scan_update():
                         'old': old_value,
                         'new': issue['ball_in_court']['api']
                     }
+                    # Same rule as the webhook path: the ball moved, so the previous
+                    # drafter's HOLD is stale (BUG-16). The drop rides in `updates`,
+                    # so the SubmittalEvents row below records it.
+                    dropped = drop_drafting_status_for_bic_change(db_record)
+                    if dropped is not None:
+                        updates['submittal_drafting_status'] = {
+                            'old': dropped,
+                            'new': ''
+                        }
+                        logger.info(
+                            "drafting_status_dropped",
+                            submittal_id=issue['submittal_id'],
+                            old=dropped,
+                            reason="ball_in_court_changed",
+                            source="health_scan",
+                        )
                 
                 # Update status if there's a mismatch
                 if issue['status']['mismatch']:

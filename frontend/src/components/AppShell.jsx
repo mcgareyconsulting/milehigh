@@ -7,7 +7,9 @@
  * imports_from: [react, react-router-dom, ../utils/auth, ../context/ThemeContext, ../context/LocationContext, ../context/ReleasesContext, ./QuickSearch, ./NotificationBell, ./MobileNavDrawer, ./Rail, ./BBChatWidget]
  * imported_by: [frontend/src/App.jsx]
  * invariants:
- *   - Admin-only nav items are gated on checkAuth result
+ *   - Admin-only nav items are gated on checkAuth result; the last known role flags are
+ *     read from localStorage for the first paint only (see utils/auth roleFlagsFor) so the
+ *     rail doesn't re-lay itself out when the round-trip lands. Never an access decision.
  *   - LocationProvider wraps the inner shell so all children can access geolocation context
  *   - Header height: 3.5rem (h-14) up to 3xl, then 4rem to give 27"+ / TV more room.
  *   - Left rail only when isSidebarMode is on AND width ≥1440px; top header is the default.
@@ -19,7 +21,7 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
-import { logout, checkAuth, userCanAccessInvoicing } from '../utils/auth';
+import { logout, checkAuth, cacheRoleFlags, readCachedRoleFlags } from '../utils/auth';
 import { useTheme } from '../context/ThemeContext';
 import { LocationProvider, useLocationContext } from '../context/LocationContext';
 import { ReleasesProvider } from '../context/ReleasesContext';
@@ -40,9 +42,12 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
   const useRail = !subcontractor && isSidebarMode;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { locationEnabled, locationRequesting, handleLocationToggle } = useLocationContext();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [canSeeReport, setCanSeeReport] = useState(false);
-  const [canUseBBChat, setCanUseBBChat] = useState(false);
+  // Seeded from the last known answer rather than all-false, so an admin doesn't
+  // paint the non-admin nav first and then gain six role-gated rows a round-trip
+  // later — in rail mode that re-lays out every row, since Rail derives its row
+  // height from the viewport against the row count. checkAuth still decides.
+  const [roles, setRoles] = useState(readCachedRoleFlags);
+  const { isAdmin, canSeeReport, canUseBBChat } = roles;
   const [showPatchNotes, setShowPatchNotes] = useState(false);
   const [carmenOpen, setCarmenOpen] = useState(false);
   const carmenBtnRef = useRef(null);
@@ -66,10 +71,9 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
   useEffect(() => {
     if (isAuthenticated) {
       checkAuth().then(user => {
-        setIsAdmin(user?.is_admin || false);
-        setCanSeeReport(userCanAccessInvoicing(user));
-        // Admins always have Carmen-chat access; others need the per-user flag.
-        setCanUseBBChat(!!user && (user.is_admin || user.is_carmen_chat));
+        // cacheRoleFlags returns the same flags it stores, and clears the cache
+        // outright when the session is gone (user === null).
+        setRoles(cacheRoleFlags(user));
       });
     }
   }, [isAuthenticated]);

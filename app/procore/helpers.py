@@ -10,12 +10,15 @@ exports:
   resolve_webhook_user_ids: Map a webhook payload to (external_user_id, internal_user_id).
   is_duplicate_webhook: Burst-dedup check using time-bucketed SHA-256 receipt hashes.
   create_submittal_event: Create a SubmittalEvents audit record with user attribution.
+  drop_drafting_status_for_bic_change: Clear a submittal's DWL drafting status when its ball-in-court changes.
 imports_from: [hashlib, json, sqlalchemy, app.models, app.config]
 imported_by: [app/procore/__init__.py, app/procore/procore.py, app/brain/drafting_work_load/routes.py, app/procore/scripts/sync_submittals.py]
 invariants:
   - is_duplicate_webhook uses a 15-second time bucket; the first delivery inserts a WebhookReceipt row, duplicates hit the unique constraint.
   - create_submittal_event is placed here (not in procore.py) to avoid circular imports between procore and brain.
   - Ball-in-court parsing prefers user name over login and skips email-only identifiers.
+  - Every path that writes ball_in_court must call drop_drafting_status_for_bic_change; a
+    drafting status is scoped to the drafter who held the ball and is stale once it moves.
 updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
 """
 import hashlib
@@ -260,6 +263,32 @@ def create_submittal_payload_hash(action: str, submittal_id: str, payload: dict)
     hash_string = f"{action}:{submittal_id}:{payload_json}"
     return hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
 
+
+
+def drop_drafting_status_for_bic_change(record) -> Optional[str]:
+    """Clear the DWL drafting status when a submittal's ball-in-court really changed.
+
+    HOLD / STARTED / NEED VIF are set against whoever held the ball. The moment the
+    submittal moves to someone else that status describes work that is no longer
+    theirs, so the Drafting Work Load keeps showing held work that isn't held. Every
+    path that writes ``ball_in_court`` must call this, or the next audit sweep
+    resurrects the stale status.
+
+    Mutates ``record`` only; the caller owns the commit.
+
+    Args:
+        record: A Submittals row whose ball_in_court is being changed.
+
+    Returns:
+        The status that was dropped, or None if there was nothing to drop. Callers
+        fold a non-None result into the SubmittalEvents payload they emit so the
+        drop is auditable rather than silent.
+    """
+    old_status = record.submittal_drafting_status or ""
+    if not old_status:
+        return None
+    record.submittal_drafting_status = ""
+    return old_status
 
 
 def create_submittal_event(
