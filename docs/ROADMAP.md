@@ -1,7 +1,7 @@
 ---
 project: MHMW
-updated: 2026-08-21
-verified: origin/main @ 4c048ca (PR #340 font wave)
+updated: 2026-08-29
+verified: origin/main @ 68b62c6 (PR #347 credential scrub)
 config:                       # inputs to derived math — store inputs, never results
   horizon:
     - 2027-10 Procore absolute dead date (renewed 2026-08-15)
@@ -66,13 +66,14 @@ start cold (phone included) without exploring first.
 **Queue cleared 2026-08-15** (branch `claude/roadmap-review-bugs-uinik2`).
 BUG-10's config half landed the same day and **elevated A1**.
 **Re-stocked 2026-08-21** from the pre-Alaska standup (BUG-11 through BUG-15);
-BUG-15 shipped the same day.
+BUG-15 and BUG-12 both shipped the same day. **Open as of 2026-08-29: BUG-11
+(high, client-decided), BUG-13, BUG-14.**
 
 | ID | Fix | Entry point | Pri |
 |---|---|---|---|
 | BUG-11 | Hard-date color dump fires too early — moves from Shipping Planning to **Start Install** (Bill reversed his own 8/15 rule: *"I might have given you bad information"* [bill-2026-08-21#L109]; color survives ship stages, dumps once install starts [#L115]; yellow overdue must never silently disappear [#L113]). Open build call: trigger = the `Install Start` stage vs. the `start_install` date arriving — confirm against AUD1 | `app/brain/job_log/features/start_install/shipping_stage_date_discipline.py` (+ `stage/command.py` intercept); tests `tests/brain/test_shipping_stage_date_discipline.py` | **high — client-decided** |
 | BUG-15 | ~~Meeting-bot transcription autodetects language — mis-detected a production standup as Portuguese and translated a line [bill-2026-08-21#§2]~~ **built 2026-08-21**: `language_code: "en"` + explicit `prioritize_accuracy` mode pinned on every dispatch (covers the calendar poller and the on-demand route, which share `dispatch_bot`) | `app/brain/meetings/recall.py` (`TRANSCRIPT_LANGUAGE`); test `tests/brain/test_calendar_recall.py::test_dispatch_bot_pins_transcription_to_english` | med |
-| BUG-12 | Carmen lookahead tool returns a stale window — Novel Flatirons pull starts in May [bill-2026-08-21#L133]. Must be today-forward, upcoming project dates, labeled by department | `app/brain/carmen_chat/tools.py` (`build_project_lookahead`), `app/brain/lookahead/pipeline.py` | med |
+| BUG-12 | ~~Carmen lookahead tool returns a stale window — Novel Flatirons pull starts in May [bill-2026-08-21#L133]~~ **built 2026-08-21** (PR #348): the symptom was the rendered Gantt axis, not the data. `_chart_range` expanded the x-axis *backwards* to cover any past-dated phase bar, so one stale bar rewound the whole chart to May. It now starts at the declared window and only extends forward — the window is a viewport, not a row filter. The other two halves of Bill's ask were **already true and predate the bug**: the schedule window is 3 weeks from `today` (`schedule_builder.py:427`), and the phase labels (Drafting / Fabrication / Paint / Shipping / Installation) landed 2026-07-25 | `app/brain/lookahead/export_pdf.py` (`_chart_range`); test `tests/lookahead/test_export_pdf.py` | med |
 | BUG-13 | Backspace intermittently dead in the meeting-notes to-do input [bill-2026-08-21#L95]. Unreproduced — Bill and Daniel have both seen it; instrument before fixing | `frontend/src/pages/Meetings.jsx` (to-do note input) | low |
 | BUG-14 | iPad rotation dumps modal/scroll state — *"you're like, where was I?"* [bill-2026-08-21#L145]. Likely a remount on orientation change; fits the tablet-tuning lane (`docs/tablet-tuning.md`) | frontend, component TBD — reproduce on the physical iPad first | low |
 | BUG-9 | ~~Fab order not flipping 2→1 at paint → complete; order cleared inconsistently~~ **built** | `app/brain/job_log/features/fab_order/tier.py` (tier logic: Complete=NULL, 0, 1, 2, dynamic 3+) | **high** |
@@ -173,13 +174,35 @@ most critical bit of it**"* [#L75].
 
 The job it must do, in his words: see what's ready to ship, see what's **stored at
 Mile High**, grab anything **past paint complete** and drop it where it goes —
-*"use that for visual planning for the guys."* **Base is confirmed:
-`feature/jay-view` (day-bucket timeline) + `feature/mirror-cards` (installer lanes
-as gantt range bars).** **Un-parks D4**, which dissolves into this item.
+*"use that for visual planning for the guys."* **Base is confirmed and, as of 2026-08-29,
+is already on `main`** — `feature/jay-view` (day-bucket timeline, PR #286) and
+`feature/mirror-cards` (installer lanes as gantt range bars, PRs #300/#301) both
+merged in July. There is no branch reconciliation to do: T1 starts from a clean
+worktree off `main`, in `frontend/src/components/GanttChart.jsx`. **Un-parks D4**,
+which dissolves into this item.
 
 **Drag is a real scheduling write** (confirmed intent, 2026-08-15) — dropping a
 card writes the installer field that drives `comp_eta` / `num_guys`, not a
 view-local arrangement. That is the point of the feature, not a side effect.
+
+**Two build facts found in the code 2026-08-29, before the first line is written:**
+
+1. **The drag has been built once and pulled once.** The Timeline is declared
+   READ-ONLY in its own header — *"The Phase-5 drag interactions — installer-day
+   reschedule and shipping-lane stage change — were REMOVED 2026-07-12 for the
+   prod-stability release: **native HTML5 drag was dead on iPad anyway**"*
+   (`GanttChart.jsx:17-23`). Against Bill's 2026-08-21 **iPad-first** target that
+   makes T1 a *rebuild on `@dnd-kit`* (pointer sensors), **not** a revert of the
+   removal commit. `Board.jsx` is the only dnd-kit precedent in the codebase and is
+   the pattern to copy; the same native-drag rot is logged across ~10 components in
+   `docs/tablet-tuning.md`. **Prove drag works on the physical iPad before building
+   surface on top of it.**
+2. **There is no unassigned lane to filter into.** Lanes are the two fixed shipping
+   stages plus the installer roster, and *"a release with no shipping stage and no
+   installer appears nowhere"* (`GanttChart.jsx:32`). Bill's *"vertical column of
+   unassigned so we can plug and play"* is net-new construction with its own
+   membership rule — his stated intake is ready-to-ship / stored at Mile High /
+   past paint complete — not a filter toggle on an existing lane.
 
 **Trail**
 - 2026-08-15 · transcript · src bill-2026-08-15#L61 — move/assign cards + a vertical unassigned lane to plug and play from
@@ -187,6 +210,9 @@ view-local arrangement. That is the point of the feature, not a side effect.
 - 2026-08-15 · decision · src — — priority 1 of W5; base = jay-view + mirror-cards; drag writes the real schedule; absorbs parked D4
 - 2026-08-20 · spec · src fieldops-2026-08-20#§5 — written spec confirms the shape (Field Dispatch Timeline: crew/company lanes, unassigned plug-and-play, hard-date-first) and adds Phase-B detail for later: finite capacity baseline **3 installers / 24 labor-hrs per day per crew** (overridable per release via existing `num_guys`), drag restricted to PM/Field Super (a sub admin may only move cards between their own teams), look-ahead attachment, and per-card readiness flags (§12: FC / materials / shipping / equipment / site / crew)
 - 2026-08-21 · transcript · src bill-2026-08-21#L169 — priority reconfirmed over the spec's Phase-A-first ordering: the timeline scheduling piece comes first, "to kind of get out of the Trello piece"
+- 2026-08-29 · note · src — — base verified **already merged to `main`** (jay-view PR #286, mirror-cards PRs #300/#301); the roadmap's "base is confirmed" read as two branches to reconcile, and that work does not exist. T1 starts from a clean worktree off `main`
+- 2026-08-29 · decision · src — — drag rebuilds on `@dnd-kit`, not restored from the 2026-07-12 removal: the removed implementation was native HTML5 drag, dead on iPad, and iPad is now the stated target [bill-2026-08-21#L155]. iPad drag is the first thing to prove, on the physical device
+- 2026-08-29 · note · src — — the unassigned lane is net-new: no lane today holds a release with neither a shipping stage nor an installer (`GanttChart.jsx:32`). Its membership rule (ready-to-ship / stored at Mile High / past paint complete) is a build-time question to confirm with Bill
 
 ### T2 · Admin member management — permissions + onboarding, consolidated
 *W5 · not-started · class build · due — · deps — · owner daniel · src bill-2026-08-15#L83 · upd 2026-08-15*
@@ -1285,6 +1311,26 @@ verification (5–20 m), not position tracking. **Gated by Open question 3
 (shared-tablet attribution) — decide before building the watermark**, because
 it changes what is rendered onto the image. This is what makes J1 work.
 
+**The capture standard changed under this item on 2026-08-24 and the plan above
+is now partly obsolete.** PR #349 added a client-side compressor
+(`frontend/src/utils/imageCompress.js`) and wired it into the job-log release
+photo upload (`PdfVersionHistoryModal.jsx:271`). It decodes the file and
+re-encodes through `canvas.toBlob(..., 'image/jpeg')`, which emits a **fresh JPEG
+carrying no EXIF at all** — for every file over its 600 KB skip threshold, i.e.
+every phone shot (3–12 MB). Consequences for N9:
+
+- **EXIF is not "opportunistic" any more, it is gone.** The GPS IFD was already
+  absent in transit; now the whole block is stripped client-side before the
+  server sees the bytes. Browser geolocation at upload is the *only* location
+  source, not the primary one.
+- **Capture date needs a new source.** The trail below prefers EXIF `DateTime`
+  over `uploaded_at`; that field no longer arrives. The compressor *does*
+  preserve `file.lastModified` onto the new `File`, which is the usable
+  stand-in — otherwise read EXIF in the browser **before** `compressImage` runs
+  and post it alongside the file.
+- Either fix lands in the upload path, so decide it with Open question 3 rather
+  than after the watermark is built.
+
 **Trail**
 - 2026-08-06 · transcript · src bill-2026-08-06#notes — client ask: stamp date, who took it, current stage, GPS coordinates
 - 2026-08-06 · note · src — — EXIF test on a real field photo (Pixel 6a): Make/Model/DateTime survived, GPS IFD absent — re-encoded in transit; do not build on EXIF GPS
@@ -1292,6 +1338,7 @@ it changes what is rendered onto the image. This is what makes J1 work.
 - 2026-08-06 · question · src — — opened Open question 3: shared-tablet attribution; decide before the watermark is built
 - 2026-08-21 · decision · src bill-2026-08-21#L67 — elevated to the short timeline; stamp-not-watermark, content pinned (job/release/stage-at-photo-time/who), Katie-to-customer invoicing purpose, ship-then-tweak on the ordering race, stage-change photo gate as the future option; in-modal preview + photo-markup rider asks logged
 - 2026-08-21 · decision · src — — stamp field list is the **union** of the 8/6 and 8/21 lists (job, release, stage-at-photo-time, who, date, GPS); Daniel's call — Bill referenced the 8/6 notes rather than superseding them. Legibility of a six-field string is a layout problem, not grounds to cut a field
+- 2026-08-29 · note · src pr#349 — client-side JPEG re-encode now strips EXIF from every job-log photo over 600 KB; browser geolocation becomes the sole location source and capture date must come from `file.lastModified` or a pre-compression EXIF read. Supersedes the "EXIF opportunistic / capture DateTime preferred" half of the 2026-08-06 capture standard
 
 ### H1 · Polish sweep
 *W3 · not-started · due — · deps N7 · owner daniel · src — · upd 2026-08-06*
@@ -1624,6 +1671,11 @@ Append-only log — never edited, never pruned.
 - 2026-08-21 · question · Phase-A-first or T1-first? → **T1 first, from Bill directly** — the timeline scheduling piece before everything, T&M (A1) deliberately stalled behind it. Closes thread ③ of the reconciliation row; threads ①/② remain. src bill-2026-08-21#L169
 - 2026-08-21 · **standup digest** — pre-Alaska session folded in: **T9 opened** (release splicing — punch/remaining work spawns a fractional field work ticket with residual invoiceable value), **T10 opened** (interim job-log-photos→Trello bridge, Doug's ask, dies with T4), **N13 opened** (Carmen prompt library exposed in-app), **N14 opened** (FC pack on the job log modal); **N9 elevated** to `queue.next` with its spec pinned (stamp text: job/release/stage-at-photo-time/who; Katie-to-customer purpose); **punch/field issues anchor to the release** (T6); **subs invoice inside the Brain** hardened (T8); **N5's color-dump rule reversed** → BUG-11 (dump at Start Install, yellow never silently dropped), plus BUG-12 (Carmen lookahead window), BUG-13 (backspace), BUG-14 (iPad rotation state). Mobile target: iPad first. src bill-2026-08-21
 - 2026-08-21 · question · punch and field issues — project or release? → **release**, always; punch on a finished release spawns a spliced work ticket (T9). src bill-2026-08-21#L45
+- 2026-08-29 · **BUG-12** · closed — Carmen lookahead stale window. Root cause was the rendered Gantt axis, not the data: `_chart_range` expanded the x-axis backwards to cover any past-dated phase bar, so one stale bar rewound the chart to May. Fixed in PR #348 — the axis now starts at the declared window and only extends forward. The other two halves of Bill's ask were already true and predate the bug (3-week-from-today window, `schedule_builder.py:427`; Drafting/Fabrication/Paint/Shipping/Installation labels, 2026-07-25). src pr#348
+- 2026-08-29 · **T1 base** · note — `feature/jay-view` (PR #286) and `feature/mirror-cards` (PRs #300/#301) verified **already merged to `main`** in July. The "base is confirmed" line read as two branches awaiting reconciliation; that work does not exist. T1 starts from a clean worktree off `main`. src —
+- 2026-08-29 · **T1** · decision — drag rebuilds on `@dnd-kit`, not restored from the 2026-07-12 removal commit: what was removed was native HTML5 drag, already dead on iPad, and iPad is now the stated target. The unassigned lane is net-new — no lane today holds a release with neither a shipping stage nor an installer. src —
+- 2026-08-29 · **N9** · note — capture standard partly superseded by PR #349's client-side JPEG re-encode: EXIF is stripped before upload for every photo over 600 KB, so browser geolocation is the sole location source and capture date must come from `file.lastModified` or a pre-compression read. Folded into N9. src pr#349
+- 2026-08-29 · **queue** · note — eight days after the 8/21 standup, nothing on the queue has started. PRs #344, #345, #348, #349 and #347 landed in that window; all are fixes or housekeeping. `queue.now` stays **T1**. src —
 
 ---
 
@@ -1637,4 +1689,4 @@ Append-only log — never edited, never pruned.
 | bill-2026-08-06 | `~/Desktop/Transcripts/MHMW/processed/Bill-8-6-2026.md` | Submittal-system working session (Bill, Colton) — primary transcript; `#LNNN` anchors are its line numbers |
 | bill-2026-07-22 | `~/Desktop/Transcripts/MHMW/processed/Bill-7-22-2026.md` | Ops/roadmap review — the October deadline surfaces; A2, C3-origin, N8, J1-drop |
 | notes-2026-08-04 | daily notes (no transcript) | Daniel's 2026-08-04 notes — N5 origin, N4 symptom |
-| pr#NNN | GitHub PRs on the milehigh repo | Build provenance for merged work — #323–#334 (2026-08-06/08), #336–#338 (2026-08-09, v2.0.338), #339 (2026-08-10) |
+| pr#NNN | GitHub PRs on the milehigh repo | Build provenance for merged work — #323–#334 (2026-08-06/08), #336–#338 (2026-08-09, v2.0.338), #339 (2026-08-10), #344/#345 (2026-08-20, archive rules · install hours on the subs tab), #348 (2026-08-21, BUG-12 + Carmen chat placement), #349 (2026-08-24, photo upload + client-side compression — see N9), #347 (2026-08-29, credential scrub) |
