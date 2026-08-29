@@ -1796,6 +1796,16 @@ def update_start_install(job, release):
                         'limit': 2,
                     }), 409
 
+            # ASAP is a rush flag on work that has not started. Once the stage is
+            # `Install Start` or later it is meaningless — and the cascade has already
+            # dumped this row's color, so honoring it would repaint the row red.
+            if new_asap and job_record.stage in COLOR_DUMP_STAGES:
+                return jsonify({
+                    'error': 'asap_after_install_start',
+                    'stage': job_record.stage,
+                    'message': 'ASAP cannot be set once install has started.',
+                }), 409
+
             payload = {'from': old_asap, 'to': new_asap}
             new_start = None
             new_comp_eta = None
@@ -1834,7 +1844,9 @@ def update_start_install(job, release):
                 job_record.start_install = new_start
                 job_record.start_install_formula = None
                 job_record.start_install_formulaTF = False
-                job_record.start_install_no_color = job_record.stage in COLOR_DUMP_STAGES
+                # Always colored: the guard above already refused every stage where the
+                # color is dumped, so this branch only runs before install has started.
+                job_record.start_install_no_color = False
                 job_record.comp_eta = new_comp_eta
                 # Push the primary card due = start_install (hard-date behavior).
                 if job_record.trello_card_id:

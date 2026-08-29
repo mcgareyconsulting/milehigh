@@ -12,13 +12,14 @@ invariants:
   - Install neutralization is a no-op unless a hard date is present (start_install_formulaTF is False and start_install is set)
   - The trigger is the STAGE reaching `Install Start` or later, never the `start_install` date arriving (BUG-11)
   - Color survives the ship stages; Ship Planning / Ship Complete no longer wash it
-  - KEEPS start_install / ship_date and the hard-date flag (dates preserved; scheduling still skips hard rows)
+  - KEEPS start_install / ship_date and the hard-date flag, EXCEPT an ASAP row's placeholder date, which is
+    rewritten to install_started_on when the caller passes it (stage transitions into the dump zone only)
   - Sets start_install_no_color=True (renders both install and ship neutral) and clears start_install_asap (no red)
   - Idempotent: no-op when already neutral and not ASAP
   - Emits action='updated' with parent_event_id for audit bundling
 """
-from datetime import datetime
-from typing import Literal
+from datetime import date, datetime
+from typing import Literal, Optional
 
 from app.models import Releases
 from app.services.job_event_service import JobEventService
@@ -65,6 +66,7 @@ def neutralize_install_date_cascade(
     parent_event_id: int,
     reason: CascadeReason,
     source: str = 'Brain',
+    install_started_on: Optional[date] = None,
 ) -> bool:
     """Strip the color from a hard install date once install has started (or it is complete).
 
@@ -73,12 +75,25 @@ def neutralize_install_date_cascade(
     start_install_asap so a finished release never shows the red ASAP flag. The ship date's
     color follows start_install_no_color, so it goes neutral in lockstep — no separate write.
 
+    Args:
+        install_started_on: The date install actually began — the date of the stage event
+            that triggered this. When given, the hard start_install is rewritten to it.
+
+            Pass it ONLY for an ASAP row entering `Install Start` or later. An ASAP date
+            was never a plan: it was an anchor five business days out, stamped to make the
+            row shout, so the day install starts is the truer value. A hand-set hard date
+            is a real commitment and must never be rewritten — omit it and no date moves.
+
+            The ASAP test is the CALLER's to make, deliberately: UpdateStageCommand drops
+            start_install_asap earlier in the same command, so by the time this runs the
+            flag is already False and cannot be re-derived here.
+
     Returns True if it changed anything, False on no-op. Caller commits.
     """
     changed = False
 
-    def _emit_neutralized(field, old_value):
-        """Record one *_no_color flip as a child audit event linked to the parent."""
+    def _emit(field, old_value, new_value):
+        """Record one field change as a child audit event linked to the parent."""
         JobEventService.create_and_close(
             job=job_record.job,
             release=job_record.release,
@@ -87,7 +102,7 @@ def neutralize_install_date_cascade(
             payload={
                 'field': field,
                 'old_value': old_value,
-                'new_value': True,
+                'new_value': new_value,
                 'reason': reason,
                 'parent_event_id': parent_event_id,
             },
@@ -99,14 +114,37 @@ def neutralize_install_date_cascade(
     install_hard = (
         job_record.start_install_formulaTF is False and job_record.start_install is not None
     )
+    was_asap = bool(getattr(job_record, 'start_install_asap', False))
     if install_hard:
         already_neutral = bool(getattr(job_record, 'start_install_no_color', False))
-        is_asap = bool(getattr(job_record, 'start_install_asap', False))
-        if not (already_neutral and not is_asap):
+        if not (already_neutral and not was_asap):
             job_record.start_install_no_color = True
             job_record.start_install_asap = False
-            _emit_neutralized('start_install_no_color', already_neutral)
+            _emit('start_install_no_color', already_neutral, True)
             changed = True
+
+        # Rewrite an ASAP row's placeholder date to the day install actually started.
+        # The caller decides whether this row qualifies (see the arg doc — the ASAP flag
+        # is already cleared by the time we get here). The event carries both values so
+        # the anchor it replaced stays recoverable.
+        if install_started_on is not None:
+            old_start = job_record.start_install
+            if old_start != install_started_on:
+                job_record.start_install = install_started_on
+                _emit(
+                    'start_install',
+                    old_start.isoformat() if old_start else None,
+                    install_started_on.isoformat(),
+                )
+                logger.info(
+                    "asap_date_reset_to_install_start",
+                    job=job_record.job,
+                    release=job_record.release,
+                    old=old_start.isoformat() if old_start else None,
+                    new=install_started_on.isoformat(),
+                    parent_event_id=parent_event_id,
+                )
+                changed = True
 
     if not changed:
         return False

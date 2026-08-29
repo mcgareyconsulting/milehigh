@@ -12,7 +12,8 @@ invariants:
   - Setting stage='Complete' cascades job_comp='X'; leaving Complete clears job_comp='X'
   - Paint Complete + hard start_install auto-rolls to Ship Planning (N5; generalizes ASAP intercept)
   - Ship Planning / Ship Complete apply N5 formula-date blanking only; a hard date keeps its color there (BUG-11)
-  - A transition into `Install Start` or later dumps a hard date's color (COLOR_DUMP_STAGES)
+  - A transition into `Install Start` or later dumps a hard date's color (COLOR_DUMP_STAGES);
+    an ASAP row additionally has its placeholder start_install rewritten to the event's date
   - Deduplicated events raise ValueError (event_exists); caller decides whether to treat as success
   - Scheduling recalculation failure is logged but does not roll back the update
 """
@@ -210,6 +211,11 @@ class UpdateStageCommand:
 
         extras: dict = {}
 
+        # Captured before the ASAP-drop block below clears the flag: the install-date
+        # neutralize further down needs to know this row WAS an ASAP, and by then it
+        # cannot tell.
+        had_asap = bool(getattr(job_record, 'start_install_asap', False))
+
         # ASAP drop on completion: once an ASAP release reaches Ship Complete or any
         # later stage, it is no longer a rush, so clear the ASAP flag. The start_install /
         # comp_eta set at ASAP-flag time (and any subsequent mirror-card tweak) are LEFT
@@ -301,6 +307,14 @@ class UpdateStageCommand:
                 parent_event_id=event.id,
                 reason=reason_for_stage(self.stage),
                 source=self.source,
+                # An ASAP row's date was an anchor a week out, never a plan. This stage
+                # change is the moment install actually began, so it becomes the date.
+                # Taken from the stage event itself, so the audit trail and the date agree.
+                # Only ASAP rows: a hand-set hard date is a real commitment and keeps its
+                # value, so a non-ASAP row passes None and nothing moves.
+                install_started_on=(
+                    (event.created_at or datetime.utcnow()).date() if had_asap else None
+                ),
             ):
                 extras['hard_date_cleared'] = True
 
