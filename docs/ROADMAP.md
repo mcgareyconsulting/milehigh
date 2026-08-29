@@ -1,7 +1,7 @@
 ---
 project: MHMW
 updated: 2026-08-29
-verified: origin/main @ 68b62c6 (PR #347 credential scrub)
+verified: origin/main @ 5a9a584 (PR #351 scrub leftovers)
 config:                       # inputs to derived math — store inputs, never results
   horizon:
     - 2027-10 Procore absolute dead date (renewed 2026-08-15)
@@ -15,6 +15,9 @@ classes:                      # what KIND of work an item is — orthogonal to e
 queue:                        # agent-maintained, set by agreement in session
   now: T1
   next: [N9, T2, AUD1]  # 2026-08-21: N9 elevated by Bill ("short timeline"); A1 deliberately stalled behind T1 [bill-2026-08-21#L169]
+                        # 2026-08-29: N9 unblocked (Open question 3 answered) — order unchanged. Its
+                        # individual-logins answer needs accounts, which T2 makes self-serve, but Daniel
+                        # can create them by hand today, so N9 does not move behind T2.
   awaiting: [N11]
 ---
 
@@ -71,7 +74,7 @@ BUG-15 and BUG-12 both shipped the same day. **Open as of 2026-08-29: BUG-11
 
 | ID | Fix | Entry point | Pri |
 |---|---|---|---|
-| BUG-11 | Hard-date color dump fires too early — moves from Shipping Planning to **Start Install** (Bill reversed his own 8/15 rule: *"I might have given you bad information"* [bill-2026-08-21#L109]; color survives ship stages, dumps once install starts [#L115]; yellow overdue must never silently disappear [#L113]). Open build call: trigger = the `Install Start` stage vs. the `start_install` date arriving — confirm against AUD1 | `app/brain/job_log/features/start_install/shipping_stage_date_discipline.py` (+ `stage/command.py` intercept); tests `tests/brain/test_shipping_stage_date_discipline.py` | **high — client-decided** |
+| BUG-11 | Hard-date color dump fires too early — moves from Shipping Planning to **Start Install** (Bill reversed his own 8/15 rule: *"I might have given you bad information"* [bill-2026-08-21#L109]; color survives ship stages, dumps once install starts [#L115]; yellow overdue must never silently disappear [#L113]). ~~Open build call: trigger = the `Install Start` stage vs. the `start_install` date arriving~~ **decided 2026-08-29 (Daniel): the `Install Start` stage flip**, not the date arriving — a date-driven dump fires on schedule even when the install slipped, which is exactly the silently-vanishing yellow Bill ruled out [#L113]. Accepted cost: if the crew never moves the stage, the color outlives the real start | `app/brain/job_log/features/start_install/shipping_stage_date_discipline.py` (+ `stage/command.py` intercept); tests `tests/brain/test_shipping_stage_date_discipline.py` | **high — client-decided** |
 | BUG-15 | ~~Meeting-bot transcription autodetects language — mis-detected a production standup as Portuguese and translated a line [bill-2026-08-21#§2]~~ **built 2026-08-21**: `language_code: "en"` + explicit `prioritize_accuracy` mode pinned on every dispatch (covers the calendar poller and the on-demand route, which share `dispatch_bot`) | `app/brain/meetings/recall.py` (`TRANSCRIPT_LANGUAGE`); test `tests/brain/test_calendar_recall.py::test_dispatch_bot_pins_transcription_to_english` | med |
 | BUG-12 | ~~Carmen lookahead tool returns a stale window — Novel Flatirons pull starts in May [bill-2026-08-21#L133]~~ **built 2026-08-21** (PR #348): the symptom was the rendered Gantt axis, not the data. `_chart_range` expanded the x-axis *backwards* to cover any past-dated phase bar, so one stale bar rewound the whole chart to May. It now starts at the declared window and only extends forward — the window is a viewport, not a row filter. The other two halves of Bill's ask were **already true and predate the bug**: the schedule window is 3 weeks from `today` (`schedule_builder.py:427`), and the phase labels (Drafting / Fabrication / Paint / Shipping / Installation) landed 2026-07-25 | `app/brain/lookahead/export_pdf.py` (`_chart_range`); test `tests/lookahead/test_export_pdf.py` | med |
 | BUG-13 | Backspace intermittently dead in the meeting-notes to-do input [bill-2026-08-21#L95]. Unreproduced — Bill and Daniel have both seen it; instrument before fixing | `frontend/src/pages/Meetings.jsx` (to-do note input) | low |
@@ -200,9 +203,13 @@ view-local arrangement. That is the point of the feature, not a side effect.
 2. **There is no unassigned lane to filter into.** Lanes are the two fixed shipping
    stages plus the installer roster, and *"a release with no shipping stage and no
    installer appears nowhere"* (`GanttChart.jsx:32`). Bill's *"vertical column of
-   unassigned so we can plug and play"* is net-new construction with its own
-   membership rule — his stated intake is ready-to-ship / stored at Mile High /
-   past paint complete — not a filter toggle on an existing lane.
+   unassigned so we can plug and play"* is net-new construction, not a filter toggle
+   on an existing lane. **Membership rule decided 2026-08-29 (Daniel): no installer
+   assigned AND (ready to ship OR stored at Mile High OR past paint complete)** —
+   Bill's stated intake, verbatim. Deliberately *not* "any release with no
+   installer": that pulls in everything still in drafting and fab and the column
+   stops being a work surface. The three conditions are shop-state, so confirm how
+   each maps onto `stage` at build time.
 
 **Trail**
 - 2026-08-15 · transcript · src bill-2026-08-15#L61 — move/assign cards + a vertical unassigned lane to plug and play from
@@ -212,7 +219,8 @@ view-local arrangement. That is the point of the feature, not a side effect.
 - 2026-08-21 · transcript · src bill-2026-08-21#L169 — priority reconfirmed over the spec's Phase-A-first ordering: the timeline scheduling piece comes first, "to kind of get out of the Trello piece"
 - 2026-08-29 · note · src — — base verified **already merged to `main`** (jay-view PR #286, mirror-cards PRs #300/#301); the roadmap's "base is confirmed" read as two branches to reconcile, and that work does not exist. T1 starts from a clean worktree off `main`
 - 2026-08-29 · decision · src — — drag rebuilds on `@dnd-kit`, not restored from the 2026-07-12 removal: the removed implementation was native HTML5 drag, dead on iPad, and iPad is now the stated target [bill-2026-08-21#L155]. iPad drag is the first thing to prove, on the physical device
-- 2026-08-29 · note · src — — the unassigned lane is net-new: no lane today holds a release with neither a shipping stage nor an installer (`GanttChart.jsx:32`). Its membership rule (ready-to-ship / stored at Mile High / past paint complete) is a build-time question to confirm with Bill
+- 2026-08-29 · note · src — — the unassigned lane is net-new: no lane today holds a release with neither a shipping stage nor an installer (`GanttChart.jsx:32`)
+- 2026-08-29 · decision · src — — unassigned-lane membership = **no installer AND (ready to ship OR stored at Mile High OR past paint complete)**, Bill's stated intake. "Any release with no installer" was considered and rejected — hundreds of drafting/fab rows would drown the column
 
 ### T2 · Admin member management — permissions + onboarding, consolidated
 *W5 · not-started · class build · due — · deps — · owner daniel · src bill-2026-08-15#L83 · upd 2026-08-15*
@@ -767,10 +775,14 @@ both the pasted and verbal paths, editable afterwards in the release hub's
 Billing section (`JobDetailsBody.jsx`, `ReleasesLayout.jsx`,
 `constants/releaseTags.js`). Existing rows are untagged, exactly as planned —
 the sequencing holds: nullable now → N10 bulk-edit backfill → required.
-**It shipped ahead of its own definition:** Open question 2 (what *MHMW Cost*
-means) is still unanswered, so the third value is a live field with undefined
-semantics. Cheap now, expensive if it accumulates rows under the wrong
-reading — worth closing before N10 backfills against it.
+**It shipped ahead of its own definition, and that turned out to be safe.**
+Open question 2 (what *MHMW Cost* means) was half-answered 2026-08-29: it means
+a release MHMW eats the cost on, and **for now it is a flag with no downstream
+behavior** — no invoicing exclusion, no cost rollup. So the rows accumulating
+under it are descriptive, not load-bearing, and the "expensive if it accumulates
+under the wrong reading" risk is off the table. The reason split (rework /
+warranty / no-charge) only has to be settled when the tag first drives
+something — which is N2b/invoicing, not N10.
 
 *The pre-build statement, retained for the record (2026-08-06):* the classifier that makes the invoicing tab work: the 8/6
 conversation described *how much* is invoiceable per stage; the tag says
@@ -787,6 +799,7 @@ question 2).
 - 2026-08-06 · question · src — — opened Open question 2: what MHMW Cost means
 - 2026-08-09 · build · src pr#338-wave — `release_tag` shipped: required at creation (pasted + verbal), editable in the hub Billing section, existing rows untagged
 - 2026-08-10 · note · src — — migration `add_release_tag.py` run; Open question 2 still open, so MHMW Cost is collecting rows before its meaning is fixed
+- 2026-08-29 · decision · src — — Open question 2 half-answered (Daniel): MHMW Cost = a release MHMW eats the cost on, **flag only, no behavior attached**. De-escalates the "collecting rows before its meaning is fixed" risk — the rows are descriptive. The reason split waits until invoicing actually reads the tag
 
 ### N10 · Bulk edit on the job log
 *W2 · not-started · due — · deps N1 · owner daniel · src bill-2026-08-06#notes · upd 2026-08-06*
@@ -1211,6 +1224,7 @@ sending session.
 > scored EOS metric). Try the start-install trigger **before** touching
 > hard-date semantics [#L115]. Carried as **BUG-11** in the Fix queue; the
 > formula-date blanking and Paint-Complete intercept are untouched.
+> **Trigger resolved 2026-08-29: the `Install Start` stage flip.**
 
 Effort M (grew from S). Formula dates blank at ship stages; hard dates wash
 white; Paint Complete + hard date auto-rolls to Ship Planning (generalizes the
@@ -1229,6 +1243,7 @@ Implementation: `shipping_stage_date_discipline.py` called from
 - 2026-08-08 · decision · src — — fork is hard vs formula date; hard wins, color washes white, auto-fill suppressed, Break on by default; Paint Complete intercept widens from ASAP-only to any hard date
 - 2026-08-08 · build · src pr#334 — `shipping_stage_date_discipline.py` + stage intercept + modal Break-default; tests green
 - 2026-08-21 · decision · src bill-2026-08-21#L109 — color-wash trigger reversed by Bill: moves from the ship stages to Start Install; yellow stays visible until then; supersedes the 8/15 "confirmed correct in production" banking → BUG-11
+- 2026-08-29 · decision · src — — "install starts" means the **`Install Start` stage flip**, not the `start_install` date arriving. A human action, so the color drops when someone says work began; a date-driven dump would fire on schedule through a slip and hide the overdue signal. If the crew never moves the stage the color outlives the real start — accepted, and the stage-change photo gate (N9) is the eventual nudge
 
 ### N7 · Job log modal merge + redesign
 *W3 · built · due — · deps — · owner daniel · src — · upd 2026-08-09*
@@ -1287,9 +1302,21 @@ now second in `queue.next`. The 8/21 session pinned the spec down:
   of photos** [#L69] — the markup half is C3 ground (one markup stack, not
   two), noted on C3's trail.
 
-**Open question 3 (shared-tablet attribution) is now urgent, not tidy** —
-"who took the photo" is on Bill's stamp list and the item is elevated; the
-question gates the render. Ask it before building.
+**Open question 3 (shared-tablet attribution) is RESOLVED 2026-08-29 (Daniel):
+individual Brain logins on the shared tablets.** The stamp renders `who` from the
+logged-in user with no new capture UI — no picker, no device-name fallback, no
+blank-on-tablet case. Attribution then matches the rest of the audit trail, which
+matters because these photos are invoicing evidence going to customers.
+
+**It buys correctness with friction and with a rollout, and both are real.**
+Everyone who photographs anything needs their own account and has to be logged in
+as themselves on a shared device — that is an operational prerequisite, not a code
+one, and it lands on **T2** (member management: add people, assign permissions,
+invite). N9 does not *block* on T2 — the stamp reads `get_current_user()` either
+way — but a stamp shipped before the accounts exist prints one generic name on
+every photo, which is the exact failure the question was asked about. **Ship the
+accounts alongside the stamp, not after it.** Worth re-checking with Bill once the
+crews feel the login friction; the picker stays the fallback if it doesn't hold.
 
 Effort M — the metadata is free, the rendering is not. Stamp uploaded job-log
 photos with date, who took it, current stage, plus GPS. Three of the four
@@ -1307,9 +1334,9 @@ source each coordinate came from; the geofence
 silently degraded; a location denial never blocks the upload; personal phones
 get gesture-only prompts, never background location; cellular tablets are a
 **standing purchase spec** (Wi-Fi-only iPads have no GNSS). Pitch as site
-verification (5–20 m), not position tracking. **Gated by Open question 3
-(shared-tablet attribution) — decide before building the watermark**, because
-it changes what is rendered onto the image. This is what makes J1 work.
+verification (5–20 m), not position tracking. **Open question 3 (shared-tablet
+attribution) is resolved — individual logins**, so what gets rendered is settled
+and the build can start. This is what makes J1 work.
 
 **The capture standard changed under this item on 2026-08-24 and the plan above
 is now partly obsolete.** PR #349 added a client-side compressor
@@ -1338,6 +1365,7 @@ every phone shot (3–12 MB). Consequences for N9:
 - 2026-08-06 · question · src — — opened Open question 3: shared-tablet attribution; decide before the watermark is built
 - 2026-08-21 · decision · src bill-2026-08-21#L67 — elevated to the short timeline; stamp-not-watermark, content pinned (job/release/stage-at-photo-time/who), Katie-to-customer invoicing purpose, ship-then-tweak on the ordering race, stage-change photo gate as the future option; in-modal preview + photo-markup rider asks logged
 - 2026-08-21 · decision · src — — stamp field list is the **union** of the 8/6 and 8/21 lists (job, release, stage-at-photo-time, who, date, GPS); Daniel's call — Bill referenced the 8/6 notes rather than superseding them. Legibility of a six-field string is a layout problem, not grounds to cut a field
+- 2026-08-29 · decision · src — — Open question 3 answered: **individual Brain logins on shared tablets**, not a capture-time picker. Stamp reads the logged-in user; correctness over friction, because the photos are customer-facing invoicing evidence. Carries an account-rollout prerequisite onto T2 — ship the accounts with the stamp, or every tablet photo prints the same generic name
 - 2026-08-29 · note · src pr#349 — client-side JPEG re-encode now strips EXIF from every job-log photo over 600 KB; browser geolocation becomes the sole location source and capture date must come from `file.lastModified` or a pre-compression EXIF read. Supersedes the "EXIF opportunistic / capture DateTime preferred" half of the 2026-08-06 capture standard
 
 ### H1 · Polish sweep
@@ -1577,8 +1605,11 @@ Open question 4, and the reconciliation row above.
 
 ## Open questions
 
-Nine were asked 2026-08-06; seven are resolved (see Resolved log). These
-remain:
+Nine were asked 2026-08-06; eight are resolved (see Resolved log). These
+remain — #2 is half-answered and no longer gates anything. **Numbers are stable
+identifiers:** #3 (shared-tablet attribution) was resolved 2026-08-29 and the gap
+is deliberate — the Resolved log and several trails cite these by number, so they
+are never reused or shifted up.
 
 1. **In-flight Procore projects at the ~~October~~ line** — **DORMANT
    2026-08-15**, deferred with W1. It stops being urgent and starts being a
@@ -1592,26 +1623,18 @@ remain:
    Brain becomes the UI for records it already has" rather than a migration —
    but it needs deciding, not assuming. **Answers: Bill** (possibly a
    contract-renewal question, not a build one).
-2. **What MHMW Cost means, and the tag semantics** *(source §10.2 — with the
-   client)*. Gates **N1** becoming a required field. Backfill mechanism is
-   settled (N10 bulk edit); the remaining question is semantic — rework,
-   warranty, no-charge, or something else? It determines whether those
-   releases are excluded from invoicing entirely or tracked as internal cost.
-   **Answers: the client (Bill / office).** **Now urgent rather than tidy:**
-   N1 shipped 2026-08-09 with MHMW Cost as a selectable value, so releases are
-   being tagged against a meaning nobody has fixed. Every day this stays open
-   is rows to re-read later.
-3. **Shared-tablet photo attribution** *(source §10.3 — decide before N9
-   builds)*. Gates **N9** — **and N9 was elevated to the short timeline
-   2026-08-21 with "who took the photo" on Bill's stamp list
-   [bill-2026-08-21#L73], so this is now the first question to ask, not a tidy
-   one.** The stamp renders *who took the photo* from the
-   logged-in Brain user; on a shared company iPad under a generic login every
-   photo carries the same name — exactly the metadata Katie needs, made
-   worthless. Options: individual logins on shared tablets · a "who is this"
-   picker at capture · tablet photos carry no attribution while phone photos
-   do. Changes what is rendered onto the image, so it precedes the build.
-   **Answers: Bill.**
+2. **What MHMW Cost means, and the tag semantics** — **half-answered
+   2026-08-29 (Daniel), and de-escalated.** It means *a release MHMW eats the
+   cost on*. **For now it is a flag and nothing more: no invoicing exclusion,
+   no internal-cost rollup, no downstream behavior at all.** That closes the
+   urgent half — rows tagged today are descriptive, so nothing is accruing
+   against a meaning that will later change under it, and the "every day is
+   rows to re-read" pressure is off.
+   What stays open is the *reason* split — rework vs. warranty vs. no-charge —
+   which only has to be settled when the tag first drives something (invoicing
+   exclusion or a cost rollup). Take it then, and expect it to want a reason
+   field beside the flag rather than more tag values. **Answers: the client
+   (Bill / office), when behavior attaches.** *(source §10.2)* No longer gates N1.
 4. **Punch items vs. completion, and the invoice holdback** *(source
    fieldops-2026-08-20 §7.2 / §11.2 — opened 2026-08-20)*. Gates **T8's**
    validation rules and T5/T6's completion semantics. The spec's §17 declares
@@ -1676,6 +1699,10 @@ Append-only log — never edited, never pruned.
 - 2026-08-29 · **T1** · decision — drag rebuilds on `@dnd-kit`, not restored from the 2026-07-12 removal commit: what was removed was native HTML5 drag, already dead on iPad, and iPad is now the stated target. The unassigned lane is net-new — no lane today holds a release with neither a shipping stage nor an installer. src —
 - 2026-08-29 · **N9** · note — capture standard partly superseded by PR #349's client-side JPEG re-encode: EXIF is stripped before upload for every photo over 600 KB, so browser geolocation is the sole location source and capture date must come from `file.lastModified` or a pre-compression read. Folded into N9. src pr#349
 - 2026-08-29 · **queue** · note — eight days after the 8/21 standup, nothing on the queue has started. PRs #344, #345, #348, #349 and #347 landed in that window; all are fixes or housekeeping. `queue.now` stays **T1**. src —
+- 2026-08-29 · question · shared-tablet photo attribution (Open question 3) → **individual Brain logins on the shared tablets**, not a capture-time picker, not a device name, not blank-on-tablet. Correctness over friction: the stamped photos are invoicing evidence Katie sends to customers, so a generic name on every shop photo defeats the feature. The stamp reads the logged-in user with no new capture UI. Carries an account-rollout prerequisite onto T2 — ship the accounts alongside the stamp, or every tablet photo prints one name. Re-check with Bill once the crews feel the login friction; the picker is the fallback. Unblocks **N9**. src —
+- 2026-08-29 · question · MHMW Cost semantics (Open question 2) → **half-answered: a release MHMW eats the cost on, and for now a flag with no behavior** — no invoicing exclusion, no cost rollup. De-escalated: rows tagged today are descriptive, so the "every day is rows to re-read later" pressure is gone and it no longer gates N1. The reason split (rework / warranty / no-charge) waits until invoicing actually reads the tag. src —
+- 2026-08-29 · **T1** · decision — unassigned-lane membership = **no installer assigned AND (ready to ship OR stored at Mile High OR past paint complete)**, Bill's stated intake verbatim. "Any release with no installer" rejected: it drags in every drafting and fab row and the column stops being a work surface. src —
+- 2026-08-29 · **BUG-11** · decision — the color dump triggers on the **`Install Start` stage flip**, not the `start_install` date arriving. A date-driven dump fires on schedule straight through a slip, hiding exactly the yellow-overdue signal Bill said must never silently disappear [bill-2026-08-21#L113]. Accepted cost: a crew that never moves the stage keeps the color past the real start; the stage-change photo gate (N9) is the eventual nudge. src —
 
 ---
 
