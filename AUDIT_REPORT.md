@@ -36,8 +36,8 @@ The problems cluster in three places:
 
 Full PostgreSQL connection strings *with passwords* for the live Render-hosted prod and sandbox databases are hardcoded, e.g.:
 ```python
-PROD_URL = "postgresql://mile_high_metal_works_..._user:G97rTBCF...@dpg-...oregon-postgres.render.com/..."
-SANDBOX_URL = "postgresql://sandbox_mhmw_db_user:SLnOrx7Q...@dpg-...oregon-postgres.render.com/sandbox_mhmw_db"
+PROD_URL = "postgresql://mile_high_metal_works_..._user:<REDACTED>@dpg-...oregon-postgres.render.com/..."
+SANDBOX_URL = "postgresql://sandbox_mhmw_db_user:<REDACTED>@dpg-...oregon-postgres.render.com/sandbox_mhmw_db"
 ```
 Render external Postgres hosts are internet-reachable. Anyone with repo read access (a contractor, a leaked laptop, or a future public/mirror push) gets full read/write to production data.
 
