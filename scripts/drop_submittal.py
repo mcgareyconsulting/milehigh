@@ -12,11 +12,17 @@ Tables affected (by submittal_id string match):
   - notifications (also cascades via FK, deleted explicitly for counting)
 """
 import argparse
+import os
 import sys
+
 import psycopg2
 import psycopg2.extras
 
-PROD_URL = "postgresql://mile_high_metal_works_trello_onedrive_user:G97rTBCFgwUubIokFMf85i7f4hwOCNUR@dpg-d3in27ogjchc73efo2l0-a.oregon-postgres.render.com/mile_high_metal_works_trello_onedrive"
+try:  # allow both `python -m scripts.drop_submittal` and direct execution
+    from scripts._db_urls import mask, prod_url
+except ImportError:  # pragma: no cover - path fixup for direct execution
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from scripts._db_urls import mask, prod_url
 
 TARGET_SUBMITTAL_ID = "69656624"
 
@@ -29,9 +35,11 @@ def main():
 
     sid = args.submittal_id
     mode = "EXECUTE" if args.execute else "DRY RUN"
-    print(f"=== {mode} — dropping submittal_id={sid} from PRODUCTION ===\n")
+    url = prod_url()
+    print(f"=== {mode} — dropping submittal_id={sid} from PRODUCTION ===")
+    print(f"target: {mask(url)}\n")
 
-    conn = psycopg2.connect(PROD_URL)
+    conn = psycopg2.connect(url)
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             # Preview main submittal row
