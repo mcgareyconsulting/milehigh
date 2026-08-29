@@ -1,8 +1,11 @@
 # To-Do page cleanup — scoping notes (BUG-17)
 
-**Status:** unblocked 2026-08-29. Scope decisions below are open; nothing here is built.
-**Target:** `frontend/src/pages/ToDos.jsx` (411 lines), `frontend/src/services/todosApi.js`,
-`app/brain/todos_routes.py`.
+**Status:** unblocked 2026-08-29, scope narrowed the same day. Nothing here is built.
+**Scope: frontend / quality-of-life only — no backend behavior changes** (Daniel,
+2026-08-29). Everything that would alter the API, the model, or what the server enforces
+is listed under *Out of scope* and must not be picked up as part of BUG-17.
+**Target:** `frontend/src/pages/ToDos.jsx` (411 lines) — and `todos_routes.py` /
+`todosApi.js` for reading only, not changing.
 
 **Reference material:** the HPB EOS app's standalone To-Dos page, delivered by Daniel
 2026-08-29 as `eos-todos-reference.zip` (44 files, ~6,850 lines). It lives at
@@ -43,9 +46,10 @@ below separate what is free from what is a decision.
 
 ---
 
-## Tier 1 — take now, no backend change
+## In scope — all frontend, all in `ToDos.jsx`
 
-These are presentation-only and land entirely in `ToDos.jsx`.
+Seven items. None changes the API, the model, or server-enforced behavior — item 4
+changes how the page *fetches*, which is still frontend, but read its tradeoff.
 
 **1. Three-tone due urgency.** `lib/due.ts` (`dueToneClass`) uses overdue → red,
 within 14 days → amber, otherwise → muted, and *completed items never shout*. We
@@ -63,49 +67,69 @@ muted row rather than struck through — *"no strikethrough, stays readable"*. O
 to `done` terminally, so our equivalent is the gap between "marked done" and "filtered
 out by the Open tab". Worth mirroring the muted treatment.
 
-**4. Page chrome patterns.** `board-column.tsx` (titled card with a count),
-`empty-state.tsx`, `entity-view-tabs.tsx` (tabs carrying counts, preserving the owner
-filter across a tab switch). Our status tabs (`STATUS_TABS`, `ToDos.jsx:23`) do not show
-counts; the reference's do, and counts are what make a tab worth clicking.
+**4. Counts on the status tabs — the one item with a tradeoff.** `entity-view-tabs.tsx`
+carries a count per tab and preserves the owner filter across a tab switch. Ours
+(`STATUS_TABS`, `ToDos.jsx:23`) show no counts, and counts are what make a tab worth
+clicking.
 
-**5. Owner initials on group headers.** Cheap, and we already compute `initials(u)`.
+**This one is not free, though it is still frontend-only.** The page fetches per tab —
+`fetchTodos({ status, owner })` at `ToDos.jsx:119`, refetching whenever `status` changes
+(`:123`) — so it only ever holds the current tab's rows and cannot count the others. The
+fix is to fetch `status='all'` once (the route already supports it,
+`todos_routes.py:51`) and move the status split client-side, which the page is already
+shaped for: `item_type`, job and text all filter client-side today.
 
----
+The cost: for an admin that pulls every accepted **and** done to-do in one response
+instead of one tab's worth. Check the real row count against production before
+committing to it — if it is large, drop this item rather than paginate, since the rest of
+the list delivers most of the value. **If the owner filter also moves clientward as part
+of this, scoping must not follow it** — see the closing invariant.
 
-## Tier 2 — worth doing, needs a backend touch but no new table
+**5. Page chrome.** `board-column.tsx` (titled card with a count) and `empty-state.tsx`.
+Our empty state is a bare sentence (`ToDos.jsx:320`).
 
-**6. Group by owner as an alternative to due-urgency.** The clearest structural
-difference: the reference groups into **owner cards** ordered by team speaking order;
-we group into **due buckets** (`BUCKETS`, `ToDos.jsx:41`). Neither is wrong — owner
-grouping answers *"what does each person owe?"*, due grouping answers *"what is on
-fire?"*. **Recommendation: keep due-urgency as the default and add an owner-grouped
-toggle**, rather than replacing it. We are a job shop, not a weekly leadership meeting;
-"overdue" is the question people open this page with. Drop the speaking-order ordering
-entirely — we have no speaking order — and fall back to alphabetical, which is what the
-reference's README says to do anyway.
-
-**7. Edit due date and owner from the row.** `PATCH /todos/<id>` currently takes
-`status` only (`todos_routes.py:76`). Widening it to accept `due_date` and
-`owner_user_id` is small and is the most likely real complaint about the current page —
-a to-do's date is set once by the extractor and then only changeable in the meeting
-review screen. **Keep the immutable `proposed_*` columns untouched** when doing this;
-they are the audit record of what the agent inferred and must not be overwritten by a
-human edit.
+**6. Owner initials on group headers.** Cheap, and we already compute `initials(u)`.
 
 ---
 
-## Tier 3 — model changes, decide before building
+**7. Group by owner, as a toggle.** The clearest structural difference: the reference
+groups into **owner cards**; we group into **due buckets** (`BUCKETS`, `ToDos.jsx:41`).
+Neither is wrong — owner grouping answers *"what does each person owe?"*, due grouping
+answers *"what is on fire?"*.
 
-**8. Create a to-do outside a meeting.** `ChecklistItem.meeting_id` is
-`nullable=False`, so a standalone to-do is currently impossible by construction. Options:
-make it nullable and accept that "checklist item" no longer means "from a meeting"; or
-add a real `todos` table and make checklist items one *source* feeding it. The second is
-the honest model and the more expensive one. **Do not decide this inside BUG-17** — it
-is a product question, and BUG-17 was raised as a cleanup.
+**Verified frontend-only:** `to_dict` already returns `owner_user_id` **and**
+`owner_name` (`app/models.py:1693-1694`), so grouping by owner is a client-side regroup
+of data the page already holds. No API change.
 
-**9. Archive.** We have no archive; `status='done'` is terminal and the Done tab is our
-"archive". If we ever add one, steal this contract verbatim from the reference's README,
-because it is the non-obvious part:
+**Keep due-urgency as the default and add owner as a toggle**, rather than replacing it.
+We are a job shop, not a weekly leadership meeting; "overdue" is the question people open
+this page with. Drop the reference's speaking-order ordering — we have no speaking order —
+and fall back to alphabetical with "Unassigned" last, which is what its own README says to
+do in that case.
+
+---
+
+## Out of scope for BUG-17
+
+Not because they are bad, but because they change backend behavior and this pass does
+not. Each stays recorded so the next person does not have to re-derive it.
+
+**Editing a to-do's due date or owner from the row.** `PATCH /todos/<id>` accepts
+`status` only (`todos_routes.py:76`). Widening it is small and is probably the most
+*useful* thing on this list — a to-do's date is set once by the extractor and is then
+only changeable in the meeting review screen. It is still an API change. When it is
+taken: **leave the `proposed_*` columns alone**; they are the immutable record of what
+the agent inferred and must not be overwritten by a human edit.
+
+**Creating a to-do outside a meeting.** `ChecklistItem.meeting_id` is `nullable=False`,
+so a standalone to-do is impossible by construction. Either make it nullable and accept
+that "checklist item" stops meaning "from a meeting", or add a real `todos` table and
+make checklist items one *source* feeding it. The second is the honest model and the
+more expensive one. A product question, not a cleanup.
+
+**Archive.** We have no archive; `status='done'` is terminal and the Done tab is our
+version. If one is ever built, steal this contract verbatim from the reference — it is
+the non-obvious part:
 
 > A to-do archives *because* it was completed. Restore therefore clears both
 > `archived_at` **and** `completed_at`; clearing only `archived_at` would let the sweep
@@ -113,17 +137,16 @@ because it is the non-obvious part:
 
 That is a bug we would otherwise certainly ship.
 
-**10. Rich-text descriptions.** `ChecklistItem.detail` is plain `db.Text` and the
-extractor writes plain prose into it. The reference's `rich-text.ts` /
-`rich-text-editor.tsx` are a self-contained markup stack. Adopting them is a scope
-increase with no stated demand — **skip unless asked.**
+**Rich-text descriptions.** `ChecklistItem.detail` is plain `db.Text` and the extractor
+writes plain prose into it. The reference's `rich-text.ts` / `rich-text-editor.tsx` are a
+self-contained markup stack. Scope increase, no stated demand.
 
-**11. `visibility: private`.** Do **not** port this onto our role model. Ours is
+**Per-row `visibility: private`.** Do **not** layer this onto our role model. Ours is
 enforced server-side (`todos_routes.py:42`, non-admins hard-scoped to their own rows) and
-that invariant is load-bearing — it is stated in both the page and route headers. A
-per-row `visibility` field layered on top of role scoping creates two overlapping
-authorities on the same question. If per-row privacy is ever wanted, it should replace
-the role scoping deliberately, not sit beside it.
+that invariant is load-bearing — stated in both the page and route headers. A per-row
+visibility field on top of role scoping creates two overlapping authorities on the same
+question. If per-row privacy is ever wanted it should *replace* role scoping deliberately,
+not sit beside it.
 
 ---
 
@@ -152,13 +175,18 @@ Everything below is in the bundle and has no path into this codebase:
 
 ---
 
-## Suggested first slice
+## Suggested order
 
-Tier 1 in one pass — three-tone urgency, expandable rows, muted completed state, counts
-on the tabs. It is all frontend, it is the part a person actually feels, and it needs no
-decisions from anyone. Tier 2 item 7 (edit due/owner) is the natural follow-up if the
-cleanup is meant to reduce friction rather than just look better.
+Items 1-3, 5 and 6 first — urgency tones, expandable rows, the muted completed state,
+the column/empty-state chrome, owner initials. They are independent of each other, need
+no refetch change, and are the part a person actually feels.
+
+Then item 7 (owner toggle), which is the largest single change but still a pure regroup.
+Take item 4 (tab counts) last, or not at all — it is the only one that changes how the
+page loads, and it is the only one worth dropping if the row count says so.
 
 **Invariant that must survive any rewrite:** non-admins can only ever see or modify their
-own items, and that is enforced server-side. Both `ToDos.jsx` and `todos_routes.py` state
-it in their headers. Do not move scoping into the client.
+own items, and that is enforced **server-side**. Both `ToDos.jsx` and `todos_routes.py`
+state it in their headers. Do not move scoping into the client — and note that item 4's
+refetch change moves *filtering* clientward, which is fine, while scoping must not follow
+it.
