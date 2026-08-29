@@ -49,7 +49,10 @@ from app.api.helpers import DEFAULT_FAB_ORDER, active_releases_filter
 from app.brain.job_log.features.fab_order.tier import apply_fab_order_for_stage
 from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
 from app.brain.job_log.features.start_install.assign_installer import AssignInstallerCommand
-from app.brain.job_log.features.start_install.neutralize_install_date_cascade import neutralize_install_date_cascade
+from app.brain.job_log.features.start_install.neutralize_install_date_cascade import (
+    neutralize_install_date_cascade,
+    COLOR_DUMP_STAGES,
+)
 from app.brain.job_log.features.ship_date.command import UpdateShipDateCommand
 from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
 from datetime import datetime, timedelta
@@ -1823,11 +1826,15 @@ def update_start_install(job, release):
 
             job_record.start_install_asap = new_asap
             if new_asap:
-                # Hard, normal-color date one week out; comp_eta from num_guys.
+                # Hard date one week out; comp_eta from num_guys. The date itself is set
+                # the same either way — only its colour depends on the stage. BUG-11: past
+                # `Install Start` the colour is already dumped, so flagging ASAP there must
+                # not light the row back up red. `prev_no_color` was captured into the
+                # payload above, so the undo still restores whatever was here before.
                 job_record.start_install = new_start
                 job_record.start_install_formula = None
                 job_record.start_install_formulaTF = False
-                job_record.start_install_no_color = False
+                job_record.start_install_no_color = job_record.stage in COLOR_DUMP_STAGES
                 job_record.comp_eta = new_comp_eta
                 # Push the primary card due = start_install (hard-date behavior).
                 if job_record.trello_card_id:

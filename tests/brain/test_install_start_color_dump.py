@@ -11,11 +11,16 @@ Two things this pins that are easy to get wrong:
   * "Or later" is load-bearing — a release can jump Ship Planning -> `Complete` and
     skip `Install Start` entirely.
 
+Every path that stamps a hard date decides its color the same way, off the one
+`COLOR_DUMP_STAGES` boundary — the stage cascade, a hand-typed date, the ASAP
+toggle and a Trello mirror-card edit. Each of the last three used to hardcode the
+color on, which would light a dumped row back up.
+
 The ship stages leaving hard dates alone is covered in
 tests/brain/test_shipping_stage_date_discipline.py.
 """
 from datetime import date
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -234,3 +239,108 @@ def test_date_set_by_hand_at_install_start_stays_neutral(app):
 
         db.session.refresh(r)
         assert r.start_install_no_color is True
+
+
+# --- other paths that stamp a hard date -----------------------------------
+
+@pytest.mark.parametrize("stage,expected_no_color", [
+    ("Ship Planning", False),
+    ("Install Start", True),
+])
+def test_asap_toggle_colors_by_stage(app, client, stage, expected_no_color):
+    """Flagging ASAP stamps a hard date one week out. The DATE is stamped either way —
+    only its color follows the stage, so ASAP cannot repaint a row red after install
+    has started."""
+    with app.app_context():
+        r = _make_release(
+            1, "A",
+            stage=stage,
+            start_install=None,
+            start_install_formulaTF=True,
+            start_install_asap=False,
+            start_install_no_color=False,
+            install_hrs=8,
+            num_guys=2,
+        )
+        db.session.commit()
+
+        with patch("app.brain.job_log.routes.update_trello_card"), \
+             patch("app.brain.job_log.scheduling.service.recalculate_all_jobs_scheduling"):
+            resp = client.patch(
+                "/brain/update-start-install/1/A",
+                json={"asap": True},
+            )
+
+        assert resp.status_code == 200, resp.get_data(as_text=True)
+        db.session.refresh(r)
+        assert r.start_install_asap is True
+        assert r.start_install is not None, "the date is stamped regardless of stage"
+        assert r.start_install_no_color is expected_no_color
+
+
+def test_asap_undo_restores_the_previous_color(app, client):
+    """The undo restores prev_no_color from its own payload, so the stage-aware write
+    above must not break it."""
+    with app.app_context():
+        r = _make_release(
+            1, "A",
+            stage="Install Start",
+            start_install=None,
+            start_install_formulaTF=True,
+            start_install_no_color=False,
+            install_hrs=8,
+            num_guys=2,
+        )
+        db.session.commit()
+
+        with patch("app.brain.job_log.routes.update_trello_card"), \
+             patch("app.brain.job_log.scheduling.service.recalculate_all_jobs_scheduling"):
+            client.patch(
+                "/brain/update-start-install/1/A",
+                json={"asap": True},
+            )
+            db.session.refresh(r)
+            assert r.start_install_no_color is True
+
+            set_event = ReleaseEvents.query.filter_by(action="set_asap").one()
+            resp = client.post(f"/brain/events/{set_event.id}/undo")
+
+        assert resp.status_code == 200, resp.get_data(as_text=True)
+        db.session.refresh(r)
+        assert r.start_install_no_color is False
+        assert r.start_install_asap is False
+
+
+@pytest.mark.parametrize("stage,expected_no_color", [
+    ("Ship Planning", False),
+    ("Install Start", True),
+])
+def test_trello_mirror_date_slide_colors_by_stage(app, stage, expected_no_color):
+    """The installer team slides the mirror card's start bar. The new date is written
+    back verbatim either way; only its color follows the stage, so a slide can't
+    resurrect color on a release whose color was already dumped."""
+    with app.app_context():
+        r = _make_release(
+            1, "A",
+            stage=stage,
+            start_install=date(2026, 9, 1),
+            start_install_formulaTF=False,
+            start_install_no_color=expected_no_color,
+            mirror_trello_card_id="mirror-1",
+            trello_card_id=None,
+        )
+        db.session.commit()
+
+        from app.trello.sync import _handle_mirror_writeback
+        handled = _handle_mirror_writeback(
+            "mirror-1",
+            {"start": "2026-09-15T12:00:00.000Z", "due": None},
+            {"change_types": ["start_date_change"], "trello_user_id": None,
+             "time": "2026-09-15T12:00:00.000Z"},
+            MagicMock(operation_id="op-1"),
+        )
+
+        assert handled is True
+        db.session.refresh(r)
+        assert r.start_install == date(2026, 9, 15), "the slid date is written back verbatim"
+        assert r.start_install_no_color is expected_no_color
