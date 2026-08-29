@@ -40,6 +40,7 @@ from app.procore.helpers import (
     resolve_internal_user_id,
     resolve_webhook_user_ids,
     create_submittal_event as _create_submittal_event,
+    drop_drafting_status_for_bic_change,
 )
 from app.brain.drafting_work_load.service import UrgencyService, SubmittalOrderingService
 from app.brain.drafting_work_load.engine import SubmittalOrderingEngine
@@ -1178,6 +1179,7 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, s
             return False, False, False, False, None, ball_in_court, status
 
         ball_updated = False
+        dropped_drafting_status = None
         status_updated = False
         title_updated = False
         manager_updated = False
@@ -1222,12 +1224,17 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, s
                     # Apply compression updates
                     if compression_updates:
                         submittal_map = {s.submittal_id: s for s in old_drafter_submittals}
-                        for submittal_id, new_order in compression_updates:
-                            if submittal_id in submittal_map:
-                                submittal_map[submittal_id].order_number = new_order
+                        # Deliberately NOT `submittal_id`: this loop runs inside the
+                        # function whose parameter has that name, and rebinding it left
+                        # every later log line, urgency bump and SubmittalEvents row
+                        # attributed to the last compressed submittal instead of the one
+                        # actually being updated.
+                        for compressed_id, new_order in compression_updates:
+                            if compressed_id in submittal_map:
+                                submittal_map[compressed_id].order_number = new_order
                                 logger.info(
                                     "submittal_order_compressed",
-                                    submittal_id=submittal_id,
+                                    submittal_id=compressed_id,
                                     order_number=new_order,
                                     drafter=db_ball_value,
                                 )
@@ -1248,7 +1255,11 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, s
             
             record.ball_in_court = ball_in_court
             ball_updated = True
-        
+
+            # The ball moved, so any HOLD / STARTED / NEED VIF the previous drafter
+            # set no longer describes anyone's work — drop it (BUG-16).
+            dropped_drafting_status = drop_drafting_status_for_bic_change(record)
+
         # Check if submitter appears as pending in a later workflow group (triggers order bump)
         submitter_pending = (
             UrgencyService.check_submitter_pending_in_workflow(approvers)
@@ -1335,6 +1346,12 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, s
                         "old": db_ball_value,
                         "new": ball_in_court
                     }
+
+                if dropped_drafting_status is not None:
+                    payload["submittal_drafting_status"] = {
+                        "old": dropped_drafting_status,
+                        "new": ""
+                    }
                 
                 if status_updated:
                     payload["status"] = {
@@ -1389,6 +1406,13 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, s
                     submittal_id=submittal_id,
                     old=db_ball_value,
                     new=ball_in_court,
+                )
+            if dropped_drafting_status is not None:
+                logger.info(
+                    "drafting_status_dropped",
+                    submittal_id=submittal_id,
+                    old=dropped_drafting_status,
+                    reason="ball_in_court_changed",
                 )
             if status_updated:
                 logger.info(
@@ -2192,6 +2216,7 @@ def comprehensive_health_scan(skip_user_prompt=False):
     
     # Ask user if they want to update DB records to match API (only if not skipping prompt)
     updated_count = 0
+    drafting_status_drops = []
     if sync_issues and not skip_user_prompt:
         logger.info("sync_fix_prompted", count=len(sync_issues))
         user_input = input("\nWould you like to update DB records to match API values? (yes/no): ").strip().lower()
@@ -2217,6 +2242,22 @@ def comprehensive_health_scan(skip_user_prompt=False):
                             new=issue['ball_in_court']['api'],
                             source="health_scan",
                         )
+                        # Same rule as the webhook path: the ball moved, so the
+                        # previous drafter's HOLD is stale (BUG-16). Without this the
+                        # audit sweep re-syncs BIC and leaves the status behind.
+                        dropped = drop_drafting_status_for_bic_change(db_record)
+                        if dropped is not None:
+                            drafting_status_drops.append(
+                                (issue['submittal_id'], old_value,
+                                 issue['ball_in_court']['api'], dropped)
+                            )
+                            logger.info(
+                                "drafting_status_dropped",
+                                submittal_id=issue['submittal_id'],
+                                old=dropped,
+                                reason="ball_in_court_changed",
+                                source="health_scan",
+                            )
 
                     # Update status if there's a mismatch
                     if issue['status']['mismatch']:
@@ -2247,6 +2288,26 @@ def comprehensive_health_scan(skip_user_prompt=False):
             try:
                 db.session.commit()
                 logger.info("sync_fix_committed", count=updated_count)
+                # Only auditable once the drop is actually durable.
+                for sid, old_bic, new_bic, dropped in drafting_status_drops:
+                    try:
+                        _create_submittal_event(
+                            str(sid), "updated",
+                            {
+                                "ball_in_court": {"old": old_bic or "", "new": new_bic or ""},
+                                "submittal_drafting_status": {"old": dropped, "new": ""},
+                            },
+                            source='HealthScan',
+                        )
+                    except Exception as event_error:
+                        logger.warning(
+                            "submittal_event_create_failed",
+                            submittal_id=sid,
+                            action="updated",
+                            error=str(event_error),
+                            error_type=type(event_error).__name__,
+                            exc_info=True,
+                        )
             except Exception as e:
                 db.session.rollback()
                 logger.error(
