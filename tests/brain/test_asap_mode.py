@@ -391,12 +391,14 @@ class TestAsapDropOnCompletion:
 
             db.session.refresh(r)
             assert r.stage == "Ship Complete"
-            # Flag cleared (ASAP drop and/or N5 wash); hard date kept, color washed white (N5).
+            # ASAP drop clears the rush flag; the dates it set are left intact.
             assert r.start_install_asap is False
             assert r.start_install == date(2026, 7, 1)
             assert r.comp_eta == date(2026, 7, 3)
             assert r.start_install_formulaTF is False
-            assert r.start_install_no_color is True
+            # BUG-11: the ship stages no longer wash the color. Dropping ASAP takes the
+            # red off, but the date still shows green/yellow until install starts.
+            assert r.start_install_no_color is False
 
             # A child event records the ASAP drop, linked to the stage event, with no date.
             stage_event = ReleaseEvents.query.filter_by(action="update_stage").one()

@@ -1,13 +1,17 @@
 """
 @milehigh-header
 schema_version: 1
-purpose: Neutralize a hard install date's color when a release reaches the complete zone (stage='Complete'/'Install Complete', job_comp='X', invoiced='X') — the DATE is retained, only its red/green/yellow color flagging is stripped (start_install_no_color = True) so a finished release doesn't show an alarming date. The ship date's color follows start_install_no_color, so it neutralizes with the install date and needs no separate flag. Emits a child audit event, linked by parent_event_id.
+purpose: Neutralize a hard install date's color once install has started or the release is closed out (stage `Install Start` or later, job_comp='X', invoiced='X') — the DATE is retained, only its red/green/yellow color flagging is stripped (start_install_no_color = True) so a finished release doesn't show an alarming date. The ship date's color follows start_install_no_color, so it neutralizes with the install date and needs no separate flag. Emits a child audit event, linked by parent_event_id.
 exports:
-  neutralize_install_date_cascade: Set start_install_no_color (and clear start_install_asap) on a completed release, keeping the date
+  neutralize_install_date_cascade: Set start_install_no_color (and clear start_install_asap) on a started/completed release, keeping the date
+  COLOR_DUMP_STAGES: Stages at which a hard install date's color drops (`Install Start` or later)
+  reason_for_stage: Map a color-dump stage to its CascadeReason
 imports_from: [app.models, app.services.job_event_service]
-imported_by: [app/brain/job_log/features/stage/command.py, app/brain/job_log/routes.py]
+imported_by: [app/brain/job_log/features/stage/command.py, app/brain/job_log/features/start_install/command.py, app/brain/job_log/routes.py]
 invariants:
   - Install neutralization is a no-op unless a hard date is present (start_install_formulaTF is False and start_install is set)
+  - The trigger is the STAGE reaching `Install Start` or later, never the `start_install` date arriving (BUG-11)
+  - Color survives the ship stages; Ship Planning / Ship Complete no longer wash it
   - KEEPS start_install / ship_date and the hard-date flag (dates preserved; scheduling still skips hard rows)
   - Sets start_install_no_color=True (renders both install and ship neutral) and clears start_install_asap (no red)
   - Idempotent: no-op when already neutral and not ASAP
@@ -23,14 +27,36 @@ from app.logging_config import get_logger
 logger = get_logger(__name__)
 
 CascadeReason = Literal[
-    'stage_set_to_complete',
+    'stage_set_to_install_start',
     'stage_set_to_install_complete',
+    'stage_set_to_complete',
     'job_comp_set_to_x',
     'invoiced_set_to_x',
-    # N5 shipping-stage wash (hard dates keep their value; color only)
-    'stage_set_to_ship_planning',
-    'stage_set_to_ship_complete',
 ]
+
+# The stages at which a hard install date's color drops: a transition whose
+# DESTINATION is `Install Start` or any stage after it (BUG-11).
+#
+# Mind the two look-alike names: `start_install` is the date field, `Install
+# Start` is the stage value. The trigger is the stage, never the date arriving —
+# a date-driven dump fires on schedule even when the install slipped, hiding the
+# yellow-overdue signal that must never silently disappear.
+#
+# "Or later" is load-bearing: a release can jump Ship Planning -> `Complete` and
+# skip `Install Start` entirely, so a bare equality check on `Install Start`
+# would miss it. This is the tail of the canonical stage order in
+# app.api.helpers.STAGE_HOUR_PERCENTAGES, starting at `Install Start`;
+# tests/brain/test_install_start_color_dump.py asserts the two stay in step.
+COLOR_DUMP_STAGES = ('Install Start', 'Install Complete', 'Complete')
+
+
+def reason_for_stage(stage: str) -> CascadeReason:
+    """Map a color-dump stage to its audit reason. Caller checks COLOR_DUMP_STAGES first."""
+    return {
+        'Install Start': 'stage_set_to_install_start',
+        'Install Complete': 'stage_set_to_install_complete',
+        'Complete': 'stage_set_to_complete',
+    }[stage]
 
 
 def neutralize_install_date_cascade(
@@ -40,7 +66,7 @@ def neutralize_install_date_cascade(
     reason: CascadeReason,
     source: str = 'Brain',
 ) -> bool:
-    """Strip the color from a hard install date once the release is installed/complete.
+    """Strip the color from a hard install date once install has started (or it is complete).
 
     Keeps start_install (and the hard-date flag) so the actual date is preserved, but sets
     start_install_no_color=True so it renders neutral instead of red/green/yellow, and clears
