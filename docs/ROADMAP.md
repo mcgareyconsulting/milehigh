@@ -1,6 +1,6 @@
 ---
 project: MHMW
-updated: 2026-08-29
+updated: 2026-08-30
 verified: origin/main @ fa85582 (PR #354 BUG-16 + BUG-18)
 config:                       # inputs to derived math — store inputs, never results
   horizon:
@@ -233,7 +233,7 @@ view-local arrangement. That is the point of the feature, not a side effect.
 - 2026-08-29 · decision · src — — unassigned-lane membership = **no installer AND (ready to ship OR stored at Mile High OR past paint complete)**, Bill's stated intake. "Any release with no installer" was considered and rejected — hundreds of drafting/fab rows would drown the column
 
 ### T2 · Admin member management — permissions + onboarding, consolidated
-*W5 · not-started · class build · due — · deps — · owner daniel · src bill-2026-08-15#L83 · upd 2026-08-15*
+*W5 · in_progress · class build · due — · deps — · owner daniel · src bill-2026-08-15#L83 · upd 2026-08-30*
 
 Effort M–L. **Runs in tandem with T1**, not queued behind it. The problem is
 scatter: sub invites live in the subs/T&M surface, staff roles are boolean flags
@@ -254,10 +254,29 @@ folds into the `User`/role table is a build-time call, not a roadmap decision.
 yet, but long term I think that's a deal"*); it is elevated here because the
 permission model underneath it is load-bearing for T3.
 
+**Stage as of 2026-08-30:** Bill's six actions from [#L83], against this
+page. **See all users is the slice that landed.** The other five are not
+started.
+
+| Bill's action | Status |
+|---|---|
+| See all users | **done** — admin-only `/admin/users` (`GET /brain/directory`). First / Last / email / role. Split Employees (`users`) vs Subcontractors (`subcontractors`). Shared `table-fixed` columns so the two sections line up. Rail item sits under Matching; also in the top bar and drawer |
+| Add people | open |
+| Assign permissions | open — still the `User` booleans (`Admin` / `Drafter` / both / `Employee`); subs labeled `Subcontractor` |
+| Send invite | open — sub invite stays on the Subs roster until it relocates here |
+| Reset password | open |
+| Block | open |
+
+Also still open, not in the spoken six: relocate sub invite onto this page, and
+the role-model decision (boolean flags cannot express one person holding
+multiple named roles). T3 visibility walls are unchanged.
+
 **Trail**
 - 2026-08-15 · transcript · src bill-2026-08-15#L83 — admin user view: add, assign permissions, invite, see all users, reset password, block
 - 2026-08-15 · decision · src — — one page covering staff + subs; sub invite relocates here; admins own elevation/deferral; consolidation of scattered admin surfaces invited; runs in tandem with T1
 - 2026-08-20 · spec · src fieldops-2026-08-20#§3.2 — written spec confirms the Procore-style admin center (invite by email, first-time onboarding, role templates, checkbox permission overrides, MHMW/External/Vendor classification, audit log of who invited/changed what) and adds a load-bearing requirement: **one person may hold multiple roles** (e.g. PM + Field Super). Boolean flags on `User` cannot express that — the "build-time call" on whether `Subcontractor` folds into a `User`/role table now has a real constraint pushing toward an actual role model
+- 2026-08-30 · build · src — — first pass landed on `feature/user-directory`: read-only admin directory (Employees from `users`, Subcontractors from `subcontractors`), First/Last/email/role, no controls. Tables stay separate. T3 visibility walls are unchanged
+- 2026-08-30 · note · src — — **see all users** is the completed slice of Bill's six [#L83]. Add / assign permissions / invite / reset password / block remain open. Directory reviewed in-session: column widths locked so Employees and Subcontractors share one horizontal grid; Users rail icon moved under Matching. Status stays `in_progress`; queue.now stays T1
 
 ### T3 · Subcontractor visibility — short-term scope
 *W5 · not-started · class build · due — · deps T2 · owner daniel · src bill-2026-08-15#L93 · upd 2026-08-20*
@@ -1733,6 +1752,8 @@ Append-only log — never edited, never pruned.
 - 2026-08-29 · **fix queue** · re-stocked — BUG-16 (DWL HOLD must drop on a BIC change — high, client-asked), BUG-17 (To-Do page cleanup — blocked on Daniel's stub), BUG-18 (icon rail pops in role-gated rows on load — diagnosed, low). Triaged with entry points so BUG-16 and BUG-18 can be handed to an agent cold; BUG-14 explicitly held back as device-dependent. src daniel-2026-08-29
 - 2026-08-29 · **BUG-17** · unblocked — the To-Do page reference arrived the same day it was asked for (HPB EOS standalone To-Dos page, 44 files). Scoped in `docs/design/todos-page/README.md`. The triage headline is that **we have no to-do table**: ours are `ChecklistItem` rows the meeting extractor creates, with no create / delete / archive / field-edit path and role-based rather than per-row scoping, so the reference's whole write model has no counterpart — "port the page" is not a coherent instruction and the doc says so. Split into take-now / needs-a-backend-touch / decide-first; Tier 1 is decision-free and is the first slice. The bundle itself is **parked outside git** at `~/Desktop/Reference/eos-todos-reference/` — this repo is public and that is another app's source, so it follows the transcripts convention: only the synthesized doc is committed. Flagged the rocks/milestones column as dormant-but-relevant if D8 (EOS Module) ever lands. src eos-todos-2026-08-29
 - 2026-08-29 · **BUG-17** · parked — Daniel pulled it out of the bug pass hours after scoping it: *"drop the reference for the to-dos page and the to-dos from the bug pass, I'll circle back on that."* Class `deferred`, re-check trigger = Daniel raises it. The scope survives intact at `~/Desktop/Reference/eos-todos-reference/SCOPE-for-MHMW.md`, moved out of `docs/design/todos-page/` so the analysis sits with its source material instead of in a public repo — the same reason the reference tree was never committed. Nothing to re-derive when it comes back. src —
+- 2026-08-30 · **T2** · first pass — admin-only read-only user directory (`/admin/users`, `GET /brain/directory`): First/Last/email/role, split Employees vs Subcontractors. No invite/permissions/reset/block. Status `in_progress`; the rest of T2 and all of T3 are still open. src —
+- 2026-08-30 · **T2** · stage — of Bill's six actions [#L83], **see all users is done**. Add people, assign permissions, send invite, reset password, and block are not started. Directory columns share one `table-fixed` grid; Users sits under Matching on the left rail. Queue unchanged (`now` T1). src —
 
 ---
 
