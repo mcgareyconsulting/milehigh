@@ -1,16 +1,16 @@
 """
 @milehigh-header
 schema_version: 1
-purpose: N5 shipping-stage date discipline — when a release enters Ship Planning or Ship Complete, blank stale formula/estimated dates (and lock against re-estimation) or wash hard-date color to white. Complete-zone job_comp cascade stays separate; this owns only date behavior at shipping stages.
+purpose: N5 shipping-stage date discipline — when a release enters Ship Planning or Ship Complete, blank stale formula/estimated dates and lock against re-estimation. Hard dates are left entirely alone here (BUG-11 moved their color dump to `Install Start` or later); the early return for them exists to keep them out of the blanking path.
 exports:
-  apply_shipping_stage_date_discipline: Apply formula-blank or hard-date wash for Ship Planning / Ship Complete
+  apply_shipping_stage_date_discipline: Blank stale formula dates at Ship Planning / Ship Complete
   SHIPPING_STAGES: Stages that trigger the discipline
-imports_from: [app.models, app.services.job_event_service, app.brain.job_log.features.start_install.neutralize_install_date_cascade]
+imports_from: [app.models, app.services.job_event_service]
 imported_by: [app/brain/job_log/features/stage/command.py]
 invariants:
   - Fork is hard date vs formula: hard = start_install_formulaTF is False AND start_install is set
+  - Hard path is a deliberate no-op — it exists only to protect the date from the formula blanking below (BUG-11)
   - Formula path blanks start_install, ship_date, formula text, and comp_eta; sets formulaTF=False so scheduling never re-estimates
-  - Hard path keeps dates and washes color via neutralize_install_date_cascade (no ASAP red / green / yellow)
   - Idempotent: already-blank locked rows and already-neutral hard dates are no-ops
   - Child audit events carry parent_event_id for stage-undo bundling visibility
 """
@@ -19,9 +19,6 @@ from datetime import datetime
 from app.models import Releases
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
-from app.brain.job_log.features.start_install.neutralize_install_date_cascade import (
-    neutralize_install_date_cascade,
-)
 
 logger = get_logger(__name__)
 
@@ -57,8 +54,7 @@ def apply_shipping_stage_date_discipline(
 
     Returns a small extras dict for the stage command response:
       - formula_dates_blanked: True when estimated dates were cleared
-      - dates_washed: True when hard-date color was neutralized
-    Empty dict on no-op / wrong stage. Caller commits.
+    Empty dict on no-op / wrong stage / hard date. Caller commits.
     """
     if stage not in SHIPPING_STAGES:
         return {}
@@ -70,21 +66,14 @@ def apply_shipping_stage_date_discipline(
     )
 
     if _is_hard_install(job_record):
-        washed = neutralize_install_date_cascade(
-            job_record,
-            parent_event_id=parent_event_id,
-            reason=reason,
-            source=source,
-        )
-        if washed:
-            logger.info(
-                "shipping_stage_dates_washed",
-                job=job_record.job,
-                release=job_record.release,
-                stage=stage,
-                parent_event_id=parent_event_id,
-            )
-            return {"dates_washed": True}
+        # BUG-11: a hard date's color used to be washed white right here. It now
+        # survives the ship stages and drops only on a transition into `Install
+        # Start` or later (see COLOR_DUMP_STAGES) — washing it at Ship Planning
+        # made an overdue date vanish while the install was still ahead of us.
+        #
+        # The early return stays load-bearing even with nothing left to do: it is
+        # what keeps a hard date out of the formula-blanking path below, which
+        # would erase the date entirely.
         return {}
 
     # Formula / estimated (or empty formula-driven) path: blank and lock.

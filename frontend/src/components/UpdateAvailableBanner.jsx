@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { checkVersion } from '../utils/versionCheck';
 
+// The z-[65] below is chosen, not arbitrary. The banner has to sit above the app chrome it
+// physically overlaps at the top of the viewport — the notification pod and Carmen's
+// launcher (z-50) and Carmen's drop panel (z-[61]). At the old z-50 it merely tied
+// with the pod, so DOM order decided and the pod, mounted later, covered the Reload
+// button. It stays BELOW modal scrims (z-[70]) and portaled dropdowns (z-[1000]):
+// those are focused interactions that should cover a passive banner.
 export default function UpdateAvailableBanner() {
   const [stale, setStale] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -26,7 +32,7 @@ export default function UpdateAvailableBanner() {
       role="status"
       aria-live="polite"
       data-testid="update-available-banner"
-      className="fixed top-0 inset-x-0 z-50 bg-amber-50 dark:bg-amber-900/40 border-b-2 border-amber-500 text-amber-900 dark:text-amber-100 shadow-sm"
+      className="fixed top-0 inset-x-0 z-[65] bg-amber-50 dark:bg-amber-900/40 border-b-2 border-amber-500 text-amber-900 dark:text-amber-100 shadow-sm"
     >
       <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 text-sm">
