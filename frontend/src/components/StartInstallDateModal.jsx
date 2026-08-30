@@ -23,6 +23,7 @@
 import React, { useState, useEffect } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { toYmd, subtractBusinessDays, addBusinessDays } from '../utils/formatters';
+import { isInstallStartOrLater } from '../utils/installDateColor';
 
 const SHIPPING_STAGES = new Set(['Ship Planning', 'Ship Complete']);
 
@@ -38,6 +39,9 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
     const [shipDateInput, setShipDateInput] = useState('');
     const [linked, setLinked] = useState(true);
     const [asapToggle, setAsapToggle] = useState(false);
+    // Past `Install Start` the color is already dumped and the server rejects a set
+    // with 409 asap_after_install_start (BUG-11).
+    const asapLocked = isInstallStartOrLater(stage) && !isAsap;
     const [installer, setInstaller] = useState('');
     const [installerOptions, setInstallerOptions] = useState([]);
     const [error, setError] = useState('');
@@ -189,17 +193,25 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
                 </div>
 
                 <div className="p-6">
-                    <label className="flex items-start gap-2 mb-4 cursor-pointer select-none">
+                    {/* ASAP is a rush flag on work that has not started. The server refuses
+                        it once the stage is `Install Start` or later, so don't offer it —
+                        an enabled control that 409s is worse than a disabled one. */}
+                    <label className={`flex items-start gap-2 mb-4 select-none ${
+                        asapLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                    }`}>
                         <input
                             type="checkbox"
                             checked={asapToggle}
                             onChange={handleAsapToggle}
+                            disabled={asapLocked}
                             className="mt-1 h-4 w-4 accent-red-600"
                         />
                         <span>
                             <span className="block text-sm font-semibold text-gray-700">ASAP Mode</span>
                             <span className="block text-xs text-gray-500">
-                                Sets Start Install one week out and rips to Shipping Planning at Paint Complete.
+                                {asapLocked
+                                    ? 'Unavailable once install has started.'
+                                    : 'Sets Start Install one week out and rips to Shipping Planning at Paint Complete.'}
                             </span>
                         </span>
                     </label>

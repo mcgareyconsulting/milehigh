@@ -15,7 +15,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { setAsapAndAssign } from '../utils/asap';
-import { localTodayStr, toYmd, formatFabOrder } from '../utils/formatters';
+import { formatFabOrder } from '../utils/formatters';
+import { classifyInstallDate } from '../utils/installDateColor';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import { ReleaseHubModal } from './ReleaseHubModal';
 import { MaterialOrderBadge } from './MaterialOrderBadge';
@@ -1220,26 +1221,22 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
                     // Handle Start install column with clickable cell that opens modal
                     if (column === 'Start install') {
-                        // N5: at shipping stages hard dates stay washed white (also covers optimistic
-                        // save before refetch brings back start_install_no_color).
-                        const atShippingStage = localStage === 'Ship Planning' || localStage === 'Ship Complete';
-                        const isAsap = !atShippingStage && row['start_install_asap'] === true;
+                        // BUG-11: color drops at `Install Start` or later, NOT at the ship
+                        // stages. Keying on localStage also covers the optimistic window,
+                        // before the refetch brings back start_install_no_color.
+                        const { isAsap, isHardDate, isHardDatePast } = classifyInstallDate({
+                            stage: localStage,
+                            asap: row['start_install_asap'],
+                            noColor: row['start_install_no_color'],
+                            formulaTF: row['start_install_formulaTF'],
+                            installDate: localStartInstall,
+                        });
                         const displayValue = isAsap ? 'ASAP' : formatDate(localStartInstall);
-                        // A no-color date (N5 shipping wash / complete-zone neutralize) shows plainly —
-                        // not the green/yellow hard-date treatment.
-                        const isNoColor = atShippingStage || row['start_install_no_color'] === true;
-                        // Hard date is when start_install_formulaTF is explicitly false and there's a date value
-                        const isHardDate = !isAsap && !isNoColor && row['start_install_formulaTF'] === false && localStartInstall;
                         // Formula date is when start_install_formulaTF is true or formula starts with '='
                         const isFormulaDate = !isAsap && (row['start_install_formulaTF'] === true || (row['start_install_formula'] && row['start_install_formula'].startsWith('=')));
                         // IMPORTANT: avoid conflicting bg-* utilities (Tailwind utility order, not class string order,
                         // determines the winner). If we include both rowBgClass and bg-red-500, the row bg can win,
                         // leaving white text on a light background (looks blank until hover).
-                        // Hard dates compare to today's LOCAL date (toISOString would shift to UTC).
-                        const now = new Date();
-                        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-                        const installDay = String(localStartInstall ?? '').split('T')[0];
-                        const isHardDatePast = isHardDate && installDay < todayStr;
                         let startInstallBgClass;
                         if (isAsap) {
                             startInstallBgClass = 'jl-flag jl-flag-red';
@@ -1281,16 +1278,18 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     // install is still green. ASAP propagates red; formula/no-color/no-date
                     // fall through to neutral, matching Start install above.
                     if (column === 'Ship Date') {
-                        const atShippingStage = localStage === 'Ship Planning' || localStage === 'Ship Complete';
-                        const isAsap = !atShippingStage && row['start_install_asap'] === true;
+                        // Same classification as the Start install cell, keyed on the INSTALL
+                        // date so the two columns can never disagree.
+                        const { isAsap, isNoColor, isHardDate, isHardDatePast } = classifyInstallDate({
+                            stage: localStage,
+                            asap: row['start_install_asap'],
+                            noColor: row['start_install_no_color'],
+                            formulaTF: row['start_install_formulaTF'],
+                            installDate: localStartInstall,
+                        });
                         // Show "ASAP" instead of the underlying date, matching the Start install cell.
                         const displayValue = isAsap ? 'ASAP' : formatDate(localShipDate);
-                        // N5: wash at shipping stages (mirrors Start install cell).
-                        const isNoColor = atShippingStage || row['start_install_no_color'] === true;
                         const hasDate = !!localShipDate;
-                        // Same hard-date test the Start install cell uses.
-                        const isHardDate = !isAsap && !isNoColor && row['start_install_formulaTF'] === false && localStartInstall;
-                        const isHardDatePast = isHardDate && toYmd(localStartInstall) < localTodayStr();
                         let shipBgClass;
                         if (isAsap) {
                             shipBgClass = 'jl-flag jl-flag-red';

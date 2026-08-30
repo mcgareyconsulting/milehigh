@@ -45,6 +45,9 @@ from zoneinfo import ZoneInfo
 from app.logging_config import get_logger, SyncContext, log_sync_operation
 from app.services.job_event_service import JobEventService
 from app.brain.job_log.features.fab_order.tier import apply_fab_order_for_stage
+from app.brain.job_log.features.start_install.neutralize_install_date_cascade import (
+    COLOR_DUMP_STAGES,
+)
 import uuid
 import re
 from app.config import Config as cfg
@@ -249,11 +252,14 @@ def _handle_mirror_writeback(card_id, card_data, event_info, sync_op):
 
         if start_changed:
             old_start = cur_start
-            # Verbatim: the mirror start becomes a hard start_install (normal color).
+            # Verbatim: the mirror start becomes a hard start_install. Normal colour
+            # before install starts; BUG-11 keeps it neutral at `Install Start` or later,
+            # so editing the mirror card's date doesn't resurrect colour on a release
+            # whose colour was already dumped.
             mirror_rec.start_install = new_start_date
             mirror_rec.start_install_formula = None
             mirror_rec.start_install_formulaTF = False
-            mirror_rec.start_install_no_color = False
+            mirror_rec.start_install_no_color = mirror_rec.stage in COLOR_DUMP_STAGES
             JobEventService.create_and_close(
                 job=mirror_rec.job, release=mirror_rec.release,
                 action="update_start_install", source="Trello",

@@ -49,7 +49,10 @@ from app.api.helpers import DEFAULT_FAB_ORDER, active_releases_filter
 from app.brain.job_log.features.fab_order.tier import apply_fab_order_for_stage
 from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
 from app.brain.job_log.features.start_install.assign_installer import AssignInstallerCommand
-from app.brain.job_log.features.start_install.neutralize_install_date_cascade import neutralize_install_date_cascade
+from app.brain.job_log.features.start_install.neutralize_install_date_cascade import (
+    neutralize_install_date_cascade,
+    COLOR_DUMP_STAGES,
+)
 from app.brain.job_log.features.ship_date.command import UpdateShipDateCommand
 from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
 from datetime import datetime, timedelta
@@ -1793,6 +1796,16 @@ def update_start_install(job, release):
                         'limit': 2,
                     }), 409
 
+            # ASAP is a rush flag on work that has not started. Once the stage is
+            # `Install Start` or later it is meaningless — and the cascade has already
+            # dumped this row's color, so honoring it would repaint the row red.
+            if new_asap and job_record.stage in COLOR_DUMP_STAGES:
+                return jsonify({
+                    'error': 'asap_after_install_start',
+                    'stage': job_record.stage,
+                    'message': 'ASAP cannot be set once install has started.',
+                }), 409
+
             payload = {'from': old_asap, 'to': new_asap}
             new_start = None
             new_comp_eta = None
@@ -1823,10 +1836,16 @@ def update_start_install(job, release):
 
             job_record.start_install_asap = new_asap
             if new_asap:
-                # Hard, normal-color date one week out; comp_eta from num_guys.
+                # Hard date one week out; comp_eta from num_guys. The date itself is set
+                # the same either way — only its colour depends on the stage. BUG-11: past
+                # `Install Start` the colour is already dumped, so flagging ASAP there must
+                # not light the row back up red. `prev_no_color` was captured into the
+                # payload above, so the undo still restores whatever was here before.
                 job_record.start_install = new_start
                 job_record.start_install_formula = None
                 job_record.start_install_formulaTF = False
+                # Always colored: the guard above already refused every stage where the
+                # color is dumped, so this branch only runs before install has started.
                 job_record.start_install_no_color = False
                 job_record.comp_eta = new_comp_eta
                 # Push the primary card due = start_install (hard-date behavior).

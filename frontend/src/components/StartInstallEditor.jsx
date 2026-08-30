@@ -7,10 +7,11 @@
  *   the same actions available from the desktop table cell, without embedding JobsTableRow.
  * exports:
  *   default StartInstallEditor: Props — row, onUpdate, formatDate, variant ('tile' | 'pill'), className.
- * imports_from: [react, ./StartInstallDateModal, ../services/jobsApi, ../utils/asap, ../utils/formatters]
+ * imports_from: [react, ./StartInstallDateModal, ../services/jobsApi, ../utils/asap, ../utils/formatters, ../utils/installDateColor]
  * imported_by: [frontend/src/components/JobLogCard.jsx, frontend/src/components/JobLogRow.jsx]
  * invariants:
- *   - Mirrors JobsTableRow's Start install colors: ASAP=red, past hard date=yellow, future hard date=green.
+ *   - Colors come from utils/installDateColor (one copy, shared with JobsTableRow): ASAP=red,
+ *     past hard date=yellow, future hard date=green, dump zone / no-color=plain.
  *   - The trigger stops click propagation so it never triggers the parent card's open/expand handler.
  *   - Editing requires an onUpdate callback; without it (e.g. Archive cards) the control renders read-only.
  */
@@ -18,6 +19,7 @@ import React, { useState } from 'react';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { jobsApi } from '../services/jobsApi';
 import { setAsapAndAssign } from '../utils/asap';
+import { classifyInstallDate } from '../utils/installDateColor';
 import { formatDateShort } from '../utils/formatters';
 
 export default function StartInstallEditor({
@@ -34,17 +36,13 @@ export default function StartInstallEditor({
     const value = row['Start install'];
 
     const stage = row['Stage'] ?? row.stage;
-    const atShippingStage = stage === 'Ship Planning' || stage === 'Ship Complete';
-    // N5: shipping stages never show ASAP red / hard-date green-yellow.
-    const isAsap = !atShippingStage && row['start_install_asap'] === true;
-    // A no-color date (shipping wash / complete-zone neutralize) shows the date plainly —
-    // neither the red ASAP nor the green/yellow hard-date treatment.
-    const isNoColor = atShippingStage || row['start_install_no_color'] === true;
-    const isHardDate = !isAsap && !isNoColor && row['start_install_formulaTF'] === false && !!value;
-    const now = new Date();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const installDay = String(value ?? '').split('T')[0];
-    const isHardDatePast = isHardDate && installDay < todayStr;
+    const { isAsap, isHardDate, isHardDatePast } = classifyInstallDate({
+        stage,
+        asap: row['start_install_asap'],
+        noColor: row['start_install_no_color'],
+        formulaTF: row['start_install_formulaTF'],
+        installDate: value,
+    });
 
     const displayValue = isAsap ? 'ASAP' : (formatDate(value) || '—');
 
