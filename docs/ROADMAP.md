@@ -1,6 +1,6 @@
 ---
 project: MHMW
-updated: 2026-08-29
+updated: 2026-08-30
 verified: origin/main @ d916d1d (PR #353 bug queue re-stock)
 config:                       # inputs to derived math — store inputs, never results
   horizon:
@@ -74,10 +74,11 @@ from Daniel's own list (BUG-16 through BUG-18).
 
 **BUG-16 and BUG-18 both built 2026-08-29** (branch `claude/bug-16-18-fixes-eqqca9`).
 
-**Open as of 2026-08-29, in handoff order:** BUG-11 (high, client-decided —
-trigger now settled, fully spec'd), BUG-13 (low, reproduce first),
-BUG-14 (low, **needs a physical iPad** — don't hand this to an agent).
-**BUG-17 is parked** (Daniel, 2026-08-29) and is not part of this pass.
+**Open as of 2026-08-30, in handoff order:** BUG-11 (high, client-decided —
+trigger now settled, fully spec'd), BUG-13 (low, reproduce first).
+**BUG-14 shipped 2026-08-30** pending a physical-iPad confirm (no device this week;
+did not take the client's rotation-lock fallback). **BUG-17 is parked**
+(Daniel, 2026-08-29) and is not part of this pass.
 
 | ID | Fix | Entry point | Pri |
 |---|---|---|---|
@@ -88,7 +89,7 @@ BUG-14 (low, **needs a physical iPad** — don't hand this to an agent).
 | BUG-15 | ~~Meeting-bot transcription autodetects language — mis-detected a production standup as Portuguese and translated a line [bill-2026-08-21#§2]~~ **built 2026-08-21**: `language_code: "en"` + explicit `prioritize_accuracy` mode pinned on every dispatch (covers the calendar poller and the on-demand route, which share `dispatch_bot`) | `app/brain/meetings/recall.py` (`TRANSCRIPT_LANGUAGE`); test `tests/brain/test_calendar_recall.py::test_dispatch_bot_pins_transcription_to_english` | med |
 | BUG-12 | ~~Carmen lookahead tool returns a stale window — Novel Flatirons pull starts in May [bill-2026-08-21#L133]~~ **built 2026-08-21** (PR #348): the symptom was the rendered Gantt axis, not the data. `_chart_range` expanded the x-axis *backwards* to cover any past-dated phase bar, so one stale bar rewound the whole chart to May. It now starts at the declared window and only extends forward — the window is a viewport, not a row filter. The other two halves of Bill's ask were **already true and predate the bug**: the schedule window is 3 weeks from `today` (`schedule_builder.py:427`), and the phase labels (Drafting / Fabrication / Paint / Shipping / Installation) landed 2026-07-25 | `app/brain/lookahead/export_pdf.py` (`_chart_range`); test `tests/lookahead/test_export_pdf.py` | med |
 | BUG-13 | Backspace intermittently dead in the meeting-notes to-do input [bill-2026-08-21#L95]. Unreproduced — Bill and Daniel have both seen it; instrument before fixing | `frontend/src/pages/Meetings.jsx` (to-do note input) | low |
-| BUG-14 | iPad rotation dumps modal/scroll state — *"you're like, where was I?"* [bill-2026-08-21#L145]. Likely a remount on orientation change; fits the tablet-tuning lane (`docs/tablet-tuning.md`) | frontend, component TBD — reproduce on the physical iPad first | low |
+| BUG-14 | ~~iPad rotation dumps modal/scroll state — *"you're like, where was I?"* [bill-2026-08-21#L145]~~ **built 2026-08-30, pending physical-iPad confirm.** Diagnosed without the device: `useBreakpoint` buckets at 1024 (lg) and 1280 (xl) swap the mounted cards/table tree on rotate (10.2" iPad with Table picked: portrait cards → landscape table; 12.9" iPad Pro Auto: 1024 cards → 1366 table). The open `ReleaseHubModal` lived *inside* the unmounted tree (`JobLogCardGrid` / `JobsTableRow`), so the dialog and list scroll both died. Fix: host the hub on the page that survives the swap (`JobLogContent`, plus Archive and DWL which have the same remount), persist list + modal-pane scroll across `orientationchange`, and stash the open dialog in `sessionStorage` so a Safari reload-on-rotate can reopen it. Did **not** rotation-lock. Device confirm still owed — Chrome width-cross is the stand-in | `frontend/src/pages/JobLogContent.jsx` (hosted hub); `frontend/src/utils/viewportView.js` (the remount matrix); `frontend/src/hooks/usePersistScroll.js` | low |
 | BUG-9 | ~~Fab order not flipping 2→1 at paint → complete; order cleared inconsistently~~ **built** | `app/brain/job_log/features/fab_order/tier.py` (tier logic: Complete=NULL, 0, 1, 2, dynamic 3+) | **high** |
 | BUG-10 | ~~Sub invite email ships a `localhost:5173` link — `APP_BASE_URL` unset~~ **built** (code + Render config) | `app/config.py:76`, `app/brain/tm/subcontractors/command.py`. Acceptance test — one real invite to Bill — still to run | **high — unblocked A1** |
 | BUG-8 | ~~DWL release-number generator doesn't check the archive; job log rejects the number later~~ **built** | `app/procore/procore.py` (`_archived_rel_numbers_for_job`) | med |
@@ -1724,6 +1725,7 @@ Append-only log — never edited, never pruned.
 - 2026-08-29 · **fix queue** · re-stocked — BUG-16 (DWL HOLD must drop on a BIC change — high, client-asked), BUG-17 (To-Do page cleanup — blocked on Daniel's stub), BUG-18 (icon rail pops in role-gated rows on load — diagnosed, low). Triaged with entry points so BUG-16 and BUG-18 can be handed to an agent cold; BUG-14 explicitly held back as device-dependent. src daniel-2026-08-29
 - 2026-08-29 · **BUG-17** · unblocked — the To-Do page reference arrived the same day it was asked for (HPB EOS standalone To-Dos page, 44 files). Scoped in `docs/design/todos-page/README.md`. The triage headline is that **we have no to-do table**: ours are `ChecklistItem` rows the meeting extractor creates, with no create / delete / archive / field-edit path and role-based rather than per-row scoping, so the reference's whole write model has no counterpart — "port the page" is not a coherent instruction and the doc says so. Split into take-now / needs-a-backend-touch / decide-first; Tier 1 is decision-free and is the first slice. The bundle itself is **parked outside git** at `~/Desktop/Reference/eos-todos-reference/` — this repo is public and that is another app's source, so it follows the transcripts convention: only the synthesized doc is committed. Flagged the rocks/milestones column as dormant-but-relevant if D8 (EOS Module) ever lands. src eos-todos-2026-08-29
 - 2026-08-29 · **BUG-17** · parked — Daniel pulled it out of the bug pass hours after scoping it: *"drop the reference for the to-dos page and the to-dos from the bug pass, I'll circle back on that."* Class `deferred`, re-check trigger = Daniel raises it. The scope survives intact at `~/Desktop/Reference/eos-todos-reference/SCOPE-for-MHMW.md`, moved out of `docs/design/todos-page/` so the analysis sits with its source material instead of in a public repo — the same reason the reference tree was never committed. Nothing to re-derive when it comes back. src —
+- 2026-08-30 · **BUG-14** · built, pending device confirm — iPad rotation dump. Root cause is a cards↔table remount when rotate crosses 1024/1280, not a Safari reload (though sessionStorage covers that too). Modal state lifted off the unmounted tree; scroll restored on orientationchange; no rotation lock. Confirm on the physical iPad when it's back: open a release hub, scroll the list, rotate, still there. src bill-2026-08-21#L145
 
 ---
 

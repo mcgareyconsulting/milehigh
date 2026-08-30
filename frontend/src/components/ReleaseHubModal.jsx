@@ -16,7 +16,7 @@
  *   - Activity rail renders on Details + Change Log only — Attachments takes the full width
  * updated_by_agent: 2026-08-08T00:00:00Z
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { JobDetailsBody } from './JobDetailsBody';
@@ -24,6 +24,7 @@ import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
 import { ReleaseNotesRail } from './ReleaseNotesRail';
 import EventsList from './EventsList';
 import { stageTint } from '../utils/stageTint';
+import { usePersistScroll } from '../hooks/usePersistScroll';
 
 const TABS = [
     { key: 'details', label: 'Details' },
@@ -55,6 +56,10 @@ export function ReleaseHubModal({
 }) {
     const startTab = normalizeTab(initialTab);
     const [activeTab, setActiveTab] = useState(startTab);
+    const detailsScrollStore = useRef(0);
+    const changelogScrollStore = useRef(0);
+    const detailsScroll = usePersistScroll(detailsScrollStore);
+    const changelogScroll = usePersistScroll(changelogScrollStore);
     // Panes render once activated and then stay mounted (hidden) so an
     // in-progress comment or note draft isn't thrown away by a tab switch.
     const [visited, setVisited] = useState(() => ({ [startTab]: true }));
@@ -67,7 +72,9 @@ export function ReleaseHubModal({
         setActiveTab(tab);
         setVisited((prev) => ({ ...prev, [tab]: true }));
         setBadgeFromPane(0);
-    }, [isOpen, initialTab]);
+        detailsScrollStore.current = 0;
+        changelogScrollStore.current = 0;
+    }, [isOpen, initialTab, job?.id]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -124,7 +131,9 @@ export function ReleaseHubModal({
                 className="dc-pop bg-surface border border-hairline-strong flex flex-col overflow-hidden"
                 style={{
                     width: 'min(1380px, 96vw)',
-                    height: 'min(860px, 94vh)',
+                    // dvh tracks the visual viewport on iPad rotate; vh alone
+                    // jumps with Safari chrome and dumps the pane scroll (BUG-14).
+                    height: 'min(860px, 94dvh, 94vh)',
                     borderRadius: 14,
                     boxShadow: 'var(--shadow)',
                 }}
@@ -247,6 +256,8 @@ export function ReleaseHubModal({
                     <div className="min-w-0 relative">
                         {visited.details && (
                             <div
+                                ref={detailsScroll.ref}
+                                onScroll={detailsScroll.onScroll}
                                 className={`absolute inset-0 overflow-auto ${activeTab === 'details' ? '' : 'hidden'}`}
                                 style={{ padding: '16px 18px 22px' }}
                                 role="tabpanel"
@@ -280,6 +291,8 @@ export function ReleaseHubModal({
 
                         {visited.changelog && (
                             <div
+                                ref={changelogScroll.ref}
+                                onScroll={changelogScroll.onScroll}
                                 className={`absolute inset-0 overflow-auto ${activeTab === 'changelog' ? '' : 'hidden'}`}
                                 style={{ padding: '16px 18px 22px' }}
                                 role="tabpanel"
