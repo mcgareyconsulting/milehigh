@@ -43,7 +43,7 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { locationEnabled, locationRequesting, handleLocationToggle } = useLocationContext();
   // Seeded from the last known answer rather than all-false, so an admin doesn't
-  // paint the non-admin nav first and then gain six role-gated rows a round-trip
+  // paint the non-admin nav first and then gain seven role-gated rows a round-trip
   // later — in rail mode that re-lays out every row, since Rail derives its row
   // height from the viewport against the row count. checkAuth still decides.
   const [roles, setRoles] = useState(readCachedRoleFlags);
@@ -211,6 +211,7 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
                 {canSeeReport && navBtn('/invoicing-report', 'Invoicing')}
                 {/* Rentals nav removed 2026-07-12 (company change) — /rental-reports route + backend stay for direct URL / re-enable */}
                 {/* Subs collapses Subcontractors (invite/registry) + Invoice Paid under one stub */}
+                {isAdmin && navBtn('/admin/users', 'Users')}
                 {isAdmin && navBtn('/subs', 'Subs')}
                 {isAdmin && navBtn('/meetings', 'Meetings')}
                 {isAdmin && navIconBtn('/board', 'Ongoing Complaints', (

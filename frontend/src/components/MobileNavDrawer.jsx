@@ -27,6 +27,7 @@ const NAV_ITEMS = [
 // Rentals nav removed 2026-07-12 (company change) — route + backend intact.
 // Subs shell covers Subcontractors (invite/registry) + Invoice Paid; no separate Subcontractors item.
 const ADMIN_ITEMS = [
+    { label: 'Users', path: '/admin/users' },
     { label: 'Subs', path: '/subs' },
     { label: 'Meetings', path: '/meetings' },
     { label: 'Ongoing Complaints', path: '/board' },
