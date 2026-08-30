@@ -75,6 +75,7 @@ from Daniel's own list (BUG-16 through BUG-18).
 **BUG-16, BUG-18 and BUG-11 all built 2026-08-29** (branch
 `claude/bug-16-18-fixes-eqqca9`; the branch name predates BUG-11 joining it).
 
+
 **Open as of 2026-08-30, in handoff order:** BUG-13 (low, reproduce first),
 BUG-14 (low — **first pass landed, no iPad test yet**; root cause tracked down).
 **BUG-17 is parked** (Daniel, 2026-08-29) and is not part of this pass.

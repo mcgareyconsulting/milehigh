@@ -7,7 +7,7 @@
  * imports_from: [react, react-dom, react-router-dom, ../context/ThemeContext, ../context/LocationContext, ./QuickSearch]
  * imported_by: [frontend/src/components/AppShell.jsx]
  * invariants:
- *   - Never scrolls. The content budget (logo 38 + 15 items x 37 + footer 3 x 37 + dividers) must fit the
+ *   - Never scrolls. The content budget (logo 38 + 16 items x 37 + footer 3 x 37 + dividers) must fit the
  *     viewport; a new nav item means shrinking ITEM_H, not adding overflow.
  *   - Notifications live as the floating corner pod on AppShell main (not a rail row).
  *   - Open/collapsed state persists in localStorage under RAIL_KEY.
@@ -34,7 +34,7 @@ const RAIL_COLLAPSED = 52;
 const RAIL_EXPANDED = 212;
 
 // Handoff spec: 37px rows, and the rail must never scroll. Those two only
-// coexist on a tall enough window — a full admin rail is 18 rows, which needs
+// coexist on a tall enough window — a full admin rail is 19 rows, which needs
 // ~770px and silently loses its last items (Matching) on a short laptop. The
 // README's own instruction for that case is to reduce item height rather than
 // allow scroll, so the height is computed from the viewport and only reaches
@@ -73,6 +73,7 @@ const ICON = {
     bug: 'M9 6a3 3 0 0 1 6 0 M6 10h12v4a6 6 0 0 1-12 0z M3 11h3 M18 11h3 M4 6l2.5 2 M20 6l-2.5 2 M4 18l2.5-2 M20 18l-2.5-2',
     tm: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M12 7v5l3 2',
     matching: 'M4 7h4l8 10h4 M4 17h4l8-10h4 M18 4l3 3-3 3 M18 14l3 3-3 3',
+    users: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75',
     collapse: 'M11 6l-6 6 6 6 M19 6l-6 6 6 6',
     expand: 'M5 6l6 6-6 6 M13 6l6 6-6 6',
     sun: 'M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M12 2v2 M12 20v2 M2 12h2 M20 12h2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M19.1 4.9l-1.4 1.4 M6.3 17.7l-1.4 1.4',
@@ -229,7 +230,7 @@ export default function Rail({
     const mainItemCount =
         9 +
         (canSeeReport ? 1 : 0) +
-        (isAdmin ? 5 : 0);
+        (isAdmin ? 6 : 0);
     const itemH = fitItemHeight(viewportH, mainItemCount);
 
     const hideTip = useCallback(() => setTip(null), []);
@@ -315,6 +316,7 @@ export default function Rail({
                     {isAdmin && routeItem('/board', 'Ongoing Complaints', ICON.bug)}
                     {isAdmin && routeItem('/tm-tickets', 'T&M', ICON.tm)}
                     {isAdmin && routeItem('/admin/submittal-matching', 'Matching', ICON.matching)}
+                    {isAdmin && routeItem('/admin/users', 'Users', ICON.users)}
                 </div>
 
                 <div className="shrink-0" style={{ height: 1, background: 'var(--rail-border)', margin: '8px 0' }} />

@@ -11,7 +11,9 @@ invariants:
   - fab_order re-tiering is delegated to features/fab_order/tier.py, shared with the Trello sync and job_comp paths
   - Setting stage='Complete' cascades job_comp='X'; leaving Complete clears job_comp='X'
   - Paint Complete + hard start_install auto-rolls to Ship Planning (N5; generalizes ASAP intercept)
-  - Ship Planning / Ship Complete apply N5 date discipline (formula blank or hard-date wash)
+  - Ship Planning / Ship Complete apply N5 formula-date blanking only; a hard date keeps its color there (BUG-11)
+  - A transition into `Install Start` or later dumps a hard date's color (COLOR_DUMP_STAGES);
+    an ASAP row additionally has its placeholder start_install rewritten to the event's date
   - Deduplicated events raise ValueError (event_exists); caller decides whether to treat as success
   - Scheduling recalculation failure is logged but does not roll back the update
 """
@@ -24,7 +26,11 @@ from app.services.job_event_service import JobEventService
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
 from app.brain.job_log.features.fab_order.tier import apply_fab_order_for_stage
-from app.brain.job_log.features.start_install.neutralize_install_date_cascade import neutralize_install_date_cascade
+from app.brain.job_log.features.start_install.neutralize_install_date_cascade import (
+    neutralize_install_date_cascade,
+    COLOR_DUMP_STAGES,
+    reason_for_stage,
+)
 from app.brain.job_log.features.start_install.shipping_stage_date_discipline import (
     apply_shipping_stage_date_discipline,
 )
@@ -205,6 +211,11 @@ class UpdateStageCommand:
 
         extras: dict = {}
 
+        # Captured before the ASAP-drop block below clears the flag: the install-date
+        # neutralize further down needs to know this row WAS an ASAP, and by then it
+        # cannot tell.
+        had_asap = bool(getattr(job_record, 'start_install_asap', False))
+
         # ASAP drop on completion: once an ASAP release reaches Ship Complete or any
         # later stage, it is no longer a rush, so clear the ASAP flag. The start_install /
         # comp_eta set at ASAP-flag time (and any subsequent mirror-card tweak) are LEFT
@@ -281,20 +292,29 @@ class UpdateStageCommand:
                 )
                 extras['job_comp'] = None
 
-        # Install-date neutralize: once the release is installed/complete, KEEP the install
-        # date but strip its color (and any ASAP red) so it stops showing as an alarming
-        # red/green/yellow date. No-op when no hard date is present. Fires for both terminal
-        # stages (Install Complete is the new completion marker; Complete stays for safety).
-        if self.stage in ('Complete', 'Install Complete'):
+        # Install-date neutralize: once install has started, KEEP the install date but strip
+        # its color (and any ASAP red) so it stops showing as an alarming red/green/yellow
+        # date. No-op when no hard date is present.
+        #
+        # BUG-11: the trigger is a transition whose DESTINATION is `Install Start` or any
+        # later stage — not the ship stages, which used to wash it here far too early, and
+        # never the `start_install` date arriving. Matching the whole tail rather than just
+        # `Install Start` is deliberate: a release can jump Ship Planning -> `Complete` and
+        # skip `Install Start` entirely.
+        if self.stage in COLOR_DUMP_STAGES:
             if neutralize_install_date_cascade(
                 job_record,
                 parent_event_id=event.id,
-                reason=(
-                    'stage_set_to_install_complete'
-                    if self.stage == 'Install Complete'
-                    else 'stage_set_to_complete'
-                ),
+                reason=reason_for_stage(self.stage),
                 source=self.source,
+                # An ASAP row's date was an anchor a week out, never a plan. This stage
+                # change is the moment install actually began, so it becomes the date.
+                # Taken from the stage event itself, so the audit trail and the date agree.
+                # Only ASAP rows: a hand-set hard date is a real commitment and keeps its
+                # value, so a non-ASAP row passes None and nothing moves.
+                install_started_on=(
+                    (event.created_at or datetime.utcnow()).date() if had_asap else None
+                ),
             ):
                 extras['hard_date_cleared'] = True
 
