@@ -7,7 +7,9 @@
  * imports_from: [react, ./JobLogCard, ./ReleaseHubModal]
  * imported_by: [frontend/src/pages/JobLogContent.jsx, frontend/src/pages/Archive.jsx]
  * invariants:
- *   - Tap on a card opens ReleaseHubModal locally (no parent state required); the release number opens the same modal on its Drawings tab.
+ *   - Tap on a card opens ReleaseHubModal. When onOpenHub is passed, the host
+ *     owns the dialog so a cards↔table remount (BUG-14) cannot dump it; the
+ *     release number still opens the Drawings tab.
  *   - layout='grid' (Archive): 1 col on phone, 2 col on iPad, 3 col on 27", 4 col on 3xl.
  *   - layout='column' (Job Log Cards view): ONE centered column — deliberate Kanban-feed look
  *     with no left/right position ambiguity (top-to-bottom = the sorted list order), cards
@@ -34,13 +36,22 @@ export default function JobLogCardGrid({
     layout = 'grid',
     isAdmin = false,
     isDrafter = false,
+    onOpenHub = null,
+    onOpenMarkup = null,
+    scrollRef = null,
+    onScroll = null,
 }) {
     const [selectedJob, setSelectedJob] = useState(null);
     const [hubTab, setHubTab] = useState('details');
     // Markup opens over the hub: the hub closes first, so only one dialog is live.
     const [markup, setMarkup] = useState(null); // { releaseId, versionId, mode }
+    const hosted = typeof onOpenHub === 'function';
 
     const openHub = (job, tab = 'details') => {
+        if (hosted) {
+            onOpenHub(job, tab);
+            return;
+        }
         setHubTab(tab);
         setSelectedJob(job);
     };
@@ -54,7 +65,11 @@ export default function JobLogCardGrid({
     const isColumn = layout === 'column';
 
     return (
-        <div className={`flex-1 min-h-0 overflow-auto p-2 sm:p-3 3xl:p-5 ${isColumn ? 'rounded-xl bg-gray-100/80 dark:bg-slate-900/50' : ''}`}>
+        <div
+            ref={scrollRef}
+            onScroll={onScroll}
+            className={`flex-1 min-h-0 overflow-auto p-2 sm:p-3 3xl:p-5 ${isColumn ? 'rounded-xl bg-gray-100/80 dark:bg-slate-900/50' : ''}`}
+        >
             {showSecondary && (
                 <div className="mb-3 px-4 py-3 rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm font-medium">
                     <span className="mr-2">⚠️</span>
@@ -100,6 +115,7 @@ export default function JobLogCardGrid({
                 </div>
             )}
 
+            {!hosted && (
             <ReleaseHubModal
                 isOpen={selectedJob != null}
                 onClose={() => setSelectedJob(null)}
@@ -109,14 +125,22 @@ export default function JobLogCardGrid({
                 initialTab={hubTab}
                 onOrdersChanged={onUpdate}
                 onOpenVersion={(vid, mode) => {
-                    setMarkup({
+                    const payload = {
                         releaseId: selectedJob?.id,
                         versionId: vid,
                         mode: (isAdmin || isDrafter) ? mode : 'view',
-                    });
+                    };
+                    if (onOpenMarkup) {
+                        setSelectedJob(null);
+                        onOpenMarkup(payload);
+                        return;
+                    }
+                    setMarkup(payload);
                     setSelectedJob(null);
                 }}
             />
+            )}
+            {!hosted && !onOpenMarkup && (
             <PdfMarkupModal
                 isOpen={markup != null}
                 releaseId={markup?.releaseId}
@@ -124,6 +148,7 @@ export default function JobLogCardGrid({
                 mode={markup?.mode || 'view'}
                 onClose={() => setMarkup(null)}
             />
+            )}
         </div>
     );
 }

@@ -31,7 +31,11 @@ import { fetchMentionableUsers } from '../services/notificationApi';
 import { useLocationContext } from '../context/LocationContext';
 import ViewToggle, { useViewMode } from '../components/ViewToggle';
 import SubmittalRowList from '../components/SubmittalRowList';
+import { SubmittalDetailsModal } from '../components/SubmittalDetailsModal';
 import { useBreakpoint, useIsTabletOrSmaller } from '../hooks/useBreakpoint';
+import { resolveAutoCardsBelowXl } from '../utils/viewportView';
+import { persistOpenDialog, readOpenDialog } from '../utils/dialogPersist';
+import { usePersistScroll } from '../hooks/usePersistScroll';
 
 // Responsive column width styles for larger screens (2xl breakpoint: 1536px+)
 // Laptop sizes are kept as default (max-width only), only larger screens get adjusted max-widths
@@ -67,7 +71,27 @@ function DraftingWorkLoad() {
     const [viewMode, setViewMode] = useViewMode('dwl_view', 'auto');
     const isTabletOrSmaller = useIsTabletOrSmaller();
     const { is3xl } = useBreakpoint();
-    const effectiveView = viewMode === 'auto' ? (isTabletOrSmaller ? 'cards' : 'table') : viewMode;
+    const effectiveView = resolveAutoCardsBelowXl(viewMode, isTabletOrSmaller);
+    const savedTableScroll = useRef(0);
+    const savedCardScroll = useRef(0);
+    const tableScroll = usePersistScroll(savedTableScroll);
+    const cardScroll = usePersistScroll(savedCardScroll);
+    const [detailsSubmittal, setDetailsSubmittal] = useState(null);
+    const restoredDetails = useRef(false);
+
+    const persistDetails = useCallback((row) => {
+        persistOpenDialog('dwl_details', row ? { id: row.id } : null);
+    }, []);
+
+    const openDetails = useCallback((row) => {
+        setDetailsSubmittal(row);
+        persistDetails(row);
+    }, [persistDetails]);
+
+    const closeDetails = useCallback(() => {
+        setDetailsSubmittal(null);
+        persistDetails(null);
+    }, [persistDetails]);
     // Tab state: 'open' or 'draft' — passed to API so backend returns tab-specific submittals
     const [selectedTab, setSelectedTab] = useState('open');
     // On the Draft tab the toolbar's accent color shifts blue → green so it's visually distinct.
@@ -170,6 +194,30 @@ function DraftingWorkLoad() {
         singleSelectedBallInCourt,
         displayRows,
     } = useFilters(rows);
+
+    useEffect(() => {
+        if (restoredDetails.current || loading) return;
+        const saved = readOpenDialog('dwl_details');
+        if (!saved?.id) {
+            restoredDetails.current = true;
+            return;
+        }
+        const row = displayRows.find((r) => r.id === saved.id);
+        if (!row) return;
+        restoredDetails.current = true;
+        setDetailsSubmittal(row);
+    }, [loading, displayRows]);
+
+    useEffect(() => {
+        if (!detailsSubmittal) return;
+        const fresh = displayRows.find((r) => r.id === detailsSubmittal.id);
+        if (fresh && fresh !== detailsSubmittal) setDetailsSubmittal(fresh);
+    }, [displayRows, detailsSubmittal]);
+
+    const setTableScrollNode = useCallback((node) => {
+        scrollContainerRef.current = node;
+        tableScroll.ref(node);
+    }, [tableScroll.ref]);
 
     // Use the drag-and-drop hook
     const {
@@ -473,6 +521,9 @@ function DraftingWorkLoad() {
                                     jumpToTarget={jumpToTarget}
                                     canEditRel={canEditDrafterFields}
                                     onRelAssigned={refetch}
+                                    onOpenDetails={openDetails}
+                                    scrollRef={cardScroll.ref}
+                                    onScroll={cardScroll.onScroll}
                                 />
                             </div>
                         )}
@@ -482,7 +533,8 @@ function DraftingWorkLoad() {
                             // (separate borders + --grid lines, per CURRENT_STYLING_PIN §3).
                             <div className="job-log-table-frame flex-1 min-h-0 flex flex-col min-w-0">
                                 <div
-                                    ref={scrollContainerRef}
+                                    ref={setTableScrollNode}
+                                    onScroll={tableScroll.onScroll}
                                     className="dwl-table-scroll job-log-table-scroll flex-1 min-h-0 overflow-x-hidden"
                                     style={{ overflowY: 'auto' }}
                                 >
@@ -674,6 +726,7 @@ function DraftingWorkLoad() {
                                                             isDragOver={isDragOver}
                                                             dragOverHalf={dragOverHalf}
                                                             mentionableUsers={mentionableUsers}
+                                                            onOpenDetails={openDetails}
                                                         />
                                                     );
                                                 })
@@ -687,6 +740,13 @@ function DraftingWorkLoad() {
                 </div>
             </div>
         <AddProjectModal isOpen={addProjectOpen} onClose={() => setAddProjectOpen(false)} />
+        <SubmittalDetailsModal
+            isOpen={detailsSubmittal != null}
+            onClose={closeDetails}
+            submittal={detailsSubmittal}
+            canEditRel={canEditDrafterFields}
+            onRelAssigned={refetch}
+        />
         </>
     );
 }

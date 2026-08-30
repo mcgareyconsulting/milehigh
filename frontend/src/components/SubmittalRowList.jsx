@@ -11,8 +11,18 @@ import React, { useState } from 'react';
 import SubmittalRow from './SubmittalRow';
 import { SubmittalDetailsModal } from './SubmittalDetailsModal';
 
-export default function SubmittalRowList({ rows, jumpToTarget = null, canEditRel = false, onRelAssigned }) {
+export default function SubmittalRowList({
+    rows,
+    jumpToTarget = null,
+    canEditRel = false,
+    onRelAssigned,
+    onOpenDetails = null,
+    scrollRef = null,
+    onScroll = null,
+}) {
     const [selected, setSelected] = useState(null);
+    const hosted = typeof onOpenDetails === 'function';
+    const openDetails = hosted ? onOpenDetails : setSelected;
 
     const isHighlighted = (row) => {
         if (!jumpToTarget) return false;
@@ -29,18 +39,19 @@ export default function SubmittalRowList({ rows, jumpToTarget = null, canEditRel
     }
 
     return (
-        <div className="flex-1 min-h-0 overflow-auto">
+        <div ref={scrollRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-auto">
             <div>
                 {rows.map((row) => (
                     <SubmittalRow
                         key={row.id}
                         submittal={row}
                         isHighlighted={isHighlighted(row)}
-                        onOpenDetails={setSelected}
+                        onOpenDetails={openDetails}
                     />
                 ))}
             </div>
 
+            {!hosted && (
             <SubmittalDetailsModal
                 isOpen={selected != null}
                 onClose={() => setSelected(null)}
@@ -48,6 +59,7 @@ export default function SubmittalRowList({ rows, jumpToTarget = null, canEditRel
                 canEditRel={canEditRel}
                 onRelAssigned={onRelAssigned}
             />
+            )}
         </div>
     );
 }

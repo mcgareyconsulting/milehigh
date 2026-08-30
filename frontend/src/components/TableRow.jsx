@@ -23,7 +23,7 @@ import { StartInstallDwlModal } from './StartInstallDwlModal';
 import { DateFieldModal } from './DateFieldModal';
 import { BBStatusBadge } from './bbReview/BBStatusBadge';
 
-export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStartInstallChange, onStepOrder, allRows, rowIndex, isAdmin = false, isDrafter = false, onRelAssigned, isJumpToHighlight, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, isDragOver, dragOverHalf, mentionableUsers = [] }) {
+export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStartInstallChange, onStepOrder, allRows, rowIndex, isAdmin = false, isDrafter = false, onRelAssigned, isJumpToHighlight, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, isDragOver, dragOverHalf, mentionableUsers = [], onOpenDetails = null }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
@@ -692,7 +692,8 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                                             type="button"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                setDetailsOpen(true);
+                                                if (onOpenDetails) onOpenDetails(row);
+                                                else setDetailsOpen(true);
                                             }}
                                             className={`${linkAccent} underline cursor-pointer transition-colors bg-transparent border-0 p-0 font-medium`}
                                         >
@@ -835,6 +836,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                     );
                 })}
             </tr>
+            {!onOpenDetails && (
             <SubmittalDetailsModal
                 isOpen={detailsOpen}
                 onClose={() => setDetailsOpen(false)}
@@ -842,6 +844,7 @@ export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, o
                 canEditRel={canEditDrafterFields}
                 onRelAssigned={onRelAssigned}
             />
+            )}
         </>
     );
 }

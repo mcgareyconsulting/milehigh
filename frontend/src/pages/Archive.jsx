@@ -11,17 +11,22 @@
  *   - Filter minimized state persists in localStorage under key 'ar_minimized'
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useArchiveDataFetching } from '../hooks/useArchiveDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import { JobsTableRow } from '../components/JobsTableRow';
+import { ReleaseHubModal } from '../components/ReleaseHubModal';
+import { PdfMarkupModal } from '../components/PdfMarkupModal';
 import { jobsApi } from '../services/jobsApi';
 import { checkAuth } from '../utils/auth';
 import { HEADER_OVERRIDES } from '../constants/columnHeaders';
 import ViewToggle, { useViewMode } from '../components/ViewToggle';
 import JobLogCardGrid from '../components/JobLogCardGrid';
 import { useBreakpoint, useIsTabletOrSmaller } from '../hooks/useBreakpoint';
+import { resolveAutoCardsBelowXl } from '../utils/viewportView';
+import { persistOpenDialog, readOpenDialog } from '../utils/dialogPersist';
+import { usePersistScroll } from '../hooks/usePersistScroll';
 
 function Archive() {
     const navigate = useNavigate();
@@ -35,7 +40,41 @@ function Archive() {
     const [viewMode, setViewMode] = useViewMode('ar_view', 'auto');
     const isTabletOrSmaller = useIsTabletOrSmaller();
     const { is3xl, isMobile } = useBreakpoint();
-    const effectiveView = viewMode === 'auto' ? (isTabletOrSmaller ? 'cards' : 'table') : viewMode;
+    const effectiveView = resolveAutoCardsBelowXl(viewMode, isTabletOrSmaller);
+
+    const savedTableScroll = useRef(0);
+    const savedCardScroll = useRef(0);
+    const tableScroll = usePersistScroll(savedTableScroll);
+    const cardScroll = usePersistScroll(savedCardScroll);
+    const [hub, setHub] = useState(null);
+    const [hubMarkup, setHubMarkup] = useState(null);
+    const restoredHub = useRef(false);
+
+    const persistHub = useCallback((next) => {
+        if (!next?.job) persistOpenDialog('ar_hub', null);
+        else persistOpenDialog('ar_hub', {
+            id: next.job.id,
+            tab: next.tab || 'details',
+            scrollToMaterials: !!next.scrollToMaterials,
+        });
+    }, []);
+
+    const openHub = useCallback((job, tab = 'details', opts = {}) => {
+        const next = { job, tab, scrollToMaterials: !!opts.scrollToMaterials };
+        setHub(next);
+        persistHub(next);
+    }, [persistHub]);
+
+    const closeHub = useCallback(() => {
+        setHub(null);
+        persistHub(null);
+    }, [persistHub]);
+
+    const openHubMarkup = useCallback((payload) => {
+        setHubMarkup(payload);
+        setHub(null);
+        persistHub(null);
+    }, [persistHub]);
 
     useEffect(() => {
         const fetchUserInfo = async () => {
@@ -67,6 +106,25 @@ function Archive() {
         totalInstallHrs,
         resetFilters,
     } = useJobsFilters(jobs);
+
+    useEffect(() => {
+        if (restoredHub.current || loading) return;
+        const saved = readOpenDialog('ar_hub');
+        if (!saved?.id) {
+            restoredHub.current = true;
+            return;
+        }
+        const job = displayJobs.find((r) => r.id === saved.id);
+        if (!job) return;
+        restoredHub.current = true;
+        setHub({ job, tab: saved.tab || 'details', scrollToMaterials: !!saved.scrollToMaterials });
+    }, [loading, displayJobs]);
+
+    useEffect(() => {
+        if (!hub?.job) return;
+        const fresh = displayJobs.find((r) => r.id === hub.job.id);
+        if (fresh && fresh !== hub.job) setHub((h) => (h ? { ...h, job: fresh } : h));
+    }, [displayJobs, hub?.job]);
 
     const formatDate = (dateValue) => {
         if (!dateValue) return '—';
@@ -350,6 +408,10 @@ function Archive() {
                                     stageGroupColors={stageGroupColors}
                                     hasJobsData={hasJobsData}
                                     iconSize={is3xl ? 26 : 20}
+                                    onOpenHub={openHub}
+                                    onOpenMarkup={openHubMarkup}
+                                    scrollRef={cardScroll.ref}
+                                    onScroll={cardScroll.onScroll}
                                 />
                             </div>
                         )}
@@ -358,7 +420,11 @@ function Archive() {
                             // Lattice CSS: tokens.css .job-log-table-frame / .job-log-table
                             // (separate borders + --grid lines, per CURRENT_STYLING_PIN §3).
                             <div className="job-log-table-frame flex-1 min-h-0 flex flex-col">
-                                <div className="job-log-table-scroll overflow-auto flex-1">
+                                <div
+                                    ref={tableScroll.ref}
+                                    onScroll={tableScroll.onScroll}
+                                    className="job-log-table-scroll overflow-auto flex-1"
+                                >
                                     <table className="job-log-table">
                                         <thead className="sticky top-0 z-10">
                                             <tr>
@@ -418,6 +484,8 @@ function Archive() {
                                                         stageGroupColors={stageGroupColors}
                                                         isAdmin={isAdmin}
                                                         onUnarchive={handleUnarchiveJob}
+                                                        onOpenReleaseHub={openHub}
+                                                        onOpenReleaseMarkup={openHubMarkup}
                                                     />
                                                 ))
                                             )}
@@ -429,6 +497,25 @@ function Archive() {
                     </div>
                 </div>
             </div>
+            <ReleaseHubModal
+                isOpen={hub?.job != null}
+                onClose={closeHub}
+                job={hub?.job}
+                releaseId={hub?.job?.id}
+                viewerUrl={hub?.job?.viewer_url}
+                initialTab={hub?.tab || 'details'}
+                scrollToMaterials={!!hub?.scrollToMaterials}
+                onOpenVersion={(vid, mode) => {
+                    openHubMarkup({ releaseId: hub?.job?.id, versionId: vid, mode });
+                }}
+            />
+            <PdfMarkupModal
+                isOpen={hubMarkup != null}
+                releaseId={hubMarkup?.releaseId}
+                versionId={hubMarkup?.versionId}
+                mode={hubMarkup?.mode || 'view'}
+                onClose={() => setHubMarkup(null)}
+            />
         </div>
     );
 }

@@ -38,7 +38,7 @@ const STAGE_PHOTO_GATE_ENABLED = false;
 // the stage immediately. The backend enforces the same gate (422 photo_required).
 const STAGE_PHOTO_GATES = ['Welded QC', 'Paint Complete'];
 
-export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, bandIndex = null, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, compact = false, showActions = true }) {
+export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, bandIndex = null, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, compact = false, showActions = true, onOpenReleaseHub = null, onOpenReleaseMarkup = null }) {
     const { refreshMaterialSummary } = useReleases();
     const [isModalOpen, setIsModalOpen] = useState(false);
     // Which tab the release hub opens on. The Description cell lands on Details;
@@ -73,6 +73,12 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // only hyperlink — Job and Release # are plain text — so anything else that
     // needs the hub (the Mat. Ord. glyph) routes through here with a tab.
     const openHub = (tab = 'details', { scrollToMaterials = false } = {}) => {
+        // Hosted on JobLogContent / Archive so a cards↔table remount (BUG-14)
+        // cannot dump the open dialog.
+        if (onOpenReleaseHub) {
+            onOpenReleaseHub(row, tab, { scrollToMaterials });
+            return;
+        }
         setHubTab(tab);
         setModalScrollToMaterials(scrollToMaterials);
         setIsModalOpen(true);
@@ -1529,6 +1535,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     </td>
                 )}
             </tr>
+            {!onOpenReleaseHub && (
             <ReleaseHubModal
                 isOpen={isModalOpen}
                 onClose={() => { setIsModalOpen(false); setModalScrollToMaterials(false); }}
@@ -1543,12 +1550,22 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     setNotesInputValue(notes ?? '');
                 }}
                 onOpenVersion={(vid, mode) => {
+                    if (onOpenReleaseMarkup) {
+                        setIsModalOpen(false);
+                        onOpenReleaseMarkup({
+                            releaseId: row.id,
+                            versionId: vid,
+                            mode: canMarkup ? mode : 'view',
+                        });
+                        return;
+                    }
                     setIsModalOpen(false);
                     setPdfMarkupVersionId(vid);
                     setPdfMarkupMode(canMarkup ? mode : 'view');
                     setPdfMarkupOpen(true);
                 }}
             />
+            )}
             <StartInstallDateModal
                 isOpen={isStartInstallModalOpen}
                 onClose={() => setIsStartInstallModalOpen(false)}
