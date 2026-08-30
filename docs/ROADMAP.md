@@ -956,9 +956,13 @@ the date rules for distribution back to the client.**
 → dump the color, keep the hard date) is confirmed correct in production
 [#L127]; Bill hedged only about *"some old outliers"* [#L131].~~ **Un-banked
 2026-08-21** — Bill reversed himself (*"I might have given you bad
-information"* [bill-2026-08-21#L109]): the color dump moves to **Start
-Install**, yellow never silently disappears [#L113–L115]. Carried as BUG-11;
-one more reason this audit's deliverable is a written ruleset Bill signs.
+information"* [bill-2026-08-21#L109]): the color dump moves to the **`Install
+Start`** stage, yellow never silently disappears [#L113–L115]. Carried as BUG-11,
+**which shipped 2026-08-29** — the dump now fires on a stage transition into
+`Install Start` or later, so the behavior this audit has to describe is settled.
+Still one more reason the deliverable is a written ruleset Bill signs: the
+reversal came eight days after the rule was banked as *confirmed correct in
+production*.
 
 **Trail**
 - 2026-08-15 · transcript · src bill-2026-08-15#L115 — installer assignment and stage change both silently create hard dates; two independent reports the same morning
@@ -1224,19 +1228,20 @@ sending session.
 **The items W3 already carried, unchanged by the 8/15 pass:**
 
 ### N5 · Shipping-stage date discipline
-*W3 · built · due — · deps — · owner daniel · src bill-2026-08-06#L1322 · upd 2026-08-21*
+*W3 · built · due — · deps — · owner daniel · src bill-2026-08-06#L1322 · upd 2026-08-29*
 
-> ⚠️ **The hard-date color half of this rule was reversed by Bill 2026-08-21**
-> — *"I might have given you bad information on where we wanted to change
-> that"* [bill-2026-08-21#L109]. Hard-date color now survives the ship stages
-> and dumps at **`Install Start` or later** instead; yellow overdue color must never
-> silently disappear (*"sweeping an issue under the rug"* [#L113] — it's a
-> scored EOS metric). Try the **stage-transition** trigger (destination
-> `Install Start` or later) **before** touching hard-date semantics [#L115]. Carried as **BUG-11** in the Fix queue; the
-> formula-date blanking and Paint-Complete intercept are untouched.
-> **Trigger resolved 2026-08-29: a stage transition into `Install Start` or any
-> later stage** — destination ∈ {`Install Start`, `Install Complete`,
-> `Complete`}, never the `start_install` date arriving.
+> ✅ **The hard-date color half of this rule was reversed by Bill 2026-08-21 and
+> the reversal shipped 2026-08-29** as BUG-11 (see the Fix queue for the build
+> notes). *"I might have given you bad information on where we wanted to change
+> that"* [bill-2026-08-21#L109]. Hard-date color now **survives the ship stages**
+> and dumps on a stage transition into **`Install Start` or any later stage** —
+> destination ∈ {`Install Start`, `Install Complete`, `Complete`}, never the
+> `start_install` date arriving. Yellow overdue color never silently disappears
+> (*"sweeping an issue under the rug"* [#L113] — it's a scored EOS metric).
+> The formula-date blanking and the Paint-Complete intercept are untouched, per
+> Bill; the hard-date branch left in `shipping_stage_date_discipline.py` is now a
+> no-op that **must not be deleted** — it guards hard dates from the blanking
+> path below it.
 
 Effort M (grew from S). Formula dates blank at ship stages; hard dates wash
 white; Paint Complete + hard date auto-rolls to Ship Planning (generalizes the
