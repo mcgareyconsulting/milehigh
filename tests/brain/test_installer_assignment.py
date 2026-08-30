@@ -178,3 +178,152 @@ class TestAssignInstallerRoute:
             r2 = Releases.query.filter_by(job=1, release="A").first()
             assert r2.mirror_trello_card_id == "mirror-999"
             assert r2.comp_eta == expected_comp_eta
+
+
+class TestInstallerUndo:
+    """A Timeline drag writes the installer, so a mis-drop has to be reversible.
+
+    The drag sends date + installer in one PATCH, which lands two events; the installer event
+    carries the date event's id as `parent_event_id` so a single Undo reverses the whole drop.
+    """
+
+    def test_installer_change_is_undoable(self, app, admin_client):
+        with app.app_context():
+            _make_release(1, "A", installer="Saul 1")
+            db.session.commit()
+
+            p_list, p_move, p_range = _installer_patches()
+            with p_list, p_move, p_range:
+                resp = admin_client.patch(
+                    "/brain/update-start-install/1/A",
+                    json={"installer": "Saul 2"},
+                )
+            assert resp.status_code == 200
+            event_id = resp.get_json()["event_id"]
+
+            with p_list, p_move, p_range:
+                undo = admin_client.post(f"/brain/events/{event_id}/undo")
+            assert undo.status_code == 200, undo.get_data(as_text=True)
+
+            db.session.expire_all()
+            r2 = Releases.query.filter_by(job=1, release="A").first()
+            assert r2.installer == "Saul 1"
+
+    def test_undo_walks_the_mirror_card_back_to_the_old_crew(self, app, admin_client):
+        with app.app_context():
+            _make_release(1, "A", installer="Saul 1")
+            db.session.commit()
+
+            p_list, p_move, p_range = _installer_patches()
+            with p_list, p_move, p_range:
+                resp = admin_client.patch(
+                    "/brain/update-start-install/1/A",
+                    json={"installer": "Saul 2"},
+                )
+            event_id = resp.get_json()["event_id"]
+
+            with p_list, p_move as mock_move, p_range:
+                undo = admin_client.post(f"/brain/events/{event_id}/undo")
+            assert undo.status_code == 200
+            # The mirror is moved on the way back too, not just on the way out.
+            mock_move.assert_called_once()
+
+    def test_undo_of_an_unassign_puts_the_crew_back(self, app, admin_client):
+        with app.app_context():
+            _make_release(1, "A", installer="Saul 2")
+            db.session.commit()
+
+            with patch(
+                "app.brain.job_log.features.start_install.assign_installer.move_mirror_card",
+            ), patch(
+                "app.brain.job_log.features.start_install.assign_installer.Config"
+            ) as mock_cfg:
+                mock_cfg.UNASSIGNED_CARDS_LIST_ID = "list-unassigned"
+                resp = admin_client.patch(
+                    "/brain/update-start-install/1/A",
+                    json={"installer": ""},
+                )
+            assert resp.status_code == 200
+            event_id = resp.get_json()["event_id"]
+
+            p_list, p_move, p_range = _installer_patches()
+            with p_list, p_move, p_range:
+                undo = admin_client.post(f"/brain/events/{event_id}/undo")
+            assert undo.status_code == 200
+
+            db.session.expire_all()
+            r2 = Releases.query.filter_by(job=1, release="A").first()
+            assert r2.installer == "Saul 2"
+
+    def test_a_drag_links_both_events_so_one_undo_reverses_the_whole_drop(self, app, admin_client):
+        """The shape a Timeline drop actually sends: date + installer in one request."""
+        with app.app_context():
+            _make_release(1, "A")
+            db.session.commit()
+
+            p_list, p_move, p_range = _installer_patches()
+            p_trello, p_recalc = _date_command_patches()
+            with p_list, p_move, p_range, p_trello, p_recalc:
+                resp = admin_client.patch(
+                    "/brain/update-start-install/1/A",
+                    json={"start_install": "2026-06-15", "installer": "Saul 2"},
+                )
+            assert resp.status_code == 200
+            date_event_id = resp.get_json()["event_id"]
+
+            installer_ev = ReleaseEvents.query.filter_by(action="update_installer").one()
+            assert installer_ev.payload["parent_event_id"] == date_event_id
+
+            # Undoing the date event should take the installer with it.
+            with p_list, p_move, p_range, p_trello, p_recalc:
+                undo = admin_client.post(f"/brain/events/{date_event_id}/undo")
+            assert undo.status_code == 200, undo.get_data(as_text=True)
+
+            db.session.expire_all()
+            r2 = Releases.query.filter_by(job=1, release="A").first()
+            assert r2.installer is None, "the installer half of the drop was left behind"
+            assert r2.start_install is None
+
+    def test_undo_is_refused_when_someone_reassigned_in_the_meantime(self, app, admin_client):
+        with app.app_context():
+            _make_release(1, "A", installer="Saul 1")
+            db.session.commit()
+
+            p_list, p_move, p_range = _installer_patches()
+            with p_list, p_move, p_range:
+                resp = admin_client.patch(
+                    "/brain/update-start-install/1/A",
+                    json={"installer": "Saul 2"},
+                )
+            event_id = resp.get_json()["event_id"]
+
+            # Somebody else moves it on before the undo lands.
+            r = Releases.query.filter_by(job=1, release="A").first()
+            r.installer = "Saul 3"
+            db.session.commit()
+
+            with p_list, p_move, p_range:
+                undo = admin_client.post(f"/brain/events/{event_id}/undo")
+            assert undo.status_code == 409
+            assert undo.get_json()["error"] == "stale"
+
+            db.session.expire_all()
+            r2 = Releases.query.filter_by(job=1, release="A").first()
+            assert r2.installer == "Saul 3", "a stale undo must not overwrite the later change"
+
+    def test_events_list_marks_an_installer_change_undoable(self, app, admin_client):
+        with app.app_context():
+            _make_release(1, "A", installer="Saul 1")
+            db.session.commit()
+
+            p_list, p_move, p_range = _installer_patches()
+            with p_list, p_move, p_range:
+                admin_client.patch(
+                    "/brain/update-start-install/1/A",
+                    json={"installer": "Saul 2"},
+                )
+
+            resp = admin_client.get("/brain/events?limit=50")
+            assert resp.status_code == 200
+            ev = next(e for e in resp.get_json()["events"] if e["action"] == "update_installer")
+            assert ev["current_value"] == "Saul 2"

@@ -12,6 +12,8 @@ invariants:
   - Mirror card move is synchronous and best-effort (failure is logged, DB write still commits)
   - Deduplicated events raise ValueError, matching UpdateStartInstallCommand
   - Does not run a scheduling recalc (installer does not affect scheduling)
+  - parent_event_id links this event to the one that caused it, so the undo endpoint reverts both
+    halves of a single gesture (a timeline drag writes date + installer) as one bundle
 """
 from dataclasses import dataclass
 from datetime import datetime
@@ -53,6 +55,10 @@ class AssignInstallerCommand:
     installer: Optional[str]
     source: str = "Brain"
     undone_event_id: Optional[int] = None
+    # Set when this assignment is one half of a larger action — a Timeline drag writes the date and
+    # the installer in one gesture, and undoing either half alone would leave the release half-moved.
+    # The undo endpoint collects events carrying a parent_event_id and reverts the whole bundle.
+    parent_event_id: Optional[int] = None
 
     def execute(self) -> AssignInstallerResult:
         job_record: Releases = Releases.query.filter_by(
@@ -68,6 +74,8 @@ class AssignInstallerCommand:
         event_payload = {'from': old_installer, 'to': new_installer}
         if self.undone_event_id is not None:
             event_payload['undone_event_id'] = self.undone_event_id
+        if self.parent_event_id is not None:
+            event_payload['parent_event_id'] = self.parent_event_id
 
         event = JobEventService.create(
             job=self.job_id,
