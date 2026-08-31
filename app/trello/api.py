@@ -41,6 +41,22 @@ from app.logging_config import get_logger
 logger = get_logger(__name__)
 
 
+def _mock_write(op, **fields):
+    """In TRELLO_MOCK (local dev), swallow an outbound WRITE and log what would have gone out.
+
+    Guards the mutating helpers the release write paths call directly rather than through the
+    outbox — chiefly the start_install due-date push. Reads are left alone: they fail loudly on
+    missing credentials, which is the correct signal that mock mode isn't configured.
+
+    Uses cfg (a module-level class attribute), not current_app.config, so it also holds inside the
+    outbox retry worker's daemon thread where there is no app context.
+    """
+    if not cfg.TRELLO_MOCK:
+        return False
+    logger.info("trello_mock_write_skipped", op=op, **fields)
+    return True
+
+
 # Main function for updating trello card information
 def update_trello_card(
     card_id, new_list_id=None, new_due_date=None, clear_due_date=False
@@ -54,6 +70,9 @@ def update_trello_card(
         new_due_date: New due date as datetime object (optional)
         clear_due_date: If True, explicitly clear the due date even if new_due_date is None
     """
+    if _mock_write("update_card", card_id=card_id, new_list_id=new_list_id):
+        return None
+
     url = f"https://api.trello.com/1/cards/{card_id}"
 
     payload = {
@@ -2353,6 +2372,9 @@ def move_mirror_card(primary_card_id, target_list_id):
         )
         return None
 
+    if _mock_write("move_mirror_card", card_id=primary_card_id, list_id=target_list_id):
+        return None
+
     result = get_card_attachments_by_card_id(primary_card_id)
     if not result.get("success"):
         logger.warning(
@@ -2386,6 +2408,15 @@ def set_mirror_date_range(primary_card_id, start_date, due_date):
     """
     if not primary_card_id or start_date is None:
         return {"success": False, "error": "missing primary card id or start date"}
+
+    if _mock_write("set_mirror_date_range", card_id=primary_card_id):
+        # Same success shape a real push returns, so callers persist a mirror id and behave
+        # identically in local dev.
+        return {
+            "success": True,
+            "mirror_short_link": f"mock-mirror-{primary_card_id}",
+            "mirror_card_id": f"mock-mirror-{primary_card_id}",
+        }
 
     attachments_result = get_card_attachments_by_card_id(primary_card_id)
     if not attachments_result.get("success"):

@@ -48,6 +48,8 @@
  *     uses, imported from one place so the two surfaces cannot drift). Deliberately not "any release
  *     with no installer": that pulls in every drafting and fab row and the tray stops being a work
  *     surface. A tray release in Ship Planning ALSO appears in its shipping lane, like the mirror.
+ *     Tray cards show job-release, job name and description only — the qualifying stage is not
+ *     repeated on the card (it's in the detail modal, and all three stages read as "ready").
  *   - Installer lane colors come from constants/installerPalette indexed by installer position (NOT
  *     overall lane position) so List and Timeline colors keep matching; shipping lanes use their own
  *     board colors.
@@ -121,7 +123,7 @@ const maxIso = (a, b) => (a > b ? a : b);
 const VIEW_DAYS = 7;
 const PAD_DAYS = 14;
 const SIDEBAR_PX = 192;
-const STAGING_PX = 168;   // width of the pinned Unassigned staging column, frozen left of the lane sidebar
+const STAGING_PX = 200;   // width of the pinned Unassigned staging column, frozen left of the lane sidebar
 const HEADER_PX = 60;     // sticky header height — the staging tray hangs below it
 const CARD_GUTTER = 5;    // horizontal inset within a column
 const CARD_VGAP = 3;      // vertical gap between stacked cards in a cell
@@ -332,19 +334,20 @@ function StagingCard({ job, draggable, onClick, onMouseMove, onMouseLeave }) {
             {...attributes}
             {...listeners}
             style={{ opacity: isDragging ? 0.35 : 1, touchAction: draggable ? 'manipulation' : undefined }}
-            className={`rounded border bg-white px-1.5 py-1 shadow-sm select-none hover:border-accent-400 hover:shadow ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${asap ? 'border-red-400 ring-1 ring-red-200' : 'border-gray-300'}`}
+            className={`rounded border bg-white px-2 py-1.5 shadow-sm select-none hover:border-accent-400 hover:shadow ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${asap ? 'border-l-4 border-l-red-500 border-red-400 bg-red-50 ring-2 ring-red-300' : 'border-gray-300'}`}
         >
-            <div className="flex items-center gap-1">
-                {asap && <span className="text-[9px] font-extrabold text-red-600 leading-none">ASAP</span>}
-                <span className="text-[11px] font-bold text-gray-900 truncate">{jr}</span>
-            </div>
+            {asap && (
+                <span className="inline-block mb-1 px-1.5 py-0.5 rounded bg-red-600 text-white text-[10px] font-extrabold tracking-wide leading-none">
+                    ASAP
+                </span>
+            )}
+            <div className="text-sm font-bold text-gray-900 truncate leading-tight">{jr}</div>
             {job['Job'] && (
-                <div className="text-[10px] text-gray-600 truncate leading-tight">{job['Job']}</div>
+                <div className="text-xs text-gray-700 truncate leading-snug">{job['Job']}</div>
             )}
             {job['Description'] && (
-                <div className="text-[10px] text-gray-500 truncate leading-tight">{job['Description']}</div>
+                <div className="text-xs text-gray-500 truncate leading-snug">{job['Description']}</div>
             )}
-            <div className="text-[9px] text-gray-400 truncate leading-tight mt-0.5">{job['Stage']}</div>
         </div>
     );
 }

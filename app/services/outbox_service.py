@@ -8,6 +8,9 @@ imports_from: [app/models, app/services/job_event_service, app/trello/api, app/t
 imported_by: [app/__init__.py, app/brain/job_log/routes.py, app/brain/job_log/features/fab_order/command.py]
 invariants:
   - Outbox writes must go through OutboxService.add(), not direct DB inserts, so retry semantics are preserved.
+  - Handlers derive their target from the live Releases row wherever the row is the truth (e.g.
+    assign_installer), so queued items for a rapidly re-edited release converge instead of replaying
+    a stale sequence.
   - Exponential backoff is 2^retry_count seconds (2, 4, 8, 16, 32); max 5 retries per item.
   - process_pending_items batches list sorts after fab_order updates to avoid redundant Trello API calls.
   - Uses lazy imports inside methods to avoid circular import chains with models and services.
@@ -55,6 +58,58 @@ class OutboxService:
         )
         return outbox_item
     
+    # Local-dev simulation. Each entry writes the DB state the real Trello round-trip would have
+    # produced (usually via the inbound webhook), so downstream reads stay consistent without a
+    # single network call. Actions absent from this map need no local effect: they push a value that
+    # already lives on Releases, so completing the item is the whole simulation.
+    @staticmethod
+    def _mock_local_effect(action, event, job_record):
+        """Apply the DB side-effect a successful Trello call would have had. Mock mode only."""
+        if action == 'move_card':
+            from app.brain.job_log.routes import get_list_id_by_stage
+            from app.trello.list_mapper import TrelloListMapper
+            stage = (event.payload or {}).get('to')
+            if stage:
+                job_record.trello_list_id = get_list_id_by_stage(stage)
+                job_record.trello_list_name = TrelloListMapper.DB_STAGE_TO_TRELLO_LIST.get(stage)
+        elif action == 'create_card':
+            # Downstream code gates on `trello_card_id` being set, so mock mode has to produce one
+            # or every later sync silently no-ops. Deterministic, and never sent to Trello — same
+            # convention as get_list_id_by_stage's "mock-{slug}" ids.
+            if not job_record.trello_card_id:
+                job_record.trello_card_id = f"mock-card-{job_record.job}-{job_record.release}"
+        elif action == 'assign_installer':
+            if job_record.installer and not job_record.mirror_trello_card_id:
+                job_record.mirror_trello_card_id = f"mock-mirror-{job_record.job}-{job_record.release}"
+
+    @staticmethod
+    def _mock_deliver(outbox_item, event, job_record):
+        """Complete an outbox item without touching Trello. Returns True (delivery 'succeeded')."""
+        from app.models import db
+        from app.services.job_event_service import JobEventService
+
+        OutboxService._mock_local_effect(outbox_item.action, event, job_record)
+
+        outbox_item.status = 'completed'
+        outbox_item.completed_at = datetime.utcnow()
+        outbox_item.error_message = None
+        db.session.commit()
+
+        JobEventService.close(event.id)
+        db.session.commit()
+
+        logger.info(
+            "outbox_item_mocked",
+            outbox_id=outbox_item.id,
+            event_id=event.id,
+            job=event.job,
+            release=event.release,
+            destination=outbox_item.destination,
+            action=outbox_item.action,
+            status="ok",
+        )
+        return True
+
     @staticmethod
     def process_item(outbox_item):
         """
@@ -119,6 +174,13 @@ class OutboxService:
             # Stash list_id for batch sort in process_pending_items (not persisted)
             outbox_item._trello_list_id = job_record.trello_list_id
 
+            # TRELLO_MOCK (local dev): simulate EVERY outbound action, not just move_card. A
+            # half-mocked queue is worse than none — one un-simulated action means local work
+            # silently reaches the real board.
+            from flask import current_app
+            if current_app.config.get("TRELLO_MOCK"):
+                return OutboxService._mock_deliver(outbox_item, event, job_record)
+
             # Process based on destination and action
             if outbox_item.destination == 'trello' and outbox_item.action == 'move_card':
                 # Derive stage from event payload
@@ -177,36 +239,6 @@ class OutboxService:
                     outbox_item.error_message = f"Could not get list ID for stage: {stage}"
                     db.session.commit()
                     return False
-
-                # TRELLO_MOCK: simulate the move locally — write the target list onto
-                # Releases (mirroring what the inbound webhook would have done) and
-                # close the event as if Trello accepted the call.
-                from flask import current_app
-                if current_app.config.get("TRELLO_MOCK"):
-                    from app.trello.list_mapper import TrelloListMapper
-                    target_list_name = TrelloListMapper.DB_STAGE_TO_TRELLO_LIST.get(stage)
-                    job_record.trello_list_id = list_id
-                    job_record.trello_list_name = target_list_name
-                    outbox_item.status = 'completed'
-                    outbox_item.completed_at = datetime.utcnow()
-                    outbox_item.error_message = None
-                    db.session.commit()
-                    JobEventService.close(event.id)
-                    db.session.commit()
-                    logger.info(
-                        "outbox_move_card_mocked",
-                        outbox_id=outbox_item.id,
-                        event_id=event.id,
-                        job=event.job,
-                        release=event.release,
-                        card_id=card_id,
-                        list_id=list_id,
-                        list_name=target_list_name,
-                        destination=outbox_item.destination,
-                        action=outbox_item.action,
-                        status="ok",
-                    )
-                    return True
 
                 # Execute the Trello API call
                 try:
@@ -763,6 +795,142 @@ class OutboxService:
 
                 except Exception as api_error:
                     # API call failed - handle retry logic
+                    outbox_item.retry_count += 1
+                    outbox_item.error_message = str(api_error)
+
+                    if outbox_item.retry_count < outbox_item.max_retries:
+                        delay_seconds = 2 ** outbox_item.retry_count
+                        outbox_item.next_retry_at = datetime.utcnow() + timedelta(seconds=delay_seconds)
+                        outbox_item.status = 'pending'
+
+                        logger.debug(
+                            "outbox_retry_scheduled",
+                            outbox_id=outbox_item.id,
+                            event_id=outbox_item.event_id,
+                            destination=outbox_item.destination,
+                            action=outbox_item.action,
+                            retry_count=outbox_item.retry_count,
+                            max_retries=outbox_item.max_retries,
+                            error=str(api_error),
+                            error_type=type(api_error).__name__,
+                            exc_info=True,
+                        )
+                    else:
+                        outbox_item.status = 'failed'
+                        logger.error(
+                            "outbox_delivery_failed",
+                            outbox_id=outbox_item.id,
+                            event_id=outbox_item.event_id,
+                            destination=outbox_item.destination,
+                            action=outbox_item.action,
+                            retry_count=outbox_item.retry_count,
+                            max_retries=outbox_item.max_retries,
+                            status="error",
+                            error=str(api_error),
+                            error_type=type(api_error).__name__,
+                            exc_info=True,
+                        )
+
+                    db.session.commit()
+                    return False
+
+            elif outbox_item.destination == 'trello' and outbox_item.action == 'assign_installer':
+                # Mirror-card side of an installer assignment: move the mirror into the installer's
+                # list (or Unassigned when cleared) and, when a crew is assigned, seed its date bar
+                # to [start_install, comp_eta].
+                #
+                # The TARGET is read from the live Releases row, not from event.payload['to'].
+                # Rapid reassignment (the Timeline's drag makes that easy) queues several items for
+                # the same release; deriving from the row means every one of them converges on the
+                # current truth instead of replaying a stale sequence out of order.
+                card_id = job_record.trello_card_id
+                if not card_id:
+                    logger.warning(
+                        "outbox_card_id_missing",
+                        outbox_id=outbox_item.id,
+                        event_id=event.id,
+                        job=event.job,
+                        release=event.release,
+                        destination=outbox_item.destination,
+                        action=outbox_item.action,
+                        status="error",
+                    )
+                    outbox_item.status = 'failed'
+                    outbox_item.error_message = "Job has no trello_card_id"
+                    db.session.commit()
+                    return False
+
+                try:
+                    from app.trello.api import (
+                        get_list_by_name,
+                        move_mirror_card,
+                        set_mirror_date_range,
+                    )
+
+                    installer = job_record.installer
+                    if installer:
+                        entry = get_list_by_name(installer)
+                        target_list_id = entry["id"] if entry else None
+                        if not target_list_id:
+                            # Either the board-list cache couldn't be refreshed (transient — Trello
+                            # unreachable) or no list matches this installer (a real config gap).
+                            # Raising routes both into retry-then-ERROR instead of the silent
+                            # warning this used to be.
+                            raise ValueError(
+                                f"No Trello list matches installer '{installer}'"
+                            )
+                    else:
+                        target_list_id = cfg.UNASSIGNED_CARDS_LIST_ID
+                        if not target_list_id:
+                            raise ValueError("UNASSIGNED_CARDS_LIST_ID is not configured")
+
+                    move_mirror_card(card_id, target_list_id)
+
+                    # Only a release that has both a crew and a date has a range to draw.
+                    if installer and job_record.start_install:
+                        range_result = set_mirror_date_range(
+                            card_id, job_record.start_install, job_record.comp_eta
+                        )
+                        if range_result.get("success"):
+                            mirror_id = range_result.get("mirror_card_id")
+                            if mirror_id:
+                                job_record.mirror_trello_card_id = mirror_id
+                        else:
+                            # No linked mirror card is a fact about the board, not a delivery
+                            # failure — retrying can't create one. The move above already landed.
+                            logger.warning(
+                                "mirror_date_range_failed",
+                                outbox_id=outbox_item.id,
+                                event_id=event.id,
+                                job=event.job,
+                                release=event.release,
+                                error=range_result.get('error'),
+                            )
+
+                    outbox_item.status = 'completed'
+                    outbox_item.completed_at = datetime.utcnow()
+                    outbox_item.error_message = None
+                    db.session.commit()
+
+                    JobEventService.close(event.id)
+                    db.session.commit()
+
+                    logger.info(
+                        "outbox_item_completed",
+                        outbox_id=outbox_item.id,
+                        event_id=event.id,
+                        job=event.job,
+                        release=event.release,
+                        card_id=card_id,
+                        installer=installer,
+                        destination=outbox_item.destination,
+                        action=outbox_item.action,
+                        retry_count=outbox_item.retry_count,
+                        status="ok",
+                    )
+                    return True
+
+                except Exception as api_error:
                     outbox_item.retry_count += 1
                     outbox_item.error_message = str(api_error)
 

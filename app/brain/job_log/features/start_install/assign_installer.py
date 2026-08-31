@@ -1,15 +1,18 @@
 """
 @milehigh-header
 schema_version: 1
-purpose: Encapsulate assigning an installer team to a release (DB write, event, and moving the release's mirror Trello card into the matching installer list) as a single command object.
+purpose: Encapsulate assigning an installer team to a release (DB write, event, and QUEUEING the mirror Trello card's move + date bar onto the outbox) as a single command object.
 exports:
-  AssignInstallerCommand: Dataclass command that sets Releases.installer and moves the mirror card
+  AssignInstallerCommand: Dataclass command that sets Releases.installer and queues the mirror-card sync
   AssignInstallerResult: Dataclass result with event_id and installer
-imports_from: [app.models, app.config, app.services.job_event_service, app.trello.api (move_mirror_card, get_list_by_name)]
+imports_from: [app.models, app.services.job_event_service, app.services.outbox_service, app.brain.job_log.scheduling.calculator]
 imported_by: [app/brain/job_log/routes.py]
 invariants:
   - installer is stored as the Trello list name; empty/None clears it and moves the mirror back to Unassigned
-  - Mirror card move is synchronous and best-effort (failure is logged, DB write still commits)
+  - The mirror move + date bar are DEFERRED to TrelloOutbox (action 'assign_installer'), never called
+    inline. The DB write commits immediately; the event stays open until the outbox delivers it, so a
+    failed mirror update is retried with backoff and finally logged as an ERROR rather than swallowed.
+  - comp_eta is computed here, synchronously — it is DB truth the Timeline reads, not a Trello concern
   - Deduplicated events raise ValueError, matching UpdateStartInstallCommand
   - Does not run a scheduling recalc (installer does not affect scheduling)
   - parent_event_id links this event to the one that caused it, so the undo endpoint reverts both
@@ -20,10 +23,9 @@ from datetime import datetime
 from typing import Optional
 
 from app.models import Releases, db
-from app.config import Config
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
-from app.trello.api import move_mirror_card, get_list_by_name, set_mirror_date_range
+from app.services.outbox_service import OutboxService
 from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
 
 logger = get_logger(__name__)
@@ -96,86 +98,33 @@ class AssignInstallerCommand:
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = self.source
 
-        # Resolve the target list: the installer list by name, or Unassigned when cleared.
-        if new_installer:
-            entry = get_list_by_name(new_installer)
-            target_list_id = entry["id"] if entry else None
-            if not target_list_id:
-                logger.warning(
-                    "installer_list_not_found",
-                    installer=new_installer,
-                    job=self.job_id,
-                    release=self.release,
-                )
-        else:
-            target_list_id = Config.UNASSIGNED_CARDS_LIST_ID
+        # comp_eta is DB truth the Timeline reads immediately, so it is computed HERE, synchronously
+        # — only the Trello push is deferred. Assigning a crew to a dated release fixes the install
+        # window; the mirror's date bar is just a rendering of it.
+        if new_installer and job_record.start_install and not job_record.comp_eta:
+            job_record.comp_eta = calculate_install_complete_date(
+                job_record.start_install, job_record.install_hrs, job_record.num_guys
+            )
 
-        if job_record.trello_card_id and target_list_id:
-            try:
-                move_mirror_card(job_record.trello_card_id, target_list_id)
-                logger.debug(
-                    "mirror_card_moved",
-                    job=self.job_id,
-                    release=self.release,
-                    installer=new_installer or 'Unassigned',
-                )
-            except Exception as trello_error:
-                logger.error(
-                    "mirror_card_move_failed",
-                    job=self.job_id,
-                    release=self.release,
-                    error=str(trello_error),
-                    error_type=type(trello_error).__name__,
-                    exc_info=True,
-                )
-        elif not job_record.trello_card_id:
+        # Mirror-card work (move into the crew's list, seed its date bar) goes through the outbox
+        # rather than blocking this request on ~5 Trello round-trips that used to be swallowed on
+        # failure. The event stays OPEN until OutboxService delivers it and closes it, so a lost
+        # mirror update is now a retried, then ERROR-logged, outbox row instead of a silent warning.
+        if job_record.trello_card_id:
+            OutboxService.add(
+                destination='trello',
+                action='assign_installer',
+                event_id=event.id,
+            )
+        else:
+            # Nothing to deliver — close the event now.
             logger.debug(
                 "mirror_move_skipped_no_card",
                 job=self.job_id,
                 release=self.release,
             )
+            JobEventService.close(event.id)
 
-        # When assigning to a team (not clearing), seed the mirror card's date bar to
-        # [start_install, comp_eta] and remember the mirror's id for inbound write-back.
-        if new_installer and job_record.trello_card_id and job_record.start_install:
-            comp_eta = job_record.comp_eta or calculate_install_complete_date(
-                job_record.start_install, job_record.install_hrs, job_record.num_guys
-            )
-            if comp_eta and not job_record.comp_eta:
-                job_record.comp_eta = comp_eta
-            try:
-                range_result = set_mirror_date_range(
-                    job_record.trello_card_id, job_record.start_install, comp_eta
-                )
-                if range_result.get("success"):
-                    mirror_id = range_result.get("mirror_card_id")
-                    if mirror_id:
-                        job_record.mirror_trello_card_id = mirror_id
-                    logger.debug(
-                        "mirror_date_range_set",
-                        job=self.job_id,
-                        release=self.release,
-                        start_install=job_record.start_install.isoformat() if job_record.start_install else None,
-                        comp_eta=comp_eta.isoformat() if comp_eta else None,
-                    )
-                else:
-                    logger.warning(
-                        "mirror_date_range_failed",
-                        job=self.job_id,
-                        release=self.release,
-                        error=range_result.get('error'),
-                    )
-            except Exception as range_error:
-                logger.error(
-                    "mirror_date_range_error",
-                    job=self.job_id,
-                    release=self.release,
-                    error=str(range_error),
-                    error_type=type(range_error).__name__,
-                    exc_info=True,
-                )
-
-        JobEventService.close(event.id)
         db.session.commit()
 
         logger.info(
