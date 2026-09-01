@@ -9,8 +9,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 
-vi.mock('./ReleaseDetailModal', () => ({ default: () => null }));
-vi.mock('./ReleaseCockpitModal', () => ({ default: () => null }));
 vi.mock('./ReleaseHubModal', () => ({ ReleaseHubModal: () => null }));
 vi.mock('./PdfMarkupModal', () => ({ PdfMarkupModal: () => null }));
 
@@ -97,7 +95,7 @@ beforeEach(() => {
     patchJob.mockClear();
     updateStartInstall.mockReset().mockResolvedValue({ status: 'success' });
     authUser.current = { is_admin: true };
-    global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ orders: [] }) }));
+    globalThis.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ orders: [] }) }));
 });
 
 describe('dropping an unassigned card on a crew lane', () => {

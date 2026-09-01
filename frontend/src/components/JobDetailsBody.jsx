@@ -113,28 +113,46 @@ function MiniFlag({ kind }) {
     const cls = kind === 'ASAP' ? 'jl-flag-red' : 'jl-flag-green';
     return (
         <span
-            className={`${cls} font-bold uppercase`}
-            style={{ fontSize: 11, letterSpacing: '.05em', padding: '2px 6px', borderRadius: 4 }}
+            className={`${cls} font-bold uppercase shrink-0`}
+            style={{ fontSize: 11, letterSpacing: '.05em', padding: '2px 6px', borderRadius: 4, lineHeight: 1.25 }}
         >
             {kind}
         </span>
     );
 }
 
+// The date-flow hero is a two-row grid shared by every cell AND every arrow: a fixed-height label
+// row, then a fixed-height value row. Fixing both heights is what keeps the dates on one baseline —
+// a cell carrying a HARD/ASAP flag would otherwise grow its own label row and push its date down,
+// out of line with its neighbours. The arrow reuses the same two rows so it lands dead-centre on
+// the value line it connects, instead of floating in the middle of a stretched cell.
+const FLOW_LABEL_H = 20;   // tall enough for the flag pill, so a flag never changes the row height
+const FLOW_LABEL_GAP = 5;
+const FLOW_VALUE_H = 24;
+const FLOW_ARROW_PAD = 12;  // breathing room either side, so the glyph never crowds a date
+
 function FlowArrow() {
     return (
         <span
             aria-hidden
-            className="shrink-0"
-            style={{
-                color: 'var(--border-strong)',
-                fontSize: 17,
-                padding: '0 4px',
-                lineHeight: 1,
-                alignSelf: 'center',
-            }}
+            className="shrink-0 flex flex-col"
+            style={{ padding: `0 ${FLOW_ARROW_PAD}px` }}
         >
-            →
+            {/* Spacer matching the label row, so the arrow sits on the value row, not between rows. */}
+            <span style={{ height: FLOW_LABEL_H, marginBottom: FLOW_LABEL_GAP }} />
+            <span className="flex items-center" style={{ height: FLOW_VALUE_H }}>
+                {/* An SVG rather than the "→" glyph: its metrics are ours, not the font's, which is
+                    what let the old arrow sit high and render at a different weight per platform. */}
+                <svg width="18" height="10" viewBox="0 0 18 10" fill="none" style={{ display: 'block' }}>
+                    <path
+                        d="M1 5h15M12 1l4 4-4 4"
+                        stroke="var(--border-strong)"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    />
+                </svg>
+            </span>
         </span>
     );
 }
@@ -147,23 +165,26 @@ function FlowCell({ label, value, flag = null, accent = false }) {
     return (
         <div className="min-w-0" style={{ flex: '1 1 0' }}>
             <div
-                className="font-bold uppercase flex items-center flex-wrap"
+                className="font-bold uppercase flex items-center"
                 style={{
                     fontSize: 11,
                     letterSpacing: '.04em',
                     color: 'var(--text-3)',
                     gap: 6,
-                    marginBottom: 4,
+                    height: FLOW_LABEL_H,
+                    marginBottom: FLOW_LABEL_GAP,
+                    flexWrap: 'nowrap',
                 }}
             >
-                <span>{label}</span>
+                <span className="truncate">{label}</span>
                 {flag}
             </div>
             <div
-                className="font-mono font-semibold truncate"
+                className="font-mono font-semibold truncate flex items-center"
                 style={{
                     fontSize: 16,
                     fontWeight: 600,
+                    height: FLOW_VALUE_H,
                     color: blank
                         ? '#9aa3b2'
                         : (accent ? 'var(--accent)' : 'var(--text)'),
@@ -364,7 +385,7 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
                 className="border border-hairline bg-surface-2"
                 style={{ borderRadius: 10, padding: '16px 20px', marginBottom: 22 }}
             >
-                <div className="flex items-stretch min-w-0" style={{ gap: 0 }}>
+                <div className="flex items-start min-w-0" style={{ gap: 0 }}>
                     <FlowCell label="Released" value={formatDate(pick('Released', 'released'))} />
                     <FlowArrow />
                     <FlowCell label="Ship Date" value={formatDate(pick('Ship Date', 'ship_date'))} />
@@ -381,11 +402,12 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
                     />
                     <div
                         aria-hidden
-                        className="shrink-0 self-stretch"
+                        className="shrink-0"
                         style={{
                             width: 1,
+                            height: FLOW_LABEL_H + FLOW_LABEL_GAP + FLOW_VALUE_H,
                             background: 'var(--border)',
-                            margin: '0 16px',
+                            margin: '0 18px',
                         }}
                     />
                     <FlowCell label="Install Prog" value={installProg} accent />

@@ -17,13 +17,14 @@
  *   GanttChart: Day/week-bucket board with zoom that scales column granularity (day↔week), width,
  *     card size, per-cell cap, and card detail; whole-column zoom snapping, week-snap nav, jump-to-date,
  *     and admin drag-to-assign between the unassigned tray and the installer lanes.
- * imports_from: [react, @dnd-kit/core, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters, ../utils/unassignedLane, ../utils/timelineDrop, ./ReleaseDetailModal, ./ReleaseHubModal]
+ * imports_from: [react, @dnd-kit/core, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters, ../utils/unassignedLane, ../utils/timelineDrop, ./ReleaseHubModal, ./PdfMarkupModal]
  * imported_by: [frontend/src/pages/PMBoardContent.jsx]
  * invariants:
- *   - CLICKING is read-only: a card opens a read-only detail modal — admins get ReleaseCockpitModal
- *     (a what-if schedule sandbox that still never writes), everyone else ReleaseDetailModal; clicking
- *     a material-order chip on the Shipping Planning lane opens ReleaseHubModal scrolled to that
- *     release's Materials Ordered section.
+ *   - CLICKING opens ReleaseHubModal — the SAME modal a Job Log row or card opens. One release, one
+ *     identity, whichever surface you clicked it from: no timeline-only cockpit or read-only variant,
+ *     and no lane-colored accent (the hub tints itself from the stage). Every entry point routes
+ *     through openHub(); a material-order chip on the Shipping Planning lane opens that same hub
+ *     scrolled to the release's Materials Ordered section.
  *   - DRAGGING is the timeline's one write, and it is ADMIN-ONLY (every draggable/droppable is
  *     `disabled` otherwise, so hook order is identical for both roles and non-admins get exactly the
  *     old read-only timeline). Dropping a card on an installer lane PATCHes installer + a hard
@@ -87,8 +88,6 @@ import { selectUnassigned } from '../utils/unassignedLane';
 import { dateAtDropX } from '../utils/timelineDrop';
 import { localTodayStr as todayIso, subtractBusinessDays } from '../utils/formatters';
 import { API_BASE_URL } from '../utils/api';
-import ReleaseDetailModal from './ReleaseDetailModal';
-import ReleaseCockpitModal from './ReleaseCockpitModal';
 import { ReleaseHubModal } from './ReleaseHubModal';
 import { PdfMarkupModal } from './PdfMarkupModal';
 import { checkAuth } from '../utils/auth';
@@ -439,16 +438,23 @@ function InstallerBar({ release, lane, color, barH, twoLine, draggable, onClick,
 }
 
 function GanttChart({ filterComplete = false }) {
-    const { jobs, loading, patchJob } = useReleases();
+    const { jobs, loading, patchJob, refreshMaterialSummary } = useReleases();
     const [installerTeams, setInstallerTeams] = useState([]);
     const [teamsLoaded, setTeamsLoaded] = useState(false);
     const [planningOrders, setPlanningOrders] = useState([]);  // PU/stock/galv orders still to bring in
     const [hoveredItem, setHoveredItem] = useState(null);
     const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
-    const [selectedRelease, setSelectedRelease] = useState(null);   // full job row for the detail modal
+    // The release whose hub is open, and how it was opened. ONE modal for every entry point —
+    // a lane card, a staging card, or a material-order chip — matching what a Job Log row opens.
+    const [hubJob, setHubJob] = useState(null);              // full release row
+    const [hubScrollToMaterials, setHubScrollToMaterials] = useState(false);
+    const openHub = (row, { scrollToMaterials = false } = {}) => {
+        setHubJob(row);
+        setHubScrollToMaterials(scrollToMaterials);
+    };
+    const closeHub = () => { setHubJob(null); setHubScrollToMaterials(false); };
     const [isAdmin, setIsAdmin] = useState(false);                  // admins get the schedule cockpit; others the read-only detail modal
-    const [orderJob, setOrderJob] = useState(null);                 // full release row (or {job, release} fallback) for a clicked material-order chip
-    const [orderMarkup, setOrderMarkup] = useState(null);           // {releaseId, versionId, mode} — drawing opened from the order hub
+    const [markup, setMarkup] = useState(null);                     // {releaseId, versionId, mode} — drawing opened from the hub
 
     // A material-order chip only carries job/release digits; the hub's Drawings
     // tab needs the release row's id (and viewer_url). Look the row up in the
@@ -459,13 +465,11 @@ function GanttChart({ filterComplete = false }) {
                 String(j['Job #'] ?? j.job) === String(o.job) &&
                 String(j['Release #'] ?? j.release ?? '') === String(o.release ?? '')
         );
-        setOrderJob(row || { job: o.job, release: o.release });
+        openHub(row || { job: o.job, release: o.release }, { scrollToMaterials: true });
     };
     const [dragRow, setDragRow] = useState(null);                   // raw release row currently under the pointer (drives DragOverlay)
     const [dropHint, setDropHint] = useState(null);                 // {lane, date, leftPx} — the day the drop would write
     const [dropError, setDropError] = useState(null);               // message shown when a scheduling write is rejected
-    const [selectedColor, setSelectedColor] = useState(null);       // lane color of the clicked card → modal accent
-    const [selectedIsShip, setSelectedIsShip] = useState(false);    // did the clicked card come from a shipping lane? → hide the install-window cockpit
     const [containerW, setContainerW] = useState(0);                // measured scroll-viewport width → derives colPx
     const [containerH, setContainerH] = useState(0);                // measured scroll-viewport height → caps the staging tray
     const [viewStart, setViewStart] = useState(() => mondayOf(todayIso()));
@@ -501,8 +505,8 @@ function GanttChart({ filterComplete = false }) {
         backgroundRepeat: 'repeat'
     };
 
-    // Who's viewing → which detail modal a clicked card opens. Admins get the read-only schedule
-    // cockpit (crew/date what-if); everyone else keeps the existing ReleaseDetailModal. One fetch.
+    // Who's viewing → whether drag-to-assign is enabled, and whether a drawing opens in markup or
+    // view mode. The modal itself no longer varies by role. One fetch.
     useEffect(() => {
         let cancelled = false;
         checkAuth().then((u) => { if (!cancelled) setIsAdmin(!!u?.is_admin); }).catch(() => {});
@@ -1107,7 +1111,7 @@ function GanttChart({ filterComplete = false }) {
                                             key={row.id}
                                             job={row}
                                             draggable={canDrag}
-                                            onClick={() => { setSelectedRelease(row); setSelectedColor('rgb(107 114 128)'); setSelectedIsShip(false); }}
+                                            onClick={() => openHub(row)}
                                             onMouseMove={(e) => handleMouseMove(e, {
                                                 type: 'release',
                                                 job: row['Job #'],
@@ -1200,7 +1204,7 @@ function GanttChart({ filterComplete = false }) {
                                                             key={`${release.job}-${release.release}`}
                                                             className="rounded shadow-sm px-1.5 py-1 overflow-hidden select-none cursor-pointer text-center hover:opacity-100"
                                                             style={{ backgroundColor: band.color, opacity: 0.9, minHeight: minCardH }}
-                                                            onClick={() => { setSelectedRelease(release.raw); setSelectedColor(band.color); setSelectedIsShip(band.isShip); }}
+                                                            onClick={() => openHub(release.raw)}
                                                             onMouseMove={(e) => handleMouseMove(e, {
                                                                 type: 'release',
                                                                 job: release.job,
@@ -1258,7 +1262,7 @@ function GanttChart({ filterComplete = false }) {
                                                     barH={band.barH}
                                                     twoLine={band.twoLine}
                                                     draggable={canDrag}
-                                                    onClick={() => { setSelectedRelease(release.raw); setSelectedColor(band.color); setSelectedIsShip(band.isShip); }}
+                                                    onClick={() => openHub(release.raw)}
                                                     onMouseMove={(e) => handleMouseMove(e, {
                                                         type: 'release',
                                                         job: release.job,
@@ -1394,45 +1398,34 @@ function GanttChart({ filterComplete = false }) {
                     </div>
                 </div>
             )}
-            {isAdmin ? (
-                <ReleaseCockpitModal
-                    isOpen={!!selectedRelease}
-                    release={selectedRelease}
-                    accentColor={selectedColor}
-                    showInstallWindow={!selectedIsShip}
-                    onClose={() => setSelectedRelease(null)}
-                />
-            ) : (
-                <ReleaseDetailModal
-                    isOpen={!!selectedRelease}
-                    release={selectedRelease}
-                    accentColor={selectedColor}
-                    onClose={() => setSelectedRelease(null)}
-                />
-            )}
+            {/* The SAME modal a Job Log row opens. A release must not have two identities depending
+                on which surface you clicked it from, so the Timeline deliberately has no modal of
+                its own — no cockpit, no read-only variant, no lane-colored accent (the hub derives
+                its own tint from the stage). */}
             <ReleaseHubModal
-                isOpen={!!orderJob}
-                job={orderJob}
-                releaseId={orderJob?.id}
-                viewerUrl={orderJob?.viewer_url}
+                isOpen={!!hubJob}
+                job={hubJob}
+                releaseId={hubJob?.id}
+                viewerUrl={hubJob?.viewer_url}
                 initialTab="details"
-                scrollToMaterials
-                onClose={() => setOrderJob(null)}
+                scrollToMaterials={hubScrollToMaterials}
+                onOrdersChanged={refreshMaterialSummary}
+                onClose={closeHub}
                 onOpenVersion={(vid, mode) => {
-                    setOrderMarkup({
-                        releaseId: orderJob?.id,
+                    setMarkup({
+                        releaseId: hubJob?.id,
                         versionId: vid,
                         mode: isAdmin ? mode : 'view',
                     });
-                    setOrderJob(null);
+                    closeHub();
                 }}
             />
             <PdfMarkupModal
-                isOpen={orderMarkup != null}
-                releaseId={orderMarkup?.releaseId}
-                versionId={orderMarkup?.versionId}
-                mode={orderMarkup?.mode || 'view'}
-                onClose={() => setOrderMarkup(null)}
+                isOpen={markup != null}
+                releaseId={markup?.releaseId}
+                versionId={markup?.versionId}
+                mode={markup?.mode || 'view'}
+                onClose={() => setMarkup(null)}
             />
         </>
     );

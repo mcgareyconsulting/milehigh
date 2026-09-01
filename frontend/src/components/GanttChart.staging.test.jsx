@@ -9,8 +9,6 @@ import { render, screen, within } from '@testing-library/react';
 
 // The timeline pulls in the PDF markup stack and several heavy modals that have nothing to do with
 // the staging column. Stub them so the test exercises the chart itself.
-vi.mock('./ReleaseDetailModal', () => ({ default: () => null }));
-vi.mock('./ReleaseCockpitModal', () => ({ default: () => null }));
 vi.mock('./ReleaseHubModal', () => ({ ReleaseHubModal: () => null }));
 vi.mock('./PdfMarkupModal', () => ({ PdfMarkupModal: () => null }));
 
@@ -45,7 +43,7 @@ const lane = (container, name) => container.querySelector(`[data-lane="${name}"]
 
 beforeEach(() => {
     mockJobs.current = [];
-    global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ orders: [] }) }));
+    globalThis.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ orders: [] }) }));
 });
 
 const renderChart = async () => {
