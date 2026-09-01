@@ -1,6 +1,6 @@
 /**
  * @milehigh-header
- * schema_version: 6
+ * schema_version: 7
  * purpose: Release timeline and install-scheduling surface, mixing two lane shapes on one X-axis of day/week columns.
  *   Y-axis is a stack of lanes: two shipping-stage lanes (Shipping Planning, Shipping Completed) on
  *   top, then one lane per installer team. SHIPPING lanes are a DAY/WEEK-BUCKET BOARD ("the Trello
@@ -17,7 +17,7 @@
  *   GanttChart: Day/week-bucket board with zoom that scales column granularity (day↔week), width,
  *     card size, per-cell cap, and card detail; whole-column zoom snapping, week-snap nav, jump-to-date,
  *     and admin drag-to-assign between the unassigned tray and the installer lanes.
- * imports_from: [react, @dnd-kit/core, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters, ../utils/unassignedLane, ../utils/timelineDrop, ./ReleaseHubModal, ./PdfMarkupModal]
+ * imports_from: [react, @dnd-kit/core, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters, ../utils/unassignedLane, ../utils/timelineDrop, ../utils/shipLaneDrop, ./ReleaseHubModal, ./PdfMarkupModal]
  * imported_by: [frontend/src/pages/PMBoardContent.jsx]
  * invariants:
  *   - CLICKING opens ReleaseHubModal — the SAME modal a Job Log row or card opens. One release, one
@@ -31,8 +31,16 @@
  *     Start install for the day under the pointer in one call; dropping it back on the tray clears
  *     the installer and leaves the date alone. Both land undoable ReleaseEvents rows. The update is
  *     applied optimistically via ReleasesContext.patchJob and rolled back if the request fails.
- *   - SHIPPING lanes accept no drops. A stage change cascades into job_comp, the Trello list and the
- *     scheduling recalc — a much wider blast radius than assigning a crew, and not what this asked for.
+ *   - SHIPPING lanes accept drops too, and their write is the STAGE ONLY (Ship Planning ↔ Ship
+ *     Complete, via the same /brain/update-stage the Job Log dropdown uses — cascades into job_comp,
+ *     the Trello list, N5 date discipline and the scheduling recalc all included). No date is ever
+ *     written from a shipping drop: a shipping lane's X is DERIVED (planning sits on the ship date,
+ *     completed on the hard Start install), so honouring the drop column would move an install date
+ *     the user never aimed at. Dropping onto the lane a release is already in is a no-op, and a drop
+ *     onto Shipping Completed is REFUSED when the release has no hard Start install — the lane is
+ *     anchored on that date and the backend blanks estimated dates on the way in, so the card would
+ *     silently vanish off the board. Because the write leaves no mark at the drop point, hovering a
+ *     shipping lane washes the whole lane and names the stage it will set.
  *   - Drag is @dnd-kit (MouseSensor 8px + TouchSensor 220ms press-and-hold), NOT native HTML5 drag.
  *     The Phase-5 native-drag interactions were removed 2026-07-12 because native drag is dead on
  *     iPad; iPad is now the stated target, so this is a rebuild on pointer sensors, not a revert.
@@ -68,7 +76,7 @@
  *     unit='week'); column width is derived from the live viewport so exactly that many clean columns
  *     fill the chart. On zoom the viewport re-anchors on the same left-edge DATE (across day↔week
  *     switches) and snaps to a whole-column boundary. Week-snap nav anchors viewStart to a Monday.
- * updated_by_agent: 2026-08-30 (T1: unassigned tray + @dnd-kit drag-to-assign — the timeline's first write)
+ * updated_by_agent: 2026-09-01 (T1: shipping-lane drag = stage-only write, Ship Planning ↔ Ship Complete)
  */
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { jobsApi } from '../services/jobsApi';
@@ -86,6 +94,7 @@ import {
 import { INSTALLER_PALETTE } from '../constants/installerPalette';
 import { selectUnassigned } from '../utils/unassignedLane';
 import { dateAtDropX } from '../utils/timelineDrop';
+import { shipLaneDropOutcome, shipLabelFor } from '../utils/shipLaneDrop';
 import { localTodayStr as todayIso, subtractBusinessDays } from '../utils/formatters';
 import { API_BASE_URL } from '../utils/api';
 import { ReleaseHubModal } from './ReleaseHubModal';
@@ -165,6 +174,8 @@ const SHIP_LANES = [
     { lane: 'Shipping Completed', stage: 'Ship Complete', color: 'rgb(139 92 246)' },
 ];
 const STAGE_TO_SHIP_LANE = new Map(SHIP_LANES.map((s) => [s.stage, s.lane]));
+// Reverse lookup: dropping on a shipping lane sets the release to that lane's stage.
+const LANE_TO_SHIP_STAGE = new Map(SHIP_LANES.map((s) => [s.lane, s.stage]));
 
 // Within a lane×column cell: ASAP rush jobs first, then by job # asc, then release # asc.
 // Deterministic so the stack order is stable across polls/zoom.
@@ -369,11 +380,13 @@ function StagingTray({ enabled, className, style, children }) {
     );
 }
 
-// An installer lane's chart area, doubling as the drop target for that crew. One droppable per
-// lane (not per lane×day cell): the exact DAY comes from where the pointer let go, so 90 columns
-// of installer lanes cost one droppable each instead of hundreds. `hintLeft` paints the column the
-// drop would land on, so the user aims at a date rather than guessing.
-function LaneDropArea({ lane, enabled, registerRef, hintLeft, colPx, className, style, children }) {
+// A lane's chart area, doubling as its drop target. One droppable per lane (not per lane×day cell):
+// on an INSTALLER lane the exact DAY comes from where the pointer let go, so 90 columns cost one
+// droppable each instead of hundreds, and `hintLeft` paints the column the drop would land on so
+// the user aims at a date rather than guessing. A SHIPPING lane has no date to aim at — its X is
+// derived, not chosen — so it gets `hintLabel` instead: a whole-lane wash naming the stage the drop
+// will write, because a stage change is invisible at the drop point and must be announced first.
+function LaneDropArea({ lane, enabled, registerRef, hintLeft, hintLabel, colPx, className, style, children }) {
     const { setNodeRef, isOver } = useDroppable({
         id: laneDropId(lane),
         data: { lane },
@@ -385,13 +398,77 @@ function LaneDropArea({ lane, enabled, registerRef, hintLeft, colPx, className, 
             className={`${className} ${isOver ? 'ring-2 ring-inset ring-accent-400' : ''}`}
             style={style}
         >
-            {isOver && hintLeft != null && (
+            {isOver && !hintLabel && hintLeft != null && (
                 <div
                     className="absolute top-0 bottom-0 bg-accent-300/40 border-x-2 border-accent-500 pointer-events-none z-10"
                     style={{ left: hintLeft, width: colPx }}
                 />
             )}
+            {isOver && hintLabel && (
+                <>
+                    {/* Whole-lane wash: the drop applies to the LANE, not to a column. */}
+                    <div className="absolute inset-0 bg-accent-300/25 pointer-events-none z-10" />
+                    <div
+                        data-ship-drop-hint="1"
+                        className="absolute top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-full bg-accent-600 text-white text-[11px] font-bold shadow whitespace-nowrap pointer-events-none z-10"
+                        style={{ left: (hintLeft ?? 0) + colPx / 2, transform: 'translate(-50%, -50%)' }}
+                    >
+                        {hintLabel}
+                    </div>
+                </>
+            )}
             {children}
+        </div>
+    );
+}
+
+// One release sitting in a shipping lane as a point card. Draggable so the shop can walk a release
+// from Shipping Planning to Shipping Completed without leaving the board — that drop writes the
+// STAGE ONLY. Unlike an installer lane, a shipping lane's X position is derived (planning sits on
+// the ship date, completed on the hard Start install), never chosen, so the drop column is ignored.
+function ShipCard({ release, lane, color, minCardH, imgH, detail, wrap, draggable, onClick, onMouseMove, onMouseLeave }) {
+    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+        id: `ship:${release.id}:${lane}`,
+        data: { row: release.raw, fromLane: lane },
+        disabled: !draggable,
+    });
+    return (
+        <div
+            ref={setNodeRef}
+            role="button"
+            tabIndex={0}
+            className={`rounded shadow-sm px-1.5 py-1 overflow-hidden select-none text-center hover:opacity-100 ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+            style={{
+                backgroundColor: color,
+                opacity: isDragging ? 0.35 : 0.9,
+                minHeight: minCardH,
+                touchAction: draggable ? 'manipulation' : undefined,
+            }}
+            {...attributes}
+            {...listeners}
+            onClick={onClick}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+            onMouseMove={onMouseMove}
+            onMouseLeave={onMouseLeave}
+        >
+            {imgH > 0 && release.raw && release.raw.cover_photo_id && (
+                <div className="relative mb-1 -mx-0.5">
+                    <img
+                        src={`${API_BASE_URL}/brain/releases/${release.id}/photos/${release.raw.cover_photo_id}/file`}
+                        alt=""
+                        loading="lazy"
+                        draggable={false}
+                        className="w-full object-cover rounded bg-black/10"
+                        style={{ height: imgH }}
+                    />
+                    {release.raw.photo_count > 1 && (
+                        <span className="absolute top-0.5 right-0.5 px-1 rounded bg-black/60 text-white text-[9px] font-semibold leading-tight">
+                            📎 {release.raw.photo_count}
+                        </span>
+                    )}
+                </div>
+            )}
+            <CardBody release={release} detail={detail} wrap={wrap} />
         </div>
     );
 }
@@ -921,12 +998,24 @@ function GanttChart({ filterComplete = false }) {
         setHoveredItem(null);   // the hover tooltip would otherwise follow the card around
     };
 
-    const handleDragMove = ({ over, activatorEvent, delta }) => {
+    const handleDragMove = ({ active, over, activatorEvent, delta }) => {
         const lane = laneOfDropId(over?.id);
         if (!lane) { setDropHint(null); return; }
         const date = dropDateFor(lane, activatorEvent, delta);
+        const shipStage = LANE_TO_SHIP_STAGE.get(lane);
+        if (shipStage) {
+            // The date under the pointer only positions the label — a shipping drop writes no date.
+            const row = active?.data?.current?.row ?? null;
+            setDropHint({
+                lane,
+                date: null,
+                leftPx: date ? xOfDate(date) : 0,
+                label: shipLabelFor(row, shipStage),
+            });
+            return;
+        }
         if (!date) { setDropHint(null); return; }
-        setDropHint({ lane, date, leftPx: xOfDate(date) });
+        setDropHint({ lane, date, leftPx: xOfDate(date), label: null });
     };
 
     const handleDragCancel = () => { setDragRow(null); setDropHint(null); };
@@ -949,11 +1038,26 @@ function GanttChart({ filterComplete = false }) {
             installer: row.installer ?? null,
             'Start install': row['Start install'] ?? null,
             start_install_formulaTF: row.start_install_formulaTF,
+            Stage: row['Stage'] ?? null,
         };
+
+        const toShipStage = toLane ? LANE_TO_SHIP_STAGE.get(toLane) : undefined;
 
         let optimistic;
         let call;
-        if (toTray) {
+        if (toShipStage) {
+            // A shipping lane writes the STAGE and nothing else. Where the card lands horizontally
+            // is derived (planning → ship date, completed → hard Start install), so honouring the
+            // drop column here would silently move an install date the user never aimed at.
+            const outcome = shipLaneDropOutcome(row, toShipStage);
+            if (outcome.kind === 'noop') return;
+            if (outcome.kind === 'blocked') {
+                setDropError(`Can't mark ${job}-${release} ${toShipStage} — ${outcome.reason}.`);
+                return;
+            }
+            optimistic = { Stage: toShipStage };
+            call = () => jobsApi.updateStage(job, release, toShipStage);
+        } else if (toTray) {
             if (!before.installer) return;   // already unassigned — nothing to write
             optimistic = { installer: null };
             call = () => jobsApi.updateStartInstall(job, release, null, '');
@@ -972,10 +1076,11 @@ function GanttChart({ filterComplete = false }) {
             await call();
         } catch (err) {
             patchJob(row.id, before);   // put the card back where it came from
+            const verb = toShipStage ? 'move' : 'schedule';
             setDropError(
-                `Couldn't schedule ${job}-${release}: ${err?.message || 'the update was rejected'}`
+                `Couldn't ${verb} ${job}-${release}: ${err?.message || 'the update was rejected'}`
             );
-            console.error('Timeline drag-assign failed:', job, release, err);
+            console.error('Timeline drag failed:', job, release, err);
         }
     };
 
@@ -1153,9 +1258,10 @@ function GanttChart({ filterComplete = false }) {
                                         </div>
                                         <LaneDropArea
                                             lane={band.lane}
-                                            enabled={canDrag && !band.isShip}
+                                            enabled={canDrag}
                                             registerRef={(el) => { laneChartRefs.current[band.lane] = el; }}
                                             hintLeft={dropHint?.lane === band.lane ? dropHint.leftPx : null}
+                                            hintLabel={dropHint?.lane === band.lane ? dropHint.label : null}
                                             colPx={colPx}
                                             className="relative flex-shrink-0 bg-white"
                                             style={{ width: totalPx, height: laneH, ...colGridStyle }}
@@ -1200,10 +1306,16 @@ function GanttChart({ filterComplete = false }) {
                                                     style={{ left: cell.left, top: CELL_PAD_TOP, width: cell.width, gap: CARD_VGAP }}
                                                 >
                                                     {cell.shown.map((release) => (
-                                                        <div
+                                                        <ShipCard
                                                             key={`${release.job}-${release.release}`}
-                                                            className="rounded shadow-sm px-1.5 py-1 overflow-hidden select-none cursor-pointer text-center hover:opacity-100"
-                                                            style={{ backgroundColor: band.color, opacity: 0.9, minHeight: minCardH }}
+                                                            release={release}
+                                                            lane={band.lane}
+                                                            color={band.color}
+                                                            minCardH={minCardH}
+                                                            imgH={imgH}
+                                                            detail={detail}
+                                                            wrap={wrap}
+                                                            draggable={canDrag}
                                                             onClick={() => openHub(release.raw)}
                                                             onMouseMove={(e) => handleMouseMove(e, {
                                                                 type: 'release',
@@ -1219,26 +1331,7 @@ function GanttChart({ filterComplete = false }) {
                                                                 by: release.by
                                                             })}
                                                             onMouseLeave={handleMouseLeave}
-                                                        >
-                                                            {imgH > 0 && release.raw && release.raw.cover_photo_id && (
-                                                                <div className="relative mb-1 -mx-0.5">
-                                                                    <img
-                                                                        src={`${API_BASE_URL}/brain/releases/${release.id}/photos/${release.raw.cover_photo_id}/file`}
-                                                                        alt=""
-                                                                        loading="lazy"
-                                                                        draggable={false}
-                                                                        className="w-full object-cover rounded bg-black/10"
-                                                                        style={{ height: imgH }}
-                                                                    />
-                                                                    {release.raw.photo_count > 1 && (
-                                                                        <span className="absolute top-0.5 right-0.5 px-1 rounded bg-black/60 text-white text-[9px] font-semibold leading-tight">
-                                                                            📎 {release.raw.photo_count}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            )}
-                                                            <CardBody release={release} detail={detail} wrap={wrap} />
-                                                        </div>
+                                                        />
                                                     ))}
                                                     {cell.extra > 0 && (
                                                         <div

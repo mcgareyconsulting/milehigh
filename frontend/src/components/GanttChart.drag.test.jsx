@@ -145,6 +145,7 @@ describe('dropping an unassigned card on a crew lane', () => {
             installer: null,
             'Start install': null,
             start_install_formulaTF: true,
+            Stage: 'Paint Complete',   // rollback restores the stage too, now that a drop can move it
         });
         expect(await screen.findByRole('alert')).toHaveTextContent(/560-923.*Event already exists/);
     });
