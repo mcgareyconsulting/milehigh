@@ -132,6 +132,28 @@ const VIEW_DAYS = 7;
 const PAD_DAYS = 14;
 const SIDEBAR_PX = 192;
 const STAGING_PX = 200;   // width of the pinned Unassigned staging column, frozen left of the lane sidebar
+const STAGING_COLLAPSED_PX = 30;   // collapsed rail: wide enough to stay a drop target and click back open
+const LANE_COLLAPSED_PX = 26;      // collapsed lane: the sidebar strip only — name, colour and count survive
+const LABEL_GUTTER_PX = 6;         // gap between the frozen chrome and a scroll-tracked bar label
+const LANES_COLLAPSED_KEY = 'mhmw:timeline-lanes-collapsed';
+
+const readCollapsedLanes = () => {
+    try {
+        const raw = JSON.parse(localStorage.getItem(LANES_COLLAPSED_KEY) || '[]');
+        return new Set(Array.isArray(raw) ? raw : []);
+    } catch {
+        return new Set();
+    }
+};
+const TRAY_COLLAPSED_KEY = 'mhmw:timeline-tray-collapsed';
+
+const readTrayCollapsed = () => {
+    try {
+        return localStorage.getItem(TRAY_COLLAPSED_KEY) === '1';
+    } catch {
+        return false;   // storage disabled — open is the safe default
+    }
+};
 const HEADER_PX = 60;     // sticky header height — the staging tray hangs below it
 const CARD_GUTTER = 5;    // horizontal inset within a column
 const CARD_VGAP = 3;      // vertical gap between stacked cards in a cell
@@ -158,8 +180,8 @@ const ORDER_KIND_BADGE = { stock: 'PU', galvanizing: 'GALV', material: 'MAT' };
 const ZOOM_LEVELS = [
     { unit: 'week', cols: 12, minCardH: 20, cap: 4, detail: 'min', wrap: false, imgH: 0 },  // ~a quarter
     { unit: 'week', cols: 6, minCardH: 22, cap: 5, detail: 'low', wrap: false, imgH: 0 },   // 6 weeks
-    { unit: 'day', cols: 21, minCardH: 24, cap: 5, detail: 'low', wrap: false, imgH: 0 },   // 3 weeks
-    { unit: 'day', cols: 14, minCardH: 40, cap: 6, detail: 'med', wrap: true, imgH: 0 },    // 2 weeks
+    { unit: 'day', cols: 21, minCardH: 24, cap: 5, detail: 'jr', wrap: false, imgH: 0 },    // 3 weeks
+    { unit: 'day', cols: 14, minCardH: 28, cap: 6, detail: 'jr', wrap: true, imgH: 0 },     // 2 weeks
     { unit: 'day', cols: 7, minCardH: 52, cap: 7, detail: 'high', wrap: true, imgH: 66 },   // 1 week (default)
     { unit: 'day', cols: 4, minCardH: 72, cap: 8, detail: 'full', wrap: true, imgH: 96 },
     { unit: 'day', cols: 2, minCardH: 96, cap: 9, detail: 'full', wrap: true, imgH: 128 },
@@ -277,46 +299,58 @@ const shortDate = (dateStr) => {
 };
 
 // Progressive card content: the more we zoom in, the more of the release we surface.
-// wrap=true (weekly and closer): name/description wrap to as many lines as needed — NO
-// truncation. wrap=false (far zoom): single-line truncate to keep tiny cards tidy.
+// wrap=true (weekly and closer): the header wraps to as many lines as needed — NO truncation.
+// wrap=false (far zoom): single-line truncate to keep tiny cards tidy.
+//
+// The header is ONE bold run — job-release, job name, description — the way a Trello card title
+// reads. Splitting them across weights made three competing lines out of what is really one label.
+// "560-941 Wood Partners - Alta Metro Bld B Structural Steel": the number and the customer are one
+// name (space), the scope is the part that gets set off (dash). Missing pieces drop out with their
+// separator, so no card ever shows a dangling dash.
 function CardBody({ release, detail, wrap }) {
     const jr = `${release.job}-${release.release}`;
-    const nameSuffix = release.jobName ? ` · ${release.jobName}` : '';
+    const header = [[jr, release.jobName].filter(Boolean).join(' '), release.description]
+        .filter(Boolean).join(' - ');
     const flow = wrap ? 'break-words' : 'truncate';
     if (detail === 'min') {
-        return <span className="block text-white text-[10px] font-bold truncate leading-none">{jr}</span>;
+        return <span className="block text-gray-900 text-[11px] font-bold truncate leading-none">{jr}</span>;
     }
-    if (detail === 'low') {
+    // Dense day columns: the identifier ALONE. At this width the name and description wrapped one
+    // or two characters per line and the card became a vertical ribbon of syllables — unreadable,
+    // and it buried the one thing the board is useless without. `anywhere` lets the identifier fall
+    // to a second line at the hyphen rather than overflow a narrow column.
+    if (detail === 'jr') {
         return (
-            <span className="block text-white text-[11px] truncate leading-none">
-                <span className="font-bold">{jr}</span>{nameSuffix}
-            </span>
+            <span
+                className="block text-gray-900 text-xs font-bold leading-tight"
+                style={{ overflowWrap: 'anywhere' }}
+            >{jr}</span>
         );
     }
-    // med / high / full: multi-line stacked card.
+    if (detail === 'low') {
+        return <span className="block text-gray-900 text-xs font-bold truncate leading-none">{header}</span>;
+    }
+    // med / high / full: bold header, then PM.
     return (
         <div className="flex flex-col gap-0.5 leading-tight">
-            <span className={`block text-white text-xs font-bold ${flow}`}>
-                {jr}{nameSuffix}
-            </span>
-            {release.description && (
-                <span className={`block text-white/90 text-[11px] ${flow}`}>{release.description}</span>
-            )}
-            {(detail === 'high' || detail === 'full') && (
-                <span className="block text-white/80 text-[10px] truncate">
-                    {release.isShip
-                        ? (release.installAnchored
-                            ? `Installs ${shortDate(release.startDate)}`
-                            : `${release.shipEstimated ? 'Est. ships' : 'Ships'} ${shortDate(release.startDate)}`)
-                        : `${shortDate(release.startDate)} → ${shortDate(release.endDate)}`}
-                </span>
-            )}
-            {detail === 'full' && (release.team || release.pm) && (
-                <span className="block text-white/70 text-[10px] truncate">
-                    {release.isShip ? release.stage : release.team}{release.pm ? ` · PM ${release.pm}` : ''}
-                </span>
+            <span className={`block text-gray-900 text-sm font-bold ${flow}`}>{header}</span>
+            {release.pm && (
+                <span className="block text-gray-500 text-[11px] truncate">{release.pm}</span>
             )}
         </div>
+    );
+}
+
+// Hide / show control for a lane. Inline SVG because the project carries no icon package, and the
+// state that needs to shout is HIDDEN — a folded lane must never read as an empty one.
+function EyeIcon({ off }) {
+    return (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M1.5 12S5 5.5 12 5.5 22.5 12 22.5 12 19 18.5 12 18.5 1.5 12 1.5 12Z" />
+            <circle cx="12" cy="12" r="3" />
+            {off && <line x1="3" y1="21" x2="21" y2="3" />}
+        </svg>
     );
 }
 
@@ -437,10 +471,10 @@ function ShipCard({ release, lane, color, minCardH, imgH, detail, wrap, draggabl
             ref={setNodeRef}
             role="button"
             tabIndex={0}
-            className={`rounded shadow-sm px-1.5 py-1 overflow-hidden select-none text-center hover:opacity-100 ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+            className={`rounded border-2 bg-gray-50 shadow-sm hover:shadow px-2 py-1.5 overflow-hidden select-none text-left ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
             style={{
-                backgroundColor: color,
-                opacity: isDragging ? 0.35 : 0.9,
+                borderColor: color,
+                opacity: isDragging ? 0.35 : 1,
                 minHeight: minCardH,
                 touchAction: draggable ? 'manipulation' : undefined,
             }}
@@ -475,6 +509,17 @@ function ShipCard({ release, lane, color, minCardH, imgH, detail, wrap, draggabl
 
 // One release on an installer lane. Draggable so an already-scheduled install can be moved to
 // another day or handed to another crew — the same gesture, the same write.
+//
+// The label TRACKS THE SCROLL. On a bar spanning weeks, scrolling to the far end used to leave the
+// name parked at the bar's true left edge, far off screen, so the visible span was anonymous. The
+// label now slides right to stay just clear of the frozen sidebar, and stops at the bar's own left
+// edge once that scrolls back into view.
+//
+// This is padding driven by a CSS variable (--tl-sx, the live scrollLeft, written by the scroll
+// handler), NOT position:sticky. Sticky would need the bar to drop `overflow-hidden` — an overflow
+// ancestor becomes the sticky element's scroll container, which never scrolls — and the unclipped
+// label would then spill past the bar's right edge by exactly the amount it slid, which is worst in
+// the very case this fixes. Padding keeps the bar clipping its own text.
 function InstallerBar({ release, lane, color, barH, twoLine, draggable, onClick, onMouseMove, onMouseLeave }) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: `bar:${release.id}:${lane}`,
@@ -485,14 +530,14 @@ function InstallerBar({ release, lane, color, barH, twoLine, draggable, onClick,
         <div
             ref={setNodeRef}
             role="button"
-            className={`absolute rounded shadow-sm px-1.5 flex items-center overflow-hidden select-none hover:opacity-100 ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+            className={`absolute rounded border-2 bg-gray-50 shadow-sm hover:shadow px-1.5 flex items-center overflow-hidden select-none ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
             style={{
                 left: release.left,
                 top: release.top,
                 width: release.width,
                 height: barH,
-                backgroundColor: color,
-                opacity: isDragging ? 0.35 : 0.9,
+                borderColor: color,
+                opacity: isDragging ? 0.35 : 1,
                 touchAction: draggable ? 'manipulation' : undefined,
             }}
             {...attributes}
@@ -501,13 +546,24 @@ function InstallerBar({ release, lane, color, barH, twoLine, draggable, onClick,
             onMouseMove={onMouseMove}
             onMouseLeave={onMouseLeave}
         >
-            <div className="min-w-0 w-full text-center leading-tight">
-                <span className="block text-white text-[11px] font-semibold truncate">
-                    <span className="font-bold">{release.job}-{release.release}</span>
-                    {release.jobName ? ` · ${release.jobName}` : ''}
+            <div
+                className="min-w-0 w-full text-left leading-tight"
+                style={{
+                    // Slide the label to the frozen chrome's right edge, but never past the bar's
+                    // own end (leave room for a few characters) and never left of its start.
+                    //
+                    // The chrome width does NOT appear here and must not: `release.left` is measured
+                    // from the chart origin, which itself sits behind the frozen chrome, so the two
+                    // offsets cancel. Adding it shoved every label a sidebar-width to the right.
+                    paddingLeft: `clamp(0px, calc(var(--tl-sx, 0px) + ${LABEL_GUTTER_PX}px - ${Math.round(release.left)}px), calc(100% - 36px))`,
+                }}
+            >
+                <span className="block text-gray-900 text-xs font-bold truncate">
+                    {[[`${release.job}-${release.release}`, release.jobName].filter(Boolean).join(' '),
+                        release.description].filter(Boolean).join(' - ')}
                 </span>
-                {twoLine && release.description && (
-                    <span className="block text-white/90 text-[10px] truncate">{release.description}</span>
+                {twoLine && release.pm && (
+                    <span className="block text-gray-500 text-[11px] truncate">{release.pm}</span>
                 )}
             </div>
         </div>
@@ -547,6 +603,8 @@ function GanttChart({ filterComplete = false }) {
     const [dragRow, setDragRow] = useState(null);                   // raw release row currently under the pointer (drives DragOverlay)
     const [dropHint, setDropHint] = useState(null);                 // {lane, date, leftPx} — the day the drop would write
     const [dropError, setDropError] = useState(null);               // message shown when a scheduling write is rejected
+    const [trayCollapsed, setTrayCollapsed] = useState(readTrayCollapsed);   // tray folded to a rail, giving the width back to the chart
+    const [collapsedLanes, setCollapsedLanes] = useState(readCollapsedLanes);   // lanes folded to their sidebar strip
     const [containerW, setContainerW] = useState(0);                // measured scroll-viewport width → derives colPx
     const [containerH, setContainerH] = useState(0);                // measured scroll-viewport height → caps the staging tray
     const [viewStart, setViewStart] = useState(() => mondayOf(todayIso()));
@@ -573,7 +631,31 @@ function GanttChart({ filterComplete = false }) {
     // (viewport minus the sticky lane sidebar). Falls back to a sane width pre-measure.
     // Both frozen columns (the staging tray and the lane sidebar) sit over the scroll viewport, so
     // the space actually left for date columns is what remains after both.
-    const chartViewportW = Math.max((containerW || 1280) - STAGING_PX - SIDEBAR_PX, 320);
+    // Every frozen-left offset measures off this, so collapsing the tray genuinely hands the
+    // pixels to the chart rather than just hiding its contents.
+    const stagingPx = trayCollapsed ? STAGING_COLLAPSED_PX : STAGING_PX;
+
+    const toggleTray = () => {
+        setTrayCollapsed((prev) => {
+            const next = !prev;
+            try { localStorage.setItem(TRAY_COLLAPSED_KEY, next ? '1' : '0'); } catch { /* preference is best-effort */ }
+            return next;
+        });
+    };
+
+    // Fold a lane down to its sidebar strip. Trello collapses a LIST to a vertical rail; our lanes
+    // run horizontally, so the same gesture gives back HEIGHT — more crews on screen at once — and
+    // the name stays upright instead of rotating.
+    const toggleLane = (lane) => {
+        setCollapsedLanes((prev) => {
+            const next = new Set(prev);
+            if (next.has(lane)) next.delete(lane); else next.add(lane);
+            try { localStorage.setItem(LANES_COLLAPSED_KEY, JSON.stringify([...next])); } catch { /* best-effort */ }
+            return next;
+        });
+    };
+
+    const chartViewportW = Math.max((containerW || 1280) - stagingPx - SIDEBAR_PX, 320);
     const colPx = Math.max(chartViewportW / zoom.cols, MIN_COL_PX);
     const fallbackLaneH = minCardH + CELL_PAD_TOP * 2;
     const colGridStyle = {
@@ -827,7 +909,9 @@ function GanttChart({ filterComplete = false }) {
         if (changed || Object.keys(next).length !== Object.keys(laneHeights).length) {
             setLaneHeights(next);
         }
-    }, [bands, colPx, colDays, detail, wrap, fallbackLaneH]);   // eslint-disable-line react-hooks/exhaustive-deps
+    // collapsedLanes is a dep because a folded lane renders no cells: without it, expanding one
+    // would keep the height measured while it was empty and clip the stack.
+    }, [bands, colPx, colDays, detail, wrap, fallbackLaneH, collapsedLanes]);   // eslint-disable-line react-hooks/exhaustive-deps
 
     // Column headers. Day granularity → one header per day (weekday / day / month). Week granularity
     // → one header per week, labelled by the week's Monday.
@@ -932,7 +1016,10 @@ function GanttChart({ filterComplete = false }) {
 
     // Column-snap free horizontal scrolling: when the user stops scrolling, glide to the nearest
     // column boundary so the left edge never sits mid-column. Skipped while a nav intent settles.
-    const handleScrollSnap = () => {
+    const handleScrollSnap = (e) => {
+        // Range-bar labels read this to stay on screen. Written straight to the DOM rather than
+        // held in state: it changes every scroll frame and must not re-render every bar.
+        e.currentTarget.style.setProperty('--tl-sx', `${e.currentTarget.scrollLeft}px`);
         if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
         snapTimerRef.current = setTimeout(() => {
             const el = scrollContainerRef.current;
@@ -1102,22 +1189,52 @@ function GanttChart({ filterComplete = false }) {
                 )}
 
                 {!initialLoad && bands.length > 0 && (
-                    <div className="flex flex-col" style={{ width: STAGING_PX + SIDEBAR_PX + totalPx, minHeight: '100%' }}>
+                    <div className="flex flex-col" style={{ width: stagingPx + SIDEBAR_PX + totalPx, minHeight: '100%' }}>
                         {/* Sticky header */}
                         <div className="sticky top-0 z-30 bg-gray-100 border-b-2 border-gray-300 flex" style={{ minHeight: HEADER_PX }}>
                             {/* Staging-column header — frozen furthest left, above the tray. */}
                             <div
-                                className="sticky left-0 z-50 flex-shrink-0 border-r-2 border-gray-400 bg-gray-200 px-2 py-2 flex flex-col justify-center"
-                                style={{ width: STAGING_PX }}
+                                className="sticky left-0 z-50 flex-shrink-0 border-r-2 border-gray-400 bg-gray-200 flex flex-col justify-center"
+                                style={{ width: stagingPx }}
                             >
-                                <span className="text-[11px] font-extrabold text-gray-800 uppercase tracking-wide">Unassigned</span>
-                                <span className="text-[10px] text-gray-600">
-                                    {unassigned.length} ready to schedule
-                                </span>
+                                {trayCollapsed ? (
+                                    <button
+                                        type="button"
+                                        onClick={toggleTray}
+                                        title={`Show unassigned (${unassigned.length} ready to schedule)`}
+                                        aria-label="Show unassigned column"
+                                        aria-expanded={false}
+                                        className="w-full h-full flex flex-col items-center justify-center gap-1 hover:bg-gray-300"
+                                    >
+                                        <span className="text-[11px] leading-none text-gray-700">▶</span>
+                                        {unassigned.length > 0 && (
+                                            <span className="text-[10px] font-extrabold text-gray-700 leading-none tabular-nums">
+                                                {unassigned.length}
+                                            </span>
+                                        )}
+                                    </button>
+                                ) : (
+                                    <div className="px-2 py-2 flex items-start gap-1">
+                                        <div className="min-w-0 flex-1">
+                                            <span className="block text-[11px] font-extrabold text-gray-800 uppercase tracking-wide">Unassigned</span>
+                                            <span className="block text-[10px] text-gray-600">
+                                                {unassigned.length} ready to schedule
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={toggleTray}
+                                            title="Collapse unassigned column"
+                                            aria-label="Collapse unassigned column"
+                                            aria-expanded={true}
+                                            className="shrink-0 px-1 py-0.5 rounded text-[11px] leading-none text-gray-600 hover:bg-gray-300"
+                                        >◀</button>
+                                    </div>
+                                )}
                             </div>
                             <div
                                 className="sticky z-40 flex-shrink-0 border-r-2 border-gray-300 bg-gray-100 px-2 py-2 flex flex-col justify-center gap-1"
-                                style={{ width: SIDEBAR_PX, left: STAGING_PX }}
+                                style={{ width: SIDEBAR_PX, left: stagingPx }}
                             >
                                 <div className="flex items-center gap-1">
                                     <button
@@ -1199,14 +1316,20 @@ function GanttChart({ filterComplete = false }) {
                             <StagingTray
                                 enabled={canDrag}
                                 className="sticky left-0 z-30 flex-shrink-0 border-r-2 border-gray-400 bg-gray-100"
-                                style={{
-                                    width: STAGING_PX,
+                                style={trayCollapsed ? {
+                                    // Folded, the tray has no content to give it height — without an
+                                    // explicit stretch the rail stops below the header and the lane
+                                    // rows show through the gap on the far left.
+                                    width: stagingPx,
+                                    alignSelf: 'stretch',
+                                } : {
+                                    width: stagingPx,
                                     top: HEADER_PX,
                                     maxHeight: containerH ? Math.max(containerH - HEADER_PX, 120) : undefined,
                                     overflowY: 'auto',
                                 }}
                             >
-                                <div className="p-1.5 space-y-1.5">
+                                <div className={trayCollapsed ? 'hidden' : 'p-1.5 space-y-1.5'}>
                                     {unassigned.length === 0 ? (
                                         <p className="text-[10px] text-gray-500 text-center py-6 leading-snug">
                                             Nothing waiting.<br />Everything ready to ship has a crew.
@@ -1236,9 +1359,12 @@ function GanttChart({ filterComplete = false }) {
                             <div className="flex flex-col" style={{ width: SIDEBAR_PX + totalPx }}>
                             {bands.map((band) => {
                                 // Reserve a bottom strip on the Shipping Planning lane for the PU/order overlay.
-                                const laneOrders = band.lane === SHIP_PLANNING_LANE ? placedOrders : [];
-                                const laneH = (laneHeights[band.lane] || fallbackLaneH)
-                                    + (laneOrders.length ? ORDER_ROW_PX + CARD_VGAP : 0);
+                                const laneCollapsed = collapsedLanes.has(band.lane);
+                                const laneOrders = laneCollapsed || band.lane !== SHIP_PLANNING_LANE ? [] : placedOrders;
+                                const laneH = laneCollapsed
+                                    ? LANE_COLLAPSED_PX
+                                    : (laneHeights[band.lane] || fallbackLaneH)
+                                        + (laneOrders.length ? ORDER_ROW_PX + CARD_VGAP : 0);
                                 return (
                                     <div
                                         key={band.lane}
@@ -1247,14 +1373,28 @@ function GanttChart({ filterComplete = false }) {
                                         style={{ minHeight: laneH }}
                                     >
                                         <div
-                                            className={`sticky z-20 flex-shrink-0 border-r-2 border-gray-300 px-2 py-1 flex items-center gap-2 ${band.isShip ? 'bg-gray-100' : 'bg-gray-50'}`}
-                                            style={{ width: SIDEBAR_PX, left: STAGING_PX }}
+                                            className={`sticky z-20 flex-shrink-0 border-r-2 border-gray-300 px-2 flex items-center gap-2 ${laneCollapsed ? 'py-0 bg-gray-200' : `py-1 ${band.isShip ? 'bg-gray-100' : 'bg-gray-50'}`}`}
+                                            style={{ width: SIDEBAR_PX, left: stagingPx }}
                                         >
                                             <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: band.color }} />
-                                            <span className={`text-sm truncate ${band.isShip ? 'font-extrabold text-gray-900' : 'font-bold text-gray-800'}`}>{band.lane}</span>
+                                            <span className={`truncate ${laneCollapsed ? 'text-xs' : 'text-sm'} ${band.isShip ? 'font-extrabold text-gray-900' : 'font-bold text-gray-800'}`}>{band.lane}</span>
                                             {band.count > 0 && (
-                                                <span className="text-[10px] text-gray-500 ml-auto">{band.count}</span>
+                                                <span className="text-[10px] text-gray-500 ml-auto tabular-nums">{band.count}</span>
                                             )}
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleLane(band.lane)}
+                                                title={laneCollapsed ? `Show ${band.lane}` : `Hide ${band.lane}`}
+                                                aria-label={laneCollapsed ? `Show ${band.lane}` : `Hide ${band.lane}`}
+                                                aria-expanded={!laneCollapsed}
+                                                className={`shrink-0 grid place-items-center w-6 h-6 rounded border shadow-sm transition-colors ${
+                                                    laneCollapsed
+                                                        ? 'border-gray-400 bg-white text-gray-900 hover:bg-gray-100'
+                                                        : 'border-gray-300 bg-white text-gray-400 hover:bg-gray-100 hover:text-gray-700'
+                                                } ${band.count > 0 ? '' : 'ml-auto'}`}
+                                            >
+                                                <EyeIcon off={laneCollapsed} />
+                                            </button>
                                         </div>
                                         <LaneDropArea
                                             lane={band.lane}
@@ -1263,7 +1403,7 @@ function GanttChart({ filterComplete = false }) {
                                             hintLeft={dropHint?.lane === band.lane ? dropHint.leftPx : null}
                                             hintLabel={dropHint?.lane === band.lane ? dropHint.label : null}
                                             colPx={colPx}
-                                            className="relative flex-shrink-0 bg-white"
+                                            className={`relative flex-shrink-0 ${laneCollapsed ? 'bg-gray-200/60' : 'bg-white'}`}
                                             style={{ width: totalPx, height: laneH, ...colGridStyle }}
                                         >
                                             {/* Snapped-week tint */}
@@ -1298,7 +1438,7 @@ function GanttChart({ filterComplete = false }) {
                                                     </div>
                                                 );
                                             })}
-                                            {band.cells && band.cells.map((cell) => (
+                                            {!laneCollapsed && band.cells && band.cells.map((cell) => (
                                                 <div
                                                     key={cell.key}
                                                     data-cell="1"
@@ -1346,7 +1486,7 @@ function GanttChart({ filterComplete = false }) {
                                             {/* Installer lane: horizontal range bars spanning start_install → comp_eta,
                                                 packed into rows so overlapping installs never collide. Same raw row as
                                                 the shipping card (the mirror), so click/hover parity is preserved. */}
-                                            {band.bars && band.bars.map((release) => (
+                                            {!laneCollapsed && band.bars && band.bars.map((release) => (
                                                 <InstallerBar
                                                     key={`${release.job}-${release.release}`}
                                                     release={release}
