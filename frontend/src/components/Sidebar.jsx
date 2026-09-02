@@ -17,6 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLocationContext } from '../context/LocationContext';
 import QuickSearch from './QuickSearch';
 import NotificationBell from './NotificationBell';
+import { SHOW_INVOICING_NAV } from '../constants/navFlags';
 
 const STORAGE_KEY = 'mhmw_sidebar_collapsed';
 
@@ -80,7 +81,7 @@ export default function Sidebar({ isAuthenticated, isAdmin, canSeeReport, onLogo
 
   const navItems = [
     ...NAV_ITEMS,
-    ...(canSeeReport ? [{ label: 'Invoicing', path: '/invoicing-report', icon: ICONS.invoicing }] : []),
+    ...(SHOW_INVOICING_NAV && canSeeReport ? [{ label: 'Invoicing', path: '/invoicing-report', icon: ICONS.invoicing }] : []),
     ...(isAdmin ? [
       { label: 'Subs', path: '/subs', icon: ICONS.invoicing },
       { label: 'Meetings', path: '/meetings', icon: ICONS.meetings },

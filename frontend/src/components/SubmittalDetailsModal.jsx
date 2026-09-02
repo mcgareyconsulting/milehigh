@@ -21,8 +21,13 @@ import DocumentRow from './bbReview/DocumentRow';
 import { PdfMarkupModal } from './PdfMarkupModal';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 import { API_BASE_URL } from '../utils/api';
+import { MODAL_PANEL_SIZE } from '../constants/modalSize';
 
 const DRR_TYPE = 'Drafting Release Review';
+// Documents region reserves this much height in every state (~3 rows) so the panel
+// geometry is stable from open through load. See the comment at the render site.
+const DOC_ROW_H = 56;
+const DOCS_REGION_MIN_H = 'min-h-[168px]';
 const PHASES = ['GC', 'DRR', 'FC'];
 
 // Model choice is sticky for the browser session (survives modal open/close), default sonnet.
@@ -58,9 +63,11 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
     const [relError, setRelError] = useState(null);
     const [relSuccess, setRelSuccess] = useState(false);
     const [relValue, setRelValue] = useState(null);
+    // Header 'Assign Rel' chip scrolls here — Details no longer collapses, so there is
+    // nothing to open, but the field can be off-screen in a tall modal.
+    const relFieldRef = React.useRef(null);
 
     const [model, setModel] = useState(sessionModel);
-    const [detailsOpen, setDetailsOpen] = useState(false);
 
     const [cite, setCite] = useState(null); // { doc, page, nonce } — active drawing shown in the right pane
     const openCite = (doc, page = 1) => setCite({ doc, page: page || 1, nonce: Date.now() });
@@ -88,7 +95,6 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
         if (!isOpen) {
             setRelError(null);
             setRelSuccess(false);
-            setDetailsOpen(false);
             return;
         }
         setRelValue(currentRel);
@@ -186,7 +192,8 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
             onClick={onClose}
         >
             <div
-                className={`bg-white dark:bg-slate-800 rounded-xl shadow-2xl flex flex-col transform transition-all ${cite ? 'w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh]' : 'w-full max-w-2xl max-h-[85vh]'}`}
+                className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl flex flex-col transform transition-all overflow-hidden"
+                style={MODAL_PANEL_SIZE}
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
@@ -211,7 +218,7 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
                             <span className={`${chip} bg-white/20 text-white`}>Rel {relValue} ✓</span>
                         ) : canAssignRel ? (
                             <button
-                                onClick={() => setDetailsOpen(true)}
+                                onClick={() => relFieldRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                                 className={`${chip} bg-white/20 text-white hover:bg-white/30 transition-colors`}
                             >
                                 Assign Rel
@@ -253,8 +260,24 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
                                 </label>
                             </div>
 
+                            {/* Reserved geometry. Every branch below sits in the same minimum box so
+                                the panel does not pop and resize as documents load, fail, or come back
+                                empty — the loading state is skeleton rows, not a single line of text. */}
+                            <div className={DOCS_REGION_MIN_H}>
                             {docsLoading ? (
-                                <p className="text-sm text-gray-500 dark:text-slate-400">Loading documents…</p>
+                                <div
+                                    className="border border-gray-200 dark:border-slate-600 rounded-lg divide-y divide-gray-200 dark:divide-slate-600 overflow-hidden"
+                                    aria-busy="true"
+                                    aria-label="Loading documents"
+                                >
+                                    {[0, 1, 2].map((i) => (
+                                        <div key={i} className="flex items-center gap-3 px-4" style={{ height: DOC_ROW_H }}>
+                                            <div className="h-3 w-2/5 rounded bg-gray-200 dark:bg-slate-700 animate-pulse" />
+                                            <div className="flex-1" />
+                                            <div className="h-3 w-16 rounded bg-gray-200 dark:bg-slate-700 animate-pulse" />
+                                        </div>
+                                    ))}
+                                </div>
                             ) : docsError ? (
                                 <p className="text-sm text-red-600 dark:text-red-400">{docsError}</p>
                             ) : docs && docs.length === 0 ? (
@@ -278,6 +301,7 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
                                     ))}
                                 </div>
                             ) : null}
+                            </div>
                         </div>
                     ) : (
                         <p className="text-sm text-gray-500 dark:text-slate-400">
@@ -287,25 +311,10 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
 
                     {/* Details (demoted, collapsible) */}
                     <div className="border-t border-gray-200 dark:border-slate-600 pt-3">
-                        <button
-                            onClick={() => setDetailsOpen((o) => !o)}
-                            className="flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white transition-colors"
-                        >
-                            Details {detailsOpen ? '▾' : '▸'}
-                        </button>
-                        {detailsOpen && (
+                        <h3 className="text-sm font-medium text-gray-600 dark:text-slate-300">Details</h3>
+                        {(
                             <div className="mt-3 space-y-4">
-                                <div>
-                                    <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Created At</span>
-                                    <p className="text-sm text-gray-700 dark:text-slate-200">{formatDateTime(createdAt)}</p>
-                                </div>
-                                {ballInCourt && (
-                                    <div>
-                                        <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Ball In Court</span>
-                                        <p className="text-sm text-gray-700 dark:text-slate-200">{ballInCourt}</p>
-                                    </div>
-                                )}
-                                <div>
+                                <div ref={relFieldRef}>
                                     <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Release (Rel)</span>
                                     {canAssignRel && relValue == null ? (
                                         <div className="mt-1 flex items-center gap-2">
@@ -356,6 +365,16 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
                                     {relError && <p className="text-sm text-red-600 dark:text-red-400 mt-1">{relError}</p>}
                                     {relSuccess && <p className="text-sm text-green-600 dark:text-green-400 mt-1">Rel saved.</p>}
                                 </div>
+                                <div>
+                                    <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Created At</span>
+                                    <p className="text-sm text-gray-700 dark:text-slate-200">{formatDateTime(createdAt)}</p>
+                                </div>
+                                {ballInCourt && (
+                                    <div>
+                                        <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Ball In Court</span>
+                                        <p className="text-sm text-gray-700 dark:text-slate-200">{ballInCourt}</p>
+                                    </div>
+                                )}
                                 {submittalId && (
                                     <button
                                         onClick={() => setEventsOpen(true)}

@@ -26,6 +26,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLocationContext } from '../context/LocationContext';
 import QuickSearch from './QuickSearch';
 import { CURRENT_VERSION } from '../data/patchNotes';
+import { SHOW_INVOICING_NAV } from '../constants/navFlags';
 
 const RAIL_KEY = 'mhmw_rail_open';
 // Collapsed: icon column only. 52px + 7px side pad fits the 38px logo without
@@ -308,7 +309,7 @@ export default function Rail({
                     {routeItem('/events', 'Events', ICON.events)}
                     {routeItem('/todos', 'To-Dos', ICON.todos)}
                     {routeItem('/install-schedule', 'Install Schedule', ICON.installSchedule)}
-                    {canSeeReport && routeItem('/invoicing-report', 'Invoicing', ICON.invoicing)}
+                    {SHOW_INVOICING_NAV && canSeeReport && routeItem('/invoicing-report', 'Invoicing', ICON.invoicing)}
                     {isAdmin && routeItem('/subs', 'Subs', ICON.subs)}
                     {isAdmin && routeItem('/meetings', 'Meetings', ICON.meetings)}
                     {/* Handoff calls this "Bug Reports"; the app renamed it to
