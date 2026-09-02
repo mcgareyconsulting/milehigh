@@ -41,6 +41,7 @@ import SubcontractorAcceptInvite from './pages/SubcontractorAcceptInvite';
 import SubcontractorTicketList from './pages/SubcontractorTicketList';
 import SubcontractorTicketDetail from './pages/SubcontractorTicketDetail';
 import Metrics from './pages/Metrics';
+import UserDirectory from './pages/UserDirectory';
 import InstallSchedule from './pages/InstallSchedule';
 import SubsLayout from './pages/SubsLayout';
 import Subs from './pages/Subs';
@@ -129,6 +130,7 @@ function AppContent() {
               <Route path="admin/fc-collection" element={<FcCollection />} />
               <Route path="admin/submittal-matching" element={<SubmittalMatching />} />
               <Route path="admin/metrics" element={<Metrics />} />
+              <Route path="admin/users" element={<UserDirectory />} />
               <Route path="*" element={<Navigate to="/job-log" replace />} />
             </>
           ) : (

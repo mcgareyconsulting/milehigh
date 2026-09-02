@@ -3,7 +3,12 @@
 When a release enters Ship Planning or Ship Complete:
   - Formula/estimated dates → blank start_install + ship_date and lock (formulaTF=False)
     so scheduling does not re-estimate
-  - Hard start_install → keep dates, wash color (start_install_no_color=True, ASAP off)
+  - Hard start_install → left completely alone, color and all
+
+That second rule is BUG-11: the hard-date color used to be washed white here, which
+made an overdue date vanish while the install was still ahead of us. It now survives
+the ship stages and drops only on a transition into `Install Start` or later — see
+tests/brain/test_install_start_color_dump.py for the dump itself.
 
 Paint Complete with a hard install date (or ASAP) auto-rolls to Ship Planning.
 """
@@ -143,8 +148,10 @@ class TestFormulaDateBlanking:
 # Hard-date color wash
 # ---------------------------------------------------------------------------
 
-class TestHardDateWash:
-    def test_ship_planning_washes_hard_date_keeps_value(self, app):
+class TestHardDateSurvivesShippingStages:
+    """BUG-11: the ship stages no longer touch a hard date — value, color or ASAP."""
+
+    def test_ship_planning_keeps_hard_date_color(self, app):
         with app.app_context():
             r = _make_release(
                 1, "A",
@@ -170,9 +177,11 @@ class TestHardDateWash:
             assert r.start_install == date(2026, 8, 20)
             assert r.ship_date == date(2026, 8, 19)
             assert r.start_install_formulaTF is False
-            assert r.start_install_no_color is True
-            assert r.start_install_asap is False
-            assert result.extras.get("dates_washed") is True
+            # The whole point of BUG-11: still colored, still visibly urgent.
+            assert r.start_install_no_color is False
+            assert r.start_install_asap is True
+            assert result.extras.get("dates_washed") is None
+            assert result.extras.get("hard_date_cleared") is None
 
             wash = [
                 e for e in ReleaseEvents.query.all()
@@ -180,11 +189,10 @@ class TestHardDateWash:
                 and isinstance(e.payload, dict)
                 and e.payload.get("field") == "start_install_no_color"
             ]
-            assert len(wash) == 1
-            assert wash[0].payload.get("reason") == "stage_set_to_ship_planning"
+            assert wash == []
 
-    def test_hard_install_no_ship_date_washes_and_keeps_install(self, app):
-        """Hard install wins the fork; ship stays empty for the user to set later."""
+    def test_hard_install_no_ship_date_is_left_alone(self, app):
+        """Hard install wins the fork; the blanking path must never reach it."""
         with app.app_context():
             r = _make_release(
                 1, "A",
@@ -202,9 +210,32 @@ class TestHardDateWash:
                 UpdateStageCommand(job_id=1, release="A", stage="Ship Planning").execute()
 
             db.session.refresh(r)
+            # The date survives at all — the early return for hard dates is what keeps
+            # it out of the formula-blanking path, which would null it.
             assert r.start_install == date(2026, 10, 1)
             assert r.ship_date is None
-            assert r.start_install_no_color is True
+            assert r.start_install_no_color is False
+
+    def test_ship_complete_keeps_hard_date_color(self, app):
+        with app.app_context():
+            r = _make_release(
+                1, "A",
+                stage="Ship Planning",
+                stage_group="READY_TO_SHIP",
+                start_install=date(2026, 8, 20),
+                start_install_formulaTF=False,
+                start_install_no_color=False,
+            )
+            db.session.commit()
+
+            from app.brain.job_log.features.stage.command import UpdateStageCommand
+            patches = _stage_command_patches()
+            with patches[0], patches[1], patches[2]:
+                UpdateStageCommand(job_id=1, release="A", stage="Ship Complete").execute()
+
+            db.session.refresh(r)
+            assert r.start_install == date(2026, 8, 20)
+            assert r.start_install_no_color is False
 
 
 # ---------------------------------------------------------------------------
@@ -235,9 +266,9 @@ class TestHardDatePaintCompleteIntercept:
             db.session.refresh(r)
             assert r.stage == "Ship Planning"
             assert r.fab_order == 2
-            # Hard date kept, color washed at Ship Planning.
+            # The intercept still rolls the stage; BUG-11 leaves the color on.
             assert r.start_install == date(2026, 8, 25)
-            assert r.start_install_no_color is True
+            assert r.start_install_no_color is False
 
             stage_event = ReleaseEvents.query.filter_by(action="update_stage").one()
             assert stage_event.payload["to"] == "Ship Planning"
@@ -272,12 +303,13 @@ class TestHardDatePaintCompleteIntercept:
 
 
 # ---------------------------------------------------------------------------
-# Setting a hard date while already at a shipping stage stays washed white
+# Setting a hard date by hand: coloured until install has started
 # ---------------------------------------------------------------------------
 
-class TestHardDateSetAtShippingStage:
-    def test_set_hard_date_at_ship_planning_stays_no_color(self, app):
-        """After formula blank, user sets dates manually — N5 keeps them white, not green."""
+class TestHardDateSetByHand:
+    def test_set_hard_date_at_ship_planning_is_colored(self, app):
+        """After formula blank the user sets dates manually. BUG-11: at a ship stage
+        the install is still ahead, so the date is coloured like any other."""
         with app.app_context():
             r = _make_release(
                 1, "A",
@@ -304,8 +336,7 @@ class TestHardDateSetAtShippingStage:
             db.session.refresh(r)
             assert r.start_install == date(2026, 9, 10)
             assert r.start_install_formulaTF is False
-            assert r.start_install_no_color is True
-            assert r.start_install_asap is False
+            assert r.start_install_no_color is False
 
     def test_set_hard_date_before_shipping_is_colored(self, app):
         """Outside shipping stages, a hard date still gets normal green/yellow treatment."""

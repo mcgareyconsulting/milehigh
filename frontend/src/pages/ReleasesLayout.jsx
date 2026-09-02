@@ -18,6 +18,7 @@ import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
 import { useReleases } from '../context/ReleasesContext';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import { useBreakpoint } from '../hooks/useBreakpoint';
+import { resolveJobLogView } from '../utils/viewportView';
 import JobLogQuickFilters from '../components/JobLogQuickFilters';
 import ProjectFilterDropdown from '../components/ProjectFilterDropdown';
 import ActiveFilterChips from '../components/ActiveFilterChips';
@@ -191,12 +192,9 @@ function ReleasesLayout() {
     // applies from tablet-landscape up (and the toggle is hidden where it's moot).
     const [viewMode, setViewMode] = useViewMode('jl_view', 'auto');
     const cardsEnforced = isBelowLg; // phones + portrait tablets
-    const effectiveView =
-        isMobile ? 'mobilecard'
-        : cardsEnforced ? 'cards'
-        : viewMode === 'table' ? 'table'
-        : viewMode === 'cards' ? 'cards'
-        : (isTablet ? 'cards' : 'table');
+    // Rotating an iPad crosses these buckets and remounts cards vs table (BUG-14).
+    // Modal/scroll state lives on JobLogContent, which survives the swap.
+    const effectiveView = resolveJobLogView({ isMobile, isTablet, isBelowLg, viewMode });
 
     const [showReleaseModal, setShowReleaseModal] = useState(false);
     const [csvData, setCsvData] = useState('');

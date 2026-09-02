@@ -5,11 +5,11 @@ purpose: Encapsulate the hard-date start_install update workflow (DB write, even
 exports:
   UpdateStartInstallCommand: Dataclass command that executes a start_install update with all side effects
   StartInstallUpdateResult: Dataclass result with event_id and start_install
-imports_from: [app.models, app.services.job_event_service, app.trello.api (update_trello_card)]
+imports_from: [app.models, app.services.job_event_service, app.trello.api (update_trello_card), app.brain.job_log.features.start_install.neutralize_install_date_cascade]
 imported_by: [app/brain/job_log/routes.py]
 invariants:
   - Hard date sets start_install_formulaTF=False and clears start_install_formula
-  - At Ship Planning / Ship Complete (N5), hard dates stay washed white (start_install_no_color=True)
+  - At `Install Start` or later, a user-set hard date stays neutral (start_install_no_color=True); at the ship stages it is colored (BUG-11)
   - Trello due-date push is synchronous (matches the pre-extraction route behavior)
   - Deduplicated events raise ValueError, matching UpdateStageCommand / UpdateFabOrderCommand
   - This command does NOT cover the `clear_hard_date` flow — that remains in the route as it
@@ -23,8 +23,8 @@ from app.models import Releases, db
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
 from app.trello.api import update_trello_card
-from app.brain.job_log.features.start_install.shipping_stage_date_discipline import (
-    SHIPPING_STAGES,
+from app.brain.job_log.features.start_install.neutralize_install_date_cascade import (
+    COLOR_DUMP_STAGES,
 )
 
 logger = get_logger(__name__)
@@ -108,10 +108,15 @@ class UpdateStartInstallCommand:
         job_record.start_install = self.start_install
         job_record.start_install_formula = None
         job_record.start_install_formulaTF = False
-        # A user-set hard date is normally colored (green/yellow). N5: at Ship Planning /
-        # Ship Complete, hard dates stay washed white so a date set after formula blanking
-        # does not reintroduce alarm colors. Ship Date UI follows this same flag.
-        job_record.start_install_no_color = job_record.stage in SHIPPING_STAGES
+        # A user-set hard date is normally colored (green/yellow). Past the point where
+        # install has started, it stays neutral instead — the same boundary the stage
+        # cascade uses, so a date typed in at `Install Start` doesn't come back colored
+        # one edit after the stage change dumped it.
+        #
+        # BUG-11 moved that boundary off the ship stages: a hard date set at Ship
+        # Planning is now colored, because the install is still ahead and an overdue
+        # date there is exactly the signal that must stay visible.
+        job_record.start_install_no_color = job_record.stage in COLOR_DUMP_STAGES
         # Setting an explicit hard date takes manual control of the date, so clear ASAP
         # (assigning an installer, by contrast, goes through AssignInstaller and keeps ASAP).
         job_record.start_install_asap = False
