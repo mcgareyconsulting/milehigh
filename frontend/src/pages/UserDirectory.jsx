@@ -66,14 +66,22 @@ function RoleBadge({ role }) {
 
 // The editable permission control. A bare <select> rather than a modal: role is the
 // only writable field on the row, so a round-trip through a dialog buys nothing.
+//
+// The control carries its OWN role's tint, drawn from the same ROLE_BADGE palette the badge uses,
+// so a directory of thirty people can be scanned for admins at a glance instead of read row by row.
+// The tint is on the control, not the <option>s: option background/colour is honoured by Firefox
+// and ignored by Safari and Chrome on macOS, so styling them would look broken for most of the
+// company. Each option keeps a •-prefixed label instead, which every browser does render.
 function RoleSelect({ row, roles, disabled, pending, onChange }) {
+    const currentKey = row.role_key || 'default';
+    const currentLabel = roles.find((r) => r.key === currentKey)?.label || row.role;
     return (
         <select
             aria-label={`Role for ${fullName(row)}`}
-            className={`w-full max-w-[9rem] rounded-lg border border-hairline bg-surface px-2 py-1 text-xs text-ink
-                        focus:outline-none focus:ring-2 focus:ring-accent-500
+            className={`w-full max-w-[9rem] rounded-lg border border-hairline px-2 py-1 text-xs font-semibold
+                        focus:outline-none focus:ring-2 focus:ring-accent-500 ${roleClass(currentLabel)}
                         ${disabled || pending ? 'opacity-60 cursor-not-allowed' : ''}`}
-            value={row.role_key || 'default'}
+            value={currentKey}
             disabled={disabled || pending}
             title={disabled ? 'You cannot change your own role' : undefined}
             onChange={(e) => onChange(row, e.target.value)}
