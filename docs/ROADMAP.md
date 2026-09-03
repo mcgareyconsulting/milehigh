@@ -1,7 +1,7 @@
 ---
 project: MHMW
-updated: 2026-08-30
-verified: origin/main @ fa85582 (PR #354 BUG-16 + BUG-18)
+updated: 2026-09-03
+verified: origin/main @ 815fd99 (PR #357 iPad rotation)
 config:                       # inputs to derived math — store inputs, never results
   horizon:
     - 2027-10 Procore absolute dead date (renewed 2026-08-15)
@@ -19,6 +19,11 @@ queue:                        # agent-maintained, set by agreement in session
                         # individual-logins answer needs accounts, which T2 makes self-serve, but Daniel
                         # can create them by hand today, so N9 does not move behind T2.
   awaiting: [N11]
+                        # 2026-09-02: session reordered NOTHING. T1 stays now — the meeting was a
+                        # live timeline demo that closed T1's open design questions (date model,
+                        # drop behavior, ordering, lanes). Bill's stated "next real big push" is sub
+                        # access = T3, which carries deps T2 — so T2 already sitting in next is the
+                        # correct chain, not a coincidence. [bill-2026-09-02#L912]
 ---
 
 # MHMW · ROADMAP
@@ -76,15 +81,19 @@ from Daniel's own list (BUG-16 through BUG-18).
 `claude/bug-16-18-fixes-eqqca9`; the branch name predates BUG-11 joining it).
 
 
-**Open as of 2026-08-30, in handoff order:** BUG-13 (low, reproduce first),
+**Re-stocked 2026-09-02** from the 9/2 session: BUG-19 (DWL unnumbered returns — active data loss) and BUG-20 (ASAP shows a date). **BUG-17's re-check trigger fired the same day.**
+
+**Open as of 2026-09-03, in handoff order:** BUG-19 (high, active data loss), BUG-20 (high, client-asked), BUG-13 (low, reproduce first),
 BUG-14 (low — **first pass landed, no iPad test yet**; root cause tracked down).
 **BUG-17 is parked** (Daniel, 2026-08-29) and is not part of this pass.
 
 | ID | Fix | Entry point | Pri |
 |---|---|---|---|
-| BUG-11 | ~~Hard-date color dump fires too early — moves from the ship stages to `Install Start` or later [bill-2026-08-21#L109/#L113/#L115]~~ **built 2026-08-29** to the 2026-08-29 spec exactly: the dump fires on a stage transition whose destination is in `COLOR_DUMP_STAGES` = {`Install Start`, `Install Complete`, `Complete`}, never on the `start_install` date arriving. **The triage's "add one reason, remove two" reduction was one site short** — `start_install/command.py:114` set `start_install_no_color = stage in SHIPPING_STAGES` when a user typed a hard date, a third independent encoding of the old boundary (the BUG-8/9/16 second-caller shape again). All three now read the one `COLOR_DUMP_STAGES` constant. The ship-stage hard-date branch in `shipping_stage_date_discipline.py` is now a **deliberate no-op that must not be deleted** — it is the guard keeping hard dates out of the formula-blanking path below it, which would null the date; its docstring says so. Formula blanking untouched, per Bill. "Or later" is enforced by an integrity test asserting `COLOR_DUMP_STAGES` equals the tail of the canonical stage order from `Install Start`, so a stage inserted later can't silently fall out of the set. **Five sites, not the two triaged** — after Daniel confirmed the rule (*"hard date setting unaffected, we wipe color for ASAP or other hard date Install Start or later. Date not changed, just color"*) two more hardcoded `no_color = False` on a hard-date write and would have repainted a dumped row: the **ASAP toggle** (`routes.py:1834`, which stamps a hard date one week out) and the **Trello mirror-card date slide** (`trello/sync.py:256`). Both now read the same constant. The `set_asap` **undo** is deliberately left alone — it restores `prev_no_color` from its own event payload, which is correct. **Side effect worth knowing:** ASAP red now survives Ship Planning (it was being cleared by the wash); the separate `asap_dropped_on_ship_complete` rule still drops it at Ship Complete | `.../start_install/neutralize_install_date_cascade.py` (`COLOR_DUMP_STAGES`, `reason_for_stage`); callers `stage/command.py`, `start_install/command.py`, `shipping_stage_date_discipline.py`; tests `tests/brain/test_install_start_color_dump.py` + updated `test_shipping_stage_date_discipline.py` | **high — client-decided** | **Two follow-on decisions from Daniel, 2026-08-29 (both built):** (1) **ASAP is refused once install has started** — `PATCH /brain/update-start-install` returns `409 asap_after_install_start` when the stage is in the dump zone, and the modal disables the toggle rather than offering a control that 409s. Clearing a stale flag is still allowed. (2) **An ASAP row's date is rewritten to the day install started** when it crosses into the dump zone — the ASAP date was an anchor five business days out, never a plan, so the stage event's own date is the truer value. Scoped to ASAP rows only: a hand-set hard date is a real commitment and still keeps its value ("date not changed, just color" holds for those). The ASAP test is the **caller's**, deliberately — `UpdateStageCommand` drops `start_install_asap` earlier in the same command, so the cascade can't re-derive it and reads a stale False; `had_asap` is captured before that block. **The frontend had its own copy of the old rule and made all of this invisible** — `atShippingStage` was hardcoded in three render paths (`StartInstallEditor`, and the Start install + Ship Date cells of `JobsTableRow`), forcing neutral at the ship stages whatever the DB said. Extracted to one `frontend/src/utils/installDateColor.js` mirroring the backend's `_classify_date`, with the stage check still covering the optimistic pre-refetch window. **Open question, not decided:** `comp_eta` is still whatever was computed from the old ASAP anchor when the date is rewritten — the Gantt bar end may now disagree with its start.
+| BUG-11 | ~~Hard-date color dump fires too early — moves from the ship stages to `Install Start` or later [bill-2026-08-21#L109/#L113/#L115]~~ **built 2026-08-29** to the 2026-08-29 spec exactly: the dump fires on a stage transition whose destination is in `COLOR_DUMP_STAGES` = {`Install Start`, `Install Complete`, `Complete`}, never on the `start_install` date arriving. **The triage's "add one reason, remove two" reduction was one site short** — `start_install/command.py:114` set `start_install_no_color = stage in SHIPPING_STAGES` when a user typed a hard date, a third independent encoding of the old boundary (the BUG-8/9/16 second-caller shape again). All three now read the one `COLOR_DUMP_STAGES` constant. The ship-stage hard-date branch in `shipping_stage_date_discipline.py` is now a **deliberate no-op that must not be deleted** — it is the guard keeping hard dates out of the formula-blanking path below it, which would null the date; its docstring says so. Formula blanking untouched, per Bill. "Or later" is enforced by an integrity test asserting `COLOR_DUMP_STAGES` equals the tail of the canonical stage order from `Install Start`, so a stage inserted later can't silently fall out of the set. **Five sites, not the two triaged** — after Daniel confirmed the rule (*"hard date setting unaffected, we wipe color for ASAP or other hard date Install Start or later. Date not changed, just color"*) two more hardcoded `no_color = False` on a hard-date write and would have repainted a dumped row: the **ASAP toggle** (`routes.py:1834`, which stamps a hard date one week out) and the **Trello mirror-card date slide** (`trello/sync.py:256`). Both now read the same constant. The `set_asap` **undo** is deliberately left alone — it restores `prev_no_color` from its own event payload, which is correct. **Side effect worth knowing:** ASAP red now survives Ship Planning (it was being cleared by the wash); the separate `asap_dropped_on_ship_complete` rule still drops it at Ship Complete | `.../start_install/neutralize_install_date_cascade.py` (`COLOR_DUMP_STAGES`, `reason_for_stage`); callers `stage/command.py`, `start_install/command.py`, `shipping_stage_date_discipline.py`; tests `tests/brain/test_install_start_color_dump.py` + updated `test_shipping_stage_date_discipline.py` | **high — client-decided** | **Two follow-on decisions from Daniel, 2026-08-29 (both built):** (1) **ASAP is refused once install has started** — `PATCH /brain/update-start-install` returns `409 asap_after_install_start` when the stage is in the dump zone, and the modal disables the toggle rather than offering a control that 409s. Clearing a stale flag is still allowed. (2) **An ASAP row's date is rewritten to the day install started** when it crosses into the dump zone — the ASAP date was an anchor five business days out, never a plan, so the stage event's own date is the truer value. Scoped to ASAP rows only: a hand-set hard date is a real commitment and still keeps its value ("date not changed, just color" holds for those). The ASAP test is the **caller's**, deliberately — `UpdateStageCommand` drops `start_install_asap` earlier in the same command, so the cascade can't re-derive it and reads a stale False; `had_asap` is captured before that block. **The frontend had its own copy of the old rule and made all of this invisible** — `atShippingStage` was hardcoded in three render paths (`StartInstallEditor`, and the Start install + Ship Date cells of `JobsTableRow`), forcing neutral at the ship stages whatever the DB said. Extracted to one `frontend/src/utils/installDateColor.js` mirroring the backend's `_classify_date`, with the stage check still covering the optimistic pre-refetch window. **Open question, not decided:** `comp_eta` is still whatever was computed from the old ASAP anchor when the date is rewritten — the Gantt bar end may now disagree with its start. **Sharpened 2026-09-02** [bill-2026-09-02]: Daniel's timeline decision is that a drag or edge-compress writes **`start_install` and `comp_eta` only** — no install hours, fab hours or num guys. That makes `comp_eta` directly settable, so a card can hold a duration its hours and crew size do not imply. The same divergence, now reachable by two paths. **Still not decided, and now needs an explicit rule:** does a later hours/crew edit recompute over a manually compressed `comp_eta`, or is a compressed card pinned? Whichever writes last currently wins by accident.
+| BUG-19 | **DWL: an unnumbered item that gets returned is invisible.** A *numbered* item that bounces back jumps to the top of the drafter's list with a decimal; an item worked **without** a number is returned into the unnumbered bucket and nobody notices — *"they don't look at their unnumbered stuff"* [bill-2026-09-02#L1590]. **Colton has already missed work this way** [#L1594]. Ask: apply the same auto-promotion to unnumbered returns | DWL urgency/bounce-back path (`app/brain/` drafting workload; the decimal-bump logic that already handles numbered returns) | **high — active data loss** |
+| BUG-20 | **ASAP drops its text and shows a real date.** Today the card reads "ASAP" [bill-2026-09-02#L732]. Bill's complaint: *"what's the point of bringing dates if we have ASAP… then the ASAP lands and then we don't know what the date is"* [#L1032]. Final behaviour (Daniel, 2026-09-02): **the entry point is unchanged — the user hits ASAP mode — but from there it behaves exactly like a hard date.** The user sets a date, the card shows that date, the cell renders **red**. "ASAP" as displayed text is dropped; red carries the urgency. Semantics: *"if we can get it faster [great], but this is the absolute drop-dead date"* [#L1043]. Touches N5/BUG-11's ASAP paths — read those notes first | ASAP toggle (`routes.py` `update-start-install`), `frontend/src/utils/installDateColor.js`, card render on the Job Log and Timeline | **high — client-asked** |
 | BUG-16 | ~~DWL **HOLD** must drop when a submittal's ball-in-court changes [daniel-2026-08-29]~~ **built 2026-08-29**. The drop is now one shared rule — `drop_drafting_status_for_bic_change` in `app/procore/helpers.py` — that every BIC writer calls, rather than the same clause copied per caller (which is how BUG-8/BUG-9 came back). It clears **any** drafter-scoped status (HOLD, STARTED, NEED VIF), not just HOLD: all three are set against whoever held the ball and are equally stale once it moves, and the ask named the field, not the value. **Three live call sites, not the two triaged** — the webhook, the CLI health scan, and `POST /procore/health-scan/update` (a second copy of the audit fix loop in `app/procore/__init__.py`, missed at triage). Each folds the drop into the `SubmittalEvents` payload it already emits, so it is auditable. **`app/procore/scripts/reconcile_bic.py` deliberately left alone** — a one-off backfill for the 2026-06-30 webhook outage whose header invariant is explicitly "silent data backfill, emits no SubmittalEvents"; hardcoded to that incident's projects and imported by nothing. Re-check if it is ever generalised. **Found and fixed en route:** the order-compression loop bound its variable to `submittal_id`, shadowing the function parameter of the same name, so after any compression every later log line, the urgency bump and the `SubmittalEvents` row were attributed to the last compressed sibling instead of the submittal that moved | `app/procore/helpers.py` (`drop_drafting_status_for_bic_change`); callers `app/procore/procore.py` + `app/procore/__init__.py`; tests `tests/procore/test_bic_drops_drafting_status.py` | **high — client-asked** |
-| BUG-17 | ~~To-Do page cleanup~~ **PARKED 2026-08-29 by Daniel — *"I'll circle back on that"*.** Class `deferred`, not dropped: the reference arrived, was scoped, and the scope was narrowed to frontend/QoL, all on 2026-08-29 — then the whole item came out of the bug pass before any of it was built. **Nothing is lost and nothing needs re-deriving.** The scope doc lives beside the reference tree at `~/Desktop/Reference/eos-todos-reference/SCOPE-for-MHMW.md` (out of the repo with its source material, same as the transcripts). It already carries the seven in-scope frontend items, the one item with a fetch tradeoff, what was ruled out and why, and the finding that reframes the task — **we have no to-do table**; ours are `ChecklistItem` rows the meeting extractor creates. **Re-check trigger: Daniel raises it again.** | scope doc `~/Desktop/Reference/eos-todos-reference/SCOPE-for-MHMW.md`; page `frontend/src/pages/ToDos.jsx` | parked |
+| BUG-17 | ~~To-Do page cleanup~~ **PARKED 2026-08-29 by Daniel — *"I'll circle back on that"*.** Class `deferred`, not dropped: the reference arrived, was scoped, and the scope was narrowed to frontend/QoL, all on 2026-08-29 — then the whole item came out of the bug pass before any of it was built. **Nothing is lost and nothing needs re-deriving.** The scope doc lives beside the reference tree at `~/Desktop/Reference/eos-todos-reference/SCOPE-for-MHMW.md` (out of the repo with its source material, same as the transcripts). It already carries the seven in-scope frontend items, the one item with a fetch tradeoff, what was ruled out and why, and the finding that reframes the task — **we have no to-do table**; ours are `ChecklistItem` rows the meeting extractor creates. **Re-check trigger: Daniel raises it again.** → **TRIGGER FIRED 2026-09-02** [bill-2026-09-02#L1607]: Bill asked for it unprompted — the To-Dos page gets **two columns, your to-dos and mentions, defaulting to yours**, with the ability to see others'; **@mention from anywhere you can write a note** raises a notification; and to-dos must be **editable after creation** — today *"the only thing you can do is [complete] it"* [#L1624]. He also framed the eventual home: to-dos, **rocks** for your team, and **my metrics** (the scorecard with a graph), plus a **company announcement** slot [#L1630] — *"you guys use 90s, figure out what you like about it, and then we probably fold it in your brain"*. Unparking is Daniel's call. | scope doc `~/Desktop/Reference/eos-todos-reference/SCOPE-for-MHMW.md`; page `frontend/src/pages/ToDos.jsx` | parked |
 | BUG-18 | ~~Left icon rail pops in extra rows on load [daniel-2026-08-29]~~ **built 2026-08-29**. Took the triage's first candidate — cache the last-known role in `localStorage` and hydrate optimistically — over reserving space, because reserving would leave a non-admin staring at six blank slots on every load to spare admins one reflow. `AppShell`'s three role `useState(false)` calls collapse into one `useState(readCachedRoleFlags)`; `checkAuth` still decides and overwrites. `canUseBBChat` (Carmen) was gated the same way and had the same pop-in, so it rides along. **The cache is a first-paint hint, never an authorization decision** — the server gates every route — and `logout()` clears it so the next user on a shared browser cannot inherit the previous one's rail; a null `checkAuth` (expired session) clears it too. Reads/writes are try/catch'd for private-mode Safari, falling back to the old all-false start | `frontend/src/utils/auth.js` (`roleFlagsFor`, `readCachedRoleFlags`, `cacheRoleFlags`), `frontend/src/components/AppShell.jsx` | low — cosmetic |
 | BUG-15 | ~~Meeting-bot transcription autodetects language — mis-detected a production standup as Portuguese and translated a line [bill-2026-08-21#§2]~~ **built 2026-08-21**: `language_code: "en"` + explicit `prioritize_accuracy` mode pinned on every dispatch (covers the calendar poller and the on-demand route, which share `dispatch_bot`) | `app/brain/meetings/recall.py` (`TRANSCRIPT_LANGUAGE`); test `tests/brain/test_calendar_recall.py::test_dispatch_bot_pins_transcription_to_english` | med |
 | BUG-12 | ~~Carmen lookahead tool returns a stale window — Novel Flatirons pull starts in May [bill-2026-08-21#L133]~~ **built 2026-08-21** (PR #348): the symptom was the rendered Gantt axis, not the data. `_chart_range` expanded the x-axis *backwards* to cover any past-dated phase bar, so one stale bar rewound the whole chart to May. It now starts at the declared window and only extends forward — the window is a viewport, not a row filter. The other two halves of Bill's ask were **already true and predate the bug**: the schedule window is 3 weeks from `today` (`schedule_builder.py:427`), and the phase labels (Drafting / Fabrication / Paint / Shipping / Installation) landed 2026-07-25 | `app/brain/lookahead/export_pdf.py` (`_chart_range`); test `tests/lookahead/test_export_pdf.py` | med |
@@ -177,7 +186,7 @@ reconciliation threads (cover-email items, the "A.1" label) remain Owed.
 [bill-2026-08-21#L155].
 
 ### T1 · Timeline assignment — drag, assign, unassigned lane
-*W5 · not-started · class build · due — · deps — · owner daniel · src bill-2026-08-15#L75 · upd 2026-08-15*
+*W5 · not-started · class build · due — · deps — · owner daniel · src bill-2026-08-15#L75 · upd 2026-09-03*
 
 Effort L. **Priority 1 of the whole lane** and Bill's top ask, stated twice:
 *"being able to **move the cards around and assign them**, and then **the vertical
@@ -232,6 +241,13 @@ view-local arrangement. That is the point of the feature, not a side effect.
 - 2026-08-29 · decision · src — — drag rebuilds on `@dnd-kit`, not restored from the 2026-07-12 removal: the removed implementation was native HTML5 drag, dead on iPad, and iPad is now the stated target [bill-2026-08-21#L155]. iPad drag is the first thing to prove, on the physical device
 - 2026-08-29 · note · src — — the unassigned lane is net-new: no lane today holds a release with neither a shipping stage nor an installer (`GanttChart.jsx:32`)
 - 2026-08-29 · decision · src — — unassigned-lane membership = **no installer AND (ready to ship OR stored at Mile High OR past paint complete)**, Bill's stated intake. "Any release with no installer" was considered and rejected — hundreds of drafting/fab rows would drown the column
+- 2026-09-02 · transcript · src bill-2026-09-02#L442–L900 — **design closed.** A full live demo settled every open question: hard date == scheduled date, with projected a separate soft state [#L625]; drop with no hard date sets installer + `start_install` and promotes to scheduled [#L677]; drop on a card that **already holds a hard date snaps back to that date** and ignores the drop cell — *"we're forcing the hard date on the first pass"* [#L739]; order by date regardless of hard/projected, with project demoted to a **filter reusing the job-log search element** [#L646]; no per-day card cap — an overloaded day should look overloaded [#L449]; collapsed cards show job-release, hover for the rest [#L454]
+- 2026-09-02 · transcript · src bill-2026-09-02#L525–L615 — **"unscheduled but assigned" is a required third state.** Work can belong to an installer with no scheduled date; today it would land on their lane at a meaningless projected date (Bill's case: something showing on Oscar's lane back in April). Shape agreed: a per-installer collapsed **tower** beside the lane; dragging out of it sets the date. The existing Unassigned lane pulls unassigned cards at **paint-complete or later** [#L546]
+- 2026-09-02 · transcript · src bill-2026-09-02#L503–L524 — Shipping Planning follows the install card (start install − 1 business day minimum); **Shipping Complete locks** — *"that should be locked for eternity"*. Business days are **not** currently computed for start install [#L515]
+- 2026-09-02 · notes · src bill-2026-09-02 — sharpened by Daniel's notes: **Ship Complete freezes at the drop and the card stays put** — `start_install` keeps moving as the install card moves, but never touches the Ship Complete card. Cards get a **red/yellow/green border keyed to date type** with the date shown on the card. A drag or edge-compress writes **`start_install` and `comp_eta` only** — no install hours, no fab hours, no num guys
+- 2026-09-02 · notes · src bill-2026-09-02 — new UI defect for this lane: the **unassigned expand/contract sidebar hides when the table is scrolled down**
+- 2026-09-02 · transcript · src bill-2026-09-02#L471–L510 — three defects found live in the demo: install hours don't compute on a **weekend** drop [#L471]; a **duplicate-event bug** blocks moving a card back to a position it held [#L509]; a card appeared to **stretch/jump ~3 days** on an early drag, not reproduced on retry [#L478]
+- 2026-09-02 · decision · src — — endorsed: *"you got the right concept right in place here"* [bill-2026-09-02#L890]. T1 stays `queue.now` with its design no longer open
 
 ### T2 · Admin member management — permissions + onboarding, consolidated
 *W5 · in_progress · class build · due — · deps — · owner daniel · src bill-2026-08-15#L83 · upd 2026-08-30*
@@ -280,7 +296,7 @@ multiple named roles). T3 visibility walls are unchanged.
 - 2026-08-30 · note · src — — **see all users** is the completed slice of Bill's six [#L83]. Add / assign permissions / invite / reset password / block remain open. Directory reviewed in-session: column widths locked so Employees and Subcontractors share one horizontal grid; Users rail icon moved under Matching. Status stays `in_progress`; queue.now stays T1
 
 ### T3 · Subcontractor visibility — short-term scope
-*W5 · not-started · class build · due — · deps T2 · owner daniel · src bill-2026-08-15#L93 · upd 2026-08-20*
+*W5 · not-started · class build · due — · deps T2 · owner daniel · src bill-2026-08-15#L93 · upd 2026-09-03*
 
 Effort M. **Short term:** subs see their **T&M tickets plus the relevant data for
 that job release**, pulled into the sub view. **Mid term this item dissolves into
@@ -301,6 +317,9 @@ mobile work package) is carried by T5, not here.
 - 2026-08-15 · transcript · src bill-2026-08-15#L93 — "give them everything that they need, but not show them what they shouldn't see"; fab hours named as the main exclusion; scope to be detailed in his doc
 - 2026-08-15 · decision · src — — short term = T&M + that job release's data; mid term collapses into the T2 role model
 - 2026-08-20 · spec · src fieldops-2026-08-20#§3.1 — permission rules written: company/project/release scoping, no financial visibility, FC-only drawings, mandatory project + assignee linkage on sensitive records
+- 2026-09-02 · transcript · src bill-2026-09-02#L900–L1013 — **Bill named this the next real big push**: *"this is great for Doug, worthless for the subs because they can't see it… that'll be the next real big push is to get them access to see"* [#L912]. Full permission matrix specified: subs see the **timeline only, no job log table**, and only their own assignments [#L917]. Inside a release modal they get **full attachments** — view, mark up drawings, add attachments and photos [#L919] — plus **notes** [#L983]; they see install hours, stage, stage group, billing tag, materials ordered, PM, and **activity**. **Fab hours are the only field removed** [#L921]. **Changelog blocked** (Daniel's call; Bill was neutral) and **no undo button** [#L953]. No other data updates
+- 2026-09-02 · transcript · src bill-2026-09-02#L986–L1008 — the *why*: the modal becomes the **direct channel to the billing team** — *"they don't have to even create invoices if they don't want to. They can just mark, hey, it's ready for invoicing"*, gated on photos and a written claim of completion. Subs get a **home page**, not a table: their T&M tickets and scheduled installs [#L1005]
+- 2026-09-02 · decision · src — — sequencing confirmed: Bill's next-big-push runs through `deps T2`. You cannot invite subs without member management, so the chain is **T1 → T2 → T3** and T2's position in `queue.next` is load-bearing
 
 ### T4 · Trello teardown
 *W5 · not-started · class build · due — · deps T1 · owner daniel · src bill-2026-08-15#L69 · upd 2026-08-15*
@@ -314,7 +333,7 @@ must be doing Trello's job before the plug comes out.
 - 2026-08-15 · decision · src — — end state is dead, not read-only; expedited; teardown waits on T1
 
 ### A1 · T&M package — gated, then elevated
-*W5 · not-started · class build · due — · deps BUG-10 · owner daniel · src bill-2026-08-15#L145 · upd 2026-08-15*
+*W5 · not-started · class build · due — · deps BUG-10 · owner daniel · src bill-2026-08-15#L145 · upd 2026-09-03*
 
 Effort M. **Unblocked 2026-08-15 — BUG-10 landed and this elevates with it, as
 planned.** It was blocked on the invite link, since Bill cannot evaluate the sub
@@ -341,6 +360,8 @@ overall concept is right there… excited about being able to track that well."*
 - 2026-08-15 · note · src — — unblocked: `APP_BASE_URL` set in Render; first real invite send is still the confirmation
 - 2026-08-20 · spec · src fieldops-2026-08-20#§10 — written spec restates the T&M shape unchanged (Draft → Submitted → GC Signed → Internal Approval → CO Request → Distributed → GC Approved → SOV → Invoiceable; finger/pen signature + typed name; O&P from contract, shown separately on the CO Request PDF, hidden from subs; 14-day Carmen follow-up) and adds field-side entry: opening a ticket from an assignment auto-populates project, release, GC contact, foreman, and location — that last part is T5/T8 ground, not a change to this package
 - 2026-08-21 · decision · src bill-2026-08-21#L169 — deliberately stalled behind T1 by Bill: *"the T&M ticket thing — I know we kind of just stalled out on where that's at. I think it's still more important to get the scheduling piece for the timeline sorted out first."* Demoted in `queue.next` accordingly; the one-package delivery constraint and the lost change notes stand
+- 2026-09-02 · transcript · src bill-2026-09-02#L999–L1020 — T&M tickets **live separately from releases, optionally linked** — a ticket can carry just a job number, or attach to a release; clicking through opens the **release modal, not a table view**, with the same drawings / photo markup / add-note capability [#L1009]. The one gap Bill found: **a signature block with two planes, GC and subcontractor** [#L1017]. Routing (*"once they're done with it, it goes to this guy, this guy"*) is already written in the field-ops doc — Daniel to read that section and return with questions
+- 2026-09-02 · notes · src bill-2026-09-02 — the signature must be an **actual finger signature** (touch capture), not a name field
 
 ### T5 · Field work foundation — assignments, My Work, mobile work package
 *W5 · not-started · class build · due — · deps T2 · owner daniel · src fieldops-2026-08-20#§6 · upd 2026-08-20*
@@ -447,7 +468,7 @@ than duplicate, the same way N2b must.
 - 2026-08-21 · transcript · src bill-2026-08-21#L51 — the remaining-value mechanic: at 90% progress the system offers "allocate remaining 10% of budget for this installation" against the spliced work ticket (T9), tying residual invoiceable value to whoever finishes the work
 
 ### T9 · Release splicing — fractional work tickets for the field
-*W5 · not-started · class build · due — · deps T5,T6 · owner daniel · src bill-2026-08-21#L45 · upd 2026-08-21*
+*W5 · not-started · class build · due — · deps T5,T6 · owner daniel · src bill-2026-08-21#L45 · upd 2026-09-03*
 
 Effort M–L. Bill's concept, volunteered when punch anchoring came up: a punch
 or remaining-work item *"produce[s] effectively a **fractional or splice of a
@@ -469,6 +490,8 @@ which stays parked but shares the apportionment shape.
 **Trail**
 - 2026-08-21 · transcript · src bill-2026-08-21#L45 — concept stated: punch/remaining work splices a fractional release as a field work ticket; balcony-rail and wall-handrail cases
 - 2026-08-21 · transcript · src bill-2026-08-21#L51 — residual-value allocation ("allocate remaining 10% of budget") tied to the sub invoice-paid surface
+- 2026-09-02 · transcript · src bill-2026-09-02#L2–L46 — named **"fractional install"** and shaped as a **mirror card**, numbered *"2 of 2", "3 of 2"* and onward. Install hours must split **both directions** — pull out of or add to the total — because which applies depends on whether it's a change order or billed against the original [#L33]. The **description is editable** so the fraction can be scoped (*"wall handrails only of this thing"*). Visible to the sub and on the sub tracking tab for invoicing, **not on the job log** — *"I don't think it needs to pop on the job log particularly"* [#L20]
+- 2026-09-02 · decision · src bill-2026-09-02#L4 — **priority explicitly NOT raised.** Asked directly whether to bump it, Bill declined: it rides along with the sub/Trello backend work. `deps T5,T6` stand
 
 ### T10 · Job-log photos → Trello bridge *(interim)*
 *W5 · not-started · class fix · due — · deps — · owner daniel · src bill-2026-08-21#L171 · upd 2026-08-21*
@@ -746,7 +769,7 @@ history is what this rescues.)
 - 2026-08-06 · decision · src — — week-1 read-only delta inventory sizes the pull; effort unknowable until it runs; verified-complete-before-lapse is the acceptance bar
 
 ### C3 · Universal PDF tool — absorbs the revision stack (P9)
-*W1 · not-started · due — · deps — · owner daniel · src bill-2026-07-22#notes · upd 2026-08-08*
+*W1 · not-started · due — · deps — · owner daniel · src bill-2026-07-22#notes · upd 2026-09-03*
 
 Effort L. **Promoted from Tier 2 onto the critical path** (collapse ②): the
 as-built path already lives in the job log markup stack, so the submittal
@@ -765,6 +788,10 @@ its binaries live.
 - 2026-08-08 · decision · src — — all future PDF modal/viewing/review work generalizes the DWL viewer; "needs a brainstorm" retired — the brainstorm happened in production, by the client using it
 - 2026-08-09 · build · src pr#337 — a read-only in-modal PDF viewer (`PdfReadViewer.jsx`) shipped inside the release hub's Attachments tab, with Carmen's drawing review beside it. Not scoped as C3 and not the revision stack — but it is a second viewer in the codebase, which is the exact outcome collapse ② exists to prevent. C3-narrow should start by deciding whether it generalizes the DWL viewer or this one
 - 2026-08-21 · note · src bill-2026-08-21#L69 — demand accumulating while deferred: the field guys asked to **mark up on top of photos**, and Bill wants drawings markable on the Brain from the job log [#L87]. Photo markup is this tool's ground (one markup stack) — do not build it ad hoc inside N9
+- 2026-09-02 · notes · src bill-2026-09-02 — **improved photos / attachments handling** is the umbrella name for this thread. Three concrete deletes in scope: **delete a photo**, **delete a single markup while it is in progress**, and **delete a whole attachment** for the wrong-file-uploaded case. The transcript covered only photo and markup deletion [bill-2026-09-02#L52]; whole-attachment delete is new
+- 2026-09-02 · transcript · src bill-2026-09-02#L1158–L1198 — **PDF viewer has no scroll** — page-at-a-time via a next button; Bill wants *"the drafting workflow side behavior"*. The edit surface opening its own window is **clunky and must stay in-modal**: the crews run the Brain as an **installed app, not a browser tab**, so a new window opens in Chrome somewhere else entirely. Pinch-to-zoom in-modal is acceptable on iPad; Bill does like the edit surface being bigger
+- 2026-09-02 · notes · src bill-2026-09-02 — **named design references**: the markup layer and the agentic panel are both to be modelled on **Procore's PDF markup modal** and the **Gemini sidebar**. New — the transcript discussed Gemini's behaviour but never set it as the UI target
+- 2026-09-02 · transcript · src bill-2026-09-02#L1239–L1291 — Carmen PDF review keeps its findings-to-page behaviour (*"the way that Carmen flags the pages and you click on the pages from the review is fucking great… so valuable"*) and **adds** a side-push chat that sees the full document **and** the findings, can update its own memory, and can be asked questions. Blocker Bill named: **our markups live in Procore and never reach the Brain** [#L1249], so there is nothing to train the reviewer on. He also wants the **Mile High 101 documentation** fed to the model [#L1234]. Reusable test prompt: given a cover sheet, verify every hole has hardware that fits and that counts match [#L1251]
 
 ### D1 · Projects page
 *W1 · in-progress · due — · deps K2 · owner daniel · src bill-2026-08-06#L802 · upd 2026-08-06*
@@ -992,7 +1019,7 @@ production*.
 - 2026-08-21 · decision · src bill-2026-08-21#L109 — second input, and a reversal of a banked rule: hard-date color survives the ship stages and dumps at Start Install; yellow stays until then (EOS-scored, never silently dropped [#L113]); trigger ambiguity (Install Start stage vs `start_install` date) is this audit's to resolve; do NOT touch hard-date semantics until the trigger move is tried [#L115]. Bill also flagged the projected-vs-hard *font* distinction as too subtle once color is gone [#L109] — legibility belongs in the same ruleset
 
 ### AUD2 · Release-number uniqueness ruleset
-*W3 · not-started · class audit · due — · deps — · owner daniel · src bill-2026-08-15#L177 · upd 2026-08-15*
+*W3 · not-started · class audit · due — · deps — · owner daniel · src bill-2026-08-15#L177 · upd 2026-09-03*
 
 Effort M. Same shape: confirm current behavior, confirm the updated behavior
 **with the client**, then change. **Early read: the job-log enforcement (the
@@ -1024,9 +1051,62 @@ Write the ruleset to survive that merge; do not hard-code today's two-model spli
 - 2026-08-15 · transcript · src bill-2026-08-15#L177 — Bill diagnosed it himself: the DWL side never checks the archive, the job log catches it later; "it should have caught that when it got to 108"
 - 2026-08-15 · transcript · src bill-2026-08-15#L173 — instances 410-108 (archived twin Columbine Square) and 500-140 (Novel Flatirons); asks for auto-advance over blocking
 - 2026-08-15 · decision · src — — full audit with client confirmation; year-as-metadata rejected (dates already in the record) with the reason owed back to Bill; uniqueness research replaces it
+- 2026-09-02 · notes · src bill-2026-09-02 — **live symptom reported.** A job's releases ran **202 → 203 → 205 → 105** because 105 cleared after the others. Daniel's ask: enforce sequential *as far as possible*, and *"ideally we just want to grab the next available larger number"*
+- 2026-09-02 · decision · src — — **root cause found, and it is not a typo.** `next_rel_number()` re-derives its position from `max(taken)` on every call. Rollover fires when `current_max == REL_MAX (998)`; when 998 frees, `current_max` becomes 997, the next suggestion is 998, and rollover **immediately re-arms** — the top of the range is an attractor, so once the range fills once the allocator never durably leaves gap-filling mode. The observed *"105 released before 998"* fits: `_globally_taken_rel_numbers` counts **pending DRRs holding a rel**, so 998 only had to be *reserved on an uncleared DRR* to trip rollover — it never reached the job log. **The allocator has no memory** is the single defect behind both symptoms (archiving the highest release also drags the sequence backward on its own)
+- 2026-09-02 · decision · src — — **rejected:** widening `REL_MIN`/`REL_MAX` (*"we are not widening"* — would push release numbers to 4 digits on drawings and paperwork). Also rejected: making the rollover branch pick the next free number above the *job's* max — it gives a per-job sequential feel but breaks the **global chronological** reading Daniel wants, and would hand a brand-new job a low scattered number
+- 2026-09-02 · decision · src — — **written option, DEFERRED** (*"not a needle mover"*): replace the derived position with a **persistent monotonic cursor + circular allocation** — store `last_issued` in a small state table (model it on `LakeIngestState`), allocate the first free number strictly above the cursor, wrap to `REL_MIN` past `REL_MAX` and keep climbing. The cursor never moves backward except at the wrap. Delivers what was asked: a new job draws *the next few highest numbers consecutively*, numbers read chronologically across all projects, and archiving the top release stops yanking the sequence. Costs a tiny table + migration, and one predictable wrap per cycle instead of constant scatter. Seed the cursor at the current global max so nothing shifts on day one. **Prerequisite for revisiting: the burn rate** — releases per year against 898 numbers decides how often the wrap actually lands. Optional refinement: on wrap, prefer numbers freed longest ago
+- 2026-09-02 · decision · src — — **the 898-number ceiling is self-imposed.** `Releases` already constrains per-job — `UniqueConstraint("job", "release", "job_name")` — and the DB would accept 105 on two different jobs. Uniqueness is global only because `ReleaseDate.rel` is `unique=True` as the Procore DRR→release join key (`models.py:230`). **Per-job uniqueness is the structural fix and rides along with the Procore exit (W1), not ahead of it**
+
+### N15 · Carmen tiers — CarMini / CarMid / CarMax
+*W4 · not-started · class build · due — · deps T2 · owner daniel · src bill-2026-09-02#L107 · upd 2026-09-03*
+
+Effort M. **Bill's idea, raised unprompted after he noticed AI spend on the admin page is
+*"pretty damn low"*** [#L66]. Three Carmen tiers keyed to **both permission and model
+strength**, so the tier decides what data is reachable *and* how much compute a question is
+worth:
+
+- **CarMini** — the default-user tier. *"Everybody can have car mini."*
+- **CarMid** — the middle tier. Named by Daniel after the meeting; the transcript says
+  "Carmen" [#L110].
+- **CarMax** — **admin only**, strongest model, **full read-only access to all data**, and
+  explicitly worth real money per question: *"you can spend $10 performing data analysis on
+  the data we've collected"* [#L116].
+
+Wires into the user-roles work — *"just as we're working on the user roles, maybe default
+user just gets car mini, but the admin gets car max"* [#L122]. Hence `deps T2`.
+
+**The need is unanticipated ad-hoc queries, not a prompt library.** Bill's worked case: at
+project close, tax work needs total fabrication labour hours for a job; in the old job log he
+sorted and tallied it himself and now cannot [#L74]. He wants *"hey Carmen, how many fab hours
+did I have in total on job number 500"* across **archive and active** [#L79]. He accepts a
+prompt library (N13) as *part* of it but named its limit himself: *"there's going to be obscure
+ones that are going to come up that I'm like, I didn't think about this because it hasn't
+happened for two years. When it does, it's painstaking to figure it out"* [#L90].
+
+**Adjacent, and likely its own item once real — conversational write-back.** Separate work
+from tiering, recorded here so it is not lost. Sparked by an oil-and-gas field app Bill saw
+where a tech says *"I'm at well site X"* in a chat and the job record updates [#L216]. MHMW
+shape: *"I'm at Columbine Square building one, balcony rails are done with the exception of
+this, add a note about this"*. Hard requirements he stated:
+- **Confirm before writing** — *"you mean this job, this release, this description… check"*
+  then commit [#L226]. Daniel's notes ask for a **written spec of that confirmation modal**,
+  with a worked example to build against: *"move 150-389 to Install Start and leave a note
+  '…'"* spoken through general voice mode.
+- **Extends to subs** — *"I'm at this project on this building"* → *"do you mean this
+  release?"* → yes → photos attached [#L230].
+- **Gating is part of the appeal** — *"this has a gate, we can't make it QC complete until you
+  have your photos, please"* [#L239].
+- Bill on urgency: *"I don't know that that's mission critical to get in there right away"*
+  [#L234].
+
+**Trail**
+- 2026-09-02 · transcript · src bill-2026-09-02#L107–L127 — three tiers proposed by Bill, keyed to permission *and* model strength; CarMax admin-only with full read-only data access and a real per-query budget
+- 2026-09-02 · notes · src bill-2026-09-02 — middle tier named **CarMid** by Daniel after the meeting, superseding the transcript's "Carmen"
+- 2026-09-02 · transcript · src bill-2026-09-02#L74–L95 — the driving need is the query nobody anticipated; a prompt library (N13) is complementary, not sufficient
+- 2026-09-02 · decision · src — — conversational write-back recorded here as adjacent scope; it is genuinely different work and should take its own ID once it is real
 
 ### N12 · Release Modal — distribute the one-stop surface
-*W3 · in-progress · class build · due — · deps — · owner daniel · src bill-2026-08-15#L49 · upd 2026-08-15*
+*W3 · in-progress · class build · due — · deps — · owner daniel · src bill-2026-08-15#L49 · upd 2026-09-03*
 
 Effort M, incremental. **Reframed 2026-08-15 from "invoicing detail modal" to
 what it actually is:** the **Release Modal** is the one-stop surface for all data
@@ -1045,9 +1125,15 @@ wider distribution.
 - 2026-08-15 · transcript · src bill-2026-08-15#L49 — Lexi wants column enrichment + a detail modal on the invoicing surface; notes filed in the bug tracker
 - 2026-08-15 · decision · src — — reframed as the Release Modal: one canonical surface, distributed to other pages, refined in place; invoicing is the first target
 - 2026-08-21 · transcript · src bill-2026-08-21#L143 — sizing note: the modal could be bigger on desktop ("there's more space for it") but **do not disturb the iPad layout** — that's where most usage lives and it "looks really good" there. Photos should render in the modal's preview area rather than a new window [#L69] (also on N9)
+- 2026-09-02 · transcript · src bill-2026-09-02#L291–L321 — the Job Log modal's own rework, from Bill: **photos move to the front page** and Attachments becomes the drawings/PDF-review surface — motive is the shipping guy's click path, *"he's clicking here and then he's clicking attachments"* [#L294]; a **photo-present indicator icon** [#L291]; **condense the data box** — Bill is *"a medium fan"* of how it reads and Daniel owes him options, target near job-log density [#L305]; and **write access to everything** — *"any functionality you have on the main page should be inside"* [#L311]. Stage progress is explicitly free to move [#L295]
+- 2026-09-02 · notes · src bill-2026-09-02 — placement pinned by Daniel: the **camera icon lives in the description field**, and the **Banana Code goes upper-right on the JL modal** (it currently sits at the bottom of `JobDetailsBody`, so that's a move, not a build)
+- 2026-09-02 · decision · src — — **the combined modal is N12's next redistribution target, not a reopened N7.** Today four components render a release across ~1,940 lines: `ReleaseHubModal` (325) + `JobDetailsBody` (497) on the Job Log, and `ReleaseDetailModal` (471) / `ReleaseCockpitModal` (647) from a timeline card — the latter two **read-only by `GanttChart`'s stated invariant**. Daniel's ask is one modal everywhere, which retires ~1,100 lines of duplicate. N7 stays `built`: it shipped the `ReleaseHubModal` unification 2026-08-06/09 and never had the timeline modals in scope
+- 2026-09-02 · decision · src — — **two open questions block a clean start.** (1) `ReleaseCockpitModal` is 647 lines of admin crew/date what-if that deliberately never writes — does it survive as a *mode* inside the combined modal, or go away? It is the largest branch in the consolidation. (2) `GanttChart`'s "clicking a card opens a read-only detail modal" invariant is retired once the combined modal carries write — correct now that drag sets `start_install` (T1), but it must be retired deliberately, not by accident
+- 2026-09-02 · decision · src — — **sequencing note:** `JobDetailsBody`'s header states *"no new write paths except mark-received on orders and release_tag PATCH"*. Write access is therefore the bulk of this work and must land **before** the T3 permission layer — you cannot gate fields that do not yet write. Suggested order: settle the cockpit question → consolidate → layout → write access → permissions
+- 2026-09-02 · decision · src — — **watch the direction conflict.** Bill wants the Job Log data box *condensed* [bill-2026-09-02#L305]; Daniel's DWL instruction was Details *expanded, no collapse control*. Scoped to the DWL modal only on Daniel's confirmation (2026-09-02), but the two surfaces are about to become one component — confirm the Job Log side genuinely goes the other way before building
 
 ### N14 · FC pack on the Job Log modal
-*W3 · not-started · class fix · due — · deps — · owner daniel · src bill-2026-08-21#L87 · upd 2026-08-21*
+*W3 · not-started · class fix · due — · deps — · owner daniel · src bill-2026-08-21#L87 · upd 2026-09-03*
 
 Effort S–M. The DWL attachments can pull the drawing down from Procore; Bill
 wants the same on the job log modal — *"or if it just automatically did it —
@@ -1060,6 +1146,8 @@ preferred over a manual pull.
 
 **Trail**
 - 2026-08-21 · transcript · src bill-2026-08-21#L87 — ask: replicate the DWL Procore pull on the job log, ideally auto-attaching the FC pack; markup to follow
+- 2026-09-02 · transcript · src bill-2026-09-02#L1114–L1157 — restated by Bill and widened: he wants the final PDF packs on **every** release with no extra click — *"the opportunity for those to be in every one of these cards without someone doing an extra click"*. Daniel's read: a **collection script** lands ~80%, improving over time. Bill **accepts a manual attach step as part of the release process in the interim** [#L1118]
+- 2026-09-02 · notes · src bill-2026-09-02 — **deferred by Daniel, with a follow-up owed.** Not dropped: *"Procore Final PDF Pack collection for all job log releases (deferred, but will follow up)"*. Re-check trigger: Daniel raises it
 
 ### BUG-8 · DWL release-number generator skips the archive
 *W3 · built · class fix · due — · deps — · owner daniel · src bill-2026-08-15#L177 · upd 2026-08-15*
@@ -1248,7 +1336,7 @@ sending session.
 **The items W3 already carried, unchanged by the 8/15 pass:**
 
 ### N5 · Shipping-stage date discipline
-*W3 · built · due — · deps — · owner daniel · src bill-2026-08-06#L1322 · upd 2026-08-29*
+*W3 · built · due — · deps — · owner daniel · src bill-2026-08-06#L1322 · upd 2026-09-03*
 
 > ✅ **The hard-date color half of this rule was reversed by Bill 2026-08-21 and
 > the reversal shipped 2026-08-29** as BUG-11 (see the Fix queue for the build
@@ -1284,6 +1372,9 @@ Implementation: `shipping_stage_date_discipline.py` called from
 - 2026-08-29 · note · src — — **naming hazard, called out by Daniel:** `start_install` (date field) vs `Install Start` (stage value) read almost identically and the roadmap's own "start-install trigger" phrasing had already blurred them. Prose here now names the stage in backticks and the date as `start_install`; do not reintroduce the bare phrase
 - 2026-08-29 · note · src — — **the mechanism already exists for two of the three stages.** `neutralize_install_date_cascade` (`CascadeReason`) already fires on `stage_set_to_install_complete` and `stage_set_to_complete` (`stage/command.py:289`), so `Install Complete` and `Complete` are done. BUG-11 reduces to: **add** an `install_start` reason and its trigger, and **remove** the two N5 ship-stage reasons (`stage_set_to_ship_planning` / `stage_set_to_ship_complete`) whose hard-date wash lives at `shipping_stage_date_discipline.py:67-73`. The formula-date blanking further down that module (~`:95-120`) is untouched, per Bill
 - 2026-08-29 · build · src — — **BUG-11 shipped.** `COLOR_DUMP_STAGES` {`Install Start`, `Install Complete`, `Complete`} in `neutralize_install_date_cascade.py` is now the single boundary; `stage/command.py`, `start_install/command.py` and `shipping_stage_date_discipline.py` all read it. The reduction above undercounted by one: `start_install/command.py:114` was a third encoding of the boundary (`no_color = stage in SHIPPING_STAGES` on a hand-typed date). The ship-stage hard-date branch survives as a no-op guard — it is what keeps hard dates out of the formula blanking below it. An integrity test ties the set to the tail of the canonical stage order so "or later" cannot rot
+- 2026-09-02 · transcript · src bill-2026-09-02#L283 — **Bill confirmed the shipped rule is correct**: colour dumps at Start Install, and if no hard date exists at Start Install one is set to the start date. Validates the BUG-11 ship of 2026-08-29. Colour semantics restated for the record: **yellow = one day past due, day-of stays green** [#L257]
+- 2026-09-02 · transcript · src bill-2026-09-02#L243–L290 — **open question, Bill owns it.** The rule is right but he is not satisfied, because one of his **EOS measurables is how many hard dates are in play** and he does not want to lose hard-date visibility when the colour goes. Options he floated: a gold/yellow **band** around the cell keeping the base colour inside; faded/opaque variants; **bolding hard dates in addition to colouring**. Alternative he raised himself: change his own metric to *"yellow dates that are not shipped"*. **Decision deferred deliberately — Bill is thinking about it and will come back.** He was candid about the churn: *"I made you change this thing so many times I got confused on what was actually happening"* [#L288]
+- 2026-09-02 · notes · src bill-2026-09-02 — related but separate, and decided: **ASAP drops its text.** Filed as BUG-20
 
 ### N7 · Job log modal merge + redesign
 *W3 · built · due — · deps — · owner daniel · src — · upd 2026-08-09*
@@ -1314,7 +1405,7 @@ door — see C3's trail.
 - 2026-08-09 · build · src pr#337 — unplanned: Attachments tab + in-modal read-only PDF viewer (`PdfReadViewer.jsx`), Carmen drawing review inside it, opened to drafters; overlaps C3-narrow
 
 ### N9 · Photo stamp + GPS
-*W3 · not-started · class build · due — · deps — · owner daniel · src bill-2026-08-06#notes · upd 2026-08-21*
+*W3 · not-started · class build · due — · deps — · owner daniel · src bill-2026-08-06#notes · upd 2026-09-03*
 
 **Elevated 2026-08-21 — Bill wants it "in the short timeline"** [bill-2026-08-21#L67],
 now second in `queue.next`. The 8/21 session pinned the spec down:
@@ -1407,6 +1498,7 @@ every phone shot (3–12 MB). Consequences for N9:
 - 2026-08-21 · decision · src — — stamp field list is the **union** of the 8/6 and 8/21 lists (job, release, stage-at-photo-time, who, date, GPS); Daniel's call — Bill referenced the 8/6 notes rather than superseding them. Legibility of a six-field string is a layout problem, not grounds to cut a field
 - 2026-08-29 · decision · src — — Open question 3 answered: **individual Brain logins on shared tablets**, not a capture-time picker. Stamp reads the logged-in user; correctness over friction, because the photos are customer-facing invoicing evidence. Carries an account-rollout prerequisite onto T2 — ship the accounts with the stamp, or every tablet photo prints the same generic name
 - 2026-08-29 · note · src pr#349 — client-side JPEG re-encode now strips EXIF from every job-log photo over 600 KB; browser geolocation becomes the sole location source and capture date must come from `file.lastModified` or a pre-compression EXIF read. Supersedes the "EXIF opportunistic / capture DateTime preferred" half of the 2026-08-06 capture standard
+- 2026-09-02 · transcript · src bill-2026-09-02#L60 — **Bill re-elevated it unprompted**: the photo watermark/text stamp is *"something I need to push into the higher priority"*. Consistent with its existing position at #2 in `queue.next`; no reorder needed
 
 ### H1 · Polish sweep
 *W3 · not-started · due — · deps N7 · owner daniel · src — · upd 2026-08-06*
@@ -1763,6 +1855,7 @@ Append-only log — never edited, never pruned.
 
 | Slug | Path | Role |
 |---|---|---|
+| bill-2026-09-02 | `~/Desktop/Transcripts/MHMW/Bill-9-2-2026.txt` | Tuesday working session (Bill), post-Alaska — a live **Timeline demo that closed T1's design** plus a full **sub-access permission matrix** (T3). `#LNNN` anchors are line numbers in the **raw** transcript: it is continuous prose and directly citable, so there is no `-clean.md` companion. Findings: `processed/Bill-9-2-2026.md`, which also folds in **Daniel's own page-by-page notes** and a **reconciliation section** recording where those notes supersede the audio (ASAP display, CarMid, drag-writes-dates-only, Ship Complete freeze). Note the first transcription pass hit a Whisper repetition loop that destroyed the back half; it was re-run clean the same day and the broken output is kept as `Bill-9-2-2026.BROKEN.txt` |
 | bill-2026-08-21 | `~/Desktop/Transcripts/MHMW/Bill-8-21-2026-clean.md` | Thursday standup (Bill), pre-Alaska — T1-first confirmed, punch→release + splicing, N9 elevated + spec'd, N5 color rule reversed, prompt library, iPad-first. `#LNNN` anchors are line numbers in the **cleaned** transcript (raw `Bill-8-21-2026.txt` is too interleaved to cite). Findings: `processed/Bill-8-21-2026.md`. Daniel's own notes to follow |
 | fieldops-2026-08-20 | `~/Downloads/MHMW_Brain_Trello_Replacement_Subcontractor_Field_Operations_Build_Package.md` | The delivered Trello-replacement / subcontractor field-ops functional spec (Manus-prepared, Aug 2026) — the Owed W5 written scope. `#§N` anchors are its section numbers. **Lives in Downloads — fragile; move beside the transcripts if it's to be a durable citation source.** Its own cited sources (`BRAIN_KNOWLEDGE_BASE.md`, `07_TM_Module.md`, …) are the Procore-replacement package, also outside this repo |
 | bill-2026-08-15 | `~/Desktop/Transcripts/MHMW/Bill-8-15-2026-clean.md` | Friday standup (Bill) — **the reset**: Procore renewed, Trello promoted. `#LNNN` anchors are line numbers in the **cleaned** transcript, not the raw (`Bill-8-15-2026.txt` is too interleaved to cite). Findings: `processed/Bill-8-15-2026.md` |
