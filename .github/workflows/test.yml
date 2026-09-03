@@ -57,7 +57,10 @@ jobs:
   frontend:
     name: Frontend (vitest)
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # A healthy run is ~1 min off a warm npm cache. 5 left no slack: a cold
+    # cache once took 5m in `npm ci` alone and the job was killed before vitest
+    # ran at all. Matches the backend budget; anything past 10 is a real hang.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
