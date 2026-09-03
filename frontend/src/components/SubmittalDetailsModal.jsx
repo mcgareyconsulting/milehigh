@@ -309,82 +309,80 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
                         </p>
                     )}
 
-                    {/* Details (demoted, collapsible) */}
+                    {/* Details — always visible; Rel first (Daniel, 2026-09-02) */}
                     <div className="border-t border-gray-200 dark:border-slate-600 pt-3">
                         <h3 className="text-sm font-medium text-gray-600 dark:text-slate-300">Details</h3>
-                        {(
-                            <div className="mt-3 space-y-4">
-                                <div ref={relFieldRef}>
-                                    <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Release (Rel)</span>
-                                    {canAssignRel && relValue == null ? (
-                                        <div className="mt-1 flex items-center gap-2">
-                                            <input
-                                                type="text"
-                                                inputMode="numeric"
-                                                value={relInput}
-                                                onChange={(e) => setRelInput(e.target.value.replace(/[^0-9]/g, ''))}
-                                                disabled={relSaving}
-                                                placeholder="101–998"
-                                                className="w-24 px-2 py-1 text-sm rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 disabled:bg-gray-100 dark:disabled:bg-slate-700 disabled:cursor-not-allowed"
-                                            />
-                                            <button
-                                                onClick={handleAssignRel}
-                                                disabled={relSaving}
-                                                className="px-3 py-1 text-sm font-medium bg-accent-600 text-white rounded hover:bg-accent-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                                            >
-                                                {relSaving ? 'Saving…' : 'Assign Rel'}
-                                            </button>
-                                        </div>
-                                    ) : canAssignRel ? (
-                                        <div className="mt-1 flex items-center gap-2">
-                                            <span className="inline-block text-sm font-medium px-2 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200">
-                                                Rel {relValue}
-                                            </span>
-                                            <input
-                                                type="text"
-                                                inputMode="numeric"
-                                                value={relInput}
-                                                onChange={(e) => setRelInput(e.target.value.replace(/[^0-9]/g, ''))}
-                                                disabled={relSaving}
-                                                placeholder="101–998"
-                                                className="w-24 px-2 py-1 text-sm rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 disabled:bg-gray-100 dark:disabled:bg-slate-700 disabled:cursor-not-allowed"
-                                            />
-                                            <button
-                                                onClick={handleAssignRel}
-                                                disabled={relSaving}
-                                                className="px-3 py-1 text-sm font-medium bg-accent-600 text-white rounded hover:bg-accent-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                                            >
-                                                {relSaving ? 'Saving…' : 'Update Rel'}
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <p className="text-sm text-gray-700 dark:text-slate-200">
-                                            {relValue != null ? `Rel ${relValue}` : '—'}
-                                        </p>
-                                    )}
-                                    {relError && <p className="text-sm text-red-600 dark:text-red-400 mt-1">{relError}</p>}
-                                    {relSuccess && <p className="text-sm text-green-600 dark:text-green-400 mt-1">Rel saved.</p>}
-                                </div>
-                                <div>
-                                    <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Created At</span>
-                                    <p className="text-sm text-gray-700 dark:text-slate-200">{formatDateTime(createdAt)}</p>
-                                </div>
-                                {ballInCourt && (
-                                    <div>
-                                        <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Ball In Court</span>
-                                        <p className="text-sm text-gray-700 dark:text-slate-200">{ballInCourt}</p>
+                        <div className="mt-3 space-y-4">
+                            <div ref={relFieldRef}>
+                                <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Release (Rel)</span>
+                                {canAssignRel && relValue == null ? (
+                                    <div className="mt-1 flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            value={relInput}
+                                            onChange={(e) => setRelInput(e.target.value.replace(/[^0-9]/g, ''))}
+                                            disabled={relSaving}
+                                            placeholder="101–998"
+                                            className="w-24 px-2 py-1 text-sm rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 disabled:bg-gray-100 dark:disabled:bg-slate-700 disabled:cursor-not-allowed"
+                                        />
+                                        <button
+                                            onClick={handleAssignRel}
+                                            disabled={relSaving}
+                                            className="px-3 py-1 text-sm font-medium bg-accent-600 text-white rounded hover:bg-accent-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                            {relSaving ? 'Saving…' : 'Assign Rel'}
+                                        </button>
                                     </div>
+                                ) : canAssignRel ? (
+                                    <div className="mt-1 flex items-center gap-2">
+                                        <span className="inline-block text-sm font-medium px-2 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200">
+                                            Rel {relValue}
+                                        </span>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            value={relInput}
+                                            onChange={(e) => setRelInput(e.target.value.replace(/[^0-9]/g, ''))}
+                                            disabled={relSaving}
+                                            placeholder="101–998"
+                                            className="w-24 px-2 py-1 text-sm rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 disabled:bg-gray-100 dark:disabled:bg-slate-700 disabled:cursor-not-allowed"
+                                        />
+                                        <button
+                                            onClick={handleAssignRel}
+                                            disabled={relSaving}
+                                            className="px-3 py-1 text-sm font-medium bg-accent-600 text-white rounded hover:bg-accent-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                            {relSaving ? 'Saving…' : 'Update Rel'}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-gray-700 dark:text-slate-200">
+                                        {relValue != null ? `Rel ${relValue}` : '—'}
+                                    </p>
                                 )}
-                                {submittalId && (
-                                    <button
-                                        onClick={() => setEventsOpen(true)}
-                                        className="px-3 py-1.5 text-sm font-medium bg-accent-600 text-white rounded hover:bg-accent-700 transition-colors"
-                                    >
-                                        Events
-                                    </button>
-                                )}
+                                {relError && <p className="text-sm text-red-600 dark:text-red-400 mt-1">{relError}</p>}
+                                {relSuccess && <p className="text-sm text-green-600 dark:text-green-400 mt-1">Rel saved.</p>}
                             </div>
-                        )}
+                            <div>
+                                <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Created At</span>
+                                <p className="text-sm text-gray-700 dark:text-slate-200">{formatDateTime(createdAt)}</p>
+                            </div>
+                            {ballInCourt && (
+                                <div>
+                                    <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Ball In Court</span>
+                                    <p className="text-sm text-gray-700 dark:text-slate-200">{ballInCourt}</p>
+                                </div>
+                            )}
+                            {submittalId && (
+                                <button
+                                    onClick={() => setEventsOpen(true)}
+                                    className="px-3 py-1.5 text-sm font-medium bg-accent-600 text-white rounded hover:bg-accent-700 transition-colors"
+                                >
+                                    Events
+                                </button>
+                            )}
+                        </div>
                     </div>
                     </div>
                     {cite && (
