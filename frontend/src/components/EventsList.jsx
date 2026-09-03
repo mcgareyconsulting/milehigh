@@ -38,6 +38,50 @@ const UNDO_ACTION_LABEL = {
     update_start_install: 'Start Install',
 };
 
+/**
+ * Photo / drawing events record a happening, not a field going from one scalar
+ * to another: their payloads carry an object under `to` (photo_id, filename,
+ * version…). Rendering them through the from → to diff chips printed
+ * "[object Object]" for uploads and "— → —" for deletes, so they get a sentence
+ * instead. The raw payload is still one click away under `payload ▾`.
+ */
+const ATTACHMENT_ACTIONS = new Set([
+    'upload_photo',
+    'delete_photo',
+    'upload_drawing',
+    'save_drawing_version',
+    'delete_drawing_version',
+]);
+
+function attachmentSummary(event) {
+    const payload = event?.payload || {};
+    const to = payload.to && typeof payload.to === 'object' ? payload.to : {};
+    const from = payload.from && typeof payload.from === 'object' ? payload.from : {};
+
+    switch (event?.action) {
+        case 'upload_photo': {
+            const bits = [to.filename, to.stage ? `at ${to.stage}` : null].filter(Boolean);
+            return bits.length ? `Added ${bits.join(' · ')}` : 'Photo added';
+        }
+        case 'delete_photo':
+            return 'Photo deleted';
+        case 'upload_drawing':
+            return to.filename ? `Uploaded ${to.filename} (v${to.version ?? 1})` : 'Drawing uploaded';
+        case 'save_drawing_version': {
+            const step = from.version != null && to.version != null
+                ? `v${from.version} → v${to.version}`
+                : (to.version != null ? `v${to.version}` : null);
+            return step ? `Markup saved — ${step}` : 'Markup saved';
+        }
+        case 'delete_drawing_version':
+            return payload.version != null
+                ? `Drawing v${payload.version} deleted`
+                : 'Drawing version deleted';
+        default:
+            return null;
+    }
+}
+
 /** Plain field labels for hub Change Log — never render raw action names. */
 const ACTION_FIELD_LABEL = {
     ...UNDO_ACTION_LABEL,
@@ -54,6 +98,11 @@ const ACTION_FIELD_LABEL = {
     update_fab_hrs: 'Fab Hrs',
     update_pm: 'PM',
     update_by: 'By',
+    upload_photo: 'Photo',
+    delete_photo: 'Photo',
+    upload_drawing: 'Drawing',
+    save_drawing_version: 'Drawing',
+    delete_drawing_version: 'Drawing',
 };
 
 export function fieldLabelForAction(action) {
@@ -306,7 +355,11 @@ function DiffChip({ value, variant = 'old', stageName = null }) {
 }
 
 function HubSourceChip({ source }) {
-    const s = (source || '').toString();
+    const raw = (source || '').toString();
+    // Photo/markup events stamp "Brain:<username>"; everything else is bare.
+    // Chip the system, keep the person in the tooltip — the full string is far
+    // wider than the column and used to collide with the Undo button.
+    const s = raw.split(':')[0];
     let bg = 'var(--head-bg)';
     let fg = 'var(--text-2)';
     if (s === 'Brain') {
@@ -321,7 +374,7 @@ function HubSourceChip({ source }) {
     }
     return (
         <span
-            className="inline-block font-semibold"
+            className="inline-block font-semibold truncate max-w-full"
             style={{
                 fontSize: 12,
                 padding: '2px 7px',
@@ -329,6 +382,7 @@ function HubSourceChip({ source }) {
                 background: bg,
                 color: fg,
             }}
+            title={raw || undefined}
         >
             {s || '—'}
         </span>
@@ -365,6 +419,7 @@ function HubChangeRow({
     const longNotes = isNotes && (
         String(from || '').length > 80 || String(to || '').length > 80
     );
+    const attachmentText = ATTACHMENT_ACTIONS.has(event.action) ? attachmentSummary(event) : null;
     const { canUndo, reason } = getUndoEligibility(event);
     const uniqueKey = `${event.type}-${event.id}`;
 
@@ -390,7 +445,12 @@ function HubChangeRow({
                 <div className="min-w-0">
                     <div className="flex items-center flex-wrap" style={{ gap: 6 }}>
                         <span className="text-ink-2 shrink-0" style={{ fontSize: 13 }}>{field}</span>
-                        {!longNotes && (
+                        {attachmentText && (
+                            <span className="text-ink truncate" style={{ fontSize: 13 }} title={attachmentText}>
+                                {attachmentText}
+                            </span>
+                        )}
+                        {!attachmentText && !longNotes && (
                             <>
                                 <DiffChip value={from} variant="old" />
                                 <span className="text-ink-3" style={{ fontSize: 13 }}>→</span>

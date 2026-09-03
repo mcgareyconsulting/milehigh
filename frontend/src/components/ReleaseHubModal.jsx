@@ -1,12 +1,13 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Single modal for a release — Details / Attachments / Change Log, with an
- *   Activity rail on Details and Change Log (hidden on Attachments for full-width viewer).
+ * purpose: The single release modal — Details / Attachments / Change Log — opened from the Job
+ *   Log table, the card grid, the Timeline, Archive and Subs. Activity rail on Details and
+ *   Change Log (hidden on Attachments for the full-width viewer).
  * exports:
  *   ReleaseHubModal: Portal modal shell for a release
  * imports_from: [react, react-dom, ./JobDetailsBody, ./PdfVersionHistoryModal, ./EventsList,
- *   ./ReleaseNotesRail, ../utils/stageTint, ../constants/modalSize]
+ *   ./ReleaseNotesRail, ./StageIconRow, ../utils/stageTint, ../constants/modalSize]
  * imported_by: [frontend/src/components/JobsTableRow.jsx, frontend/src/components/JobLogCardGrid.jsx,
  *   frontend/src/components/GanttChart.jsx]
  * invariants:
@@ -14,7 +15,9 @@
  *   - Leaves a click-out margin around the panel: the backdrop stays reachable on every edge
  *   - A tab pane stays mounted once visited, so drafts and uploads survive tab switching
  *   - Activity rail renders on Details + Change Log only — Attachments takes the full width
- * updated_by_agent: 2026-08-08T00:00:00Z
+ *   - The header owns the stage pill and the compact banana row; both follow an in-pane stage
+ *     edit immediately via onStageChange, without waiting for the host's refetch
+ * updated_by_agent: 2026-09-03T00:00:00Z
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -23,6 +26,7 @@ import { JobDetailsBody } from './JobDetailsBody';
 import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
 import { ReleaseNotesRail } from './ReleaseNotesRail';
 import EventsList from './EventsList';
+import { StageIconRow } from './StageIconRow';
 import { stageTint } from '../utils/stageTint';
 import { MODAL_PANEL_SIZE } from '../constants/modalSize';
 import { usePersistScroll } from '../hooks/usePersistScroll';
@@ -37,6 +41,9 @@ const TABS = [
 const normalizeTab = (tab) => (tab === 'drawings' ? 'attachments' : tab);
 
 const ACTIVITY_RAIL_WIDTH = 346;
+
+/** Banana row sits in the header now, so it reads at chip scale, not section scale. */
+const HEADER_BANANA_ICON_SIZE = 18;
 
 export function ReleaseHubModal({
     isOpen,
@@ -54,6 +61,8 @@ export function ReleaseHubModal({
     onAttachmentsBadgeCount = null,
     /** Called after Activity rail overwrites Job Log notes (parent can refresh row). */
     onNotesChanged = null,
+    /** Refetch hook for the host list — every write in the Details pane calls it. */
+    onJobUpdate = null,
 }) {
     const startTab = normalizeTab(initialTab);
     const [activeTab, setActiveTab] = useState(startTab);
@@ -66,6 +75,9 @@ export function ReleaseHubModal({
     const [visited, setVisited] = useState(() => ({ [startTab]: true }));
     // Local badge can be lifted from the Attachments pane once reviews load.
     const [badgeFromPane, setBadgeFromPane] = useState(0);
+    // Stage the header renders. Seeded from the row, then owned by the Details
+    // pane's select until the host's refetch brings a fresh row in.
+    const [liveStage, setLiveStage] = useState(null);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -73,6 +85,7 @@ export function ReleaseHubModal({
         setActiveTab(tab);
         setVisited((prev) => ({ ...prev, [tab]: true }));
         setBadgeFromPane(0);
+        setLiveStage(null);
         detailsScrollStore.current = 0;
         changelogScrollStore.current = 0;
     }, [isOpen, initialTab, job?.id]);
@@ -90,7 +103,7 @@ export function ReleaseHubModal({
     const releaseNumber = job['Release #'] || job.release;
     const jobName = job['Job'] || job.job_name || '';
     const description = (job['Description'] || job.description || '').toString().trim();
-    const stage = job['Stage'] || job.stage || '';
+    const stage = liveStage ?? (job['Stage'] || job.stage || '');
     const pm = job['PM'] || job.pm;
     const by = job['BY'] || job.by;
     const label = `${jobNumber ?? ''}${releaseNumber ? `-${releaseNumber}` : ''}`;
@@ -110,7 +123,8 @@ export function ReleaseHubModal({
     const linkStyle = { height: 28, padding: '0 11px', fontSize: 13 };
     const deadStyle = { ...linkStyle, opacity: 0.45, cursor: 'not-allowed' };
 
-    const context = [jobName, pm ? `PM ${pm}` : null, by ? `Detailed by ${by}` : null]
+    // Row 2. The job name now leads row 1, so this is attribution only.
+    const context = [pm ? `PM ${pm}` : null, by ? `Detailed by ${by}` : null]
         .filter(Boolean).join(' · ');
 
     const showActivityRail = activeTab === 'details' || activeTab === 'changelog';
@@ -145,33 +159,59 @@ export function ReleaseHubModal({
                 <div className="shrink-0 border-b border-hairline bg-surface-2" style={{ padding: '14px 18px 0' }}>
                     <div className="flex items-start gap-3.5">
                         <div className="min-w-0">
-                            <div className="flex items-center gap-2.5 flex-wrap">
+                            <div className="flex items-center flex-wrap" style={{ gap: 12 }}>
                                 <span
-                                    className="font-mono font-semibold text-brand bg-brand-soft"
-                                    style={{ fontSize: 13, padding: '3px 8px', borderRadius: 5 }}
+                                    className="font-mono"
+                                    style={{
+                                        fontWeight: 700,
+                                        fontSize: 15,
+                                        padding: '4px 10px',
+                                        borderRadius: 6,
+                                        color: 'var(--accent)',
+                                        background: 'var(--accent-soft)',
+                                    }}
                                 >
                                     {label}
                                 </span>
-                                <span className="font-bold text-ink truncate" style={{ fontSize: 17, letterSpacing: '-.3px' }}>
-                                    {description || '—'}
+                                <span
+                                    className="text-ink truncate"
+                                    style={{ fontWeight: 700, fontSize: 20, letterSpacing: '-.3px' }}
+                                >
+                                    {jobName || '—'}
                                 </span>
+                                {description && (
+                                    <span className="text-ink-2 truncate" style={{ fontWeight: 500, fontSize: 17 }}>
+                                        {description}
+                                    </span>
+                                )}
                                 {stage && (
                                     <span
                                         className="inline-block font-semibold"
-                                        style={{ padding: '3px 9px', borderRadius: 5, fontSize: 12.5, background: tint.bg, color: tint.fg }}
+                                        style={{ padding: '4px 11px', borderRadius: 6, fontSize: 13.5, background: tint.bg, color: tint.fg }}
                                     >
                                         {stage}
                                     </span>
                                 )}
                             </div>
                             {context && (
-                                <div className="text-jl text-ink-2 truncate" style={{ marginTop: 3 }} title={context}>
+                                <div className="text-ink-2 truncate" style={{ fontSize: 13.5, marginTop: 4 }} title={context}>
                                     {context}
                                 </div>
                             )}
                         </div>
                         <div className="flex-1" />
                         <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Stage progress, compacted out of the Details pane and into the
+                                header — it reads as identity, not as a section. */}
+                            {stage && (
+                                <span
+                                    className="inline-flex items-center bg-surface border border-hairline"
+                                    style={{ padding: '4px 8px', borderRadius: 8, marginRight: 4 }}
+                                    title={stage}
+                                >
+                                    <StageIconRow stage={stage} iconSize={HEADER_BANANA_ICON_SIZE} />
+                                </span>
+                            )}
                             {procoreUrl ? (
                                 <a href={procoreUrl} target="_blank" rel="noopener noreferrer" className={linkCls} style={linkStyle}>
                                     Procore
@@ -264,8 +304,11 @@ export function ReleaseHubModal({
                             >
                                 <JobDetailsBody
                                     job={job}
+                                    releaseId={releaseId}
                                     scrollToMaterials={scrollToMaterials}
                                     onOrdersChanged={onOrdersChanged}
+                                    onJobUpdate={onJobUpdate}
+                                    onStageChange={setLiveStage}
                                 />
                             </div>
                         )}

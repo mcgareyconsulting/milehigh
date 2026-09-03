@@ -6,7 +6,7 @@
  *   jobsApi: Singleton with methods for fetching, updating, releasing, deleting, archiving, and scheduling jobs,
  *            plus read-only release enrichment (checklist/to-dos, photos, drawings) for the timeline detail modal.
  * imports_from: [axios, ../utils/api]
- * imported_by: [components/PMBoardList.jsx, components/JobsTableRow.jsx, components/GanttChart.jsx, components/ReleaseDetailModal.jsx, pages/PMBoard.jsx, pages/JobLog.jsx, pages/Archive.jsx, hooks/useJobsDataFetching.js, hooks/useArchiveDataFetching.js]
+ * imported_by: [components/PMBoardList.jsx, components/JobsTableRow.jsx, components/GanttChart.jsx, components/JobDetailsBody.jsx, pages/PMBoard.jsx, pages/JobLog.jsx, pages/Archive.jsx, hooks/useJobsDataFetching.js, hooks/useArchiveDataFetching.js]
  * invariants:
  *   - Exported as a singleton; all callers share the same instance.
  *   - fetchAllJobs paginates internally and returns the full accumulated array.

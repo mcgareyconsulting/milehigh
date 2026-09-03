@@ -498,6 +498,7 @@ function Archive() {
                 </div>
             </div>
             <ReleaseHubModal
+                onJobUpdate={refetch}
                 isOpen={hub?.job != null}
                 onClose={closeHub}
                 job={hub?.job}

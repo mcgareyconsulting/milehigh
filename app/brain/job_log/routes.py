@@ -2013,13 +2013,16 @@ def update_start_install(job, release):
                 return jsonify({'error': 'Event already exists'}), 400
             raise
 
-        # Apply the installer change alongside the date, if one was sent.
+        # Apply the installer change alongside the date, if one was sent. This is the Timeline
+        # drag's shape: one drop, one request, two events. The installer event is linked to the date
+        # event as its parent so a single Undo reverses the whole drop rather than half of it.
         if installer_in_req:
             try:
                 AssignInstallerCommand(
                     job_id=job,
                     release=release,
                     installer=installer_val,
+                    parent_event_id=result.event_id,
                 ).execute()
             except ValueError as ve:
                 # Installer unchanged within the dedup window — the date update
@@ -2816,7 +2819,7 @@ def get_events():
         from app.models import Releases
         UNDO_WHITELIST = {
             'update_stage', 'update_notes', 'update_fab_order', 'update_start_install',
-            'update_ship_date',
+            'update_ship_date', 'update_installer',
         }
         UNDO_FIELD = {
             'update_stage': 'stage',
@@ -2824,6 +2827,7 @@ def get_events():
             'update_fab_order': 'fab_order',
             'update_start_install': 'start_install',
             'update_ship_date': 'ship_date',
+            'update_installer': 'installer',
         }
         # DWL whitelist: submittal events with action='updated' whose payload
         # targets one of these fields. Mirrors _DWL_UNDO_FIELDS in the undo
@@ -2971,6 +2975,9 @@ _UNDO_WHITELIST_FIELD = {
     'update_fab_order': 'fab_order',
     'update_start_install': 'start_install',
     'update_ship_date': 'ship_date',
+    # A timeline drag writes the installer, so a mis-drop has to be reversible. Undoing it re-runs
+    # AssignInstallerCommand with the old value, which also walks the mirror Trello card back.
+    'update_installer': 'installer',
     'set_asap': 'start_install_asap',
     'clear_asap': 'start_install_asap',
 }
@@ -3031,6 +3038,13 @@ def _dispatch_undo(event, *, source, defer_cascade):
             job_id=event.job, release=event.release,
             start_install=from_date,
             is_hard_date=payload.get('is_hard_date', True),
+            source=source,
+            undone_event_id=event.id,
+        ).execute()
+    if action == 'update_installer':
+        return AssignInstallerCommand(
+            job_id=event.job, release=event.release,
+            installer=payload['from'],
             source=source,
             undone_event_id=event.id,
         ).execute()

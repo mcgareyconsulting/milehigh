@@ -41,9 +41,12 @@ def test_directory_splits_employees_and_subcontractors(app, admin_client):
         "last_name": "Arendt",
         "email": "carendt@mhmw.com",
         "role": "Drafter",
+        "role_key": "drafter",
     }
-    assert employees["boneill@mhmw.com"]["role"] == "Admin, Drafter"
-    assert employees["khearn@mhmw.com"]["role"] == "Employee"
+    # Admin wins over a legacy row that also carries is_drafter.
+    assert employees["boneill@mhmw.com"]["role"] == "Admin"
+    assert employees["boneill@mhmw.com"]["role_key"] == "admin"
+    assert employees["khearn@mhmw.com"]["role"] == "Default"
 
     last_names = [row["last_name"] for row in body["employees"]]
     assert last_names == sorted(last_names, key=str.lower)
@@ -73,10 +76,10 @@ def test_employee_role_labels():
             self.is_admin = is_admin
             self.is_drafter = is_drafter
 
-    assert employee_role(U()) == "Employee"
+    assert employee_role(U()) == "Default"
     assert employee_role(U(is_admin=True)) == "Admin"
     assert employee_role(U(is_drafter=True)) == "Drafter"
-    assert employee_role(U(is_admin=True, is_drafter=True)) == "Admin, Drafter"
+    assert employee_role(U(is_admin=True, is_drafter=True)) == "Admin"
 
 
 def test_split_contact_name():

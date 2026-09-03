@@ -17,6 +17,17 @@ vi.mock('../services/jobsApi', () => ({
             Promise.resolve({ order: { id, status: received ? 'received' : 'ordered', description: 'Part' } })
         ),
         updateNotes: vi.fn(() => Promise.resolve({})),
+        // Details pane: photos strip, to-do cards, installer select, and the
+        // write paths behind Stage / Installer / the start-install dialog.
+        getReleasePhotos: vi.fn(() => Promise.resolve([])),
+        getReleaseChecklist: vi.fn(() => Promise.resolve({ todos: [], meetings: [] })),
+        getInstallerTeams: vi.fn(() => Promise.resolve(['Team 1', 'Team 2'])),
+        updateStage: vi.fn(() => Promise.resolve({})),
+        updateStartInstall: vi.fn(() => Promise.resolve({})),
+        updateShipDate: vi.fn(() => Promise.resolve({})),
+        clearStartInstallHardDate: vi.fn(() => Promise.resolve({})),
+        setStartInstallAsap: vi.fn(() => Promise.resolve({})),
+        updateJobFields: vi.fn(() => Promise.resolve({})),
         getBBReview: vi.fn(() => Promise.resolve(null)),
         requestBBReview: vi.fn(() => Promise.resolve({ status: 'pending' })),
         // Activity rail reads the release event stream (notes + stage/date/fab).
@@ -132,14 +143,17 @@ describe('ReleaseHubModal', () => {
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
-    it('heads itself with the id chip, description, stage pill, and context line', () => {
+    it('heads itself with the id chip, job name, description, stage pill, and context line', () => {
         renderHub();
         const dialog = screen.getByRole('dialog');
         expect(within(dialog).getByText('560-923')).toBeInTheDocument();
+        // The job name now leads row 1; the description follows it, lighter.
+        expect(within(dialog).getByText('Alta Metro')).toBeInTheDocument();
         expect(within(dialog).getByText('Bldg C stair')).toBeInTheDocument();
-        // Stage appears twice: header pill and the Production field.
+        // Stage appears in the header pill and again in the Details select.
         expect(within(dialog).getAllByText('Cut Complete').length).toBeGreaterThanOrEqual(1);
-        expect(within(dialog).getByText(/Alta Metro · PM Doug · Detailed by Rich/)).toBeInTheDocument();
+        // Row 2 is attribution only — the job name moved up out of it.
+        expect(within(dialog).getByText('PM Doug · Detailed by Rich')).toBeInTheDocument();
     });
 
     it('offers all three tabs with Details active by default', () => {
@@ -155,7 +169,9 @@ describe('ReleaseHubModal', () => {
         // Embedded split pane: left rail Drawings section + empty viewer prompt.
         expect(await screen.findByText('Drawings')).toBeInTheDocument();
         expect(screen.getByText('+ Upload PDF')).toBeInTheDocument();
-        expect(screen.getByText('Photos')).toBeInTheDocument();
+        // Photos moved to the Details pane, which this entry point never mounts —
+        // the embedded rail is drawings + findings only.
+        expect(screen.queryByText(/^Photos/)).not.toBeInTheDocument();
         // Empty release: left rail empty-state and/or right viewer prompt.
         expect(
             screen.getAllByText(/No drawings yet|Select a drawing to preview/i).length,
@@ -206,18 +222,25 @@ describe('ReleaseHubModal', () => {
         expect(within(tab).queryByText('0')).not.toBeInTheDocument();
     });
 
-    it('lays the release out as date hero + 3-col metadata + stage progress', () => {
+    it('lays the release out as the dossier split, not the old hero + 3-col grid', () => {
         renderHub();
-        // Date-flow hero labels (Install Prog also labels the Production field).
-        for (const label of ['Released', 'Ship Date', 'Start Install', 'Comp. ETA']) {
-            expect(screen.getByText(label)).toBeInTheDocument();
-        }
-        expect(screen.getAllByText('Install Prog').length).toBeGreaterThanOrEqual(1);
-        for (const heading of ['Production', 'Assignment', 'Materials ordered', 'Stage progress']) {
+        // Left column, then right column, then the full-width to-do strip.
+        for (const heading of ['Materials ordered', 'Schedule', 'Active to-dos']) {
             expect(screen.getByText(heading)).toBeInTheDocument();
         }
-        // Schedule is no longer a section — dates live in the hero only.
-        expect(screen.queryByText('Schedule')).not.toBeInTheDocument();
+        // 'Details' names both the tab and the right column's second section.
+        expect(screen.getAllByText('Details')).toHaveLength(2);
+        expect(screen.getByText(/^Photos/)).toBeInTheDocument();
+        // Schedule rows. 'Released' is also a Stage option, hence getAllByText.
+        expect(screen.getAllByText('Released').length).toBeGreaterThanOrEqual(1);
+        for (const label of ['Ship Date (est)', 'Start Install', 'Comp. ETA', 'Install Prog']) {
+            expect(screen.getByText(label)).toBeInTheDocument();
+        }
+        // The date-flow hero, the Assignment/Production grid and the bottom
+        // Stage progress section are gone (the banana row moved to the header).
+        for (const gone of ['Assignment', 'Production', 'Stage progress', 'Stage Group']) {
+            expect(screen.queryByText(gone)).not.toBeInTheDocument();
+        }
     });
 
     it('renders the banana-code icon row instead of the 17-segment progress bar', () => {
@@ -235,7 +258,7 @@ describe('ReleaseHubModal', () => {
         expect(screen.getAllByText('Cut Complete').length).toBeGreaterThanOrEqual(1);
         expect(screen.getAllByText('Cut Start').length).toBeGreaterThanOrEqual(1);
         expect(screen.getByText(/Ship date set to/)).toBeInTheDocument();
-        expect(screen.getByText('Waiting on GC embed approval')).toBeInTheDocument();
+        expect(screen.getAllByText('Waiting on GC embed approval').length).toBeGreaterThanOrEqual(1);
         expect(screen.getAllByText('Note').length).toBeGreaterThanOrEqual(1);
         expect(screen.getByText('Activity')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: '+ Note' })).toBeInTheDocument();
@@ -244,14 +267,15 @@ describe('ReleaseHubModal', () => {
     it('renders the release fields the Job Log row carries', () => {
         renderHub();
         const dialog = screen.getByRole('dialog');
-        // Hero dates are reformatted from ISO.
-        expect(within(dialog).getByText('Jun 2, 2026')).toBeInTheDocument();
-        expect(within(dialog).getByText('Aug 1, 2026')).toBeInTheDocument();
-        // Production + assignment.
-        expect(within(dialog).getByText('14')).toBeInTheDocument();
-        expect(within(dialog).getByText('Rich')).toBeInTheDocument();
-        expect(within(dialog).getByText('Team 2')).toBeInTheDocument();
-        expect(within(dialog).getByText('Black')).toBeInTheDocument();
+        // Commitments keep the full date; derived rows carry the weekday.
+        expect(within(dialog).getByText('Jun 2, 2026')).toBeInTheDocument();     // Released
+        expect(within(dialog).getByText('Sat, Aug 1')).toBeInTheDocument();      // Comp. ETA
+        // PM and By share one row now.
+        expect(within(dialog).getByText('Doug · Rich')).toBeInTheDocument();
+        // Crew · Install Hrs likewise.
+        expect(within(dialog).getByText('3 · 24')).toBeInTheDocument();
+        expect(within(dialog).getByText('14')).toBeInTheDocument();              // Fab Order
+        expect(within(dialog).getByText('Black')).toBeInTheDocument();           // Paint color
     });
 
     it('shows an em dash for empty fields rather than dropping the row', () => {
@@ -264,8 +288,8 @@ describe('ReleaseHubModal', () => {
     it('appends % to whole-number Install Prog', () => {
         renderHub({ job: { ...JOB, 'Job Comp': 75 } });
         const dialog = screen.getByRole('dialog');
-        // Hero + Production field both show 75%.
-        expect(within(dialog).getAllByText('75%').length).toBeGreaterThanOrEqual(1);
+        // One place now: the Schedule column's Install Prog row.
+        expect(within(dialog).getByText('75%')).toBeInTheDocument();
     });
 
     it('flags an ASAP install with the mini-flag beside the date', () => {
@@ -299,9 +323,9 @@ describe('ReleaseHubModal', () => {
         renderHub();
         expect(screen.getByText('Activity')).toBeInTheDocument();
 
-        expect(await screen.findByText('Waiting on GC embed approval')).toBeInTheDocument();
-        expect(screen.getByText('Fab has pack')).toBeInTheDocument();
-        // Newest note matches the release Notes field once (not duplicated as orphan).
+        expect(await screen.findByText('Fab has pack')).toBeInTheDocument();
+        // The release's notes live on the rail alone — the Details pane no longer
+        // repeats them, so the newest note appears exactly once.
         expect(screen.getAllByText('Waiting on GC embed approval')).toHaveLength(1);
     });
 

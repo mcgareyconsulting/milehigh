@@ -4,7 +4,7 @@
  * purpose: Centralizes all Job Log filter, subset, and sort logic so JobLog.jsx only handles rendering.
  * exports:
  *   useJobsFilters: Hook returning filter state, stage options/colors, displayJobs, KPI totals, and reset/toggle handlers
- * imports_from: [react]
+ * imports_from: [react, ../utils/fabHours, ../utils/jobLogColumns, ../utils/unassignedLane]
  * imported_by: [../pages/JobLog.jsx, ../pages/Archive.jsx]
  * invariants:
  *   - selectedProjectNames and selectedSubset are persisted to localStorage across sessions
@@ -20,6 +20,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { computeTotalFabHrs } from '../utils/fabHours';
 import { DATE_COLUMNS } from '../utils/jobLogColumns';
+import { READY_TO_SHIP_STAGES } from '../utils/unassignedLane';
 
 // Stages that make up the Paint department (the `paint` quick-filter set).
 const PAINT_STAGES = ['Welded QC', 'Paint Start'];
@@ -442,8 +443,7 @@ export function useJobsFilters(jobs = []) {
         } else if (selectedSubset === 'job_order') {
             return getJobOrderSubset(base);
         } else if (selectedSubset === 'ready_to_ship') {
-            const readyToShipStages = ['Ship Planning', 'Store at MHMW', 'Paint Complete'];
-            const rtsOnly = base.filter(job => readyToShipStages.includes(String(job['Stage'] ?? '').trim()));
+            const rtsOnly = base.filter(job => READY_TO_SHIP_STAGES.includes(String(job['Stage'] ?? '').trim()));
             return sortByStageThenLastUpdated(rtsOnly);
         } else if (selectedSubset === 'paint') {
             const paintOnly = base.filter(job => PAINT_STAGES.includes(String(job['Stage'] ?? '').trim()));

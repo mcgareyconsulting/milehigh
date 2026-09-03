@@ -684,6 +684,7 @@ export default function Subs() {
 
             {/* Same release hub the Job Log opens — Details / Attachments / Change Log. */}
             <ReleaseHubModal
+                onJobUpdate={load}
                 isOpen={hubRow != null}
                 onClose={() => setHubKey(null)}
                 job={hubRow}
