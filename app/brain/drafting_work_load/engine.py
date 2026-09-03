@@ -738,7 +738,7 @@ class UrgencyEngine:
     
     @staticmethod
     def calculate_bump_updates(
-        current_order: float,
+        current_order: Optional[float],
         existing_urgent_submittals_data: List[Dict],
         existing_regular_submittals_data: List[Dict]
     ) -> Tuple[bool, Optional[float], List[Tuple[str, float]], List[Tuple[str, float]]]:
@@ -746,7 +746,8 @@ class UrgencyEngine:
         Calculate updates needed for bumping a submittal to urgent.
         
         Args:
-            current_order: Current order number of the submittal being bumped (must be >= 1)
+            current_order: Current order number of the submittal being bumped (integer >= 1),
+                or None for a row promoted out of the unnumbered bucket (BUG-19)
             existing_urgent_submittals_data: List of dicts with 'submittal_id' and 'order_number' for urgent submittals
             existing_regular_submittals_data: List of dicts with 'submittal_id' and 'order_number' for regular submittals
             
@@ -757,11 +758,14 @@ class UrgencyEngine:
             - urgent_updates: List[Tuple[str, float]] (list of (submittal_id, new_order) for urgent shifts)
             - regular_updates: List[Tuple[str, float]] (list of (submittal_id, new_order) for regular shifts)
         """
-        # Check if order_number is an integer >= 1
-        is_integer = isinstance(current_order, (int, float)) and current_order >= 1 and current_order == int(current_order)
-        
-        if not is_integer:
-            return False, None, [], []
+        # A row promoted out of the unnumbered bucket (BUG-19) has no current position
+        # to validate. Every other entry must be an integer >= 1; a decimal (0 < x < 1)
+        # is already sitting in an urgency slot and has nothing to gain from a bump.
+        if current_order is not None:
+            is_integer = isinstance(current_order, (int, float)) and current_order >= 1 and current_order == int(current_order)
+
+            if not is_integer:
+                return False, None, [], []
         
         existing_urgent_orders = [
             float(s.get('order_number')) 

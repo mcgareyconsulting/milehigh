@@ -5,7 +5,8 @@ purpose: Bridge between DWL routes and the pure-logic engine, converting ORM obj
 exports:
   DraftingWorkLoadService: CRUD helpers for notes, drafting status, due date, and filtered submittal queries.
   SubmittalOrderingService: Delegates ordering math to engine and maps results back to ORM objects.
-  UrgencyService: Executes bump workflows (ordered-to-urgent and unordered-to-ordered) against the database.
+  UrgencyService: Executes bump workflows (ordered-to-urgent, unordered-to-ordered, and
+    the multiple-assignees -> single group return that also promotes unnumbered rows) against the database.
   LocationService: Resolves lat/lng to job numbers via PostGIS or Python fallback.
   SubmittalOrderUpdate: Re-exported from engine for backward compatibility.
 imports_from: [datetime, typing, sqlalchemy, app.logging_config, app.models, app.brain.drafting_work_load.engine]
@@ -533,12 +534,60 @@ class UrgencyService:
             logger.debug("ladder_bump_skipped", submittal_id=submittal_id, reason="no_order_number")
             return False
 
+        return UrgencyService._apply_ladder_bump(record, submittal_id, ball_in_court_value)
+
+    @staticmethod
+    def promote_group_return(record, submittal_id, ball_in_court_value):
+        """
+        Promote a submittal that just came back from a review group to a single drafter.
+
+        Same ladder as bump_order_number_to_urgent, with one difference that is the whole
+        point (BUG-19): an **unnumbered** row is promoted too. A submittal whose status left
+        'Open' had its order_number cleared on the way out (check_and_update_submittal), so it
+        returns with no number and lands in the unnumbered bucket at the bottom of the
+        drafter's list, where nobody looks — Colton has missed real work this way.
+
+        Deliberately scoped to the multiple-assignees -> single return. A single -> single
+        ball-in-court move is a drafter reassignment the engineering lead communicates
+        directly, not a bounce-back, and must NOT jump the queue (Daniel, 2026-09-03).
+
+        Args:
+            record: Submittals DB record
+            submittal_id: Submittal ID for logging
+            ball_in_court_value: Current ball_in_court value for grouping
+
+        Returns:
+            bool: True if the submittal was promoted, False otherwise
+        """
+        if record.order_number is not None and record.order_number < 1:
+            logger.debug(
+                "group_return_promote_skipped",
+                submittal_id=submittal_id,
+                reason="already_urgent",
+                old=record.order_number,
+            )
+            return False
+
+        logger.debug(
+            "group_return_promote_started",
+            submittal_id=submittal_id,
+            from_unnumbered=record.order_number is None,
+        )
+        return UrgencyService._apply_ladder_bump(record, submittal_id, ball_in_court_value)
+
+    @staticmethod
+    def _apply_ladder_bump(record, submittal_id, ball_in_court_value):
+        """
+        Shared urgency-ladder mechanics for both public entry points above. Assumes the
+        caller has already decided this row is eligible. Accepts an integer order >= 1
+        (the classic bump) or None (a promotion out of the unnumbered bucket).
+        """
         current_order = record.order_number
 
-        # Check if order_number is an integer >= 1
+        # An unnumbered row has no position to validate; anything else must be an integer >= 1.
         is_integer = isinstance(current_order, (int, float)) and current_order >= 1 and current_order == int(current_order)
 
-        if not is_integer:
+        if current_order is not None and not is_integer:
             logger.debug(
                 "ladder_bump_skipped",
                 submittal_id=submittal_id,

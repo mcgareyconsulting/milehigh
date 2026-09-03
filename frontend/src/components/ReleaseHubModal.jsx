@@ -7,7 +7,7 @@
  * exports:
  *   ReleaseHubModal: Portal modal shell for a release
  * imports_from: [react, react-dom, ./JobDetailsBody, ./PdfVersionHistoryModal, ./EventsList,
- *   ./ReleaseNotesRail, ./StageIconRow, ../utils/stageTint]
+ *   ./ReleaseNotesRail, ./StageIconRow, ../utils/stageTint, ../constants/modalSize]
  * imported_by: [frontend/src/components/JobsTableRow.jsx, frontend/src/components/JobLogCardGrid.jsx,
  *   frontend/src/components/GanttChart.jsx]
  * invariants:
@@ -28,6 +28,7 @@ import { ReleaseNotesRail } from './ReleaseNotesRail';
 import EventsList from './EventsList';
 import { StageIconRow } from './StageIconRow';
 import { stageTint } from '../utils/stageTint';
+import { MODAL_PANEL_SIZE } from '../constants/modalSize';
 import { usePersistScroll } from '../hooks/usePersistScroll';
 
 const TABS = [
@@ -144,10 +145,9 @@ export function ReleaseHubModal({
             <div
                 className="dc-pop bg-surface border border-hairline-strong flex flex-col overflow-hidden"
                 style={{
-                    width: 'min(1380px, 96vw)',
-                    // dvh tracks the visual viewport on iPad rotate; vh alone
-                    // jumps with Safari chrome and dumps the pane scroll (BUG-14).
-                    height: 'min(860px, 94dvh, 94vh)',
+                    // Shared with the DWL submittal modal — see constants/modalSize.js
+                    // (that file carries the dvh/BUG-14 note).
+                    ...MODAL_PANEL_SIZE,
                     borderRadius: 14,
                     boxShadow: 'var(--shadow)',
                 }}

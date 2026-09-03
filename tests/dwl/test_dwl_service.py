@@ -636,3 +636,96 @@ class TestUrgencyService:
 
         assert result is True
         assert sample_record.order_number == 1.0
+
+
+# ==============================================================================
+# BUG-19 — UNNUMBERED GROUP RETURNS
+# ==============================================================================
+
+class TestPromoteGroupReturn:
+    """
+    A submittal that comes back from a review group to a single drafter must land in an
+    urgency slot even when it returns UNNUMBERED — its order_number was cleared on the way
+    out of 'Open', so the plain bump no-oped it into the bucket nobody reads (BUG-19).
+
+    Scope boundary, deliberate: this is the multiple-assignees -> single return only. A
+    single -> single ball-in-court move is a drafter reassignment the engineering lead
+    communicates directly, and still must not jump the queue.
+    """
+
+    @pytest.fixture
+    def app(self):
+        app = create_app()
+        app.config['TESTING'] = True
+        with app.app_context():
+            yield app
+
+    @pytest.fixture
+    def mock_query(self, app):
+        mock_query_obj = Mock()
+        patcher = patch('app.brain.drafting_work_load.service.Submittals.query', mock_query_obj)
+        patcher.start()
+        yield mock_query_obj
+        patcher.stop()
+
+    @pytest.fixture
+    def unnumbered_record(self):
+        record = Mock(spec=Submittals)
+        record.order_number = None
+        record.submittal_id = "submittal_123"
+        return record
+
+    def test_unnumbered_return_gets_09(self, mock_query, unnumbered_record):
+        """The regression: an unnumbered return is promoted instead of silently ignored."""
+        mock_query.filter.return_value.all.return_value = []
+
+        result = UrgencyService.promote_group_return(unnumbered_record, "submittal_123", "Drafter A")
+
+        assert result is True
+        assert unnumbered_record.order_number == 0.9
+
+    def test_unnumbered_return_shifts_existing_urgent_down(self, mock_query, unnumbered_record):
+        """The promoted row takes 0.9 and the incumbent slides toward 0.1, same as a numbered bump."""
+        incumbent = Mock(spec=Submittals)
+        incumbent.order_number = 0.9
+        incumbent.submittal_id = "urgent_1"
+        mock_query.filter.return_value.all.return_value = [incumbent]
+
+        result = UrgencyService.promote_group_return(unnumbered_record, "submittal_123", "Drafter A")
+
+        assert result is True
+        assert unnumbered_record.order_number == 0.9
+        assert incumbent.order_number == pytest.approx(0.8, abs=0.001)
+
+    def test_numbered_return_still_bumps(self, mock_query):
+        """A numbered return keeps the behaviour it already had."""
+        record = Mock(spec=Submittals)
+        record.order_number = 5
+        record.submittal_id = "submittal_123"
+        mock_query.filter.return_value.all.return_value = []
+
+        result = UrgencyService.promote_group_return(record, "submittal_123", "Drafter A")
+
+        assert result is True
+        assert record.order_number == 0.9
+
+    def test_already_urgent_return_is_left_alone(self, mock_query):
+        """A row already in an urgency slot is at the top; re-promoting would only reshuffle."""
+        record = Mock(spec=Submittals)
+        record.order_number = 0.4
+        record.submittal_id = "submittal_123"
+        mock_query.filter.return_value.all.return_value = []
+
+        result = UrgencyService.promote_group_return(record, "submittal_123", "Drafter A")
+
+        assert result is False
+        assert record.order_number == 0.4
+
+    def test_plain_bump_still_refuses_unnumbered(self, mock_query, unnumbered_record):
+        """The single -> single path is unchanged: unnumbered stays unnumbered (Daniel, 2026-09-03)."""
+        mock_query.filter.return_value.all.return_value = []
+
+        result = UrgencyService.bump_order_number_to_urgent(unnumbered_record, "submittal_123", "Drafter A")
+
+        assert result is False
+        assert unnumbered_record.order_number is None
