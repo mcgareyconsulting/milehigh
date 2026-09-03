@@ -16,7 +16,7 @@
  *     NewItemModal.jsx. Edit mode hits both APIs immediately via the child components, which
  *     own their own fetch.
  *   - Re-fetches release candidates whenever the job number field changes to a valid integer.
- *   - Closes on backdrop click and Escape, matching the other modals (ReleaseDetailModal, etc).
+ *   - Closes on backdrop click and Escape, matching the other modals (ReleaseHubModal, etc).
  */
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';

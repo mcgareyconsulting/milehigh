@@ -248,7 +248,8 @@ def delete_release_drawing_version(release_id, version_id):
         job=release.job,
         release=release.release,
         action='delete_drawing_version',
-        source=f"Brain:{user.username}" if user else "Brain",
+        source="Brain",
+        internal_user_id=user.id if user else None,
         payload={
             'version': version.version_number,
             'version_id': version.id,

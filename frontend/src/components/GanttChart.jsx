@@ -571,7 +571,7 @@ function InstallerBar({ release, lane, color, barH, twoLine, draggable, onClick,
 }
 
 function GanttChart({ filterComplete = false }) {
-    const { jobs, loading, patchJob, refreshMaterialSummary } = useReleases();
+    const { jobs, loading, patchJob, refreshMaterialSummary, refetch } = useReleases();
     const [installerTeams, setInstallerTeams] = useState([]);
     const [teamsLoaded, setTeamsLoaded] = useState(false);
     const [planningOrders, setPlanningOrders] = useState([]);  // PU/stock/galv orders still to bring in
@@ -1636,6 +1636,7 @@ function GanttChart({ filterComplete = false }) {
                 its own — no cockpit, no read-only variant, no lane-colored accent (the hub derives
                 its own tint from the stage). */}
             <ReleaseHubModal
+                onJobUpdate={refetch}
                 isOpen={!!hubJob}
                 job={hubJob}
                 releaseId={hubJob?.id}

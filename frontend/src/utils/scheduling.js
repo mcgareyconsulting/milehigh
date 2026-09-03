@@ -3,7 +3,7 @@
  * schema_version: 1
  * purpose: Client-side mirror of the backend install-schedule math
  *   (app/brain/job_log/scheduling/calculator.py :: calculate_install_complete_date), so the
- *   read-only "cockpit" preview in ReleaseCockpitModal recomputes the exact dates the server
+ *   read-only schedule preview in the release hub recomputes the exact dates the server
  *   would, without any network round-trip. Pure functions over YYYY-MM-DD strings.
  * exports:
  *   installDays: work days an install spans for (install_hrs, num_guys)
@@ -11,7 +11,7 @@
  *   shipEstimate: estimated ship = start - 1 business day
  *   businessDaysBetween: signed business-day distance between two dates (for deltas)
  * imports_from: [./formatters]
- * imported_by: [components/ReleaseCockpitModal.jsx, utils/scheduling.test.js]
+ * imported_by: [components/JobDetailsBody.jsx, utils/scheduling.test.js]
  * invariants:
  *   - Must stay in lockstep with the backend SchedulingConfig: HOURS_PER_INSTALLER_DAY = 8,
  *     DEFAULT_NUM_GUYS = 2. Change both together.
