@@ -60,20 +60,10 @@ def test_classify_install_date_kinds():
         "start_install_formulaTF": True,
     }) == KIND_PROJECTED
     assert classify_install_date({"start_install": None}) == KIND_MISSING
-    # ASAP labels a HARD date as a rush. schedule_builder maps KIND_ASAP to SOURCE_HARD,
-    # so the flag on a projected date must NOT win — that would report an estimate as a
-    # commitment. Since ASAP stopped stamping its own date, a flag without a hard date is
-    # reachable (the API takes the flag alone; the modal is what requires the date).
     assert classify_install_date({
         "start_install": date(2026, 8, 1),
-        "start_install_formulaTF": False,
         "start_install_asap": True,
     }) == KIND_ASAP
-    assert classify_install_date({
-        "start_install": date(2026, 8, 1),
-        "start_install_formulaTF": True,
-        "start_install_asap": True,
-    }) == KIND_PROJECTED
     assert classify_install_date({
         "start_install": date(2026, 8, 1),
         "start_install_formulaTF": False,

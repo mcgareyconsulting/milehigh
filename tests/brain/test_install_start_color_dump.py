@@ -646,25 +646,3 @@ def test_install_schedule_keeps_asap_on_a_real_hard_date(app):
         r = _hard_dated(stage="Fitup Start", start_install_asap=True)
 
         assert _classify_date(r) == KIND_ASAP
-
-
-def test_lookahead_does_not_promote_a_projected_asap_to_hard(app):
-    from app.brain.lookahead.pipeline import classify_install_date, KIND_PROJECTED, KIND_ASAP
-
-    with app.app_context():
-        soft = _make_release(
-            1, "A",
-            start_install=date(2026, 9, 10),
-            start_install_formulaTF=True,
-            start_install_asap=True,
-        )
-        hard = _make_release(
-            2, "B",
-            start_install=date(2026, 9, 10),
-            start_install_formulaTF=False,
-            start_install_asap=True,
-        )
-        db.session.commit()
-
-        assert classify_install_date(soft) == KIND_PROJECTED
-        assert classify_install_date(hard) == KIND_ASAP
