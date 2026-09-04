@@ -30,6 +30,12 @@ export const PATCH_NOTES = [
       },
       {
         type: 'new',
+        title: 'The tray reads as a queue, not a pile',
+        detail:
+          'Every card in the Unassigned tray shows the Start install date it is waiting on, and the tray is ordered by that date — soonest first, rush jobs above all of it, undated work at the bottom. A projected date is shown next to a hard one, marked with a ~ and set in grey so a guess never reads as a promise; both are on the list because either one is a claim about when the work is wanted. The card\'s border carries the color the Job Log already gives that date: red for ASAP, amber for a hard date gone by, green for one still ahead, grey for a projection or nothing. Drop the card on a crew and it takes that crew\'s color instead — in a lane the question is whose work it is, not when it is due.',
+      },
+      {
+        type: 'new',
         title: 'The shipping lanes accept drops too',
         detail:
           'Dropping a card on Shipping Planning or Shipping Completed changes its stage and nothing else — no date is written, because a shipping lane\'s position is derived from dates you already set, and honoring the drop column would move an install date you never aimed at. Hovering washes the whole lane and names the stage it will set, since the change leaves no mark where you let go. Dropping onto the lane a release already sits in does nothing, and Shipping Completed refuses a release with no hard Start install date — the lane is anchored on that date, so the card would silently vanish off the board.',

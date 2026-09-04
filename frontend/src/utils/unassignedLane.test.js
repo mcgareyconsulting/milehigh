@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { READY_TO_SHIP_STAGES, isUnassigned, selectUnassigned } from './unassignedLane';
+import { READY_TO_SHIP_STAGES, isUnassigned, selectUnassigned, trayDateKey } from './unassignedLane';
 
 const rel = (over = {}) => ({
     'Job #': 560,
@@ -61,11 +61,45 @@ describe('selectUnassigned — staging column order', () => {
         expect(out.map((r) => r['Job #'])).toEqual([900, 100]);
     });
 
-    it('sorts by job # then release # numerically, not lexically', () => {
+    it('orders by Start install date, soonest first', () => {
         const out = selectUnassigned([
-            rel({ 'Job #': 560, 'Release #': '10' }),
-            rel({ 'Job #': 560, 'Release #': '9' }),
-            rel({ 'Job #': 90, 'Release #': '1' }),
+            rel({ 'Release #': 'late', 'Start install': '2026-10-01' }),
+            rel({ 'Release #': 'soon', 'Start install': '2026-09-08' }),
+            rel({ 'Release #': 'next', 'Start install': '2026-09-15' }),
+        ]);
+        expect(out.map((r) => r['Release #'])).toEqual(['soon', 'next', 'late']);
+    });
+
+    it('orders a projected date alongside a hard one — the date is the key, not its type', () => {
+        const out = selectUnassigned([
+            rel({ 'Release #': 'hard-later', 'Start install': '2026-09-20', start_install_formulaTF: false }),
+            rel({ 'Release #': 'projected-sooner', 'Start install': '2026-09-10', start_install_formulaTF: true }),
+        ]);
+        expect(out.map((r) => r['Release #'])).toEqual(['projected-sooner', 'hard-later']);
+    });
+
+    it('sinks undated releases below every dated one', () => {
+        const out = selectUnassigned([
+            rel({ 'Release #': 'undated' }),
+            rel({ 'Release #': 'dated', 'Start install': '2026-12-31' }),
+        ]);
+        expect(out.map((r) => r['Release #'])).toEqual(['dated', 'undated']);
+    });
+
+    it('keeps ASAP above the date order — a rush flag is not a date type', () => {
+        const out = selectUnassigned([
+            rel({ 'Release #': 'tomorrow', 'Start install': '2026-09-04' }),
+            rel({ 'Release #': 'rush', 'Start install': '2026-09-30', start_install_asap: true }),
+        ]);
+        expect(out.map((r) => r['Release #'])).toEqual(['rush', 'tomorrow']);
+    });
+
+    it('breaks a date tie by job # then release # numerically, not lexically', () => {
+        const day = { 'Start install': '2026-09-09' };
+        const out = selectUnassigned([
+            rel({ 'Job #': 560, 'Release #': '10', ...day }),
+            rel({ 'Job #': 560, 'Release #': '9', ...day }),
+            rel({ 'Job #': 90, 'Release #': '1', ...day }),
         ]);
         expect(out.map((r) => `${r['Job #']}-${r['Release #']}`)).toEqual(['90-1', '560-9', '560-10']);
     });
@@ -89,5 +123,23 @@ describe('selectUnassigned — staging column order', () => {
     it('handles an empty or missing dataset', () => {
         expect(selectUnassigned([])).toEqual([]);
         expect(selectUnassigned(undefined)).toEqual([]);
+    });
+});
+
+describe('trayDateKey — the sort key', () => {
+    it('reads the display key and the raw key', () => {
+        expect(trayDateKey({ 'Start install': '2026-09-09' })).toBe('2026-09-09');
+        expect(trayDateKey({ start_install: '2026-09-09' })).toBe('2026-09-09');
+    });
+
+    it('lops the time off an ISO stamp rather than parsing it — a Date would shift the day', () => {
+        expect(trayDateKey({ 'Start install': '2026-09-09T00:00:00Z' })).toBe('2026-09-09');
+    });
+
+    it('returns null for a missing, blank or unparseable date', () => {
+        expect(trayDateKey({})).toBeNull();
+        expect(trayDateKey({ 'Start install': '   ' })).toBeNull();
+        expect(trayDateKey({ 'Start install': 'ASAP' })).toBeNull();
+        expect(trayDateKey(null)).toBeNull();
     });
 });

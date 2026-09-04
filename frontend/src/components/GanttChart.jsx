@@ -17,7 +17,7 @@
  *   GanttChart: Day/week-bucket board with zoom that scales column granularity (day↔week), width,
  *     card size, per-cell cap, and card detail; whole-column zoom snapping, week-snap nav, jump-to-date,
  *     and admin drag-to-assign between the unassigned tray and the installer lanes.
- * imports_from: [react, @dnd-kit/core, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters, ../utils/unassignedLane, ../utils/timelineDrop, ../utils/shipLaneDrop, ./ReleaseHubModal, ./PdfMarkupModal]
+ * imports_from: [react, @dnd-kit/core, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters, ../utils/installDateColor, ../utils/unassignedLane, ../utils/timelineDrop, ../utils/shipLaneDrop, ./ReleaseHubModal, ./PdfMarkupModal]
  * imported_by: [frontend/src/pages/PMBoardContent.jsx]
  * invariants:
  *   - CLICKING opens ReleaseHubModal — the SAME modal a Job Log row or card opens. One release, one
@@ -57,8 +57,15 @@
  *     uses, imported from one place so the two surfaces cannot drift). Deliberately not "any release
  *     with no installer": that pulls in every drafting and fab row and the tray stops being a work
  *     surface. A tray release in Ship Planning ALSO appears in its shipping lane, like the mirror.
- *     Tray cards show job-release, job name and description only — the qualifying stage is not
- *     repeated on the card (it's in the detail modal, and all three stages read as "ready").
+ *     Tray cards show job-release, job name, description and the Start install date — hard or
+ *     projected, the projection marked with a leading ~ so a guess never reads as a promise. The
+ *     qualifying stage is not repeated on the card (it's in the detail modal, and all three stages
+ *     read as "ready"). The tray is ordered by that date (ASAP first, undated last), so it is a
+ *     queue of what to schedule next rather than a list by job number.
+ *   - A tray card's BORDER is keyed to its date the same way the Job Log's Start install cell is
+ *     (utils/installDateColor): red ASAP, amber a hard date gone by, green a hard date ahead, grey
+ *     a projection or none. That colour is the TRAY's only — dropped onto a lane the card takes the
+ *     lane's installer colour, since there the question is whose work it is, not when it is due.
  *   - Installer lane colors come from constants/installerPalette indexed by installer position (NOT
  *     overall lane position) so List and Timeline colors keep matching; shipping lanes use their own
  *     board colors.
@@ -95,7 +102,8 @@ import { INSTALLER_PALETTE } from '../constants/installerPalette';
 import { selectUnassigned } from '../utils/unassignedLane';
 import { dateAtDropX } from '../utils/timelineDrop';
 import { shipLaneDropOutcome, shipLabelFor } from '../utils/shipLaneDrop';
-import { localTodayStr as todayIso, subtractBusinessDays } from '../utils/formatters';
+import { localTodayStr as todayIso, subtractBusinessDays, formatDateShort } from '../utils/formatters';
+import { classifyInstallDate } from '../utils/installDateColor';
 import { API_BASE_URL } from '../utils/api';
 import { ReleaseHubModal } from './ReleaseHubModal';
 import { PdfMarkupModal } from './PdfMarkupModal';
@@ -354,12 +362,55 @@ function EyeIcon({ off }) {
     );
 }
 
-// One release sitting in the pinned staging column. It has no date yet — that is the whole point,
-// the date is what dropping it onto a lane×day cell writes — so the card shows shop state instead:
-// job-release, name, description, and the stage that qualified it for the column.
+// The colour a tray card's border carries, keyed to its Start install date the same way the Job
+// Log's Start install cell is (utils/installDateColor, mirroring the backend's _classify_date), so
+// a release reads the same on both surfaces:
+//   red    ASAP — a rush flag, whatever the date says
+//   amber  a hard date already in the past — the one that is a scored metric
+//   green  a hard date still ahead
+//   grey   no hard date: a projection, or nothing at all. Not a warning, just not a commitment.
+// A card only wears this in the tray. Dropped onto a lane it takes that lane's installer colour,
+// because there the question is whose work it is, not when it is due.
+const TRAY_BORDER = {
+    asap: 'border-red-400 border-l-4 border-l-red-500 bg-red-50 ring-2 ring-red-300',
+    overdue: 'border-amber-400 border-l-4 border-l-amber-500 bg-amber-50',
+    scheduled: 'border-emerald-400 border-l-4 border-l-emerald-500 bg-emerald-50',
+    soft: 'border-gray-300 border-l-4 border-l-gray-300',
+};
+
+// Which of the four a release falls into, plus how its date should read.
+function trayDateState(job) {
+    const { isAsap, isHardDate, isHardDatePast } = classifyInstallDate({
+        stage: job['Stage'],
+        asap: job['start_install_asap'],
+        noColor: job['start_install_no_color'],
+        formulaTF: job['start_install_formulaTF'],
+        installDate: job['Start install'],
+    });
+    const kind = isAsap ? 'asap' : isHardDatePast ? 'overdue' : isHardDate ? 'scheduled' : 'soft';
+    const hard = job['start_install_formulaTF'] === false && !!job['Start install'];
+    return {
+        kind,
+        // A projected date is shown too — it is the Brain's answer for when this is wanted, and it
+        // is what the tray now sorts on — but it is marked, so nobody reads a guess as a promise.
+        label: formatDateShort(job['Start install']),
+        projected: !hard && !!job['Start install'],
+        title: !job['Start install']
+            ? 'No start install date'
+            : hard
+                ? (isAsap ? 'ASAP — hard start install date' : 'Hard start install date')
+                : 'Projected start install date',
+    };
+}
+
+// One release sitting in the pinned staging column: job-release, name, description, the Start
+// install date it is waiting on, and a border keyed to that date. The date is shown BECAUSE the
+// card is unscheduled — it is the projection or hard date the work is wanted against, and dropping
+// the card onto a lane×day cell is what replaces it with the day you chose.
 function StagingCard({ job, draggable, onClick, onMouseMove, onMouseLeave }) {
     const jr = `${job['Job #']}-${job['Release #']}`;
     const asap = job['start_install_asap'] === true;
+    const date = trayDateState(job);
     // `disabled` keeps the hook order stable for non-admins, who get the same card without a grab.
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: `staging:${job.id}`,
@@ -378,7 +429,7 @@ function StagingCard({ job, draggable, onClick, onMouseMove, onMouseLeave }) {
             {...attributes}
             {...listeners}
             style={{ opacity: isDragging ? 0.35 : 1, touchAction: draggable ? 'manipulation' : undefined }}
-            className={`rounded border bg-white px-2 py-1.5 shadow-sm select-none hover:border-accent-400 hover:shadow ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${asap ? 'border-l-4 border-l-red-500 border-red-400 bg-red-50 ring-2 ring-red-300' : 'border-gray-300'}`}
+            className={`rounded border bg-white px-2 py-1.5 shadow-sm select-none hover:shadow ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${TRAY_BORDER[date.kind]}`}
         >
             {asap && (
                 <span className="inline-block mb-1 px-1.5 py-0.5 rounded bg-red-600 text-white text-[10px] font-extrabold tracking-wide leading-none">
@@ -392,6 +443,12 @@ function StagingCard({ job, draggable, onClick, onMouseMove, onMouseLeave }) {
             {job['Description'] && (
                 <div className="text-xs text-gray-500 truncate leading-snug">{job['Description']}</div>
             )}
+            <div
+                className={`mt-1 text-[11px] font-semibold leading-none ${date.projected ? 'text-gray-500 italic font-normal' : 'text-gray-800'}`}
+                title={date.title}
+            >
+                {job['Start install'] ? (date.projected ? `~ ${date.label}` : date.label) : 'No date'}
+            </div>
         </div>
     );
 }
