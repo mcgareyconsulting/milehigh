@@ -34,7 +34,17 @@ export async function setAsapAndAssign(job, release, installer, startInstall) {
     // writing a date onto a row that was refused. The modal will not set ASAP without a
     // date, so startInstall is always a real YYYY-MM-DD by the time we get here.
     if (ok) {
-        await jobsApi.updateStartInstall(job, release, startInstall, installer);
+        try {
+            await jobsApi.updateStartInstall(job, release, startInstall, installer);
+        } catch (error) {
+            // The flag is already committed server-side. A half-applied ASAP — red row,
+            // no date — is worse than none, and the caller only refreshes on success, so
+            // the user would not even see the state that was created. Put the flag back
+            // before surfacing the failure. (Reachable: a repeat Set ASAP with the same
+            // date inside the event-dedup window makes the date save 400.)
+            await jobsApi.setStartInstallAsap(job, release, false).catch(() => {});
+            throw error;
+        }
     }
     return ok;
 }

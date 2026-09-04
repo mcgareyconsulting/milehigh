@@ -37,11 +37,16 @@ _KIND_ORDER = {KIND_ASAP: 0, KIND_HARD: 1, KIND_PROJECTED: 2, KIND_NEUTRAL: 3}
 
 def _classify_date(rel):
     """Mirror the frontend StartInstallEditor color logic to label the install date."""
-    if rel.start_install_asap:
+    # The flag alone is not a commitment. The modal refuses to set ASAP without a hard
+    # date, but the API accepts the flag on its own and legacy rows predate the rule —
+    # so an ASAP row with a projected (or absent) date must classify as projected, or
+    # is_hard below would feed a soft date into the crew conflict pairing.
+    is_hard_date = rel.start_install_formulaTF is False and rel.start_install is not None
+    if rel.start_install_asap and is_hard_date:
         return KIND_ASAP
     if rel.start_install_no_color:
         return KIND_NEUTRAL
-    if rel.start_install_formulaTF is False and rel.start_install is not None:
+    if is_hard_date:
         return KIND_HARD
     return KIND_PROJECTED
 

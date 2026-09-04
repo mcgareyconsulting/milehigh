@@ -8,11 +8,13 @@
  * imported_by: [frontend/src/components/JobsTableRow.jsx]
  * invariants:
  *   - Any non-empty date submitted via Save is persisted as a hard date (is_hard_date=true).
- *   - ASAP REQUIRES a Start Install date: the toggle leaves every control enabled and Save is
+ *   - ASAP REQUIRES a Start Install date: the toggle leaves the date fields enabled and Save is
  *     refused until a date is entered. ASAP sets no date of its own.
+ *   - The toggle only ever turns ASAP ON — it is disabled once the flag is set, because Save
+ *     has no clear path; Clear ASAP owns that.
  *   - The confirm button reads "Set ASAP" only when turning ASAP on (off->on); otherwise "Save".
  *     Saving an already-ASAP row edits its date/installer exactly like any other row.
- *   - Clear Hard Date button is only shown when the row currently has a hard date (startInstallFormulaTF === false && currentDate && !isAsap).
+ *   - Clear Hard Date button is shown whenever the row has a hard date (startInstallFormulaTF === false && currentDate), ASAP rows included — an ASAP row's date is hand-set like any other and must be clearable without losing the flag.
  *   - Clear ASAP button is only shown when the row currently has ASAP set (isAsap === true).
  *   - Ship ↔ Install auto-estimate only runs while `linked` is true (default when gap is empty or 1 biz day). Break (N6) sets linked false; Link re-enables and re-applies ship = install − 1.
  *   - N5: at Ship Planning / Ship Complete, open unlinked (Break / manual mode by default).
@@ -119,6 +121,11 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
     const handleAsapToggle = (e) => {
         // Flag only — the date fields stay live and stay filled. ASAP marks the row a rush;
         // the date is still the user's to set, and Save below refuses without one.
+        //
+        // Only ever turns ASAP ON: the box is disabled once the flag is set (see the
+        // checkbox below), because Save has no path that clears it — that is Clear ASAP's
+        // job. Leaving it un-checkable silently was a dead control: the box read
+        // unchecked, Save wrote the date, and the row stayed red with no explanation.
         setAsapToggle(e.target.checked);
         setError('');
     };
@@ -130,22 +137,24 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
     const turningAsapOn = asapToggle && !isAsap;
 
     const handleSave = () => {
+        // Validate BEFORE writing anything. The ship date used to be persisted up front,
+        // so a rejected "Set ASAP" still saved it — and saved it again on the retry.
+        if (turningAsapOn && !dateInput) {
+            // ASAP is a flag on a real date, not a date of its own — refuse without one.
+            setError('ASAP needs a Start Install date — pick the date this has to go in by');
+            return;
+        }
+        if (!dateInput && !installerChanged && !shipChanged) {
+            setError('Please select an install date, ship date, or installer');
+            return;
+        }
         // Ship date is independent of install/ASAP — persist it whenever it changed, so it
         // works alongside a date/installer save or on its own.
         if (shipChanged && onSaveShipDate) {
             onSaveShipDate(shipDateInput || null);
         }
         if (turningAsapOn) {
-            // ASAP is a flag on a real date, not a date of its own — refuse without one.
-            if (!dateInput) {
-                setError('ASAP needs a Start Install date — pick the date this has to go in by');
-                return;
-            }
             onSetAsap(installerChanged ? installer : undefined, dateInput);
-            return;
-        }
-        if (!dateInput && !installerChanged && !shipChanged) {
-            setError('Please select an install date, ship date, or installer');
             return;
         }
         if (!dateInput && !installerChanged) {
@@ -206,7 +215,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
                             type="checkbox"
                             checked={asapToggle}
                             onChange={handleAsapToggle}
-                            disabled={asapLocked}
+                            disabled={asapLocked || isAsap}
                             className="mt-1 h-4 w-4 accent-red-600"
                         />
                         <span>
@@ -214,7 +223,9 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
                             <span className="block text-xs text-gray-500">
                                 {asapLocked
                                     ? 'Unavailable once install has started.'
-                                    : 'Marks the release a rush (red) and rips to Shipping Planning at Paint Complete. Set the Start Install date below — ASAP will not pick one for you.'}
+                                    : isAsap
+                                        ? 'This release is flagged a rush. Use Clear ASAP below to remove it; the date stays.'
+                                        : 'Marks the release a rush (red) and rips to Shipping Planning at Paint Complete. Set the Start Install date below — ASAP will not pick one for you.'}
                             </span>
                         </span>
                     </label>
@@ -304,7 +315,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
 
                     <div className="flex justify-between gap-3">
                         <div className="flex gap-2">
-                            {!isAsap && startInstallFormulaTF === false && currentDate && onClearHardDate && (
+                            {startInstallFormulaTF === false && currentDate && onClearHardDate && (
                                 <button
                                     onClick={onClearHardDate}
                                     className="px-4 py-2 bg-red-100 border border-red-300 text-red-700 rounded-lg font-medium hover:bg-red-200 transition-all"

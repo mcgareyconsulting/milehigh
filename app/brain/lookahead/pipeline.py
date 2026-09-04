@@ -72,7 +72,10 @@ def classify_install_date(rel) -> str:
 
     if not start:
         return KIND_MISSING
-    if asap:
+    # ASAP labels a HARD date as a rush; on a projected date it is just a flag, and
+    # schedule_builder maps KIND_ASAP to SOURCE_HARD, so letting it win here would
+    # promote an estimate to a commitment.
+    if asap and formula_tf is False:
         return KIND_ASAP
     if no_color:
         return KIND_NEUTRAL
