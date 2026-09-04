@@ -28,6 +28,7 @@ import StartInstallEditor from './StartInstallEditor';
 import { JobsTableRow } from './JobsTableRow';
 import ReleaseNumberLink from './ReleaseNumberLink';
 import { ASAP_PROPAGATED_ROW_CLASS } from './AsapPropagationTag';
+import { PhotoBadge } from './PhotoBadge';
 import { isCompleteStage } from '../utils/stageProgress';
 import { formatDateShort, formatCellValue } from '../utils/formatters';
 
@@ -104,6 +105,9 @@ export default function JobLogCard({
     const compEta = formatDateShort(job['Comp. ETA']);
     const released = formatDateShort(job['Released']);
     const notes = (job['Notes'] || '').toString().trim();
+    // Comes down with the row (batched server-side), so the card can say a release has
+    // photos without anyone opening it to find out.
+    const photoCount = Number(job.photo_count) || 0;
     const complete = isCompleteStage(stage);
     // Same background rule as the table (JobsTableRow's rowBgClass — keep in sync): complete
     // rows are muted + receding, otherwise alternate white/blue banding. Applies to the BODY
@@ -188,7 +192,11 @@ export default function JobLogCard({
                         )}
                     </span>
                 </div>
-                <div className="mt-0.5 text-center text-sm truncate" title={description ? `${jobName} — ${description}` : jobName}>
+                <div
+                    className="mt-0.5 text-center text-sm truncate"
+                    title={`${description ? `${jobName} — ${description}` : jobName}${photoCount ? (photoCount === 1 ? ' · 1 photo' : ` · ${photoCount} photos`) : ''}`}
+                >
+                    <PhotoBadge count={photoCount} className="mr-1 opacity-70" />
                     <span className="font-bold">{jobName}</span>
                     {description && <span className="opacity-70"> — {description}</span>}
                 </div>
