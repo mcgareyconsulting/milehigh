@@ -32,6 +32,7 @@ import Rail from './Rail';
 import BBChatWidget, { CarmenButton } from './BBChatWidget';
 import PatchNotesModal from './PatchNotesModal';
 import { CURRENT_VERSION } from '../data/patchNotes';
+import { SHOW_INVOICING_NAV } from '../constants/navFlags';
 
 function AppShellInner({ isAuthenticated, subcontractor }) {
   const navigate = useNavigate();
@@ -208,7 +209,7 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
                 {navBtn('/events', 'Events')}
                 {navBtn('/todos', 'To-Dos')}
                 {navBtn('/install-schedule', 'Install Schedule')}
-                {canSeeReport && navBtn('/invoicing-report', 'Invoicing')}
+                {SHOW_INVOICING_NAV && canSeeReport && navBtn('/invoicing-report', 'Invoicing')}
                 {/* Rentals nav removed 2026-07-12 (company change) — /rental-reports route + backend stay for direct URL / re-enable */}
                 {/* Subs collapses Subcontractors (invite/registry) + Invoice Paid under one stub */}
                 {isAdmin && navBtn('/admin/users', 'Users')}

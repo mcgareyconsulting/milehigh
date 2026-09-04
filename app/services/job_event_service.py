@@ -25,7 +25,8 @@ class JobEventService:
     """Service for managing job events"""
 
     @staticmethod
-    def create(job, release, action, source, payload, external_user_id=None):
+    def create(job, release, action, source, payload, external_user_id=None,
+               internal_user_id=None):
         """
         Create a new job event with deduplication.
 
@@ -36,6 +37,10 @@ class JobEventService:
             source: Base source string (e.g., 'Brain', 'Trello', 'Excel', 'Procore')
             payload: Event payload dict
             external_user_id: Optional external user id (e.g. Trello member id, Procore user id)
+            internal_user_id: Optional users.id to attribute the event to. Pass it when the
+                actor is known but the request context is not the source of truth (e.g. a
+                command holding an explicit uploader id). Takes precedence over resolution
+                from `source`.
 
         Returns:
             JobEvents object if created
@@ -47,12 +52,15 @@ class JobEventService:
         import hashlib
         import time
 
-        # Resolve internal_user_id: Brain uses get_current_user(); Trello resolves via users.trello_id
-        internal_user_id = None
-        if source == "Brain":
+        # Resolve internal_user_id: an explicit id wins; Brain otherwise uses
+        # get_current_user(); Trello resolves via users.trello_id.
+        # The Brain test matches on the prefix, not the whole string: photo and
+        # markup events used to stamp "Brain:<username>", which silently failed
+        # an equality check and left every one of them with no author.
+        if internal_user_id is None and str(source).split(":")[0] == "Brain":
             user = get_current_user()
             internal_user_id = user.id if user else None
-        elif source == "Trello" and external_user_id:
+        elif internal_user_id is None and source == "Trello" and external_user_id:
             from app.trello.helpers import resolve_internal_user_id_from_trello
             internal_user_id = resolve_internal_user_id_from_trello(external_user_id)
 
@@ -124,7 +132,8 @@ class JobEventService:
             logger.warning("release_event_close_missing", event_id=event_id)
 
     @staticmethod
-    def create_and_close(job, release, action, source, payload, external_user_id=None):
+    def create_and_close(job, release, action, source, payload, external_user_id=None,
+                         internal_user_id=None):
         """Create a job event and immediately mark it as applied.
 
         Use this for DB-only changes that have no async outbox step.
@@ -134,6 +143,7 @@ class JobEventService:
             job=job, release=release, action=action,
             source=source, payload=payload,
             external_user_id=external_user_id,
+            internal_user_id=internal_user_id,
         )
         if event:
             JobEventService.close(event.id)

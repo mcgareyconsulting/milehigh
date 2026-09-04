@@ -1246,8 +1246,11 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, s
             if is_new_multiple:
                 record.was_multiple_assignees = True
             elif record.was_multiple_assignees and not is_new_multiple:
-                # Was multiple, now single - this is the bounce-back scenario
-                if UrgencyService.bump_order_number_to_urgent(record, submittal_id, webhook_ball_value):
+                # Was multiple, now single - this is the bounce-back scenario.
+                # promote_group_return, not bump_order_number_to_urgent: a row that left
+                # 'Open' had its order_number cleared below, so it bounces back UNNUMBERED
+                # and the plain bump would no-op it into the bucket nobody reads (BUG-19).
+                if UrgencyService.promote_group_return(record, submittal_id, webhook_ball_value):
                     order_bumped = True
                 
                 # Reset the flag after handling bounce-back

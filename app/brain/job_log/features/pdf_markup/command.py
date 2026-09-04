@@ -21,16 +21,6 @@ from app.brain.job_log.features.pdf_markup.storage import save_pdf, delete_pdf_f
 logger = get_logger(__name__)
 
 
-def _username_suffix(user_id: Optional[int]) -> str:
-    if not user_id:
-        return "Brain"
-    from app.models import User
-    user = db.session.get(User, user_id)
-    if not user:
-        return "Brain"
-    return f"Brain:{user.username}"
-
-
 @dataclass
 class UploadInitialDrawingCommand:
     """First-time upload of a release's PDF (creates v1)."""
@@ -74,7 +64,8 @@ class UploadInitialDrawingCommand:
                 job=release.job,
                 release=release.release,
                 action='upload_drawing',
-                source=_username_suffix(self.uploaded_by_user_id),
+                source="Brain",
+                internal_user_id=self.uploaded_by_user_id,
                 payload={
                     'from': None,
                     'to': {
@@ -146,7 +137,8 @@ class SaveDrawingVersionCommand:
                 job=release.job,
                 release=release.release,
                 action='save_drawing_version',
-                source=_username_suffix(self.uploaded_by_user_id),
+                source="Brain",
+                internal_user_id=self.uploaded_by_user_id,
                 payload={
                     'from': {'version': source.version_number, 'version_id': source.id},
                     'to': {

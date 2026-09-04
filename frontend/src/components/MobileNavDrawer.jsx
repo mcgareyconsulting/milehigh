@@ -12,6 +12,7 @@
  */
 import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { SHOW_INVOICING_NAV } from '../constants/navFlags';
 
 const NAV_ITEMS = [
     { label: 'Projects', path: '/projects' },
@@ -148,7 +149,7 @@ export default function MobileNavDrawer({
                                 </button>
                             ))}
 
-                            {canSeeReport && (
+                            {SHOW_INVOICING_NAV && canSeeReport && (
                                 <button
                                     type="button"
                                     onClick={() => go('/invoicing-report')}

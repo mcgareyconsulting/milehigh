@@ -374,7 +374,7 @@ def create_app():
         db_name = "not set"
     logger.info("database_configured", host=db_host, database=db_name)
     if app.config.get("TRELLO_MOCK"):
-        logger.info("TRELLO_MOCK enabled — outbound move_card calls will be simulated and inbound webhooks dropped")
+        logger.info("TRELLO_MOCK enabled — all outbound Trello writes are simulated (every outbox action, plus direct card/mirror updates) and inbound webhooks dropped")
 
     # Get allowed origins from environment variable
     allowed_origins = app.config.get("CORS_ORIGINS", "*")

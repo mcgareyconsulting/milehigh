@@ -23,16 +23,6 @@ from app.brain.job_log.features.photos.storage import (
 logger = get_logger(__name__)
 
 
-def _username_suffix(user_id: Optional[int]) -> str:
-    if not user_id:
-        return "Brain"
-    from app.models import User
-    user = db.session.get(User, user_id)
-    if not user:
-        return "Brain"
-    return f"Brain:{user.username}"
-
-
 @dataclass
 class UploadPhotoCommand:
     """Attach a single image to a release."""
@@ -73,7 +63,8 @@ class UploadPhotoCommand:
                 job=release.job,
                 release=release.release,
                 action='upload_photo',
-                source=_username_suffix(self.uploaded_by_user_id),
+                source="Brain",
+                internal_user_id=self.uploaded_by_user_id,
                 payload={
                     'from': None,
                     'to': {

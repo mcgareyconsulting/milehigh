@@ -1,7 +1,7 @@
 /**
  * Attachment hub for a release:
  *   - Standalone modal: two-column drawings + photos (legacy layout).
- *   - Embedded in ReleaseHubModal: left rail (drawings/findings/photos) + thin
+ *   - Embedded in ReleaseHubModal: left rail (drawings/findings) + thin
  *     read-only PDF viewer on the right with finding cite jumps.
  *
  * PDFs → drawing versions; images → photos. Markup authoring stays in PdfMarkupModal.
@@ -85,7 +85,6 @@ export function PdfVersionHistoryModal({
     const fileInputRef = useRef(null);
     const pdfInputRef = useRef(null);
     const cameraInputRef = useRef(null);
-    const photoInputRef = useRef(null);
 
     const loadVersions = async () => {
         if (!releaseId) return;
@@ -876,86 +875,10 @@ export function PdfVersionHistoryModal({
                             </ul>
                         )}
 
-                        {/* PHOTOS */}
-                        <div className="flex items-center justify-between gap-2" style={{ marginBottom: 10, marginTop: 8 }}>
-                            <span className="text-jl-label font-bold uppercase text-ink-3">Photos</span>
-                            <div className="flex items-center gap-1.5">
-                                <button
-                                    type="button"
-                                    onClick={() => photoInputRef.current?.click()}
-                                    disabled={photoBusy}
-                                    style={{
-                                        ...pillBtn,
-                                        background: 'var(--accent-soft)',
-                                        color: 'var(--accent)',
-                                        opacity: photoBusy ? 0.5 : 1,
-                                    }}
-                                >
-                                    + Upload photo
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => cameraInputRef.current?.click()}
-                                    disabled={photoBusy}
-                                    className="font-semibold border border-hairline-strong bg-surface text-ink-2"
-                                    style={{
-                                        fontSize: 11.5,
-                                        padding: '4px 10px',
-                                        borderRadius: 999,
-                                        opacity: photoBusy ? 0.5 : 1,
-                                    }}
-                                >
-                                    📷 Take
-                                </button>
-                                <input
-                                    ref={photoInputRef}
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={async (e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) await uploadPhoto(file, gateStage);
-                                        if (photoInputRef.current) photoInputRef.current.value = '';
-                                    }}
-                                />
-                                <input
-                                    ref={cameraInputRef}
-                                    type="file"
-                                    accept="image/*"
-                                    capture="environment"
-                                    className="hidden"
-                                    onChange={handleCameraCapture}
-                                />
-                            </div>
-                        </div>
-                        {photosLoading && <p className="text-jl-2 text-ink-3 italic">Loading…</p>}
-                        {!photosLoading && photos.length === 0 && (
-                            <p className="text-jl-2 text-ink-3 italic">No photos yet.</p>
-                        )}
-                        {!photosLoading && photos.length > 0 && (
-                            <div
-                                className="grid"
-                                style={{ gridTemplateColumns: '1fr 1fr', gap: 8 }}
-                            >
-                                {photos.map((p) => (
-                                    <a
-                                        key={p.id}
-                                        href={`${API_BASE_URL}/brain/releases/${releaseId}/photos/${p.id}/file`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="block border border-hairline overflow-hidden bg-surface-2"
-                                        style={{ borderRadius: 8, height: 96 }}
-                                        title={p.note || p.original_filename || 'photo'}
-                                    >
-                                        <img
-                                            src={`${API_BASE_URL}/brain/releases/${releaseId}/photos/${p.id}/file`}
-                                            alt={p.original_filename || 'photo'}
-                                            className="w-full h-full object-cover"
-                                        />
-                                    </a>
-                                ))}
-                            </div>
-                        )}
+                        {/* Photos moved to the hub's Details pane (the shipping-guy click
+                            path); this rail is drawings + PDF review only. The standalone
+                            modal below still shows photos — that is where note editing,
+                            deletes and the stage-photo gate live. */}
 
                         {gateStage && (
                             <div

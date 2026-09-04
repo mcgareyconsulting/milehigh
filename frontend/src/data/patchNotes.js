@@ -17,6 +17,149 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.361',
+    date: 'September 3, 2026',
+    summary:
+      'The Timeline stops being a picture and starts being the schedule — drag a card out of the new Unassigned tray onto a crew and the work is booked — alongside a rebuilt release hub, a Users page where admins hand out permissions, install-date colors that hold until install actually starts, and an iPad that survives being turned sideways.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Drag the Timeline to schedule the work',
+        detail:
+          'Pinned to the left of the Timeline is an Unassigned tray: everything the shop is done with — past paint complete, stored at Mile High, or in shipping planning — that nobody is scheduled to install. Drag a card out of the tray onto a crew\'s lane and it assigns that crew and stamps a hard Start install on the day under your pointer, in one move. Drag it back to the tray and the crew comes off, date untouched. These are real writes, not a view you rearranged: they cascade like any Job Log edit and every one lands as an undoable entry in the Change Log. Dragging is admin-only — everyone else gets the Timeline exactly as it was — and it is built on press-and-hold pointer drag, so it works on the iPad, which the old drag never did.',
+      },
+      {
+        type: 'new',
+        title: 'The tray reads as a queue, not a pile',
+        detail:
+          'Every card in the Unassigned tray shows the Start install date it is waiting on, and the tray is ordered by that date — soonest first, rush jobs above all of it, undated work at the bottom. A projected date is shown next to a hard one, marked with a ~ and set in grey so a guess never reads as a promise; both are on the list because either one is a claim about when the work is wanted. The card\'s border carries the color the Job Log already gives that date: red for ASAP, amber for a hard date gone by, green for one still ahead, grey for a projection or nothing. Drop the card on a crew and it takes that crew\'s color instead — in a lane the question is whose work it is, not when it is due.',
+      },
+      {
+        type: 'new',
+        title: 'The shipping lanes accept drops too',
+        detail:
+          'Dropping a card on Shipping Planning or Shipping Completed changes its stage and nothing else — no date is written, because a shipping lane\'s position is derived from dates you already set, and honoring the drop column would move an install date you never aimed at. Hovering washes the whole lane and names the stage it will set, since the change leaves no mark where you let go. Dropping onto the lane a release already sits in does nothing, and Shipping Completed refuses a release with no hard Start install date — the lane is anchored on that date, so the card would silently vanish off the board.',
+      },
+      {
+        type: 'improved',
+        title: 'The release hub Details pane, rebuilt',
+        detail:
+          'Details is now a dossier: photos, notes, and materials down the left, a condensed schedule and metadata column on the right, and active to-dos full width beneath. The stage pill and the banana row moved up into the header where they read at a glance, and dates are only ever edited through the same install-date dialog the Job Log row opens, so ASAP, Clear hard date, and the ship/install link rules have exactly one implementation. Two older release popups are gone — the Timeline, Archive, and Subs Invoice Paid all open the same hub the Job Log does, so a release looks the same no matter where you clicked it.',
+      },
+      {
+        type: 'fixed',
+        title: 'The Change Log stops speaking robot',
+        detail:
+          'Photo and drawing entries record something happening rather than a field changing, so running them through the from → to chips printed "[object Object]" for an upload and "— → —" for a delete. They now get a sentence — "Added shop-floor.jpg at Paint Complete", "Markup saved — v2 → v3" — with the raw payload still one click away. Those entries also credited nobody: the name is now recorded going forward, and a one-time cleanup fills it back in on the rows already written.',
+      },
+      {
+        type: 'new',
+        title: 'A Users page, and permissions you can hand out from it',
+        detail:
+          'The new Users page lists everyone — employees and subcontractors — with their contact details and role. Admins can then set an employee\'s permission level in place: Admin, Drafter, or Default, one choice rather than a pile of checkboxes, saved the moment you pick it. Two guards keep the page from locking itself: you cannot change your own role, and the last remaining admin cannot be demoted. Subcontractors are listed but have no role to assign.',
+      },
+      {
+        type: 'fixed',
+        title: 'The iPad can be turned sideways again',
+        detail:
+          'Rotating an iPad crosses the width where the Job Log, Archive, and Drafting Work Load swap between the table and the card grid, and that swap tore down whatever was open — a modal you were typing in, and your place in the list. All three pages now hold the open dialog and the scroll position across a rotation, including the reload Safari sometimes does on its own.',
+      },
+      {
+        type: 'fixed',
+        title: 'Install date colors hold until install actually starts',
+        detail:
+          'A yellow overdue date is a scored metric, and washing it white the moment a release hit Shipping Planning made the problem disappear while the install was still ahead of us. The color now survives the shipping stages and drops only at Install Start or later, from the stage change itself rather than the date arriving — so a slipping date keeps shouting. Setting ASAP on work that has already started is refused outright instead of repainting the row, an ASAP row\'s date is rewritten to the day install began, and the screen finally agrees with all of it: the front end had been carrying its own stale copy of the old rule in three places, which is why none of this was visible before.',
+      },
+      {
+        type: 'fixed',
+        title: 'Work bounced back from a review group goes to the top',
+        detail:
+          'When a submittal leaves Open its order number is cleared, so coming back from a group of reviewers to a single drafter it landed in the unnumbered bucket at the bottom of the list where nobody looks — real work has been missed this way. That return now climbs the urgency ladder like any other bump. A straight drafter-to-drafter handoff is deliberately left alone: that is a reassignment someone tells you about, not a bounce-back, and it should not jump the queue.',
+      },
+      {
+        type: 'fixed',
+        title: 'A drafting status no longer outlives its drafter',
+        detail:
+          'HOLD, STARTED, and NEED VIF are set against whoever holds the ball, so they are stale the second the submittal moves to someone else — and the Drafting Work Load kept showing held work that was not held. The status is now dropped whenever ball-in-court changes, on all three paths that can move it, and the drop is recorded rather than happening quietly.',
+      },
+      {
+        type: 'fixed',
+        title: 'Fab order stops sticking at paint',
+        detail:
+          'The tier rules for fab order only ran when a stage change came through the Job Log dropdown. The other three paths each answered differently — most importantly the inbound Trello sync, which is how the shop actually moves work, never touched fab order at all, so a card dragged out of the paint list kept its old tier forever. All four paths now share one rule set, backward drift repairs itself, and the value is written even when the audit entry is a duplicate.',
+      },
+      {
+        type: 'fixed',
+        title: 'Archiving no longer hands a release number back',
+        detail:
+          'The Drafting Work Load drew its next release number from active work only, so archiving a release quietly freed its number — and the Job Log, which counts archived rows, rejected the release when it was finally created. Archived releases on the same job are now counted as taken, scoped to that job so the number range does not burn down.',
+      },
+      {
+        type: 'improved',
+        title: 'The archive sweep waits for Complete',
+        detail:
+          'Marking Install Prog as X cascades the stage to Install Complete, so sweeping on Install Prog and Invoiced alone pulled in releases that were installed but not closed out. Archiving now also requires the stage to be Complete — the terminal state a person moves the release to on purpose.',
+      },
+      {
+        type: 'improved',
+        title: 'Budget and earned dollars on Invoice Paid',
+        adminOnly: true,
+        detail:
+          'The Invoice Paid table gained install hours, a budget figure computed from them, and an estimated billable column — install progress against that budget, so you can see what a release has earned before the sub\'s number arrives. Install progress itself is read-only here; it belongs to the Job Log. Rows open the full release hub now, archived ones included.',
+      },
+      {
+        type: 'improved',
+        title: 'Calibri, and bigger',
+        detail:
+          'The app moved off IBM Plex onto Calibri, everywhere — on screen, in the exported Job Log PDF, and in the look-ahead PDFs — and the base type size went up across the tables, modals, and metrics. The mono role font is gone; there is one typeface now.',
+      },
+      {
+        type: 'improved',
+        title: 'Carmen moves next to the bell',
+        detail:
+          'Carmen\'s launcher is now a circle beside the notification bell in the upper-right corner, and the chat drops down from that bubble instead of floating somewhere else. The panel resizes from real grab bars. Separately, her meeting bot is pinned to English — an unset language setting had it autodetect a production standup as Portuguese and translate a line of it.',
+      },
+      {
+        type: 'fixed',
+        title: 'Photos from a phone actually upload',
+        detail:
+          'A phone camera produces a 3–12 MB image, and over LTE that could take longer to send than the server was willing to wait — the upload just failed. Photos are now downscaled and re-encoded in the browser before they go, roughly ten times smaller with no visible loss on a job-site photo, with the phone\'s rotation applied so shots stop arriving sideways. The server also waits longer.',
+      },
+      {
+        type: 'improved',
+        title: 'The Drafting Work Load modal grows up',
+        detail:
+          'The DWL record modal was less than half the width of the Job Log\'s; both now read their size from one place, so they cannot drift apart again. Its Details strip no longer collapses — Rel sits at the top of it, since assigning a Rel was the reason anyone opened the strip — and the documents panel holds its shape while loading instead of popping as files arrive. The Invoicing report also comes out of the navigation; the page itself is untouched and its link still works.',
+      },
+      {
+        type: 'fixed',
+        title: 'The reload banner stops covering the corner',
+        detail:
+          'The "new version, reload" notice spanned the full width and sat on top of the notification bell and Carmen. It is a centered pill now, clear of that corner, and waving it off sticks — it comes back only when a genuinely newer version deploys, not every time you switch tabs.',
+      },
+      {
+        type: 'improved',
+        title: 'Complaint cards stop burying their photos',
+        adminOnly: true,
+        detail:
+          'A long write-up on a complaint pushed the screenshots and the whole activity thread off the bottom of the card. The description now scrolls inside its own capped pane with the photos pinned below it, so attachments and the conversation stay on screen no matter how much someone had to say.',
+      },
+      {
+        type: 'fixed',
+        title: 'Look-ahead PDFs start where the window starts',
+        detail:
+          'A single past-dated bar dragged the whole chart\'s start date backward, squeezing the three weeks that matter into the right-hand edge. The x-axis now begins at the window you asked for; bars running past the end still stretch it.',
+      },
+      {
+        type: 'fixed',
+        title: 'Credentials and dead links out of the plumbing',
+        adminOnly: true,
+        detail:
+          'Three operational scripts had database passwords typed into them, and the audit report quoted the prefixes back; both are scrubbed. Outbound subcontractor emails now refuse to build a link against the localhost default outside local development, so a misconfigured environment costs neither a dead invite nor a burned token.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.339',
     date: 'August 10, 2026',
     summary:

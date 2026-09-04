@@ -23,6 +23,14 @@ export const ACTIVITY_ACTIONS = new Set([
     'update_ship_date',
     'update_start_install',
     'clear_hard_date',
+    // Attachment events: a photo landing on a release is activity, and the rail
+    // is where the shop looks first. Their payloads nest an object under `to`,
+    // so each gets an explicit branch below rather than the from/to fallback.
+    'upload_photo',
+    'delete_photo',
+    'upload_drawing',
+    'save_drawing_version',
+    'delete_drawing_version',
 ]);
 
 /** Display a date payload value (ISO date or ASAP flag) without UTC off-by-one. */
@@ -87,6 +95,38 @@ export function summarizeActivity(event) {
 
     if (action === 'clear_hard_date') {
         return { text: 'Hard start-install date cleared', author };
+    }
+
+    if (action === 'upload_photo') {
+        const meta = to && typeof to === 'object' ? to : {};
+        const bits = [meta.filename, meta.stage ? `at ${meta.stage}` : null].filter(Boolean);
+        return { text: bits.length ? `Photo added — ${bits.join(' · ')}` : 'Photo added', author };
+    }
+
+    if (action === 'delete_photo') {
+        return { text: 'Photo deleted', author };
+    }
+
+    if (action === 'upload_drawing') {
+        const meta = to && typeof to === 'object' ? to : {};
+        return {
+            text: meta.filename ? `Drawing uploaded — ${meta.filename}` : 'Drawing uploaded',
+            author,
+        };
+    }
+
+    if (action === 'save_drawing_version') {
+        const prev = from && typeof from === 'object' ? from.version : null;
+        const next = to && typeof to === 'object' ? to.version : null;
+        if (prev != null && next != null) return { text: `Markup saved — v${prev} → v${next}`, author };
+        return { text: 'Markup saved', author };
+    }
+
+    if (action === 'delete_drawing_version') {
+        return {
+            text: payload.version != null ? `Drawing v${payload.version} deleted` : 'Drawing version deleted',
+            author,
+        };
     }
 
     return null;

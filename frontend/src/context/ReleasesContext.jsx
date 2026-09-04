@@ -3,7 +3,7 @@
  * schema_version: 1
  * purpose: App-level store for the releases dataset — lifts the cursor-merge + 30s polling engine out of useJobsDataFetching so Job Log, PM Board, and the Timeline share one load that survives navigation.
  * exports:
- *   ReleasesProvider: Provider that fetches all releases once (gated on `enabled`) then polls; holds jobs/columns/loading/error/lastUpdated
+ *   ReleasesProvider: Provider that fetches all releases once (gated on `enabled`) then polls; holds jobs/columns/loading/error/lastUpdated, and exposes patchJob for optimistic write surfaces
  *   useReleases: Accessor hook (throws outside the provider); returns the same shape the old useJobsDataFetching hook returned
  *   mergeJobs: Pure cursor-merge reducer (add/update/soft-delete/archive removal + id sort) — exported for unit tests
  * imports_from: [react, ../services/jobsApi]
@@ -13,6 +13,8 @@
  *   - Polling pauses when the browser tab is hidden and resumes with an immediate fetch on visibility
  *   - Soft-deleted or archived jobs (is_active=false / is_archived=true) are removed from the in-memory array on merge
  *   - Initial fetch + polling only run while `enabled` is true (prevents 401 spam before login)
+ *   - patchJob merges FIELDS into one row by id; it never replaces the row, so an in-flight poll
+ *     carrying fresher values for other columns is not clobbered. Rollback is the caller's job.
  */
 import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { jobsApi } from '../services/jobsApi';
@@ -326,6 +328,29 @@ export function ReleasesProvider({ children, enabled = true }) {
         [columns]
     );
 
+    /**
+     * Apply a field patch to one release in the shared array, immediately.
+     *
+     * For write surfaces that need the UI to move the instant the user acts rather than on the next
+     * 30s poll — the Timeline's drag-to-assign, where a card snapping back to its old lane for a
+     * second reads as a failed drop. The caller owns the round trip: patch optimistically, PATCH the
+     * API, and patch back with the original values if the request fails.
+     *
+     * Deliberately field-level and not a full row replace, so a concurrent poll that merges fresher
+     * data for other columns is not clobbered.
+     */
+    const patchJob = useCallback((id, fields) => {
+        setJobs((prev) => {
+            let hit = false;
+            const next = prev.map((j) => {
+                if (j.id !== id) return j;
+                hit = true;
+                return { ...j, ...fields };
+            });
+            return hit ? next : prev;   // unknown id → referential no-op, no wasted render
+        });
+    }, []);
+
     const value = useMemo(() => ({
         jobs: jobsWithMaterial,
         columns: columnsWithMaterial,
@@ -335,7 +360,8 @@ export function ReleasesProvider({ children, enabled = true }) {
         refetch: fetchData,
         fetchAll: fetchAllData,
         refreshMaterialSummary: fetchMaterialSummary,
-    }), [jobsWithMaterial, columnsWithMaterial, loading, error, lastUpdated, fetchData, fetchAllData, fetchMaterialSummary]);
+        patchJob,
+    }), [jobsWithMaterial, columnsWithMaterial, loading, error, lastUpdated, fetchData, fetchAllData, fetchMaterialSummary, patchJob]);
 
     return (
         <ReleasesContext.Provider value={value}>

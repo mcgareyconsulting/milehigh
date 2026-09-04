@@ -1,30 +1,44 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Admin-only user directory — first T2 pass. Lists First, Last, email, role
- *          split into Employees (users table) and Subcontractors (subcontractors table).
- *          Read-only; invite / permissions / reset / block come later.
+ * purpose: Admin-only user directory + permissions management. Lists First, Last,
+ *          email, role split into Employees (users table) and Subcontractors
+ *          (subcontractors table). Employee role is editable in place —
+ *          Admin / Drafter / Default; subcontractors are read-only.
  * exports:
  *   UserDirectory: Page component, admin-gated client-side; server also requires admin.
  * imports_from: [react, ../services/directoryApi, ../utils/auth]
  * imported_by: [App.jsx]
  * invariants:
  *   - Renders an access message (no fetch) unless the authenticated user is_admin.
+ *   - Roles are mutually exclusive (one of admin/drafter/default) and only apply to
+ *     employees; the Subcontractor group has no permission control and is unaffected.
+ *   - The signed-in admin's own row is not editable (the server rejects it too, so the
+ *     disabled control is a courtesy, never the authorization).
+ *   - Role changes save immediately and optimistically; a failed PATCH reverts the row
+ *     and surfaces the server's message.
  *   - Mirrors SubcontractorAdmin's mobile-first card list (below sm:) / table (sm:+)
  *     and token classes (canvas, surface, hairline, ink, head-bg).
  *   - Desktop tables share one table-fixed colgroup so Employees and Subcontractors
  *     columns line up (auto-sized tables drifted).
  */
 import { useState, useEffect } from 'react';
-import { fetchDirectory } from '../services/directoryApi';
+import { fetchDirectory, updateEmployeeRole } from '../services/directoryApi';
 import { checkAuth } from '../utils/auth';
 
 const ROLE_BADGE = {
     Admin: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
     Drafter: 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300',
-    Employee: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+    Default: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
     Subcontractor: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
 };
+
+// Fallback if the server response predates the `roles` key.
+const DEFAULT_ROLES = [
+    { key: 'admin', label: 'Admin' },
+    { key: 'drafter', label: 'Drafter' },
+    { key: 'default', label: 'Default' },
+];
 
 function display(value) {
     return value ? value : '—';
@@ -39,7 +53,7 @@ function roleClass(role) {
     if (ROLE_BADGE[role]) return ROLE_BADGE[role];
     if (role && role.includes('Admin')) return ROLE_BADGE.Admin;
     if (role && role.includes('Drafter')) return ROLE_BADGE.Drafter;
-    return ROLE_BADGE.Employee;
+    return ROLE_BADGE.Default;
 }
 
 function RoleBadge({ role }) {
@@ -47,6 +61,35 @@ function RoleBadge({ role }) {
         <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${roleClass(role)}`}>
             {display(role)}
         </span>
+    );
+}
+
+// The editable permission control. A bare <select> rather than a modal: role is the
+// only writable field on the row, so a round-trip through a dialog buys nothing.
+//
+// The control carries its OWN role's tint, drawn from the same ROLE_BADGE palette the badge uses,
+// so a directory of thirty people can be scanned for admins at a glance instead of read row by row.
+// The tint is on the control, not the <option>s: option background/colour is honoured by Firefox
+// and ignored by Safari and Chrome on macOS, so styling them would look broken for most of the
+// company. Each option keeps a •-prefixed label instead, which every browser does render.
+function RoleSelect({ row, roles, disabled, pending, onChange }) {
+    const currentKey = row.role_key || 'default';
+    const currentLabel = roles.find((r) => r.key === currentKey)?.label || row.role;
+    return (
+        <select
+            aria-label={`Role for ${fullName(row)}`}
+            className={`w-full max-w-[9rem] rounded-lg border border-hairline px-2 py-1 text-xs font-semibold
+                        focus:outline-none focus:ring-2 focus:ring-accent-500 ${roleClass(currentLabel)}
+                        ${disabled || pending ? 'opacity-60 cursor-not-allowed' : ''}`}
+            value={currentKey}
+            disabled={disabled || pending}
+            title={disabled ? 'You cannot change your own role' : undefined}
+            onChange={(e) => onChange(row, e.target.value)}
+        >
+            {roles.map((r) => (
+                <option key={r.key} value={r.key}>{r.label}</option>
+            ))}
+        </select>
     );
 }
 
@@ -61,7 +104,20 @@ const COLGROUP = (
     </colgroup>
 );
 
-function DirectorySection({ title, rows }) {
+function DirectorySection({ title, rows, editableRoles, roles, currentUserId, pendingIds, onRoleChange }) {
+    const renderRole = (row) => {
+        if (!editableRoles) return <RoleBadge role={row.role} />;
+        return (
+            <RoleSelect
+                row={row}
+                roles={roles}
+                disabled={row.id === currentUserId}
+                pending={pendingIds.has(row.id)}
+                onChange={onRoleChange}
+            />
+        );
+    };
+
     return (
         <section className="mb-8">
             <div className="flex items-baseline gap-2 mb-3">
@@ -82,7 +138,7 @@ function DirectorySection({ title, rows }) {
                                     <span className="text-sm font-semibold text-ink">
                                         {fullName(row)}
                                     </span>
-                                    <RoleBadge role={row.role} />
+                                    {renderRole(row)}
                                 </div>
                                 <div className="text-xs text-ink-3">{display(row.email)}</div>
                             </div>
@@ -107,7 +163,7 @@ function DirectorySection({ title, rows }) {
                                         <td className="px-3 py-2 text-ink truncate">{display(row.last_name)}</td>
                                         <td className="px-3 py-2 text-ink-2 truncate">{display(row.email)}</td>
                                         <td className="px-3 py-2 whitespace-nowrap">
-                                            <RoleBadge role={row.role} />
+                                            {renderRole(row)}
                                         </td>
                                     </tr>
                                 ))}
@@ -122,13 +178,19 @@ function DirectorySection({ title, rows }) {
 
 export default function UserDirectory() {
     const [authorized, setAuthorized] = useState(null);
+    const [currentUserId, setCurrentUserId] = useState(null);
     const [employees, setEmployees] = useState([]);
     const [subcontractors, setSubcontractors] = useState([]);
+    const [roles, setRoles] = useState(DEFAULT_ROLES);
+    const [pendingIds, setPendingIds] = useState(new Set());
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        checkAuth().then((user) => setAuthorized(!!(user && user.is_admin)));
+        checkAuth().then((user) => {
+            setAuthorized(!!(user && user.is_admin));
+            setCurrentUserId(user ? user.id : null);
+        });
     }, []);
 
     useEffect(() => {
@@ -141,6 +203,7 @@ export default function UserDirectory() {
                 if (cancelled) return;
                 setEmployees(data.employees || []);
                 setSubcontractors(data.subcontractors || []);
+                if (data.roles && data.roles.length) setRoles(data.roles);
             })
             .catch(() => {
                 if (!cancelled) setError('Failed to load users');
@@ -150,6 +213,41 @@ export default function UserDirectory() {
             });
         return () => { cancelled = true; };
     }, [authorized]);
+
+    const markPending = (id, on) => {
+        setPendingIds((prev) => {
+            const next = new Set(prev);
+            if (on) next.add(id); else next.delete(id);
+            return next;
+        });
+    };
+
+    const handleRoleChange = async (row, roleKey) => {
+        if (roleKey === row.role_key) return;
+        const previous = { role: row.role, role_key: row.role_key };
+        const label = (roles.find((r) => r.key === roleKey) || {}).label || roleKey;
+
+        setError(null);
+        markPending(row.id, true);
+        // Optimistic: the select must not snap back to the old value while in flight.
+        setEmployees((prev) => prev.map((e) => (
+            e.id === row.id ? { ...e, role_key: roleKey, role: label } : e
+        )));
+
+        try {
+            const updated = await updateEmployeeRole(row.id, roleKey);
+            setEmployees((prev) => prev.map((e) => (
+                e.id === row.id ? { ...e, ...updated } : e
+            )));
+        } catch (err) {
+            setEmployees((prev) => prev.map((e) => (
+                e.id === row.id ? { ...e, ...previous } : e
+            )));
+            setError(err?.response?.data?.error || 'Failed to update role');
+        } finally {
+            markPending(row.id, false);
+        }
+    };
 
     if (authorized === null) {
         return (
@@ -183,8 +281,24 @@ export default function UserDirectory() {
                     </div>
                 ) : (
                     <>
-                        <DirectorySection title="Employees" rows={employees} />
-                        <DirectorySection title="Subcontractors" rows={subcontractors} />
+                        <DirectorySection
+                            title="Employees"
+                            rows={employees}
+                            editableRoles
+                            roles={roles}
+                            currentUserId={currentUserId}
+                            pendingIds={pendingIds}
+                            onRoleChange={handleRoleChange}
+                        />
+                        <DirectorySection
+                            title="Subcontractors"
+                            rows={subcontractors}
+                            editableRoles={false}
+                            roles={roles}
+                            currentUserId={currentUserId}
+                            pendingIds={pendingIds}
+                            onRoleChange={handleRoleChange}
+                        />
                     </>
                 )}
             </div>

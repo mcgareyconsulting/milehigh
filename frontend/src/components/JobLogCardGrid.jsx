@@ -117,6 +117,7 @@ export default function JobLogCardGrid({
 
             {!hosted && (
             <ReleaseHubModal
+                onJobUpdate={onUpdate}
                 isOpen={selectedJob != null}
                 onClose={() => setSelectedJob(null)}
                 job={selectedJob}

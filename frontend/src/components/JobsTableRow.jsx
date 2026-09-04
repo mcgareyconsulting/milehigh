@@ -1538,6 +1538,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             </tr>
             {!onOpenReleaseHub && (
             <ReleaseHubModal
+                onJobUpdate={onUpdate}
                 isOpen={isModalOpen}
                 onClose={() => { setIsModalOpen(false); setModalScrollToMaterials(false); }}
                 job={row}

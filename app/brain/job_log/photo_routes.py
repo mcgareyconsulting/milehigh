@@ -173,7 +173,8 @@ def delete_release_photo(release_id, photo_id):
         job=release.job,
         release=release.release,
         action='delete_photo',
-        source=f"Brain:{user.username}" if user else "Brain",
+        source="Brain",
+        internal_user_id=user.id if user else None,
         payload={'photo_id': photo.id, 'soft': True},
     )
     db.session.commit()
