@@ -17,6 +17,38 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.369',
+    date: 'September 4, 2026',
+    summary:
+      'The To-Dos page becomes the place you actually work from: your assigned items on the left, every @mention of you on the right, with the words somebody wrote instead of a bare "you were mentioned". Plus a camera on any release that has photos, so you stop opening the hub to find out there are none.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Every mention of you, next to your to-dos',
+        detail:
+          'The To-Dos page now runs two columns: your assigned items on the left, the @mentions of you on the right — board comments, drawing comments, and Drafting Work Load notes, all in one list. Each one shows what the person actually wrote and who wrote it, not just "somebody mentioned you", so you can tell what needs an answer without opening anything. Unread ones are called out with a count at the top; clicking one marks it read and takes you straight to the comment it came from, and there is a Mark all read for a backlog. You can also narrow the list to one person when you are chasing a single thread. It refreshes on its own every minute.',
+      },
+      {
+        type: 'improved',
+        title: 'One owner control, both columns — and other people\'s mentions stay theirs',
+        detail:
+          'Admins can point the page at any employee, or at everyone, and both the to-dos and the mentions follow that choice — one control instead of two views to keep in sync. Everyone still lands on their own queue first and has to widen it deliberately. When you are looking at someone else\'s mentions the list is read-only: no marking read, no Mark all read, because that read state belongs to them and clearing it would take their unread badge away. Non-admins see only their own rows, and the server enforces that rather than the screen hiding it.',
+      },
+      {
+        type: 'improved',
+        title: 'To-do filters that say what they mean',
+        detail:
+          'Status and the due window are both multi-select now: pick Open and Done together and you get everything, pick neither and you get an honest empty list instead of a silent "here is everything anyway". The due window, item type, job, and text search stack on top of each other, the urgency groups still collapse for scanning, and the whole page moved onto the Job Log design tokens so the two read as one system in both light and dark.',
+      },
+      {
+        type: 'improved',
+        title: 'A camera on releases that have photos',
+        detail:
+          'You had to open a release and wait for it to load to find out whether anyone had put photos on it — and usually nobody had. A small camera now sits beside the Description in the Job Log, in both the table and the card view, on any release that has at least one photo; hover it for the count. Nothing to load, because the count was already coming down with the row.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.366',
     date: 'September 4, 2026',
     summary:
