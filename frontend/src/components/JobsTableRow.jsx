@@ -20,6 +20,7 @@ import { classifyInstallDate } from '../utils/installDateColor';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import { ReleaseHubModal } from './ReleaseHubModal';
 import { MaterialOrderBadge } from './MaterialOrderBadge';
+import { PhotoBadge } from './PhotoBadge';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { StageIconRow } from './StageIconRow';
 import { ASAP_PROPAGATED_ROW_CLASS } from './AsapPropagationTag';
@@ -1401,11 +1402,16 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     // hub the Release # cell used to reach on its own.
                     if (column === 'Description') {
                         const hasText = rawValue != null && String(rawValue).trim() !== '';
+                        // Photos already ride along on the row payload (cover_photo_id /
+                        // photo_count, batched server-side), so the camera costs no request —
+                        // it just saves opening the hub to find out there is nothing to see.
+                        const photoCount = Number(row.photo_count) || 0;
+                        const photoNote = photoCount === 1 ? ' · 1 photo' : ` · ${photoCount} photos`;
                         return (
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`px-1 ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
-                                title={hasText ? `${tooltipValue} — click to open` : 'Click to open'}
+                                title={`${hasText ? `${tooltipValue} — click to open` : 'Click to open'}${photoCount ? photoNote : ''}`}
                                 onClick={() => openHub('details')}
                             >
                                 <div
@@ -1425,6 +1431,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         is the row's ONLY way into the release, so it keeps
                                         a link's affordance — token accent, not raw blue. */}
                                     <span className="font-semibold text-brand hover:underline">
+                                        {/* Leads the text rather than trailing it: the cell
+                                            clamps to two lines, and a trailing icon on a long
+                                            description would be the first thing truncated. */}
+                                        <PhotoBadge count={photoCount} className="mr-1 opacity-70" />
                                         {hasText ? rawValue : '—'}
                                     </span>
                                 </div>
