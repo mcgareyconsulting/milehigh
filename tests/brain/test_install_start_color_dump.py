@@ -154,12 +154,13 @@ def test_install_start_clears_asap_red(app):
         assert r.start_install_no_color is True
 
 
-# --- an ASAP row's placeholder date becomes the real start ------------------
+# --- no date is ever rewritten, ASAP included ------------------------------
 
 @pytest.mark.parametrize("stage", ["Install Start", "Install Complete", "Complete"])
-def test_asap_date_is_rewritten_to_the_day_install_started(app, stage):
-    """An ASAP date was an anchor five business days out, not a plan. Crossing into the
-    dump zone is the moment install actually began, so that becomes the date."""
+def test_an_asap_rows_date_survives_the_dump_zone(app, stage):
+    """An ASAP date used to be rewritten to the day install began — it was a placeholder
+    anchor five business days out, never a plan. ASAP stamps no date now: an ASAP row's
+    date is one a person typed, so it is a commitment like any other and must not move."""
     with app.app_context():
         r = _hard_dated(start_install_asap=True)
         assert r.start_install == date(2026, 9, 10)
@@ -167,32 +168,17 @@ def test_asap_date_is_rewritten_to_the_day_install_started(app, stage):
         _move_to(stage)
 
         db.session.refresh(r)
-        stage_event = ReleaseEvents.query.filter_by(action="update_stage").one()
-        assert r.start_install == stage_event.created_at.date()
-        assert r.start_install != date(2026, 9, 10)
-
-
-def test_asap_date_rewrite_is_audited_with_both_values(app):
-    """The anchor it replaced has to stay recoverable."""
-    with app.app_context():
-        _hard_dated(start_install_asap=True)
-
-        _move_to("Install Start")
-
-        resets = [
-            e for e in ReleaseEvents.query.all()
-            if isinstance(e.payload, dict) and e.payload.get("field") == "start_install"
-        ]
-        assert len(resets) == 1
-        assert resets[0].payload["old_value"] == "2026-09-10"
-        assert resets[0].payload["new_value"] == resets[0].created_at.date().isoformat()
-        assert resets[0].payload["reason"] == "stage_set_to_install_start"
-        stage_event = ReleaseEvents.query.filter_by(action="update_stage").one()
-        assert resets[0].payload["parent_event_id"] == stage_event.id
+        assert r.start_install == date(2026, 9, 10)
+        assert r.start_install_no_color is True
+        assert r.start_install_asap is False, "the red comes off with the rest of the colour"
+        assert not any(
+            isinstance(e.payload, dict) and e.payload.get("field") == "start_install"
+            for e in ReleaseEvents.query.all()
+        ), "nothing rewrote the date, so nothing is audited as having done so"
 
 
 def test_a_hand_set_hard_date_is_never_rewritten(app):
-    """Only ASAP rows. A date someone chose is a real commitment — colour drops, date stays.
+    """A date someone chose is a real commitment — colour drops, date stays.
     This is the 'date not changed, just colour' half of the rule."""
     with app.app_context():
         r = _hard_dated(start_install_asap=False)
@@ -209,8 +195,8 @@ def test_a_hand_set_hard_date_is_never_rewritten(app):
 
 
 def test_job_comp_cascade_does_not_rewrite_an_asap_date(app):
-    """The rewrite is scoped to stage transitions into the dump zone. The job_comp and
-    invoiced cascades share this helper but pass no date, so they must not move it."""
+    """The job_comp and invoiced cascades share the neutralize helper. Like every other
+    caller they take the colour and leave the date."""
     with app.app_context():
         r = _hard_dated(stage="Install Start", start_install_asap=True)
         from app.brain.job_log.features.start_install.neutralize_install_date_cascade import (
@@ -322,7 +308,7 @@ def test_date_set_by_hand_at_install_start_stays_neutral(app):
 # --- other paths that stamp a hard date -----------------------------------
 
 def test_asap_can_be_flagged_before_install_starts(app, client):
-    """The normal case: ASAP stamps a hard date a week out and paints the row red."""
+    """The normal case: ASAP paints the row red and leaves the date to the user."""
     with app.app_context():
         r = _make_release(
             1, "A",
@@ -346,7 +332,7 @@ def test_asap_can_be_flagged_before_install_starts(app, client):
         assert resp.status_code == 200, resp.get_data(as_text=True)
         db.session.refresh(r)
         assert r.start_install_asap is True
-        assert r.start_install is not None
+        assert r.start_install is None, "the flag sets no date; the user still has to"
         assert r.start_install_no_color is False
 
 
@@ -407,16 +393,15 @@ def test_clearing_asap_is_still_allowed_after_install_starts(app, client):
         assert r.start_install_asap is False
 
 
-def test_asap_undo_restores_the_date_state_it_overwrote(app, client):
-    """set_asap stamps a hard date over whatever was there; its undo restores the lot
-    from its own event payload rather than re-deriving it. The stage-aware colour write
-    must not break that."""
+def test_asap_undo_leaves_the_users_date_alone(app, client):
+    """set_asap writes the flag and the colour bit, so its undo puts back exactly those
+    two. The hard date belongs to the user's own save and must survive the undo."""
     with app.app_context():
         r = _make_release(
             1, "A",
             stage="Ship Planning",
-            start_install=None,
-            start_install_formulaTF=True,
+            start_install=date(2026, 9, 10),
+            start_install_formulaTF=False,
             start_install_no_color=False,
             install_hrs=8,
             num_guys=2,
@@ -427,7 +412,7 @@ def test_asap_undo_restores_the_date_state_it_overwrote(app, client):
              patch("app.brain.job_log.scheduling.service.recalculate_all_jobs_scheduling"):
             client.patch("/brain/update-start-install/1/A", json={"asap": True})
             db.session.refresh(r)
-            assert r.start_install is not None and r.start_install_formulaTF is False
+            assert r.start_install_asap is True
 
             set_event = ReleaseEvents.query.filter_by(action="set_asap").one()
             resp = client.post(f"/brain/events/{set_event.id}/undo")
@@ -435,9 +420,47 @@ def test_asap_undo_restores_the_date_state_it_overwrote(app, client):
         assert resp.status_code == 200, resp.get_data(as_text=True)
         db.session.refresh(r)
         assert r.start_install_asap is False
-        assert r.start_install is None, "the pre-ASAP date state is restored"
-        assert r.start_install_formulaTF is True
+        assert r.start_install == date(2026, 9, 10), "the user's date is not the flag's to undo"
+        assert r.start_install_formulaTF is False
         assert r.start_install_no_color is False
+
+
+def test_undoing_a_legacy_asap_still_restores_its_stamped_date(app, client):
+    """Events recorded before ASAP stopped stamping a date carry prev_start_install.
+    Undoing one has to put the whole date-state back, or the +1wk placeholder it wrote
+    would be left behind on the row."""
+    with app.app_context():
+        r = _make_release(
+            1, "A",
+            stage="Ship Planning",
+            start_install=date(2026, 9, 10),
+            start_install_formulaTF=False,
+            start_install_asap=True,
+            start_install_no_color=False,
+        )
+        from app.services.job_event_service import JobEventService
+        legacy = JobEventService.create_and_close(
+            job=1, release="A", action="set_asap", source="Brain",
+            payload={
+                "from": False, "to": True,
+                "prev_start_install": None,
+                "prev_comp_eta": None,
+                "prev_formulaTF": True,
+                "prev_no_color": False,
+                "new_start_install": "2026-09-10",
+            },
+        )
+        db.session.commit()
+
+        with patch("app.trello.api.update_trello_card"), \
+             patch("app.brain.job_log.scheduling.service.recalculate_all_jobs_scheduling"):
+            resp = client.post(f"/brain/events/{legacy.id}/undo")
+
+        assert resp.status_code == 200, resp.get_data(as_text=True)
+        db.session.refresh(r)
+        assert r.start_install_asap is False
+        assert r.start_install is None, "the placeholder it stamped is rolled back"
+        assert r.start_install_formulaTF is True
 
 
 @pytest.mark.parametrize("stage,expected_no_color", [
@@ -473,3 +496,122 @@ def test_trello_mirror_date_slide_colors_by_stage(app, stage, expected_no_color)
         db.session.refresh(r)
         assert r.start_install == date(2026, 9, 15), "the slid date is written back verbatim"
         assert r.start_install_no_color is expected_no_color
+
+
+# --- Install Prog: the third writer that advances a stage ------------------
+#
+# The Install Prog column moves the stage itself instead of going through
+# UpdateStageCommand: a percentage means install BEGAN (-> `Install Start`), an 'X'
+# means it FINISHED (-> `Install Complete`). The 'X' branch always ran the colour
+# cascade; the percentage branch ran nothing, so the most explicit "work began"
+# signal in the system was the one path that kept the row red (prod row 190-917).
+
+def _install_prog(client, value):
+    with patch("app.brain.job_log.routes.update_trello_card"), \
+         patch("app.brain.job_log.scheduling.service.recalculate_all_jobs_scheduling"):
+        return client.patch("/brain/update-job-comp/1/A", json={"job_comp": value})
+
+
+def test_install_prog_percentage_moves_to_install_start_and_dumps_colour(app, client):
+    with app.app_context():
+        r = _hard_dated(stage="Ship Complete", start_install_asap=True)
+
+        resp = _install_prog(client, "90")
+
+        assert resp.status_code == 200, resp.get_data(as_text=True)
+        db.session.refresh(r)
+        assert r.job_comp == "90%"
+        assert r.stage == "Install Start"
+        assert r.start_install_asap is False, "reporting progress means it is no longer a rush"
+        assert r.start_install_no_color is True, "BUG-11: colour drops once install begins"
+        assert r.start_install == date(2026, 9, 10), "the date itself never moves"
+
+
+def test_install_prog_percentage_links_its_cascades_to_the_job_comp_event(app, client):
+    """Both children hang off the job_comp event so the undo endpoint can bundle them."""
+    with app.app_context():
+        _hard_dated(stage="Ship Complete", start_install_asap=True)
+
+        _install_prog(client, "90")
+
+        primary = [
+            e for e in ReleaseEvents.query.all()
+            if isinstance(e.payload, dict) and e.payload.get("field") == "job_comp"
+        ]
+        assert len(primary) == 1
+        children = [
+            e for e in ReleaseEvents.query.all()
+            if isinstance(e.payload, dict)
+            and e.payload.get("parent_event_id") == primary[0].id
+        ]
+        reasons = {e.payload.get("reason") for e in children}
+        assert "asap_dropped_on_ship_complete" in reasons
+        assert reason_for_stage("Install Start") in reasons
+
+
+def test_install_prog_percentage_drops_asap_on_a_formula_dated_row(app, client):
+    """The colour cascade no-ops without a hard date. The ASAP drop is flag-only and
+    must fire anyway, or a formula-dated rush row would keep its red forever."""
+    with app.app_context():
+        r = _make_release(
+            1, "A",
+            stage="Ship Complete",
+            start_install=None,
+            start_install_formulaTF=True,
+            start_install_asap=True,
+        )
+        db.session.commit()
+
+        _install_prog(client, "50")
+
+        db.session.refresh(r)
+        assert r.stage == "Install Start"
+        assert r.start_install_asap is False
+
+
+def test_install_prog_x_drops_asap_on_a_formula_dated_row(app, client):
+    """Same gap on the 'X' branch: its neutralize cascade clears the flag only on a
+    hard-dated row, so the flag-only drop has to run there too."""
+    with app.app_context():
+        r = _make_release(
+            1, "A",
+            stage="Ship Complete",
+            start_install=None,
+            start_install_formulaTF=True,
+            start_install_asap=True,
+        )
+        db.session.commit()
+
+        _install_prog(client, "X")
+
+        db.session.refresh(r)
+        assert r.stage == "Install Complete"
+        assert r.start_install_asap is False
+
+
+def test_install_prog_x_still_dumps_colour_and_keeps_the_date(app, client):
+    """The branch that already worked keeps working."""
+    with app.app_context():
+        r = _hard_dated(stage="Ship Complete", start_install_asap=True)
+
+        _install_prog(client, "X")
+
+        db.session.refresh(r)
+        assert r.stage == "Install Complete"
+        assert r.start_install_asap is False
+        assert r.start_install_no_color is True
+        assert r.start_install == date(2026, 9, 10)
+
+
+def test_install_prog_non_numeric_moves_nothing(app, client):
+    """'MFP' is neither a percentage nor an X — it is a note, and notes move no stage."""
+    with app.app_context():
+        r = _hard_dated(stage="Ship Planning", start_install_asap=True)
+
+        _install_prog(client, "MFP")
+
+        db.session.refresh(r)
+        assert r.job_comp == "MFP"
+        assert r.stage == "Ship Planning"
+        assert r.start_install_asap is True
+        assert r.start_install_no_color is False

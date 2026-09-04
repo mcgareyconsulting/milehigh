@@ -44,7 +44,8 @@ export default function StartInstallEditor({
         installDate: value,
     });
 
-    const displayValue = isAsap ? 'ASAP' : (formatDate(value) || '—');
+    // ASAP is red on a real date now, never the word "ASAP" in place of one.
+    const displayValue = formatDate(value) || '—';
 
     let colorClass;
     if (isAsap) colorClass = 'bg-red-500 text-white hover:bg-red-600';
@@ -75,10 +76,10 @@ export default function StartInstallEditor({
         }
     };
 
-    const handleSetAsap = async (installer) => {
+    const handleSetAsap = async (installer, startInstall) => {
         setOpen(false);
         try {
-            const ok = await setAsapAndAssign(job, release, installer);
+            const ok = await setAsapAndAssign(job, release, installer, startInstall);
             if (ok) refresh();
         } catch (e) {
             alert(`Failed to set ASAP: ${e.message}`);

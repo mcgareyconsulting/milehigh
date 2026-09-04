@@ -1,17 +1,17 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Lets users set or clear the Start Install date on a release, or flag the release ASAP. Any date entered is treated as a hard date; flagging ASAP sets a hard Start Install one week out (and triggers the Paint Complete → Ship Planning auto-advance). Ship and Install stay linked (ship = install − 1 biz day) until the user hits Break (N6).
+ * purpose: Lets users set or clear the Start Install date on a release, or flag the release ASAP. Any date entered is treated as a hard date. ASAP is a rush FLAG only — it paints the row red and triggers the Paint Complete → Ship Planning auto-advance, but the user must enter the Start Install date themselves. Ship and Install stay linked (ship = install − 1 biz day) until the user hits Break (N6).
  * exports:
  *   StartInstallDateModal: Date-picker modal with Save, Set ASAP, Clear Hard Date, Clear ASAP, Break/Link actions
  * imports_from: [react]
  * imported_by: [frontend/src/components/JobsTableRow.jsx]
  * invariants:
  *   - Any non-empty date submitted via Save is persisted as a hard date (is_hard_date=true).
- *   - ASAP toggle disables the date input (ASAP owns the date), but the installer select stays
- *     enabled — an ASAP release still needs an installer assigned (that seeds the mirror bar).
+ *   - ASAP REQUIRES a Start Install date: the toggle leaves every control enabled and Save is
+ *     refused until a date is entered. ASAP sets no date of its own.
  *   - The confirm button reads "Set ASAP" only when turning ASAP on (off->on); otherwise "Save".
- *     Saving an already-ASAP row with an installer change assigns the installer and keeps the date.
+ *     Saving an already-ASAP row edits its date/installer exactly like any other row.
  *   - Clear Hard Date button is only shown when the row currently has a hard date (startInstallFormulaTF === false && currentDate && !isAsap).
  *   - Clear ASAP button is only shown when the row currently has ASAP set (isAsap === true).
  *   - Ship ↔ Install auto-estimate only runs while `linked` is true (default when gap is empty or 1 biz day). Break (N6) sets linked false; Link re-enables and re-applies ship = install − 1.
@@ -54,7 +54,8 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
             setAsapToggle(!!isAsap);
             setInstaller(initialInstaller);
             const shipYmd = toYmd(currentShipDate);
-            const installYmd = currentDate && !isAsap ? toYmd(currentDate) : '';
+            // An ASAP row's date is a real hand-set date, so it loads like any other.
+            const installYmd = toYmd(currentDate);
             setShipDateInput(shipYmd);
             setDateInput(installYmd);
             // N5: shipping stages always open in manual mode (Break). Estimated Link
@@ -93,8 +94,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
     const handleShipDateChange = (e) => {
         const value = e.target.value;
         setShipDateInput(value);
-        // ASAP owns the install date, so never move it from a ship edit.
-        if (value && linked && !asapToggle) {
+        if (value && linked) {
             setDateInput(addBusinessDays(value, 1));
         }
         setError('');
@@ -110,24 +110,23 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
         setLinked(true);
         if (dateInput) {
             setShipDateInput(subtractBusinessDays(dateInput, 1));
-        } else if (shipDateInput && !asapToggle) {
+        } else if (shipDateInput) {
             setDateInput(addBusinessDays(shipDateInput, 1));
         }
         setError('');
     };
 
     const handleAsapToggle = (e) => {
-        const next = e.target.checked;
-        setAsapToggle(next);
+        // Flag only — the date fields stay live and stay filled. ASAP marks the row a rush;
+        // the date is still the user's to set, and Save below refuses without one.
+        setAsapToggle(e.target.checked);
         setError('');
-        if (next) setDateInput('');
     };
 
     const installerChanged = installer !== initialInstaller;
     const shipChanged = (shipDateInput || null) !== (initialShipYmd || null);
-    // Turning ASAP on (off -> on) stamps the hard date via the ASAP path. When ASAP is
-    // already set, the toggle stays on but the installer/date controls still work — an
-    // ASAP release still needs an installer assigned (that's what seeds the mirror bar).
+    // Turning ASAP on (off -> on) sets the flag and then saves the date in one action.
+    // When ASAP is already set the toggle stays on and the row edits normally.
     const turningAsapOn = asapToggle && !isAsap;
 
     const handleSave = () => {
@@ -137,8 +136,12 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
             onSaveShipDate(shipDateInput || null);
         }
         if (turningAsapOn) {
-            // Flag ASAP (which stamps the date); also apply an installer if one was picked.
-            onSetAsap(installerChanged ? installer : undefined);
+            // ASAP is a flag on a real date, not a date of its own — refuse without one.
+            if (!dateInput) {
+                setError('ASAP needs a Start Install date — pick the date this has to go in by');
+                return;
+            }
+            onSetAsap(installerChanged ? installer : undefined, dateInput);
             return;
         }
         if (!dateInput && !installerChanged && !shipChanged) {
@@ -150,9 +153,8 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
             onClose();
             return;
         }
-        // An already-ASAP row keeps its ASAP date (pass null -> installer-only); otherwise use
-        // the date input. Installer is sent only when it changed, so a date-only save leaves it.
-        onSave(asapToggle ? null : (dateInput || null), installerChanged ? installer : undefined);
+        // Installer is sent only when it changed, so a date-only save leaves it alone.
+        onSave(dateInput || null, installerChanged ? installer : undefined);
     };
 
     const handleCancel = () => {
@@ -168,7 +170,8 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
     if (!isOpen) return null;
 
     const confirmLabel = turningAsapOn ? 'Set ASAP' : 'Save';
-    const confirmEnabled = turningAsapOn || !!dateInput || installerChanged || shipChanged;
+    // ASAP cannot be saved without a date, so it does not enable the button on its own.
+    const confirmEnabled = !!dateInput || installerChanged || shipChanged;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -211,7 +214,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
                             <span className="block text-xs text-gray-500">
                                 {asapLocked
                                     ? 'Unavailable once install has started.'
-                                    : 'Sets Start Install one week out and rips to Shipping Planning at Paint Complete.'}
+                                    : 'Marks the release a rush (red) and rips to Shipping Planning at Paint Complete. Set the Start Install date below — ASAP will not pick one for you.'}
                             </span>
                         </span>
                     </label>
@@ -230,9 +233,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
                             />
                         </div>
                         <div className="flex flex-col items-center justify-end pb-0.5 shrink-0 self-center sm:self-end">
-                            {asapToggle ? (
-                                <span className="text-gray-400 text-xl select-none px-1" aria-hidden="true">→</span>
-                            ) : linked ? (
+                            {linked ? (
                                 <button
                                     type="button"
                                     onClick={handleBreak}
@@ -260,10 +261,9 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
                                 type="date"
                                 value={dateInput}
                                 onChange={handleDateInputChange}
-                                disabled={asapToggle}
                                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 ${
                                     error ? 'border-red-500' : 'border-gray-300'
-                                } ${asapToggle ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+                                }`}
                             />
                         </div>
                     </div>
@@ -272,13 +272,11 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
                         <p className="text-red-600 text-sm mb-2">{error}</p>
                     )}
                     <p className="text-gray-500 text-xs mb-6">
-                        {asapToggle
-                            ? 'ASAP sets a hard Start Install one week out and displays "ASAP" in red.'
-                            : linked
+                        {linked
                                 ? 'Ship and Install are linked (ship = install − 1 business day). Use Break between the fields for an independent gap. Saving Start Install sets a hard date and cascades; Ship date does not push to Trello or affect scheduling.'
                                 : SHIPPING_STAGES.has(stage)
                                     ? 'At Ship Planning/Complete, Ship and Install start independent (manual). Set each date yourself, or use Link to re-tie them (ship = install − 1 business day).'
-                                    : 'Ship and Install are independent. Use Link between the fields to re-tie them. Saving Start Install sets a hard date and cascades; Ship date does not push to Trello or affect scheduling.'}
+                                : 'Ship and Install are independent. Use Link between the fields to re-tie them. Saving Start Install sets a hard date and cascades; Ship date does not push to Trello or affect scheduling.'}
                     </p>
 
                     <div className="mb-6">

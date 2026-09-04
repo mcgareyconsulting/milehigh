@@ -1,12 +1,14 @@
 """Tests for ASAP Mode on Start Install.
 
-Flagging ASAP (a) sets a hard start_install one week (5 business days) out and
-computes comp_eta from num_guys, and (b) marks the release red. While set, when
-the release transitions into stage 'Paint Complete', UpdateStageCommand
-intercepts and rips it straight to 'Ship Planning' — one event in DB
-(action='update_stage', payload includes asap_intercepted/via), one Trello move
-(to Shipping planning list). Reaching Ship Complete clears the flag but LEAVES
-the date intact.
+ASAP is a FLAG, not a date. Flagging it marks the release red and nothing else —
+the user sets the hard start_install themselves, through the same modal, and that
+save is what writes the date, pushes Trello and recalcs scheduling. (It used to
+stamp start_install five business days out and derive comp_eta from num_guys;
+that placeholder is gone.) While set, a transition into stage 'Paint Complete'
+makes UpdateStageCommand rip the release straight to 'Ship Planning' — one event
+in DB (action='update_stage', payload includes asap_intercepted/via), one Trello
+move (to Shipping planning list). Reaching Ship Complete clears the flag but
+LEAVES the date intact.
 """
 from unittest.mock import patch
 
@@ -74,8 +76,9 @@ class TestSetClearAsapRoute:
             assert len(evs) == 1
             assert evs[0].payload["from"] is False
             assert evs[0].payload["to"] is True
-            # set_asap now also records the date-state it set (and the prior one for undo).
-            assert "new_start_install" in evs[0].payload
+            # The flag writes no date, so the payload carries no date to restore —
+            # only the colour bit it flipped.
+            assert evs[0].payload == {"from": False, "to": True, "prev_no_color": False}
 
     def test_clear_asap_flips_flag_and_emits_event(self, app, admin_client):
         with app.app_context():
@@ -96,12 +99,11 @@ class TestSetClearAsapRoute:
             assert len(evs) == 1
             assert evs[0].payload == {"from": True, "to": False}
 
-    def test_set_asap_anchors_hard_start_install_one_week_out(self, app, admin_client):
-        """Flagging ASAP overwrites the formula-driven date with a hard date one week
-        out and computes comp_eta from num_guys."""
+    def test_set_asap_sets_no_date_of_its_own(self, app, admin_client):
+        """The flag paints the row red and leaves every date field exactly as it was.
+        ASAP used to overwrite the formula date with a hard one five business days out;
+        the user now types the real date themselves."""
         from datetime import date
-        from app.trello.utils import add_business_days
-        from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
 
         with app.app_context():
             _make_release(
@@ -109,6 +111,7 @@ class TestSetClearAsapRoute:
                 start_install=date(2026, 6, 1),
                 start_install_formula="=released+30d",
                 start_install_formulaTF=True,
+                comp_eta=date(2026, 6, 3),
                 install_hrs=32.0,
                 num_guys=2.0,
             )
@@ -120,23 +123,35 @@ class TestSetClearAsapRoute:
             )
             assert resp.status_code == 200
 
-            expected_start = add_business_days(date.today(), 5)
-            expected_comp_eta = calculate_install_complete_date(expected_start, 32.0, 2.0)
-
             db.session.expire_all()
             r2 = Releases.query.filter_by(job=1, release="A").first()
-            assert r2.start_install == expected_start
-            assert r2.start_install_formula is None
-            assert r2.start_install_formulaTF is False
+            assert r2.start_install_asap is True
+            assert r2.start_install == date(2026, 6, 1), "the date is the user's, untouched"
+            assert r2.start_install_formula == "=released+30d"
+            assert r2.start_install_formulaTF is True
+            assert r2.comp_eta == date(2026, 6, 3)
+            # Colour is the one field the flag owns.
             assert r2.start_install_no_color is False
-            assert r2.comp_eta == expected_comp_eta
-            # The prior date is preserved in the event payload for undo.
-            ev = ReleaseEvents.query.filter_by(action="set_asap").one()
-            assert ev.payload["prev_start_install"] == "2026-06-01"
 
-    def test_setting_hard_date_clears_asap(self, app, admin_client):
-        """Setting an explicit hard date on an ASAP release clears the ASAP flag —
-        an explicit date supersedes ASAP's auto +1wk date."""
+    def test_set_asap_pushes_nothing_to_trello(self, app, admin_client):
+        """The date save is what talks to Trello. The flag alone must not — there is no
+        new due date for it to push."""
+        with app.app_context():
+            _make_release(1, "A", trello_card_id="card-1")
+            db.session.commit()
+
+            with patch("app.brain.job_log.routes.update_trello_card") as push:
+                resp = admin_client.patch(
+                    "/brain/update-start-install/1/A",
+                    json={"asap": True},
+                )
+            assert resp.status_code == 200
+            push.assert_not_called()
+
+    def test_setting_hard_date_keeps_asap(self, app, admin_client):
+        """Setting the hard date is the COMPLETION of an ASAP, not a cancellation of it.
+        The date used to be ASAP's own, so typing one meant taking it back; ASAP sets no
+        date now, so the flag survives every edit until someone clears it."""
         from datetime import date
 
         with app.app_context():
@@ -160,10 +175,10 @@ class TestSetClearAsapRoute:
             r2 = Releases.query.filter_by(job=1, release="A").first()
             assert r2.start_install == date(2026, 7, 15)
             assert r2.start_install_formulaTF is False
-            assert r2.start_install_asap is False
+            assert r2.start_install_asap is True, "the rush flag rides on the new date"
 
             ev = ReleaseEvents.query.filter_by(action="update_start_install").one()
-            assert ev.payload.get("cleared_asap") is True
+            assert "cleared_asap" not in ev.payload
 
 
 # ---------------------------------------------------------------------------

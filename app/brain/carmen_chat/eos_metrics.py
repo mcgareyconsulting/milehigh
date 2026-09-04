@@ -393,7 +393,9 @@ def yellow_dates(
         Releases.query.filter(
             Releases.start_install.isnot(None),
             Releases.start_install_formulaTF.is_(False),
-            Releases.start_install_asap.is_(False),
+            # ASAP rows count: ASAP no longer stamps a placeholder date, it flags a
+            # date a person set by hand. Excluding them would hide the most urgent
+            # overdue rows we have from a scored metric.
             or_(
                 Releases.start_install_no_color.is_(False),
                 Releases.start_install_no_color.is_(None),
@@ -428,8 +430,9 @@ def yellow_dates(
         "releases_truncated": max(0, len(rows) - len(detail)),
         "rules": {
             "definition": (
-                "Hard start_install (formulaTF=false), not ASAP, not no-color, "
-                "date strictly before as_of — same as job-log amber hard dates"
+                "Hard start_install (formulaTF=false), not no-color, "
+                "date strictly before as_of — same as job-log amber hard dates. "
+                "ASAP rows are included: their date is hand-set, like any other"
             ),
             "includes_archived": False,
             "ship_dates_counted": False,
@@ -742,8 +745,8 @@ def target_dates_met(
     """Doug: of hard start_install dates falling in the week, % complete.
 
     First-pass definition (confirm with Doug):
-    - Denominator: non-archived hard dates (formulaTF=false, not ASAP) with
-      start_install in the Mon–Sun week.
+    - Denominator: non-archived hard dates (formulaTF=false, ASAP included — an
+      ASAP date is hand-set like any other) with start_install in the Mon–Sun week.
     - Numerator: those now Install Complete / Complete / job_comp=X.
     """
     monday, sunday, anchor = resolve_week(weeks_back, week_of)
@@ -753,7 +756,6 @@ def target_dates_met(
             Releases.start_install >= monday,
             Releases.start_install <= sunday,
             Releases.start_install_formulaTF.is_(False),
-            Releases.start_install_asap.is_(False),
             *_active_release_filter(),
         )
         .order_by(Releases.start_install.asc())

@@ -291,7 +291,6 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
         && job.start_install_formulaTF === false
         && Boolean(pick('Start install', 'start_install'));
     const startInstall = formatDate(pick('Start install', 'start_install'));
-    const startInstallDisplay = isAsap ? 'ASAP' : startInstall;
     const startFlag = isAsap
         ? <MiniFlag kind="ASAP" />
         : (isHardDate ? <MiniFlag kind="HARD" /> : null);
@@ -371,7 +370,7 @@ export function JobDetailsBody({ job, scrollToMaterials = false, onOrdersChanged
                     <FlowArrow />
                     <FlowCell
                         label="Start Install"
-                        value={startInstallDisplay}
+                        value={startInstall}
                         flag={startFlag}
                     />
                     <FlowArrow />

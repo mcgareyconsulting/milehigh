@@ -6,8 +6,9 @@
  * exports:
  *   setAsapWithCapConfirm(job, release): Promise<boolean> — true if the flag was set, false if the
  *     PM is at the cap. Throws on any other failure.
- *   setAsapAndAssign(job, release, installer): Promise<boolean> — set ASAP, then (when an installer
- *     was picked) assign it installer-only so the mirror bar is seeded in the same action.
+ *   setAsapAndAssign(job, release, installer, startInstall): Promise<boolean> — set the ASAP flag,
+ *     then save the hard date the user typed (and the installer, when one was picked) in the same
+ *     action. ASAP no longer stamps a date, so the date save is what actually schedules the row.
  * imports_from: [../services/jobsApi]
  * imported_by: [frontend/src/components/JobsTableRow.jsx, frontend/src/components/StartInstallEditor.jsx]
  */
@@ -27,12 +28,13 @@ export async function setAsapWithCapConfirm(job, release) {
     }
 }
 
-export async function setAsapAndAssign(job, release, installer) {
+export async function setAsapAndAssign(job, release, installer, startInstall) {
     const ok = await setAsapWithCapConfirm(job, release);
-    // ASAP stamps the date; if an installer was also picked, assign it (installer-only, null
-    // date) so the ASAP date is kept and the mirror bar is seeded in the same action.
-    if (ok && installer !== undefined) {
-        await jobsApi.updateStartInstall(job, release, null, installer);
+    // The flag goes first because it is the call that can 409 on the per-PM cap — no point
+    // writing a date onto a row that was refused. The modal will not set ASAP without a
+    // date, so startInstall is always a real YYYY-MM-DD by the time we get here.
+    if (ok) {
+        await jobsApi.updateStartInstall(job, release, startInstall, installer);
     }
     return ok;
 }

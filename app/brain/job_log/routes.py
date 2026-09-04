@@ -53,6 +53,7 @@ from app.brain.job_log.features.start_install.neutralize_install_date_cascade im
     neutralize_install_date_cascade,
     COLOR_DUMP_STAGES,
 )
+from app.brain.job_log.features.start_install.asap_drop import drop_asap_on_completion
 from app.brain.job_log.features.ship_date.command import UpdateShipDateCommand
 from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
 from datetime import datetime, timedelta
@@ -1655,6 +1656,39 @@ def update_job_comp(job, release):
             if fab_plan is not None:
                 response_extras['fab_order'] = fab_plan.fab_order
 
+    # A percentage in Install Prog says install has BEGUN — the same statement a stage
+    # flip into `Install Start` makes, and a more explicit one. It gets the same two
+    # cascades the 'X' branch below has always had, which it was silently missing: the
+    # rush flag comes off, and the hard date's colour drops (BUG-11). Guarded on the
+    # percentage rather than on whether the stage moved, so a release that reached
+    # `Install Start` by some other route is still cleaned up the next time someone
+    # reports progress on it.
+    # Either value means install has moved on, so the rush flag comes off. One call for
+    # both branches: they are mutually exclusive (a numeric value is rewritten to "N%",
+    # so it can never equal 'X') and the drop takes the same arguments either way.
+    # It runs BEFORE the neutralize cascades below on purpose — that cascade also clears
+    # the flag, but only on a row that has a hard date, and it folds the clear into a
+    # start_install_no_color event rather than auditing it as its own field.
+    if primary_event is not None and (new_is_pct or (new_is_x and not old_was_x)):
+        if drop_asap_on_completion(
+            job_record,
+            new_stage=job_record.stage,
+            parent_event_id=primary_event.id,
+        ):
+            response_extras['asap_dropped'] = True
+
+    # The colour dumps stay split: they carry different audit reasons, and collapsing
+    # them would quietly rewrite the event trail.
+    if new_is_pct and primary_event is not None:
+        if neutralize_install_date_cascade(
+            job_record,
+            parent_event_id=primary_event.id,
+            # The branch above lands on `Install Start` unconditionally, so the stage —
+            # and therefore the reason — is not in question by the time we get here.
+            reason='stage_set_to_install_start',
+        ):
+            response_extras['hard_date_cleared'] = True
+
     if new_is_x and not old_was_x and primary_event is not None:
         if neutralize_install_date_cascade(
             job_record,
@@ -1764,16 +1798,13 @@ def update_start_install(job, release):
         installer_val = request.json.get('installer')
         start_install_date = None
 
-        # ASAP set/clear.
-        #  - Setting ASAP anchors a HARD start_install one week (5 business days) out and
-        #    computes comp_eta from num_guys, pushing start_install to the primary card due.
-        #  - Clearing ASAP is flag-only and LEAVES the date (use clear_hard_date to revert
-        #    to formula). The prior date-state is stashed in the event payload so undo of a
-        #    set_asap can restore it.
+        # ASAP set/clear — a flag, never a date.
+        #  - Setting ASAP marks the release a rush (the cell paints red) and does NOTHING
+        #    else. It used to stamp a hard start_install five business days out; that
+        #    placeholder is gone — the user sets a real hard date themselves, through the
+        #    same modal, and that date save is what pushes Trello and recalcs scheduling.
+        #  - Clearing ASAP is likewise flag-only and LEAVES the date.
         if asap is True or asap is False:
-            from app.trello.utils import add_business_days
-            from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
-
             job_record = Releases.resolve(job, release)
             if not job_record:
                 return jsonify({'error': 'Job not found'}), 404
@@ -1807,22 +1838,9 @@ def update_start_install(job, release):
                 }), 409
 
             payload = {'from': old_asap, 'to': new_asap}
-            new_start = None
-            new_comp_eta = None
             if new_asap:
-                # Anchor one week out (same weekday next week for any weekday start).
-                new_start = add_business_days(date.today(), 5)
-                new_comp_eta = calculate_install_complete_date(
-                    new_start, job_record.install_hrs, job_record.num_guys
-                )
-                payload.update({
-                    'prev_start_install': job_record.start_install.isoformat() if job_record.start_install else None,
-                    'prev_comp_eta': job_record.comp_eta.isoformat() if job_record.comp_eta else None,
-                    'prev_formulaTF': job_record.start_install_formulaTF,
-                    'prev_no_color': bool(job_record.start_install_no_color),
-                    'new_start_install': new_start.isoformat(),
-                    'new_comp_eta': new_comp_eta.isoformat() if new_comp_eta else None,
-                })
+                # The only field the flag touches, so the only one undo has to restore.
+                payload['prev_no_color'] = bool(job_record.start_install_no_color)
 
             event = JobEventService.create(
                 job=job,
@@ -1836,51 +1854,17 @@ def update_start_install(job, release):
 
             job_record.start_install_asap = new_asap
             if new_asap:
-                # Hard date one week out; comp_eta from num_guys. The date itself is set
-                # the same either way — only its colour depends on the stage. BUG-11: past
-                # `Install Start` the colour is already dumped, so flagging ASAP there must
-                # not light the row back up red. `prev_no_color` was captured into the
-                # payload above, so the undo still restores whatever was here before.
-                job_record.start_install = new_start
-                job_record.start_install_formula = None
-                job_record.start_install_formulaTF = False
-                # Always colored: the guard above already refused every stage where the
-                # color is dumped, so this branch only runs before install has started.
+                # Colour only — no date is written and no Trello push happens here; the
+                # user's own hard-date save does both. The row is always coloured at this
+                # point: the guard above refused every stage where colour is dumped, so
+                # this branch only runs before install has started. `prev_no_color` is in
+                # the payload, so undo still restores whatever was here before.
                 job_record.start_install_no_color = False
-                job_record.comp_eta = new_comp_eta
-                # Push the primary card due = start_install (hard-date behavior).
-                if job_record.trello_card_id:
-                    try:
-                        update_trello_card(
-                            card_id=job_record.trello_card_id,
-                            new_due_date=new_start,
-                            clear_due_date=False,
-                        )
-                    except Exception as trello_error:
-                        logger.error(
-                            "trello_due_push_failed",
-                            job=job,
-                            release=release,
-                            card_id=job_record.trello_card_id,
-                            error=str(trello_error),
-                            error_type=type(trello_error).__name__,
-                            exc_info=True,
-                        )
             job_record.last_updated_at = datetime.utcnow()
             job_record.source_of_update = 'Brain'
 
             JobEventService.close(event.id)
             db.session.commit()
-
-            # Setting a hard date removes this release from the fab queue, so other
-            # formula-driven releases' projected dates shift — recalc to match
-            # UpdateStartInstallCommand's behavior.
-            if new_asap:
-                try:
-                    from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
-                    recalculate_all_jobs_scheduling(stage_group='FABRICATION')
-                except Exception as cascade_error:
-                    logger.error("scheduling_cascade_failed", trigger="asap_set", error=str(cascade_error), error_type=type(cascade_error).__name__, exc_info=True)
 
             logger.info(
                 "asap_set" if new_asap else "asap_cleared",
@@ -1892,8 +1876,6 @@ def update_start_install(job, release):
                 'status': 'success',
                 'event_id': event.id,
                 'start_install_asap': new_asap,
-                'start_install': new_start.isoformat() if new_start else None,
-                'comp_eta': new_comp_eta.isoformat() if new_comp_eta else None,
             }), 200
 
         # Handle clearing a hard date (revert to formula-driven)
@@ -3064,27 +3046,31 @@ def _dispatch_undo(event, *, source, defer_cascade):
         if new_event is None:
             raise ValueError("Event already exists")
         job_record.start_install_asap = target_val
-        # Undoing a set_asap also restores the date-state it overwrote (set_asap stamps a
-        # hard start_install + comp_eta; clear_asap is flag-only so there is nothing to restore).
+        # set_asap is flag + colour only, so that is all a fresh undo restores. Events
+        # recorded BEFORE ASAP stopped stamping a date carry prev_start_install; those
+        # still get their whole date-state put back, otherwise undoing an old ASAP would
+        # leave its +1wk placeholder behind.
         if action == 'set_asap':
-            prev_si = payload.get('prev_start_install')
-            prev_ce = payload.get('prev_comp_eta')
-            job_record.start_install = _dt.strptime(prev_si, '%Y-%m-%d').date() if prev_si else None
-            job_record.comp_eta = _dt.strptime(prev_ce, '%Y-%m-%d').date() if prev_ce else None
-            job_record.start_install_formulaTF = payload.get('prev_formulaTF')
-            job_record.start_install_no_color = bool(payload.get('prev_no_color', False))
-            if job_record.start_install_formulaTF is not False:
-                job_record.start_install_formula = None
-            if job_record.trello_card_id:
-                try:
-                    from app.trello.api import update_trello_card
-                    update_trello_card(
-                        card_id=job_record.trello_card_id,
-                        new_due_date=job_record.start_install,
-                        clear_due_date=(job_record.start_install is None),
-                    )
-                except Exception:
-                    logger.error("trello_due_realign_failed", trigger="set_asap_undo", card_id=job_record.trello_card_id, exc_info=True)
+            if 'prev_no_color' in payload:
+                job_record.start_install_no_color = bool(payload['prev_no_color'])
+            if 'prev_start_install' in payload:
+                prev_si = payload.get('prev_start_install')
+                prev_ce = payload.get('prev_comp_eta')
+                job_record.start_install = _dt.strptime(prev_si, '%Y-%m-%d').date() if prev_si else None
+                job_record.comp_eta = _dt.strptime(prev_ce, '%Y-%m-%d').date() if prev_ce else None
+                job_record.start_install_formulaTF = payload.get('prev_formulaTF')
+                if job_record.start_install_formulaTF is not False:
+                    job_record.start_install_formula = None
+                if job_record.trello_card_id:
+                    try:
+                        from app.trello.api import update_trello_card
+                        update_trello_card(
+                            card_id=job_record.trello_card_id,
+                            new_due_date=job_record.start_install,
+                            clear_due_date=(job_record.start_install is None),
+                        )
+                    except Exception:
+                        logger.error("trello_due_realign_failed", trigger="set_asap_undo", card_id=job_record.trello_card_id, exc_info=True)
         job_record.last_updated_at = _dt.utcnow()
         job_record.source_of_update = source
         JobEventService.close(new_event.id)

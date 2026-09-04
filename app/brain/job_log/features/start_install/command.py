@@ -77,16 +77,12 @@ class UpdateStartInstallCommand:
             raise ValueError(f"Job {self.job_id}-{self.release} not found")
 
         old_start_install = job_record.start_install
-        old_asap = bool(getattr(job_record, 'start_install_asap', False))
 
         event_payload = {
             'from': old_start_install.isoformat() if old_start_install else None,
             'to': self.start_install.isoformat() if self.start_install else None,
             'is_hard_date': self.is_hard_date,
         }
-        # An explicit hard date supersedes ASAP's auto +1wk date, so ASAP no longer applies.
-        if old_asap:
-            event_payload['cleared_asap'] = True
         if self.undone_event_id is not None:
             event_payload['undone_event_id'] = self.undone_event_id
 
@@ -117,9 +113,10 @@ class UpdateStartInstallCommand:
         # Planning is now colored, because the install is still ahead and an overdue
         # date there is exactly the signal that must stay visible.
         job_record.start_install_no_color = job_record.stage in COLOR_DUMP_STAGES
-        # Setting an explicit hard date takes manual control of the date, so clear ASAP
-        # (assigning an installer, by contrast, goes through AssignInstaller and keeps ASAP).
-        job_record.start_install_asap = False
+        # ASAP is deliberately left alone. It used to be cleared here, because ASAP owned
+        # the date and typing one meant taking it back. ASAP now sets no date — it is a
+        # rush flag on a date the user is REQUIRED to set, so setting that date is the
+        # completion of the ASAP, not a cancellation of it. Only Clear ASAP clears it.
         # comp_eta follows from the hard start_install via the canonical num_guys formula
         # (the scheduling recalc skips hard-dated rows, so it would otherwise go stale).
         from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
