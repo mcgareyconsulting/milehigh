@@ -909,6 +909,18 @@ class BoardActivity(db.Model):
         }
 
 
+#: Longest mention excerpt carried on a Notification payload before ellipsis.
+_EXCERPT_MAX = 280
+
+#: Recovers the mentioner from a mention message. Every producer writes
+#: "<author> mentioned you…" (board routes, pdf_markup_routes, DWL routes), and a
+#: DWL mention has no comment row to read an author off — the submittal note lives
+#: on the submittal, not in a table this FK reaches — so the message text is the
+#: only place that name survives. Used strictly as a fallback behind the real
+#: author_name column, so a future DWL comment model just makes it dead weight.
+_MENTION_AUTHOR_RE = re.compile(r'^(.+?)\s+mentioned you\b')
+
+
 class Notification(db.Model):
     """In-app notifications for @mentions and other events."""
     __tablename__ = "notifications"
@@ -938,6 +950,17 @@ class Notification(db.Model):
         version = comment.drawing_version if comment else None
         release = comment.release if comment else None
         review = self.carmen_drawing_review
+        # What the mentioner actually wrote. The bell only ever showed "X mentioned
+        # you"; the To-Dos mentions column shows the sentence, so surface the source
+        # comment body (board comment or drawing comment) and its author.
+        source = self.board_activity or comment
+        excerpt = (getattr(source, 'body', None) or '').strip() or None
+        if excerpt and len(excerpt) > _EXCERPT_MAX:
+            excerpt = excerpt[:_EXCERPT_MAX].rstrip() + '…'
+        author_name = getattr(source, 'author_name', None)
+        if not author_name:
+            m = _MENTION_AUTHOR_RE.match(self.message or '')
+            author_name = m.group(1).strip() if m else None
         return {
             'id': self.id,
             'user_id': self.user_id,
@@ -964,6 +987,8 @@ class Notification(db.Model):
             'drawing_version_number': version.version_number if version else None,
             'release_job_number': release.job if release else None,
             'release_number': release.release if release else None,
+            'excerpt': excerpt,
+            'author_name': author_name,
         }
 
 
