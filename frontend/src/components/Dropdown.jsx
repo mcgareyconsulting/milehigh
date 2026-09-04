@@ -5,13 +5,15 @@
  *   Closes on outside click, Escape, or item selection. Used to collapse toolbar buttons into
  *   "Actions" / "Views" menus on Job Log and Drafting WL.
  * exports:
- *   default Dropdown: Props — label, icon, active, disabled, align ('left'|'right'), menuWidth, buttonClassName, children.
+ *   default Dropdown: Props — label, icon, active, disabled, align ('left'|'right'), menuWidth, buttonClassName, closeOnSelect, children.
  *   DropdownItem: Menu row. Props — onClick, disabled, active, icon, children.
  * imports_from: [react]
  * imported_by: [src/pages/JobLog.jsx, src/pages/DraftingWorkLoad.jsx]
  * invariants:
  *   - Trigger styling matches the existing toolbar buttons by default; pass buttonClassName to override.
  *   - Menu is absolutely positioned below the trigger; the parent toolbar is not overflow-clipped downward.
+ *   - closeOnSelect={false} keeps the menu open after a click, so one open menu can toggle several
+ *     options (multi-select filters); outside click / Escape still close it.
  */
 import React, { useEffect, useRef, useState } from 'react';
 
@@ -27,7 +29,10 @@ function Chevron() {
     );
 }
 
-export default function Dropdown({ label, icon, active = false, disabled = false, align = 'left', menuWidth = 200, buttonClassName, children }) {
+export default function Dropdown({
+    label, icon, active = false, disabled = false, align = 'left', menuWidth = 200,
+    buttonClassName, closeOnSelect = true, children,
+}) {
     const [open, setOpen] = useState(false);
     const ref = useRef(null);
 
@@ -61,7 +66,7 @@ export default function Dropdown({ label, icon, active = false, disabled = false
                 <div
                     className="absolute z-50 mt-1 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg py-1"
                     style={{ minWidth: menuWidth, [align === 'right' ? 'right' : 'left']: 0 }}
-                    onClick={() => setOpen(false)}
+                    onClick={closeOnSelect ? () => setOpen(false) : undefined}
                 >
                     {children}
                 </div>
