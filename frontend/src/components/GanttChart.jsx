@@ -82,8 +82,11 @@
  *   - Zoom presets target a whole number of VISIBLE COLUMNS (days when unit='day', weeks when
  *     unit='week'); column width is derived from the live viewport so exactly that many clean columns
  *     fill the chart. On zoom the viewport re-anchors on the same left-edge DATE (across day↔week
- *     switches) and snaps to a whole-column boundary. Week-snap nav anchors viewStart to a Monday.
- * updated_by_agent: 2026-09-01 (T1: shipping-lane drag = stage-only write, Ship Planning ↔ Ship Complete)
+ *     switches) and snaps to a whole-column boundary. That date is captured by the zoom BUTTON,
+ *     before the state change — reading scrollLeft after the re-render cannot work, because a
+ *     narrower chart has already had its scrollLeft clamped by the browser. Week-snap nav anchors
+ *     viewStart to a Monday.
+ * updated_by_agent: 2026-09-04 (BUG-21: zoom captures the left-edge date before the re-render)
  */
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { jobsApi } from '../services/jobsApi';
@@ -676,6 +679,7 @@ function GanttChart({ filterComplete = false }) {
     const prevFirstDayRef = useRef(null);   // last chart origin, for scroll-anchoring on reflow
     const prevColPxRef = useRef(null);      // last column width, for scroll-anchoring on zoom
     const prevColDaysRef = useRef(null);    // last days-per-column, so day↔week zoom keeps the left-edge date
+    const zoomAnchorRef = useRef(null);     // left-edge DATE captured at the zoom click, restored after the re-render
     const snapTimerRef = useRef(null);      // debounce for column-snapping free horizontal scroll
     const didInitialScrollRef = useRef(false); // initial scroll-to-this-Monday done once per mount
     // Set by nav handlers (and once after data loads) to request a scroll on the next render.
@@ -851,19 +855,30 @@ function GanttChart({ filterComplete = false }) {
     }, [chartRange.firstDay, colPx, colDays]);
 
     // On zoom, keep the same DATE pinned under the left edge (works across day↔week granularity
-    // changes via the previous days-per-column), then snap to a whole-column boundary.
+    // changes), then snap to a whole-column boundary.
+    //
+    // The date comes from the zoom handler, which captured it BEFORE the state change. It cannot be
+    // recovered here: this effect runs after React has committed the new column width, and zooming
+    // out makes the chart narrower — so the browser has already clamped scrollLeft to the new,
+    // smaller maximum, and any px→date math on that value lands somewhere arbitrary (BUG-21). Width
+    // changes with no zoom (viewport resize, tray toggle) carry no anchor and keep the px math,
+    // which is sound for them: the old scrollLeft is still the one that was on screen.
     useLayoutEffect(() => {
         const prevPx = prevColPxRef.current;
         const prevCD = prevColDaysRef.current;
+        const anchorDate = zoomAnchorRef.current;
         prevColPxRef.current = colPx;
         prevColDaysRef.current = colDays;
+        zoomAnchorRef.current = null;
         if (prevPx === null || (prevPx === colPx && prevCD === colDays)) return;
         const el = scrollContainerRef.current;
         if (!el) return;
-        const daysFromFirst = (el.scrollLeft / prevPx) * prevCD;   // date offset (days) at old left edge
+        const daysFromFirst = anchorDate
+            ? daysBetween(chartRange.firstDay, anchorDate)
+            : (el.scrollLeft / prevPx) * prevCD;   // date offset (days) at old left edge
         const x = (daysFromFirst / colDays) * colPx;
-        el.scrollLeft = Math.round(x / colPx) * colPx;
-    }, [colPx, colDays]);
+        el.scrollLeft = Math.max(0, Math.round(x / colPx) * colPx);
+    }, [colPx, colDays, chartRange.firstDay]);
 
     // Build each lane. Two shapes share the timeline:
     //   - SHIPPING lanes: day/week-bucket point cards — group releases by Start-install COLUMN and
@@ -1035,8 +1050,20 @@ function GanttChart({ filterComplete = false }) {
     const goNextWeek = () => navigateTo(addDays(viewStart, 7));
     const goToday = () => navigateTo(mondayOf(todayIso()));
 
-    const zoomOut = () => setZoomIdx((i) => Math.max(0, i - 1));
-    const zoomIn = () => setZoomIdx((i) => Math.min(ZOOM_LEVELS.length - 1, i + 1));
+    // Zooming keeps the left-edge date. Capture it HERE, while the current column width is still
+    // the one on screen — the re-anchor effect runs too late to read it (see that effect).
+    const changeZoom = (delta) => {
+        const next = Math.min(ZOOM_LEVELS.length - 1, Math.max(0, zoomIdx + delta));
+        if (next === zoomIdx) return;
+        const el = scrollContainerRef.current;
+        if (el) {
+            const daysFromFirst = Math.round((el.scrollLeft / colPx) * colDays);
+            zoomAnchorRef.current = addDays(chartRange.firstDay, daysFromFirst);
+        }
+        setZoomIdx(next);
+    };
+    const zoomOut = () => changeZoom(-1);
+    const zoomIn = () => changeZoom(1);
 
     const openDatePicker = () => {
         setDatePickerValue(viewStart);
@@ -1237,7 +1264,7 @@ function GanttChart({ filterComplete = false }) {
                 onDragCancel={handleDragCancel}
                 onDragEnd={handleDragEnd}
             >
-            <div ref={scrollContainerRef} className="flex-1 overflow-auto h-full" onScroll={handleScrollSnap}>
+            <div ref={scrollContainerRef} data-timeline-scroll className="flex-1 overflow-auto h-full" onScroll={handleScrollSnap}>
                 {initialLoad && (
                     <div className="text-center py-12">
                         <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mb-4"></div>
