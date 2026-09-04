@@ -612,7 +612,9 @@ export function JobDetailsBody({
         && job.start_install_no_color !== true
         && job.start_install_formulaTF === false
         && Boolean(localStartInstall);
-    const startInstallDisplay = isAsap ? 'ASAP' : formatDate(localStartInstall);
+    // main's optimistic localStartInstall is the source; BUG-19 is the display rule —
+    // ASAP colours the date (MiniFlag below) and never stands in for it.
+    const startInstall = formatDate(localStartInstall);
     const startFlag = isAsap
         ? <MiniFlag kind="ASAP" />
         : (isHardDate ? <MiniFlag kind="HARD" /> : null);
@@ -987,7 +989,7 @@ export function JobDetailsBody({
                     />
                     <Row
                         label="Start Install"
-                        value={startInstallDisplay}
+                        value={startInstall}
                         flag={startFlag}
                         onClick={() => setStartInstallOpen(true)}
                         title="Edit start install — ASAP, hard date and ship link"

@@ -323,7 +323,7 @@ class TestJobCompCascade:
             # (consistent with: "only clear when the user marks it complete now").
             assert r2.start_install_formulaTF is False
 
-    def test_job_comp_percent_does_not_clear_the_date_but_does_re_tier(self, app, admin_client):
+    def test_job_comp_percent_keeps_the_date_dumps_its_colour_and_re_tiers(self, app, admin_client):
         with app.app_context():
             r = _make_release(
                 1, "A",
@@ -341,7 +341,13 @@ class TestJobCompCascade:
             db.session.expire_all()
             r2 = Releases.query.filter_by(job=1, release="A").first()
             assert r2.start_install_formulaTF is False  # not cleared
+            assert r2.start_install == date(2026, 6, 1)  # the date itself never moves
             assert r2.stage == "Install Start"  # a percentage means install has begun
+            # BUG-20: a percentage says install BEGAN, so it dumps the date's colour like
+            # any other entry into the zone. This branch used to run no cascade at all —
+            # the ASAP-drop half of that gap is covered in
+            # tests/brain/test_install_start_color_dump.py's Install Prog block.
+            assert r2.start_install_no_color is True
             # BUG-9: this route used to leave fab_order alone, so a release could
             # sit on a fixed-tier stage holding a dynamic-band value (10) and sort
             # itself in among live fab work. Install Start is tier 0 no matter

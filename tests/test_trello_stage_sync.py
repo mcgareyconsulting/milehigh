@@ -44,6 +44,43 @@ def stub_job(stage, job_id=1):
     return SimpleNamespace(id=job_id, stage=stage, stage_group=None)
 
 
+def drive_list_move(card_id, to_list, from_list):
+    """Drive one inbound list-move webhook through sync_from_trello.
+
+    Shared by every test here that exercises the inbound path: the payload shape and
+    the set of stubs ARE the contract with that path, and keeping two copies of them
+    is how they drift apart. The event time deliberately beats the record's
+    last_updated_at — sync_from_trello drops webhooks older than the row.
+    """
+    from app.models import Releases
+    from app.trello.sync import sync_from_trello
+
+    event_time = datetime.utcnow() + timedelta(hours=1)
+    card = {"id": card_id, "name": "500-101", "desc": "", "idList": "list-after", "due": None}
+    event_info = {
+        "handled": True,
+        "card_id": card_id,
+        "time": event_time.isoformat() + "Z",
+        "event": "card_updated",
+        "change_types": ["list_change"],
+        "has_list_move": True,
+        "from": from_list,
+        "list_id_before": "list-before",
+        "list_id_after": "list-after",
+        "trello_user_id": None,
+    }
+
+    with patch("app.trello.sync.get_trello_card_by_id", return_value=card), \
+         patch("app.trello.sync.get_list_name_by_id", return_value=to_list), \
+         patch("app.trello.sync._is_brain_echo_webhook", return_value=False), \
+         patch("app.trello.sync.update_trello_card_description"), \
+         patch("app.brain.job_log.scheduling.service.recalculate_all_jobs_scheduling"):
+        sync_from_trello(event_info)
+
+    db.session.expire_all()
+    return Releases.query.filter_by(trello_card_id=card_id).first()
+
+
 # ---------------------------------------------------------------------------
 # Unit: TrelloListMapper.apply_trello_list_to_db rank gate
 # ---------------------------------------------------------------------------
@@ -348,33 +385,7 @@ class TestInboundListMoveRetiersFabOrder:
     """
 
     def _drive(self, app, to_list, from_list):
-        from app.models import Releases
-        from app.trello.sync import sync_from_trello
-
-        event_time = datetime.utcnow() + timedelta(hours=1)  # must beat last_updated_at
-        card = {"id": "card-1", "name": "500-101", "desc": "", "idList": "list-after", "due": None}
-        event_info = {
-            "handled": True,
-            "card_id": "card-1",
-            "time": event_time.isoformat() + "Z",
-            "event": "card_updated",
-            "change_types": ["list_change"],
-            "has_list_move": True,
-            "from": from_list,
-            "list_id_before": "list-before",
-            "list_id_after": "list-after",
-            "trello_user_id": None,
-        }
-
-        with patch("app.trello.sync.get_trello_card_by_id", return_value=card), \
-             patch("app.trello.sync.get_list_name_by_id", return_value=to_list), \
-             patch("app.trello.sync._is_brain_echo_webhook", return_value=False), \
-             patch("app.trello.sync.update_trello_card_description"), \
-             patch("app.brain.job_log.scheduling.service.recalculate_all_jobs_scheduling"):
-            sync_from_trello(event_info)
-
-        db.session.expire_all()
-        return Releases.query.filter_by(trello_card_id="card-1").first()
+        return drive_list_move("card-1", to_list, from_list)
 
     def test_paint_list_to_shipping_flips_two_to_one(self, app):
         """Bill's exact report: 'it's not flipping the two and the one'."""
@@ -419,3 +430,92 @@ class TestInboundListMoveRetiersFabOrder:
 
             assert rec.stage == "Ship Complete"  # gate held
             assert rec.fab_order == 1            # untouched
+
+
+# ---------------------------------------------------------------------------
+# Inbound list move runs the shared ASAP-drop rule
+# ---------------------------------------------------------------------------
+
+class TestInboundAsapDrop:
+    """The shop advances work by dragging cards. This path writes the stage itself
+    rather than going through UpdateStageCommand, so it has to call the same ASAP-drop
+    rule — while that rule lived inside the command, a card dragged to 'Shipping
+    completed' kept its red forever (two such rows found in production 2026-09-03)."""
+
+    def test_drag_to_shipping_completed_drops_the_asap_flag(self, app):
+        from datetime import date
+        from app.models import Releases, ReleaseEvents
+
+        with app.app_context():
+            r = make_release(
+                1, "A",
+                stage="Ship Planning",
+                start_install_asap=True,
+                start_install=date(2026, 9, 10),
+                start_install_formulaTF=False,
+                comp_eta=date(2026, 9, 11),
+                trello_card_id="card-asap",
+                last_updated_at=datetime.utcnow() - timedelta(hours=1),
+            )
+            db.session.commit()
+
+            drive_list_move("card-asap", "Shipping completed", "Shipping planning")
+
+            db.session.expire_all()
+            r = Releases.query.filter_by(job=1, release="A").one()
+            assert r.stage == "Ship Complete"
+            assert r.start_install_asap is False, "the drag must drop the rush flag"
+            # Flag only — the dates the PM owns are untouched.
+            assert r.start_install == date(2026, 9, 10)
+            assert r.comp_eta == date(2026, 9, 11)
+            assert r.start_install_no_color is False
+
+            stage_event = ReleaseEvents.query.filter_by(action="update_stage").one()
+            drops = [
+                e for e in ReleaseEvents.query.all()
+                if isinstance(e.payload, dict)
+                and e.payload.get("reason") == "asap_dropped_on_ship_complete"
+            ]
+            assert len(drops) == 1
+            assert drops[0].source == "Trello"
+            assert drops[0].payload["parent_event_id"] == stage_event.id
+
+    def test_drag_short_of_ship_complete_keeps_the_asap_flag(self, app):
+        from app.models import Releases, ReleaseEvents
+
+        with app.app_context():
+            make_release(
+                1, "A",
+                stage="Released",
+                start_install_asap=True,
+                trello_card_id="card-asap2",
+                last_updated_at=datetime.utcnow() - timedelta(hours=1),
+            )
+            db.session.commit()
+
+            drive_list_move("card-asap2", "Paint complete", "Released")
+
+            db.session.expire_all()
+            r = Releases.query.filter_by(job=1, release="A").one()
+            assert r.stage == "Paint Complete"
+            assert r.start_install_asap is True, "still a rush — it has not shipped"
+            assert not any(
+                isinstance(e.payload, dict)
+                and e.payload.get("reason") == "asap_dropped_on_ship_complete"
+                for e in ReleaseEvents.query.all()
+            )
+
+    def test_no_trello_list_reaches_the_colour_dump_stages(self):
+        """Why the inbound path drops ASAP but does NOT run the colour dump: inbound
+        lands on the FLOOR of a list's zone (list_mapper.apply_trello_list_to_db), and
+        'Shipping completed' floors at `Ship Complete`. No inbound move can reach
+        `Install Start` or later, so a colour-dump call there would be dead code. If a
+        mapping ever changes that, this test fails and the dump has to be wired in."""
+        from app.brain.job_log.features.start_install.neutralize_install_date_cascade import (
+            COLOR_DUMP_STAGES,
+        )
+        reachable = set(TrelloListMapper.TRELLO_LIST_TO_DB_STAGE.values())
+        assert reachable.isdisjoint(COLOR_DUMP_STAGES), (
+            f"inbound can now reach {reachable & set(COLOR_DUMP_STAGES)} — wire the "
+            "colour dump into app/trello/sync.py's list-move handler"
+        )

@@ -5,7 +5,7 @@ purpose: Encapsulate the full stage update workflow (DB write, stage_group sync,
 exports:
   UpdateStageCommand: Dataclass command that executes a stage update with all side effects
   StageUpdateResult: Dataclass result with event_id, job_comp/fab_order extras
-imports_from: [app.models, app.services.outbox_service, app.services.job_event_service, app.api.helpers, app.brain.job_log.scheduling.service, app.brain.job_log.features.fab_order.tier, app.brain.job_log.features.start_install.neutralize_install_date_cascade, app.brain.job_log.features.start_install.shipping_stage_date_discipline]
+imports_from: [app.models, app.services.outbox_service, app.services.job_event_service, app.api.helpers, app.brain.job_log.scheduling.service, app.brain.job_log.features.fab_order.tier, app.brain.job_log.features.start_install.neutralize_install_date_cascade, app.brain.job_log.features.start_install.asap_drop, app.brain.job_log.features.start_install.shipping_stage_date_discipline]
 imported_by: [app/brain/job_log/routes.py]
 invariants:
   - fab_order re-tiering is delegated to features/fab_order/tier.py, shared with the Trello sync and job_comp paths
@@ -13,7 +13,7 @@ invariants:
   - Paint Complete + hard start_install auto-rolls to Ship Planning (N5; generalizes ASAP intercept)
   - Ship Planning / Ship Complete apply N5 formula-date blanking only; a hard date keeps its color there (BUG-11)
   - A transition into `Install Start` or later dumps a hard date's color (COLOR_DUMP_STAGES);
-    an ASAP row additionally has its placeholder start_install rewritten to the event's date
+    the date itself is kept — ASAP rows included, since ASAP no longer stamps a date
   - Deduplicated events raise ValueError (event_exists); caller decides whether to treat as success
   - Scheduling recalculation failure is logged but does not roll back the update
 """
@@ -31,6 +31,7 @@ from app.brain.job_log.features.start_install.neutralize_install_date_cascade im
     COLOR_DUMP_STAGES,
     reason_for_stage,
 )
+from app.brain.job_log.features.start_install.asap_drop import drop_asap_on_completion
 from app.brain.job_log.features.start_install.shipping_stage_date_discipline import (
     apply_shipping_stage_date_discipline,
 )
@@ -113,7 +114,7 @@ class UpdateStageCommand:
     undone_event_id: Optional[int] = None
 
     def execute(self) -> StageUpdateResult:
-        from app.api.helpers import get_stage_group_from_stage, STAGE_PROGRESSION_RANK
+        from app.api.helpers import get_stage_group_from_stage
 
         job_record: Releases = Releases.resolve(self.job_id, self.release)
         if not job_record:
@@ -211,33 +212,22 @@ class UpdateStageCommand:
 
         extras: dict = {}
 
-        # Captured before the ASAP-drop block below clears the flag: the install-date
-        # neutralize further down needs to know this row WAS an ASAP, and by then it
-        # cannot tell.
-        had_asap = bool(getattr(job_record, 'start_install_asap', False))
-
         # ASAP drop on completion: once an ASAP release reaches Ship Complete or any
-        # later stage, it is no longer a rush, so clear the ASAP flag. The start_install /
-        # comp_eta set at ASAP-flag time (and any subsequent mirror-card tweak) are LEFT
-        # intact — the PM owns the install date from then on. Hold (rank 99) is excluded.
-        SHIP_COMPLETE_RANK = STAGE_PROGRESSION_RANK['Ship Complete']
-        new_rank = STAGE_PROGRESSION_RANK.get(self.stage, -1)
-        if (
-            bool(getattr(job_record, 'start_install_asap', False))
-            and SHIP_COMPLETE_RANK <= new_rank < 99
+        # later stage it is no longer a rush, so the flag comes off. The dates set while
+        # it was a rush are LEFT intact — the PM owns the install date from then on.
+        #
+        # The rule lives in its own module rather than inline here because this command
+        # is NOT the only writer that advances a stage: the inbound Trello list move
+        # writes the stage itself (app/trello/sync.py), and while the rule lived in this
+        # function that path silently skipped it — cards dragged to Shipping completed
+        # kept their red indefinitely. Same shape as BUG-9's fab_order and BUG-16's
+        # drafting-status drop: one rule, every writer calls it.
+        if drop_asap_on_completion(
+            job_record,
+            new_stage=self.stage,
+            parent_event_id=event.id,
+            source=self.source,
         ):
-            job_record.start_install_asap = False
-            JobEventService.create_and_close(
-                job=self.job_id, release=self.release,
-                action='updated', source=self.source,
-                payload={
-                    'field': 'start_install_asap',
-                    'old_value': True,
-                    'new_value': False,
-                    'reason': 'asap_dropped_on_ship_complete',
-                    'parent_event_id': event.id,
-                },
-            )
             extras['asap_dropped'] = True
 
         # job_comp cascade. 'Install Complete' and 'Complete' form a single
@@ -307,14 +297,6 @@ class UpdateStageCommand:
                 parent_event_id=event.id,
                 reason=reason_for_stage(self.stage),
                 source=self.source,
-                # An ASAP row's date was an anchor a week out, never a plan. This stage
-                # change is the moment install actually began, so it becomes the date.
-                # Taken from the stage event itself, so the audit trail and the date agree.
-                # Only ASAP rows: a hand-set hard date is a real commitment and keeps its
-                # value, so a non-ASAP row passes None and nothing moves.
-                install_started_on=(
-                    (event.created_at or datetime.utcnow()).date() if had_asap else None
-                ),
             ):
                 extras['hard_date_cleared'] = True
 

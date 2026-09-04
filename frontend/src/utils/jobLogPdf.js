@@ -261,9 +261,12 @@ function buildColumnStyles(columnHeaders, columnWidthPercent) {
 
 function formatCell(job, column) {
     if (column === 'Urgency') return '';
-    // ASAP rows show the literal "ASAP" instead of a (usually empty) date,
-    // matching the on-screen displayValue in JobsTableRow.jsx.
-    if (column === 'Start install' && job['start_install_asap'] === true) return 'ASAP';
+    // On screen ASAP is a red tint on a real date. Print has no tint, so the flag rides
+    // in front of the date instead. Historic ASAP rows can still carry no date at all
+    // (ASAP used to stamp one and no longer does) — those print the bare flag.
+    if (column === 'Start install' && job['start_install_asap'] === true) {
+        return job[column] ? `ASAP ${formatDateShort(job[column])}` : 'ASAP';
+    }
     const raw = job[column];
     const value = DATE_COLUMNS.has(column)
         ? formatDateShort(raw)

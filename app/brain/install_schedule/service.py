@@ -8,7 +8,8 @@ imports_from: [app.models, app.brain.job_log.scheduling.calculator, app.brain.jo
 imported_by: [app/brain/install_schedule/routes.py, tests]
 invariants:
   - Read-only. Deterministic given (today, DB state); no external calls.
-  - "Hard date" == start_install_formulaTF is False AND not ASAP AND not no-color (mirrors StartInstallEditor.jsx).
+  - "Hard date" == start_install_formulaTF is False AND not no-color (mirrors StartInstallEditor.jsx).
+    An ASAP row is a hard date too — it is labelled `asap` for its colour and sorts ahead of plain hard.
   - Estimated hours come ONLY from the manual install_hrs field; never fabricated. Blank stays blank.
   - Crew grouping is by the installer string; releases with no installer fall into a single UNASSIGNED bucket.
 """
@@ -23,23 +24,29 @@ logger = get_logger(__name__)
 
 UNASSIGNED = "Unassigned"
 
-# date_kind values, in scheduling-priority order (hard is the non-negotiable anchor).
+# date_kind values, in scheduling-priority order (both hard kinds are non-negotiable anchors).
+KIND_ASAP = "asap"          # hard date flagged a rush — red
 KIND_HARD = "hard"          # green/future hard date — non-negotiable
-KIND_ASAP = "asap"          # red ASAP flag
 KIND_PROJECTED = "projected"  # formula-derived soft date
 KIND_NEUTRAL = "neutral"    # no-color (release already in the complete zone)
 
-# Sort weight: hard first, then asap, then projected, then neutral.
-_KIND_ORDER = {KIND_HARD: 0, KIND_ASAP: 1, KIND_PROJECTED: 2, KIND_NEUTRAL: 3}
+# Sort weight: ASAP first, then plain hard, then projected, then neutral. ASAP is a hard
+# date the PM marked as the one to do first, so it outranks an unflagged hard date.
+_KIND_ORDER = {KIND_ASAP: 0, KIND_HARD: 1, KIND_PROJECTED: 2, KIND_NEUTRAL: 3}
 
 
 def _classify_date(rel):
     """Mirror the frontend StartInstallEditor color logic to label the install date."""
-    if rel.start_install_asap:
+    # The flag alone is not a commitment. The modal refuses to set ASAP without a hard
+    # date, but the API accepts the flag on its own and legacy rows predate the rule —
+    # so an ASAP row with a projected (or absent) date must classify as projected, or
+    # is_hard below would feed a soft date into the crew conflict pairing.
+    is_hard_date = rel.start_install_formulaTF is False and rel.start_install is not None
+    if rel.start_install_asap and is_hard_date:
         return KIND_ASAP
     if rel.start_install_no_color:
         return KIND_NEUTRAL
-    if rel.start_install_formulaTF is False and rel.start_install is not None:
+    if is_hard_date:
         return KIND_HARD
     return KIND_PROJECTED
 
@@ -67,7 +74,9 @@ def _card(rel, today):
         "num_guys": rel.num_guys,
         "start_install": _iso(rel.start_install),
         "date_kind": kind,
-        "is_hard": kind == KIND_HARD,
+        # Both kinds are commitments a person made, so both count as hard for the
+        # overlap and capacity math; date_kind is what distinguishes the rush.
+        "is_hard": kind in (KIND_HARD, KIND_ASAP),
         "est_hours": rel.install_hrs,          # manual field; None when not entered
         "comp_eta": _iso(comp_eta),
         "stage": rel.stage,

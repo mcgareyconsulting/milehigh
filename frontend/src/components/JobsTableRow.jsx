@@ -722,13 +722,13 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         }
     };
 
-    const handleSetAsap = async (installer) => {
+    const handleSetAsap = async (installer, startInstall) => {
         const jobNumber = row['Job #'];
         const releaseNumber = row['Release #'];
 
         setIsStartInstallModalOpen(false);
         try {
-            const ok = await setAsapAndAssign(jobNumber, releaseNumber, installer);
+            const ok = await setAsapAndAssign(jobNumber, releaseNumber, installer, startInstall);
             if (ok && onUpdate) onUpdate();
         } catch (error) {
             console.error(`[START_INSTALL] Failed to set ASAP for job ${jobNumber}-${releaseNumber}:`, error);
@@ -1237,7 +1237,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             formulaTF: row['start_install_formulaTF'],
                             installDate: localStartInstall,
                         });
-                        const displayValue = isAsap ? 'ASAP' : formatDate(localStartInstall);
+                        // ASAP colors the date red; it never replaces it with the word.
+                        const displayValue = formatDate(localStartInstall);
                         // Formula date is when start_install_formulaTF is true or formula starts with '='
                         const isFormulaDate = !isAsap && (row['start_install_formulaTF'] === true || (row['start_install_formula'] && row['start_install_formula'].startsWith('=')));
                         // IMPORTANT: avoid conflicting bg-* utilities (Tailwind utility order, not class string order,
@@ -1255,7 +1256,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         }
 
                         const titleText = isAsap
-                            ? 'ASAP — release will jump from Paint Complete to Shipping Planning. Click to edit.'
+                            ? `ASAP ${displayValue} — release will jump from Paint Complete to Shipping Planning. Click to edit.`
                             : isFormulaDate
                                 ? `${displayValue} (Formula-driven - Click to set hard date)`
                                 : `${displayValue} - Click to edit`;
@@ -1293,8 +1294,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             formulaTF: row['start_install_formulaTF'],
                             installDate: localStartInstall,
                         });
-                        // Show "ASAP" instead of the underlying date, matching the Start install cell.
-                        const displayValue = isAsap ? 'ASAP' : formatDate(localShipDate);
+                        // ASAP tints this cell red too, but the date shown is its own.
+                        const displayValue = formatDate(localShipDate);
                         const hasDate = !!localShipDate;
                         let shipBgClass;
                         if (isAsap) {

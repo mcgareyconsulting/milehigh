@@ -291,13 +291,14 @@ def start_install_overdue(release):
     """Hard start-install date that has already passed.
 
     Mirrors isHardDatePast in JobsTableRow.jsx: only a real committed date counts
-    (not a formula-driven ETA, not a neutralized/no-color date, not ASAP).
+    (not a formula-driven ETA, not a neutralized/no-color date). ASAP rows DO count —
+    ASAP is a rush flag on a hand-set date now, not a date of its own.
     """
     if release is None or release.start_install is None:
         return False
     if release.start_install_formulaTF is not False:
         return False
-    if release.start_install_no_color or release.start_install_asap:
+    if release.start_install_no_color:
         return False
     return release.start_install < date.today()
 
