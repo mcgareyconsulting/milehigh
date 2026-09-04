@@ -17,6 +17,32 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.366',
+    date: 'September 4, 2026',
+    summary:
+      'ASAP stops inventing a date and becomes what it always meant — a red flag over a real drop-dead date you set yourself. The red now comes off on its own when the work is finished, from Trello or from an install percentage. And zooming the Timeline keeps your place instead of dumping you at the far left.',
+    changes: [
+      {
+        type: 'improved',
+        title: 'ASAP is a color, not a date',
+        detail:
+          'Setting ASAP used to stamp an install date a week out and then print the word "ASAP" over it, so the one thing you wanted to know — when does this actually have to be there — was hidden behind a placeholder nobody had chosen. Now ASAP is a rush flag over a date you set: click ASAP mode, type the real drop-dead date, and the cell shows that date in red. The date is required — Save stays off until you enter one — and it is yours from then on: setting it no longer cancels the flag, and starting install no longer rewrites it. Because every ASAP date is now a date a person typed, ASAP counts as a hard date everywhere it did not before — it is back in the on-time metrics, it anchors material lead times, and it sorts ahead of a plain hard date on the install schedule. Undo works on the flag alone; ASAP entries recorded before this change still roll back the date they had stamped.',
+      },
+      {
+        type: 'fixed',
+        title: 'The red comes off when the work is finished',
+        detail:
+          'A rush job that reached shipping kept its red until somebody went into Brain and cleared it by hand — two live releases were sitting that way. The flag was only being dropped by a stage change made in Brain, and the shop does not advance work that way: it drags the Trello card. Dragging a card to shipping completed now clears the rush the same as a stage change in Brain does, and so does typing an install percentage on a release, which is the most explicit "this has started" statement in the system and was the one path that left the row red.',
+      },
+      {
+        type: 'fixed',
+        title: 'Zooming the Timeline keeps your place',
+        detail:
+          'Zooming in or out threw away where you were looking and left you at the far-left end of the chart, on a date that had nothing to do with the week you were working in. The chart was working out where to land after it had already resized, by which point the browser had quietly moved the view — so it was reading a position that was never on your screen. It now remembers the date at the left edge before the zoom and puts that date back afterward.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.361',
     date: 'September 3, 2026',
     summary:
