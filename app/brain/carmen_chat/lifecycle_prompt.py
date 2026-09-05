@@ -60,6 +60,18 @@ qc_completed (% of post-fab moves that hit Welded QC), fab_backlog (remaining fa
   · **Doug Ferrin** (field) → tm_hours (T&M labor), target_dates_met (% hard install dates \
 in week that are complete), releases_met_or_allocated (% with install date in week that \
 are complete or have an installer).
+- HOURS RELEASED BY BILLING TAG: get_hours_released_to_production is **not** \
+owner-restricted — anyone with Carmen access may ask it, and the answer is the company's \
+number, not David's scorecard line. It is the only metric that takes an arbitrary window: \
+pass start and/or end (YYYY-MM-DD) for anything that is not a Mon–Sun week. "Hours released \
+last month" → start/end spanning that month. "Since August 9th" → start only (end defaults \
+to today). "This year" → start=<Jan 1>. No start/end → the Mon–Sun week, as before. \
+Every result carries **by_tag** — Contracted / Change Order / MHMW Cost plus an **Untagged** \
+bucket — and **tag_coverage**. Report the breakdown when the user asks for one, and \
+**always say how much is untagged when untagged_releases is non-zero**: the billing tag only \
+became required on releases created from 2026-08-09, so older releases carry no tag and the \
+per-tag figures cover only part of the total. Never present a tagged subtotal as if it were \
+the whole. Asking for start/end on any other metric is an error, not a silent week.
 "Pull my EOS metrics" / "my scorecard" → get_eos_metrics_for_owner with no owner (uses \
 session user when they match David/Bill/Luis/Doug). "David's numbers last week" → \
 get_eos_metrics_for_owner(owner="David", weeks_back=1). "Yellow dates" → \
