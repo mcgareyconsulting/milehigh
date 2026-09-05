@@ -19,7 +19,13 @@ from sqlalchemy import or_
 
 from app.api.helpers import get_fab_modifier
 from app.datetime_utils import get_mountain_timezone
-from app.models import Releases, ReleaseEvents, TMTicket, db
+from app.models import (
+    RELEASE_TAG_LABELS,
+    Releases,
+    ReleaseEvents,
+    TMTicket,
+    db,
+)
 
 # ---------------------------------------------------------------------------
 # Owner registry — who queries what
@@ -180,6 +186,90 @@ def format_week_label(monday: date, sunday: date) -> str:
     return f"{monday.strftime('%b')} {monday.day} – {sunday.strftime('%b')} {sunday.day}"
 
 
+def format_range_label(start: date | None, end: date) -> str:
+    """Human label for an arbitrary window; open-ended below reads as 'through'."""
+    if start is None:
+        return f"through {end.strftime('%b')} {end.day}, {end.year}"
+    if start.year == end.year:
+        return (f"{start.strftime('%b')} {start.day} – "
+                f"{end.strftime('%b')} {end.day}, {end.year}")
+    return (f"{start.strftime('%b')} {start.day}, {start.year} – "
+            f"{end.strftime('%b')} {end.day}, {end.year}")
+
+
+def resolve_window(
+    weeks_back: int = 0,
+    week_of: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+) -> dict:
+    """Resolve the query window, in either of two modes.
+
+    **Week mode** (the default, and what the EOS scorecard means): no ``start``
+    and no ``end``, so ``weeks_back`` / ``week_of`` pick a Monday–Sunday week the
+    same way they always have. The scorecard columns are Mon–Sun and nothing here
+    changes that.
+
+    **Range mode**: either bound present. ``start`` omitted means no lower bound
+    ("everything up to X"); ``end`` omitted means today (Mountain). Reversed
+    bounds are swapped rather than returning nothing, since a model that has
+    inverted them is asking for the span between two dates either way.
+
+    Returns a dict carrying ``mode``, the resolved ``start`` (None only when
+    unbounded) and ``end`` as dates, plus the display payload.
+    """
+    lo = parse_week_of(start)
+    hi = parse_week_of(end)
+    if start and lo is None:
+        return {"error": f"could not parse start date: {start!r} (expected YYYY-MM-DD)"}
+    if end and hi is None:
+        return {"error": f"could not parse end date: {end!r} (expected YYYY-MM-DD)"}
+
+    if lo is None and hi is None:
+        monday, sunday, anchor = resolve_week(weeks_back, week_of)
+        return {
+            "mode": "week",
+            "start": monday,
+            "end": sunday,
+            "anchor": anchor,
+            "payload": week_dict(monday, sunday, anchor),
+        }
+
+    if hi is None:
+        hi = mountain_today()
+    if lo is not None and lo > hi:
+        lo, hi = hi, lo
+    return {
+        "mode": "range",
+        "start": lo,
+        "end": hi,
+        "anchor": hi,
+        "payload": {
+            "start": lo.isoformat() if lo else None,
+            "end": hi.isoformat(),
+            "label": format_range_label(lo, hi),
+        },
+    }
+
+
+def finite_hours(value) -> float:
+    """Hours as a float, with non-finite values read as zero.
+
+    Nine legacy archived rows carry a literal ``NaN`` in ``fab_hrs`` /
+    ``install_hrs``. The non-archived filter hides them from every metric today,
+    but a single NaN would poison a sum and then serialize as invalid JSON, so
+    the coercion lives with the read rather than with the filter that happens to
+    be shielding it.
+    """
+    if value is None:
+        return 0.0
+    try:
+        hrs = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return hrs if hrs == hrs and hrs not in (float("inf"), float("-inf")) else 0.0
+
+
 def week_dict(monday: date, sunday: date, anchor: date) -> dict:
     return {
         "start": monday.isoformat(),
@@ -217,16 +307,30 @@ def _owner_payload(owner_key: str) -> dict:
     }
 
 
-def _metric_shell(metric_id: str, monday: date, sunday: date, anchor: date) -> dict:
+def _metric_shell(metric_id: str, monday: date, sunday: date, anchor: date,
+                  window: dict | None = None) -> dict:
+    """Common head of every metric payload.
+
+    ``window`` is the resolved window from ``resolve_window``. In week mode the
+    payload keeps its historical ``week`` key; in range mode ``week`` is
+    **omitted** rather than filled with range bounds, so nothing downstream can
+    read an arbitrary span as a Mon–Sun week. ``window`` is always present.
+    """
     cat = METRIC_CATALOG[metric_id]
-    return {
+    out = {
         "metric": metric_id,
         "metric_label": cat["label"],
         "goal": cat["goal"],
         "kind": cat["kind"],
         **_owner_payload(cat["owner_key"]),
-        "week": week_dict(monday, sunday, anchor),
     }
+    if window is None or window["mode"] == "week":
+        out["week"] = week_dict(monday, sunday, anchor)
+    out["window"] = {
+        "mode": (window or {}).get("mode", "week"),
+        **((window or {}).get("payload") or week_dict(monday, sunday, anchor)),
+    }
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -332,24 +436,48 @@ def _stage_from_to(payload: dict | None) -> tuple[str | None, str | None]:
 def hours_released_to_production(
     weeks_back: int = 0,
     week_of: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
 ) -> dict[str, Any]:
-    """David: count of new releases + sum fab_hrs by ``released`` Mon–Sun week."""
-    monday, sunday, anchor = resolve_week(weeks_back, week_of)
+    """Hours released to the job log: release count + fab_hrs by ``released`` date.
+
+    Two windows, one query. With neither ``start`` nor ``end`` this is David's
+    Mon–Sun EOS metric, unchanged. With either bound it answers an arbitrary
+    span — the form any admin asks in ("hours released last month", "since
+    August 9th").
+
+    Every result carries a **billing-tag breakdown** (N1's
+    ``Releases.release_tag``: Contracted / Change Order / MHMW Cost) with an
+    explicit ``untagged`` bucket. The bucket is deliberately visible: the tag
+    only became required at creation on 2026-08-09 and the historical rows are
+    untagged until N10 backfills them, so a total that silently dropped untagged
+    hours would be wrong by most of its own value. ``tag_coverage`` states how
+    much of the answer is actually classified.
+    """
+    window = resolve_window(weeks_back, week_of, start, end)
+    if "error" in window:
+        return window
+    lo, hi = window["start"], window["end"]
+
+    filters = [Releases.released.isnot(None), Releases.released <= hi]
+    if lo is not None:
+        filters.append(Releases.released >= lo)
     rows = (
-        Releases.query.filter(
-            Releases.released.isnot(None),
-            Releases.released >= monday,
-            Releases.released <= sunday,
-            *_active_release_filter(),
-        )
+        Releases.query.filter(*filters, *_active_release_filter())
         .order_by(Releases.released.asc(), Releases.job.asc(), Releases.release.asc())
         .all()
     )
+
     total_fab = 0.0
     detail = []
+    buckets: dict[str | None, dict[str, Any]] = {}
     for r in rows:
-        hrs = float(r.fab_hrs) if r.fab_hrs is not None else 0.0
+        hrs = finite_hours(r.fab_hrs)
         total_fab += hrs
+        tag = r.release_tag if r.release_tag in RELEASE_TAG_LABELS else None
+        b = buckets.setdefault(tag, {"release_count": 0, "fab_hrs": 0.0})
+        b["release_count"] += 1
+        b["fab_hrs"] += hrs
         if len(detail) < DETAIL_CAP:
             detail.append({
                 "identifier": f"{r.job}-{r.release}",
@@ -358,16 +486,50 @@ def hours_released_to_production(
                 "fab_hrs": hrs,
                 "released": r.released.isoformat() if r.released else None,
                 "stage": r.stage,
+                "release_tag": tag,
+                "release_tag_label": RELEASE_TAG_LABELS.get(tag, "Untagged"),
             })
-    out = _metric_shell("hours_released_to_production", monday, sunday, anchor)
+
+    # Canonical tag order first, untagged last — so the answer always reads in the
+    # same order whether or not a given tag appears in the window.
+    by_tag = []
+    for tag in list(RELEASE_TAG_LABELS) + [None]:
+        b = buckets.get(tag)
+        if b is None:
+            continue
+        by_tag.append({
+            "release_tag": tag,
+            "label": RELEASE_TAG_LABELS.get(tag, "Untagged"),
+            "release_count": b["release_count"],
+            "fab_hrs": round(b["fab_hrs"], 2),
+        })
+    untagged = buckets.get(None, {"release_count": 0, "fab_hrs": 0.0})
+    tagged_count = len(rows) - untagged["release_count"]
+
+    monday, sunday = window["start"] or window["end"], window["end"]
+    out = _metric_shell("hours_released_to_production", monday, sunday,
+                        window["anchor"], window=window)
     out.update({
         "release_count": len(rows),
         "total_fab_hrs": round(total_fab, 2),
+        "by_tag": by_tag,
+        "tag_coverage": {
+            "tagged_releases": tagged_count,
+            "untagged_releases": untagged["release_count"],
+            "untagged_fab_hrs": round(untagged["fab_hrs"], 2),
+            "tagged_pct": round(100.0 * tagged_count / len(rows), 1) if rows else None,
+            "note": (
+                "release_tag became required at creation on 2026-08-09; releases "
+                "created before that are untagged until the N10 bulk-edit backfill "
+                "runs. Report the untagged bucket rather than dropping it."
+            ),
+        },
         "releases": detail,
         "releases_truncated": max(0, len(rows) - len(detail)),
         "rules": {
             "date_field": "released",
             "week": "Monday–Sunday (Mountain)",
+            "window_mode": window["mode"],
             "includes_archived": False,
             "null_fab_hrs_as": 0,
         },
@@ -881,12 +1043,26 @@ METRIC_EXECUTORS = {
 }
 
 
+#: Metrics whose window can be an arbitrary date range rather than a Mon–Sun week.
+#: The rest of the scorecard is defined weekly and stays that way — forwarding
+#: start/end to them would invent a semantic nobody agreed to.
+RANGE_CAPABLE_METRICS = frozenset({"hours_released_to_production"})
+
+
 def get_eos_metric(
     metric: str,
     weeks_back: int = 0,
     week_of: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
 ) -> dict[str, Any]:
-    """Dispatch a single metric by id."""
+    """Dispatch a single metric by id.
+
+    ``start`` / ``end`` are only meaningful for ``RANGE_CAPABLE_METRICS``; asking
+    for a range on a weekly-by-definition metric is an error rather than a
+    silently-ignored argument, so the caller finds out that the number they got
+    back is not the number they asked for.
+    """
     mid = (metric or "").strip().casefold().replace(" ", "_").replace("-", "_")
     # friendly aliases
     aliases = {
@@ -912,6 +1088,16 @@ def get_eos_metric(
             "known_metrics": list(METRIC_EXECUTORS.keys()),
             "owners": list_owner_metrics(),
         }
+    if (start or end) and mid not in RANGE_CAPABLE_METRICS:
+        return {
+            "error": (
+                f"{mid} is a weekly (Mon–Sun) metric and does not accept a date "
+                f"range — use weeks_back or week_of"
+            ),
+            "range_capable_metrics": sorted(RANGE_CAPABLE_METRICS),
+        }
+    if mid in RANGE_CAPABLE_METRICS:
+        return fn(weeks_back=weeks_back, week_of=week_of, start=start, end=end)
     return fn(weeks_back=weeks_back, week_of=week_of)
 
 

@@ -226,6 +226,155 @@ def test_hours_released_to_production_weekly_aggregate(app):
         ids = {r["identifier"] for r in out["releases"]}
         assert ids == {"410-1", "410-2", "411-1", "412-1"}
         assert out["rules"]["includes_archived"] is False
+        # Week mode still says so, and still carries the historical `week` key.
+        assert out["window"]["mode"] == "week"
+        assert out["rules"]["window_mode"] == "week"
+
+
+def _released(job, rel, hrs, day, **extra):
+    """A non-archived release with a released date, for the window tests."""
+    return make_release(job, rel, job_name=f"J{job}", fab_hrs=hrs, released=day,
+                        is_active=True, is_archived=False, **extra)
+
+
+def test_hours_released_arbitrary_range_ignores_week_bounds(app):
+    """start/end define the window exactly — no snapping to Monday/Sunday."""
+    with app.app_context():
+        # Aug 5 is a Wednesday; a Mon-Sun week would pull in Aug 3-9.
+        _released(410, "1", 10.0, date(2026, 8, 4))    # before start — excluded
+        _released(410, "2", 20.0, date(2026, 8, 5))    # start boundary, inclusive
+        _released(410, "3", 30.0, date(2026, 8, 20))   # inside
+        _released(410, "4", 40.0, date(2026, 9, 2))    # end boundary, inclusive
+        _released(410, "5", 50.0, date(2026, 9, 3))    # after end — excluded
+
+        out = tools.get_hours_released_to_production(start="2026-08-05", end="2026-09-02")
+        assert out["window"]["mode"] == "range"
+        assert out["window"]["start"] == "2026-08-05"
+        assert out["window"]["end"] == "2026-09-02"
+        assert out["release_count"] == 3
+        assert out["total_fab_hrs"] == 90.0
+        # A range is not a week, so the week key is absent rather than misleading.
+        assert "week" not in out
+
+
+def test_hours_released_reversed_bounds_are_swapped(app):
+    with app.app_context():
+        _released(410, "1", 12.0, date(2026, 8, 10))
+        out = tools.get_hours_released_to_production(start="2026-08-31", end="2026-08-01")
+        assert out["window"]["start"] == "2026-08-01"
+        assert out["window"]["end"] == "2026-08-31"
+        assert out["total_fab_hrs"] == 12.0
+
+
+def test_hours_released_start_only_runs_to_today(app):
+    with app.app_context():
+        _released(410, "1", 5.0, date(2026, 8, 1))     # before start
+        _released(410, "2", 7.0, date(2026, 8, 20))
+        _released(410, "3", 9.0, date(2026, 9, 5))     # "today"
+        _released(410, "4", 11.0, date(2026, 9, 6))    # future — excluded
+        with patch("app.brain.carmen_chat.eos_metrics.mountain_today",
+                   return_value=date(2026, 9, 5)):
+            out = tools.get_hours_released_to_production(start="2026-08-15")
+        assert out["window"]["end"] == "2026-09-05"
+        assert out["total_fab_hrs"] == 16.0
+
+
+def test_hours_released_end_only_is_unbounded_below(app):
+    """'Everything up to X' — the shape behind an all-time total for a job."""
+    with app.app_context():
+        _released(410, "1", 5.0, date(2024, 1, 2))
+        _released(410, "2", 7.0, date(2026, 8, 20))
+        _released(410, "3", 9.0, date(2026, 9, 30))    # after end — excluded
+        out = tools.get_hours_released_to_production(end="2026-08-31")
+        assert out["window"]["start"] is None
+        assert out["total_fab_hrs"] == 12.0
+        assert "through Aug 31" in out["window"]["label"]
+
+
+def test_hours_released_breaks_down_by_billing_tag(app):
+    with app.app_context():
+        _released(410, "1", 100.0, date(2026, 8, 3), release_tag="contracted")
+        _released(410, "2", 50.0, date(2026, 8, 4), release_tag="contracted")
+        _released(410, "3", 25.0, date(2026, 8, 5), release_tag="change_order")
+        _released(410, "4", 12.0, date(2026, 8, 6), release_tag="mhmw_cost")
+        _released(410, "5", 13.0, date(2026, 8, 7))            # untagged
+        _released(410, "6", 8.0, date(2026, 8, 7), release_tag="nonsense")  # unknown → untagged
+
+        out = tools.get_hours_released_to_production(week_of="2026-08-05")
+        assert out["total_fab_hrs"] == 208.0
+
+        # Canonical order, untagged last.
+        assert [b["release_tag"] for b in out["by_tag"]] == [
+            "contracted", "change_order", "mhmw_cost", None,
+        ]
+        by = {b["release_tag"]: b for b in out["by_tag"]}
+        assert by["contracted"] == {"release_tag": "contracted", "label": "Contracted",
+                                    "release_count": 2, "fab_hrs": 150.0}
+        assert by[None]["label"] == "Untagged"
+        assert by[None]["release_count"] == 2      # the untagged row and the unknown tag
+        assert by[None]["fab_hrs"] == 21.0
+
+        # The per-tag figures sum back to the headline — nothing is dropped.
+        assert round(sum(b["fab_hrs"] for b in out["by_tag"]), 2) == out["total_fab_hrs"]
+        assert sum(b["release_count"] for b in out["by_tag"]) == out["release_count"]
+
+        cov = out["tag_coverage"]
+        assert cov["tagged_releases"] == 4
+        assert cov["untagged_releases"] == 2
+        assert cov["untagged_fab_hrs"] == 21.0
+        assert cov["tagged_pct"] == 66.7
+
+
+def test_hours_released_tag_coverage_on_an_empty_window(app):
+    with app.app_context():
+        out = tools.get_hours_released_to_production(week_of="2026-08-05")
+        assert out["release_count"] == 0
+        assert out["by_tag"] == []
+        assert out["tag_coverage"]["tagged_pct"] is None
+
+
+def test_hours_released_nan_fab_hrs_reads_as_zero(app):
+    """Nine legacy rows carry a literal NaN; a NaN in the sum serializes as invalid JSON."""
+    with app.app_context():
+        _released(410, "1", float("nan"), date(2026, 8, 4))
+        _released(410, "2", 10.0, date(2026, 8, 5))
+        out = tools.get_hours_released_to_production(week_of="2026-08-05")
+        assert out["total_fab_hrs"] == 10.0
+        assert out["release_count"] == 2
+        assert all(r["fab_hrs"] == r["fab_hrs"] for r in out["releases"])  # no NaN survives
+
+
+def test_hours_released_rejects_an_unparseable_date(app):
+    with app.app_context():
+        out = tools.get_hours_released_to_production(start="last tuesday")
+        assert "error" in out
+        assert "start date" in out["error"]
+
+
+def test_get_eos_metric_forwards_a_range_only_to_the_range_capable_metric(app):
+    with app.app_context():
+        _released(410, "1", 30.0, date(2026, 8, 20))
+        ok = tools.get_eos_metric(metric="hours_released", start="2026-08-01",
+                                  end="2026-08-31")
+        assert ok["total_fab_hrs"] == 30.0
+        assert ok["window"]["mode"] == "range"
+
+        # Weekly-by-definition metrics say so rather than quietly returning a week.
+        bad = tools.get_eos_metric(metric="yellow_dates", start="2026-08-01")
+        assert "error" in bad
+        assert bad["range_capable_metrics"] == ["hours_released_to_production"]
+
+
+def test_hours_released_tool_schema_offers_the_range(app):
+    """The model can only ask for a window the schema advertises."""
+    defn = next(d for d in tools.TOOL_DEFINITIONS
+                if d["name"] == tools.TOOL_HOURS_RELEASED)
+    props = defn["input_schema"]["properties"]
+    assert {"weeks_back", "week_of", "start", "end"} <= set(props)
+    # Weekly-only tools must not advertise it.
+    owner_defn = next(d for d in tools.TOOL_DEFINITIONS
+                      if d["name"] == tools.TOOL_EOS_FOR_OWNER)
+    assert "start" not in owner_defn["input_schema"]["properties"]
 
 
 def test_hours_released_weeks_back_and_dispatch(app):
