@@ -1,11 +1,14 @@
 """Shared helpers for parsing @FirstName mentions and resolving to users.
 
-Used by board comments and DWL notes. Keeping this centralized ensures parsing
-stays consistent with the frontend MentionInput component (regex `/@(\\w+)/`).
+Used by board comments, DWL notes and drawing-version comments. Keeping this
+centralized ensures parsing stays consistent with the frontend MentionInput
+component (regex `/@(\\w+)/`), and that every writer stamps the mentioner's name
+the same way — `user_display_name` is re-exported here so a mention producer
+imports its byline from the same place it imports its parser.
 """
 import re
 
-from app.models import User, db
+from app.models import User, db, user_display_name  # noqa: F401  (re-exported)
 
 
 _MENTION_RE = re.compile(r'@(\w+)')
