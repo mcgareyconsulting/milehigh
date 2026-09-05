@@ -24,10 +24,9 @@ from app.models import (
     ReleaseDrawingVersion,
     DrawingVersionComment,
     Notification,
-    User,
     db,
 )
-from app.brain.mentions import parse_mentions, resolve_mentioned_users
+from app.brain.mentions import parse_mentions, resolve_mentioned_users, user_display_name
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
 
@@ -39,14 +38,6 @@ from app.brain.job_log.features.pdf_markup.payloads import is_pdf_bytes
 from app.brain.job_log.features.pdf_markup.storage import absolute_path
 
 logger = get_logger(__name__)
-
-
-def _resolve_user_display_name(user: User) -> str:
-    if not user:
-        return None
-    first = (user.first_name or '').strip()
-    last = (user.last_name or '').strip()
-    return (f"{first} {last}".strip()) or user.username
 
 
 @brain_bp.route('/releases/<int:release_id>/drawing', methods=['POST'])
@@ -200,7 +191,7 @@ def add_drawing_version_comment(release_id, version_id):
         return jsonify({'error': 'Comment body is required'}), 400
 
     user = get_current_user()
-    author_name = _resolve_user_display_name(user)
+    author_name = user_display_name(user)
 
     comment = DrawingVersionComment(
         drawing_version_id=version.id,

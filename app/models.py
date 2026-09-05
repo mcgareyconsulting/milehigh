@@ -17,6 +17,7 @@ invariants:
   - Job vs Jobs naming collision: Job = job log entries (table 'jobs'); Projects (formerly Jobs) = geofence/job site records (table 'projects').
 updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
 """
+from flask import g, has_request_context
 from flask_sqlalchemy import SQLAlchemy
 import pandas as pd
 import re
@@ -30,6 +31,52 @@ db = SQLAlchemy()
 def _dt(value):
     """Serialize a datetime/date to ISO format string, or None."""
     return value.isoformat() if value else None
+
+
+def user_display_name(user):
+    """Canonical byline for a user: "First Last", falling back to the username.
+
+    Every path that stamps a person's name onto a comment or a mention
+    notification goes through this. Writing the byline two ways (first name on
+    board comments, full name on drawing comments) split the same person into two
+    entries in the To-Dos mentioner filter, which groups on the string.
+    """
+    if user is None:
+        return None
+    full = f"{(user.first_name or '').strip()} {(user.last_name or '').strip()}".strip()
+    return full or user.username
+
+
+def _byline_by_first_name():
+    """Lowercased first name -> canonical byline, memoized per request.
+
+    Only ambiguity-free first names are included: if two active users share one,
+    a bare "Bill" cannot be expanded safely, so it is left alone. Keyed the same
+    way `resolve_mentioned_users` matches, since that is what produced the bare
+    names in the first place.
+    """
+    cached = g.get('_mention_bylines') if has_request_context() else None
+    if cached is not None:
+        return cached
+    index = {}
+    for u in User.query.filter(User.is_active.is_(True)).all():
+        first = (u.first_name or '').strip().lower()
+        if not first:
+            continue
+        index[first] = None if first in index else user_display_name(u)
+    index = {k: v for k, v in index.items() if v}
+    if has_request_context():
+        g._mention_bylines = index
+    return index
+
+
+def canonical_mention_byline(name):
+    """Repair a mention byline written before `user_display_name` was the only
+    write path — those rows carry a bare first name. Anything already multi-word
+    (or unmatched) is returned untouched."""
+    if not name or ' ' in name:
+        return name
+    return _byline_by_first_name().get(name.strip().lower(), name)
 
 
 def is_gc_approval_type(type_value):
@@ -961,6 +1008,8 @@ class Notification(db.Model):
         if not author_name:
             m = _MENTION_AUTHOR_RE.match(self.message or '')
             author_name = m.group(1).strip() if m else None
+        # Rows written before the byline was centralized hold a bare first name.
+        author_name = canonical_mention_byline(author_name)
         return {
             'id': self.id,
             'user_id': self.user_id,

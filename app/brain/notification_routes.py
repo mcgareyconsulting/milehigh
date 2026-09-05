@@ -25,7 +25,7 @@ from flask import request, jsonify
 from app.brain import brain_bp
 from app.auth.utils import login_required, get_current_user
 from sqlalchemy.orm import joinedload
-from app.models import db, Notification, User, DrawingVersionComment
+from app.models import db, Notification, User, DrawingVersionComment, user_display_name
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -33,14 +33,6 @@ logger = get_logger(__name__)
 
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
-
-
-def _display_name(user):
-    """Best available human name for a User row."""
-    if user is None:
-        return None
-    full = f"{user.first_name or ''} {user.last_name or ''}".strip()
-    return full or user.username
 
 
 def _resolve_owner_scope(user, raw):
@@ -107,7 +99,7 @@ def list_notifications():
     for n in notifications:
         d = n.to_dict()
         if not scoped_to_self:
-            d['owner_name'] = _display_name(n.user)
+            d['owner_name'] = user_display_name(n.user)
         rows.append(d)
 
     unread_count = sum(1 for n in notifications if not n.is_read)
