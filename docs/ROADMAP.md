@@ -1,7 +1,7 @@
 ---
 project: MHMW
-updated: 2026-09-04
-verified: origin/main @ 7d42436 (PR #366 timeline zoom anchor)
+updated: 2026-09-05
+verified: origin/main @ fdaa880 (PR #369 To-Dos + mentions)
 config:                       # inputs to derived math — store inputs, never results
   horizon:
     - 2027-10 Procore absolute dead date (renewed 2026-08-15)
@@ -13,8 +13,13 @@ classes:                      # what KIND of work an item is — orthogonal to e
   lane: ongoing, never "done"
   deferred: off the active path, with a stated re-check trigger
 queue:                        # agent-maintained, set by agreement in session
-  now: T1
-  next: [N9, T2, AUD1]  # 2026-08-21: N9 elevated by Bill ("short timeline"); A1 deliberately stalled behind T1 [bill-2026-08-21#L169]
+  now: [AUD2]           # 2026-09-05: set in session by Daniel — "build now". The release-number
+                        # ruleset (AUD2) and the tagged hours-released prompt (N16) took the front;
+                        # N16 was built the same day, so only AUD2 is left standing here.
+                        # T1 drops to next with its core shipped (PR #361/#366) and its 2026-09-02
+                        # scope unlanded. First time since 2026-08-15 that W5 is not queue.now —
+                        # a deliberate pause on the front lane, not a re-ranking of it.
+  next: [T1, N9, T2, AUD1]  # 2026-08-21: N9 elevated by Bill ("short timeline"); A1 deliberately stalled behind T1 [bill-2026-08-21#L169]
                         # 2026-08-29: N9 unblocked (Open question 3 answered) — order unchanged. Its
                         # individual-logins answer needs accounts, which T2 makes self-serve, but Daniel
                         # can create them by hand today, so N9 does not move behind T2.
@@ -24,6 +29,11 @@ queue:                        # agent-maintained, set by agreement in session
                         # drop behavior, ordering, lanes). Bill's stated "next real big push" is sub
                         # access = T3, which carries deps T2 — so T2 already sitting in next is the
                         # correct chain, not a coincidence. [bill-2026-09-02#L912]
+                        # 2026-09-05: reordered. Both new front items are small and were measured
+                        # against live data this session before being queued — AUD2's allocator is
+                        # already stuck in gap-fill mode, and N16's tool exists but is locked to
+                        # Mon–Sun weeks. Neither needs Bill before it starts; both need him before
+                        # they finish (AUD2's ruleset confirm, N16's untagged-backlog call).
 ---
 
 # MHMW · ROADMAP
@@ -105,7 +115,7 @@ this list 2026-09-03/04** — BUG-19 on `feature/dwl-bounce-back`, BUG-20/BUG-22
 **BUG-23 was re-checked against `main` on 2026-09-04 and is still open** — it was
 filed *by* the audit of the ASAP work, so the ASAP work does not close it; the one
 finding that could have ridden along was deliberately pulled back out (`e10feee`).
-**BUG-17 is parked** (Daniel, 2026-08-29) and is not part of this pass.
+~~**BUG-17 is parked** (Daniel, 2026-08-29) and is not part of this pass.~~ **BUG-17 unparked and half-built 2026-09-04** (PR #369) — the two-column to-dos/mentions page shipped; only the editability half is still open. **Open as of 2026-09-05: BUG-23 and BUG-17's remainder.**
 
 | ID | Fix | Entry point | Pri |
 |---|---|---|---|
@@ -116,7 +126,7 @@ finding that could have ridden along was deliberately pulled back out (`e10feee`
 | BUG-20 | ~~**ASAP drops its text and shows a real date.** Today the card reads "ASAP" [bill-2026-09-02#L732]. Bill's complaint: *"what's the point of bringing dates if we have ASAP… then the ASAP lands and then we don't know what the date is"* [#L1032]. Final behaviour (Daniel, 2026-09-02): **the entry point is unchanged — the user hits ASAP mode — but from there it behaves exactly like a hard date.** The user sets a date, the card shows that date, the cell renders **red**. "ASAP" as displayed text is dropped; red carries the urgency. Semantics: *"if we can get it faster [great], but this is the absolute drop-dead date"* [#L1043]. Touches N5/BUG-11's ASAP paths — read those notes first~~ **built 2026-09-03 on `fix/asap-behavior`.** ASAP is now a **rush flag over a hand-set hard date**: it paints the cell red, the user types the date, and the cell shows that date. `set_asap` writes the flag and the colour bit and nothing else — the date, `comp_eta`, the Trello due push and the scheduling recalc all belong to the user's own date save, which already did every one of them. **Four consequences, all built:** setting a hard date **no longer clears ASAP** (it used to, because the date was ASAP's to own — under the new rule that would cancel the flag one keystroke after setting it); the **ASAP date rewrite on entering the dump zone is deleted** along with the `install_started_on` plumbing (it existed only because the +1wk date was a placeholder — rewriting a hand-set date destroys a real commitment); **undo is flag-only**, with the legacy branch kept and tested so events that *did* stamp a date still roll it back; and the modal **refuses ASAP without a date** rather than disabling the date field. Daniel's call on the ripple: an ASAP date is hand-set, so **ASAP counts as a hard date everywhere** — back into both EOS denominators, anchoring material-order lead time, sorting ahead of plain hard on the install schedule. Colour-drop (`COLOR_DUMP_STAGES`), the per-PM cap, the `asap_after_install_start` refusal, the Paint Complete intercept, the Ship Complete drop and Break/Link are all untouched | `routes.py` (`set_asap` + undo), `start_install/command.py`, `neutralize_install_date_cascade.py`, `stage/command.py`, `eos_metrics.py`, `material_orders/service.py`, `install_schedule/service.py`; `StartInstallDateModal.jsx`, `JobsTableRow.jsx`, `StartInstallEditor.jsx`, `JobDetailsBody.jsx`, `utils/asap.js`, `utils/jobLogPdf.js`; tests `test_asap_mode.py` + `test_install_start_color_dump.py` | **high — client-decided** |
 | BUG-11 | ~~Hard-date color dump fires too early — moves from the ship stages to `Install Start` or later [bill-2026-08-21#L109/#L113/#L115]~~ **built 2026-08-29** to the 2026-08-29 spec exactly: the dump fires on a stage transition whose destination is in `COLOR_DUMP_STAGES` = {`Install Start`, `Install Complete`, `Complete`}, never on the `start_install` date arriving. **The triage's "add one reason, remove two" reduction was one site short** — `start_install/command.py:114` set `start_install_no_color = stage in SHIPPING_STAGES` when a user typed a hard date, a third independent encoding of the old boundary (the BUG-8/9/16 second-caller shape again). All three now read the one `COLOR_DUMP_STAGES` constant. The ship-stage hard-date branch in `shipping_stage_date_discipline.py` is now a **deliberate no-op that must not be deleted** — it is the guard keeping hard dates out of the formula-blanking path below it, which would null the date; its docstring says so. Formula blanking untouched, per Bill. "Or later" is enforced by an integrity test asserting `COLOR_DUMP_STAGES` equals the tail of the canonical stage order from `Install Start`, so a stage inserted later can't silently fall out of the set. **Five sites, not the two triaged** — after Daniel confirmed the rule (*"hard date setting unaffected, we wipe color for ASAP or other hard date Install Start or later. Date not changed, just color"*) two more hardcoded `no_color = False` on a hard-date write and would have repainted a dumped row: the **ASAP toggle** (`routes.py:1834`, which stamps a hard date one week out) and the **Trello mirror-card date slide** (`trello/sync.py:256`). Both now read the same constant. The `set_asap` **undo** is deliberately left alone — it restores `prev_no_color` from its own event payload, which is correct. **Side effect worth knowing:** ASAP red now survives Ship Planning (it was being cleared by the wash); the separate `asap_dropped_on_ship_complete` rule still drops it at Ship Complete | `.../start_install/neutralize_install_date_cascade.py` (`COLOR_DUMP_STAGES`, `reason_for_stage`); callers `stage/command.py`, `start_install/command.py`, `shipping_stage_date_discipline.py`; tests `tests/brain/test_install_start_color_dump.py` + updated `test_shipping_stage_date_discipline.py` | **high — client-decided** | **Two follow-on decisions from Daniel, 2026-08-29 (both built):** (1) **ASAP is refused once install has started** — `PATCH /brain/update-start-install` returns `409 asap_after_install_start` when the stage is in the dump zone, and the modal disables the toggle rather than offering a control that 409s. Clearing a stale flag is still allowed. (2) **An ASAP row's date is rewritten to the day install started** when it crosses into the dump zone — the ASAP date was an anchor five business days out, never a plan, so the stage event's own date is the truer value. Scoped to ASAP rows only: a hand-set hard date is a real commitment and still keeps its value ("date not changed, just color" holds for those). The ASAP test is the **caller's**, deliberately — `UpdateStageCommand` drops `start_install_asap` earlier in the same command, so the cascade can't re-derive it and reads a stale False; `had_asap` is captured before that block. **The frontend had its own copy of the old rule and made all of this invisible** — `atShippingStage` was hardcoded in three render paths (`StartInstallEditor`, and the Start install + Ship Date cells of `JobsTableRow`), forcing neutral at the ship stages whatever the DB said. Extracted to one `frontend/src/utils/installDateColor.js` mirroring the backend's `_classify_date`, with the stage check still covering the optimistic pre-refetch window. **Open question, not decided:** `comp_eta` is still whatever was computed from the old ASAP anchor when the date is rewritten — the Gantt bar end may now disagree with its start. **Sharpened 2026-09-02** [bill-2026-09-02]: Daniel's timeline decision is that a drag or edge-compress writes **`start_install` and `comp_eta` only** — no install hours, fab hours or num guys. That makes `comp_eta` directly settable, so a card can hold a duration its hours and crew size do not imply. The same divergence, now reachable by two paths. **Still not decided, and now needs an explicit rule:** does a later hours/crew edit recompute over a manually compressed `comp_eta`, or is a compressed card pinned? Whichever writes last currently wins by accident.
 | BUG-16 | ~~DWL **HOLD** must drop when a submittal's ball-in-court changes [daniel-2026-08-29]~~ **built 2026-08-29**. The drop is now one shared rule — `drop_drafting_status_for_bic_change` in `app/procore/helpers.py` — that every BIC writer calls, rather than the same clause copied per caller (which is how BUG-8/BUG-9 came back). It clears **any** drafter-scoped status (HOLD, STARTED, NEED VIF), not just HOLD: all three are set against whoever held the ball and are equally stale once it moves, and the ask named the field, not the value. **Three live call sites, not the two triaged** — the webhook, the CLI health scan, and `POST /procore/health-scan/update` (a second copy of the audit fix loop in `app/procore/__init__.py`, missed at triage). Each folds the drop into the `SubmittalEvents` payload it already emits, so it is auditable. **`app/procore/scripts/reconcile_bic.py` deliberately left alone** — a one-off backfill for the 2026-06-30 webhook outage whose header invariant is explicitly "silent data backfill, emits no SubmittalEvents"; hardcoded to that incident's projects and imported by nothing. Re-check if it is ever generalised. **Found and fixed en route:** the order-compression loop bound its variable to `submittal_id`, shadowing the function parameter of the same name, so after any compression every later log line, the urgency bump and the `SubmittalEvents` row were attributed to the last compressed sibling instead of the submittal that moved | `app/procore/helpers.py` (`drop_drafting_status_for_bic_change`); callers `app/procore/procore.py` + `app/procore/__init__.py`; tests `tests/procore/test_bic_drops_drafting_status.py` | **high — client-asked** |
-| BUG-17 | ~~To-Do page cleanup~~ **PARKED 2026-08-29 by Daniel — *"I'll circle back on that"*.** Class `deferred`, not dropped: the reference arrived, was scoped, and the scope was narrowed to frontend/QoL, all on 2026-08-29 — then the whole item came out of the bug pass before any of it was built. **Nothing is lost and nothing needs re-deriving.** The scope doc lives beside the reference tree at `~/Desktop/Reference/eos-todos-reference/SCOPE-for-MHMW.md` (out of the repo with its source material, same as the transcripts). It already carries the seven in-scope frontend items, the one item with a fetch tradeoff, what was ruled out and why, and the finding that reframes the task — **we have no to-do table**; ours are `ChecklistItem` rows the meeting extractor creates. **Re-check trigger: Daniel raises it again.** → **TRIGGER FIRED 2026-09-02** [bill-2026-09-02#L1607]: Bill asked for it unprompted — the To-Dos page gets **two columns, your to-dos and mentions, defaulting to yours**, with the ability to see others'; **@mention from anywhere you can write a note** raises a notification; and to-dos must be **editable after creation** — today *"the only thing you can do is [complete] it"* [#L1624]. He also framed the eventual home: to-dos, **rocks** for your team, and **my metrics** (the scorecard with a graph), plus a **company announcement** slot [#L1630] — *"you guys use 90s, figure out what you like about it, and then we probably fold it in your brain"*. Unparking is Daniel's call. | scope doc `~/Desktop/Reference/eos-todos-reference/SCOPE-for-MHMW.md`; page `frontend/src/pages/ToDos.jsx` | parked |
+| BUG-17 | ~~To-Do page cleanup~~ **PARKED 2026-08-29 by Daniel — *"I'll circle back on that"*.** Class `deferred`, not dropped: the reference arrived, was scoped, and the scope was narrowed to frontend/QoL, all on 2026-08-29 — then the whole item came out of the bug pass before any of it was built. **Nothing is lost and nothing needs re-deriving.** The scope doc lives beside the reference tree at `~/Desktop/Reference/eos-todos-reference/SCOPE-for-MHMW.md` (out of the repo with its source material, same as the transcripts). It already carries the seven in-scope frontend items, the one item with a fetch tradeoff, what was ruled out and why, and the finding that reframes the task — **we have no to-do table**; ours are `ChecklistItem` rows the meeting extractor creates. **Re-check trigger: Daniel raises it again.** → **TRIGGER FIRED 2026-09-02** [bill-2026-09-02#L1607]: Bill asked for it unprompted — the To-Dos page gets **two columns, your to-dos and mentions, defaulting to yours**, with the ability to see others'; **@mention from anywhere you can write a note** raises a notification; and to-dos must be **editable after creation** — today *"the only thing you can do is [complete] it"* [#L1624]. He also framed the eventual home: to-dos, **rocks** for your team, and **my metrics** (the scorecard with a graph), plus a **company announcement** slot [#L1630] — *"you guys use 90s, figure out what you like about it, and then we probably fold it in your brain"*. ~~Unparking is Daniel's call.~~ **UNPARKED AND HALF-BUILT 2026-09-04** (PR #369, v2.0.369) — Bill's first two asks landed together: the page is now **two equal columns**, your to-dos on the left and the **@mentions of that same person** on the right, with one page-level owner control driving both and scope **server-enforced on each** (an admin may view any user or everyone; a non-admin only themselves). Mentions carry the sentence that was written, not just *"X mentioned you"* — `Notification.to_dict` now surfaces the source comment's body (280-char excerpt) and `author_name`, with a regex fallback that reads the mentioner out of the message for the **DWL** case, which has no comment row to read an author off. The mentions column requests `MENTION_TYPES` only, so a burst of to-do notifications cannot push mentions past the row cap. **@mention-from-anywhere is effectively there** — board comments, PDF drawing markups and DWL notes are all mention producers feeding the one bell. **Still open, and the reason this stays on the list: to-dos are not editable after creation** [#L1624]. Filtering, scoping and reading all improved; grab/move/reorder/edit did not ship, and that is the ask Bill phrased as *"literally the only thing you can do is [complete] it"*. **The home-page shape (rocks · my metrics · company announcement) remains unstarted and unscoped** — it is a page, not a cleanup, and wants its own ID when it starts | scope doc `~/Desktop/Reference/eos-todos-reference/SCOPE-for-MHMW.md`; page `frontend/src/pages/ToDos.jsx`, `app/brain/notification_routes.py`, `Notification.to_dict` | **open — editability half** |
 | BUG-18 | ~~Left icon rail pops in extra rows on load [daniel-2026-08-29]~~ **built 2026-08-29**. Took the triage's first candidate — cache the last-known role in `localStorage` and hydrate optimistically — over reserving space, because reserving would leave a non-admin staring at six blank slots on every load to spare admins one reflow. `AppShell`'s three role `useState(false)` calls collapse into one `useState(readCachedRoleFlags)`; `checkAuth` still decides and overwrites. `canUseBBChat` (Carmen) was gated the same way and had the same pop-in, so it rides along. **The cache is a first-paint hint, never an authorization decision** — the server gates every route — and `logout()` clears it so the next user on a shared browser cannot inherit the previous one's rail; a null `checkAuth` (expired session) clears it too. Reads/writes are try/catch'd for private-mode Safari, falling back to the old all-false start | `frontend/src/utils/auth.js` (`roleFlagsFor`, `readCachedRoleFlags`, `cacheRoleFlags`), `frontend/src/components/AppShell.jsx` | low — cosmetic |
 | BUG-15 | ~~Meeting-bot transcription autodetects language — mis-detected a production standup as Portuguese and translated a line [bill-2026-08-21#§2]~~ **built 2026-08-21**: `language_code: "en"` + explicit `prioritize_accuracy` mode pinned on every dispatch (covers the calendar poller and the on-demand route, which share `dispatch_bot`) | `app/brain/meetings/recall.py` (`TRANSCRIPT_LANGUAGE`); test `tests/brain/test_calendar_recall.py::test_dispatch_bot_pins_transcription_to_english` | med |
 | BUG-12 | ~~Carmen lookahead tool returns a stale window — Novel Flatirons pull starts in May [bill-2026-08-21#L133]~~ **built 2026-08-21** (PR #348): the symptom was the rendered Gantt axis, not the data. `_chart_range` expanded the x-axis *backwards* to cover any past-dated phase bar, so one stale bar rewound the whole chart to May. It now starts at the declared window and only extends forward — the window is a viewport, not a row filter. The other two halves of Bill's ask were **already true and predate the bug**: the schedule window is 3 weeks from `today` (`schedule_builder.py:427`), and the phase labels (Drafting / Fabrication / Paint / Shipping / Installation) landed 2026-07-25 | `app/brain/lookahead/export_pdf.py` (`_chart_range`); test `tests/lookahead/test_export_pdf.py` | med |
@@ -882,6 +892,7 @@ question 2).
 - 2026-08-09 · build · src pr#338-wave — `release_tag` shipped: required at creation (pasted + verbal), editable in the hub Billing section, existing rows untagged
 - 2026-08-10 · note · src — — migration `add_release_tag.py` run; Open question 2 still open, so MHMW Cost is collecting rows before its meaning is fixed
 - 2026-08-29 · decision · src — — Open question 2 half-answered (Daniel): MHMW Cost = a release MHMW eats the cost on, **flag only, no behavior attached**. De-escalates the "collecting rows before its meaning is fixed" risk — the rows are descriptive. The reason split waits until invoicing actually reads the tag
+- 2026-09-05 · measurement · src — — **coverage counted for the first time** (sandbox, read-only): **12 tagged rows system-wide**, and **91 of 99** releases with a `released` date on or after the 2026-08-09 ship date are untagged. The nullable → backfill → required sequencing is holding exactly as designed, but it means **N10 is now on the critical path for anything that reads the tag** — first instance is **N16**, which has to render an explicit `untagged` bucket because that bucket is currently the whole answer
 
 ### N10 · Bulk edit on the job log
 *W2 · not-started · due — · deps N1 · owner daniel · src bill-2026-08-06#notes · upd 2026-08-06*
@@ -915,6 +926,7 @@ check that catches double-selling a stair — is v2.
 - 2026-08-06 · transcript · src bill-2026-08-06#L607 — billing stage gates; photos required at paint complete [#L613]
 - 2026-08-06 · transcript · src bill-2026-08-06#L550 — budget vs actual reconciles to the original quote value
 - 2026-08-06 · transcript · src bill-2026-08-06#L478 — v2 is the decrement-against-contract-value check that catches double-selling a stair
+- 2026-09-02 · business rule · src bill-2026-09-02#L1131–L1145 — **line-item contract value splits roughly in thirds: material / fab+paint / install.** Bill first offered *"a general 30%"* for install, then landed on *"effectively one third of the value for each of the different stages."* Captured 2026-09-05 — it was in the 9/2 findings and had reached no item. Directly useful to N2b's stage gates, to health scoring, to T&M→CO, and to any earned-value work; Daniel is already using it to backfill an audit
 
 ### N2b · Billing stages → invoicing tab
 *W2 · not-started · due — · deps N1,N2 · owner daniel · src bill-2026-08-06#L607 · upd 2026-08-06*
@@ -1045,7 +1057,7 @@ production*.
 - 2026-08-21 · decision · src bill-2026-08-21#L109 — second input, and a reversal of a banked rule: hard-date color survives the ship stages and dumps at Start Install; yellow stays until then (EOS-scored, never silently dropped [#L113]); trigger ambiguity (Install Start stage vs `start_install` date) is this audit's to resolve; do NOT touch hard-date semantics until the trigger move is tried [#L115]. Bill also flagged the projected-vs-hard *font* distinction as too subtle once color is gone [#L109] — legibility belongs in the same ruleset
 
 ### AUD2 · Release-number uniqueness ruleset
-*W3 · not-started · class audit · due — · deps — · owner daniel · src bill-2026-08-15#L177 · upd 2026-09-03*
+*W3 · not-started · class audit · due — · deps — · owner daniel · src bill-2026-08-15#L177 · upd 2026-09-05 · **queue.now 2026-09-05***
 
 Effort M. Same shape: confirm current behavior, confirm the updated behavior
 **with the client**, then change. **Early read: the job-log enforcement (the
@@ -1072,6 +1084,51 @@ best-practice research on long-term uniqueness handling.
 **Scope constraint:** submittals and releases are converging (see the W1 banner).
 Write the ruleset to survive that merge; do not hard-code today's two-model split.
 
+**Targeted 2026-09-05 (Daniel) — and the deferral above no longer holds.** The
+written cursor option was shelved on 2026-09-02 as *"not a needle mover"*, with
+one stated prerequisite: **measure the burn rate**. That measurement was taken
+this session and it moves the item, for a reason the deferral did not anticipate.
+
+**The allocator is in rollover mode right now — it is not an edge case waiting to
+happen, it is the current steady state.** `998` is held by an **active** release,
+so `current_max == REL_MAX` on every call and `next_rel_number` takes its
+gap-filling branch every time, scattering into the **580 free numbers below the
+max**. That is Bill's 202 → 203 → 205 → 105 symptom, and it is not a transient:
+the 2026-09-02 note already described the top of the range as an attractor, and
+the data now shows the sequence sitting on it. Nothing about the current behavior
+recovers on its own.
+
+**Burn rate — the recorded prerequisite, now answered.** By `released` date:
+**282** releases in 2025 and **491** in the first eight months of 2026, a run rate
+near **735/year** and rising. Against 898 usable numbers that is a **full wrap
+roughly every 15 months, trending toward annual.** Read two ways, and both point
+the same direction: the range is not roomy enough for "we'll deal with it later",
+and the cursor design's cost — *one predictable wrap per cycle* — is a **yearly**
+event, which is a straight trade against the permanent scatter running today.
+
+**Third finding, and it belongs in the ruleset rather than the fix:** live rows sit
+**outside `[101, 998]` on both ends** — an active release numbered **999**, and
+pending DRRs holding **100** and **101**. `assign_rel_manual` validates the range,
+so nothing in the current code issued them; they are legacy or import residue. The
+ruleset has to say what an out-of-range number already in the data *means* — is it
+taken, is it reissuable, does it get migrated — because `next_rel_number` silently
+filters them out of `in_range` today and would happily hand `999` to someone else
+if the constraint ever moved.
+
+**All three figures were read from the SANDBOX database** (`SANDBOX_DATABASE_URL`,
+read-only `SELECT`s, 2026-09-05) because no production URL is configured in this
+checkout. Sandbox looked current — releases through 2026-09-01 — but **re-run the
+three queries against production before the ruleset is written**, since the wrap
+math and the "998 is occupied" claim both turn on exact live values.
+
+**What targeting it means, in order:** ① re-measure on prod; ② take the
+confirmation conversation Bill is already owed (auto-advance vs. block-and-suggest,
+and *why* `340-26` is not needed) — it is in **Owed** and it gates the change step,
+not the measurement; ③ then build. The **per-job uniqueness** structural fix stays
+where it was put — riding the Procore exit, because `ReleaseDate.rel` is
+`unique=True` as the DRR join key — so what is buildable now is the **cursor**, not
+the constraint.
+
 **Trail**
 - 2026-08-15 · transcript · src bill-2026-08-15#L159 — DWL issued a number already in use; worst case was the same job *and* the same release number
 - 2026-08-15 · transcript · src bill-2026-08-15#L177 — Bill diagnosed it himself: the DWL side never checks the archive, the job log catches it later; "it should have caught that when it got to 108"
@@ -1082,6 +1139,11 @@ Write the ruleset to survive that merge; do not hard-code today's two-model spli
 - 2026-09-02 · decision · src — — **rejected:** widening `REL_MIN`/`REL_MAX` (*"we are not widening"* — would push release numbers to 4 digits on drawings and paperwork). Also rejected: making the rollover branch pick the next free number above the *job's* max — it gives a per-job sequential feel but breaks the **global chronological** reading Daniel wants, and would hand a brand-new job a low scattered number
 - 2026-09-02 · decision · src — — **written option, DEFERRED** (*"not a needle mover"*): replace the derived position with a **persistent monotonic cursor + circular allocation** — store `last_issued` in a small state table (model it on `LakeIngestState`), allocate the first free number strictly above the cursor, wrap to `REL_MIN` past `REL_MAX` and keep climbing. The cursor never moves backward except at the wrap. Delivers what was asked: a new job draws *the next few highest numbers consecutively*, numbers read chronologically across all projects, and archiving the top release stops yanking the sequence. Costs a tiny table + migration, and one predictable wrap per cycle instead of constant scatter. Seed the cursor at the current global max so nothing shifts on day one. **Prerequisite for revisiting: the burn rate** — releases per year against 898 numbers decides how often the wrap actually lands. Optional refinement: on wrap, prefer numbers freed longest ago
 - 2026-09-02 · decision · src — — **the 898-number ceiling is self-imposed.** `Releases` already constrains per-job — `UniqueConstraint("job", "release", "job_name")` — and the DB would accept 105 on two different jobs. Uniqueness is global only because `ReleaseDate.rel` is `unique=True` as the Procore DRR→release join key (`models.py:230`). **Per-job uniqueness is the structural fix and rides along with the Procore exit (W1), not ahead of it**
+- 2026-09-05 · decision · src daniel-2026-09-05 — **targeted; moved to `queue.now`** alongside N16, on Daniel's "build now"
+- 2026-09-05 · measurement · src — — **rollover is armed today, not hypothetically.** `998` is held by an active release, so `current_max == REL_MAX` on every `next_rel_number` call and the gap-filling branch runs every time, with **580 free numbers below the max** to scatter into. The 2026-09-02 attractor analysis is confirmed by the data, and the "105 released before 998" reading was right
+- 2026-09-05 · measurement · src — — **burn rate answered, and it un-defers the cursor.** 282 releases released in 2025, 491 in Jan–Aug 2026 (~735/yr and rising) against 898 numbers = a **wrap every ~15 months, trending annual**. The deferral's own prerequisite is met and the answer argues *for* the cursor: one predictable yearly wrap replaces permanent scatter
+- 2026-09-05 · finding · src — — **live data sits outside `[101, 998]` on both ends**: an active release numbered `999`, pending DRRs holding `100` and `101`. `assign_rel_manual` validates the range so no current code path issued them. The ruleset must state what an out-of-range number means (taken / reissuable / migrated) — `next_rel_number` currently just filters them out of `in_range`
+- 2026-09-05 · caveat · src — — all three figures read **read-only from the sandbox DB**; no production URL is configured in this checkout. Sandbox is current to 2026-09-01, but **re-run against prod before writing the ruleset** — both the wrap math and the "998 is occupied" claim turn on exact live values
 
 ### N15 · Carmen tiers — CarMini / CarMid / CarMax
 *W4 · not-started · class build · due — · deps T2 · owner daniel · src bill-2026-09-02#L107 · upd 2026-09-03*
@@ -1152,6 +1214,7 @@ wider distribution.
 - 2026-08-15 · decision · src — — reframed as the Release Modal: one canonical surface, distributed to other pages, refined in place; invoicing is the first target
 - 2026-08-21 · transcript · src bill-2026-08-21#L143 — sizing note: the modal could be bigger on desktop ("there's more space for it") but **do not disturb the iPad layout** — that's where most usage lives and it "looks really good" there. Photos should render in the modal's preview area rather than a new window [#L69] (also on N9)
 - 2026-09-02 · transcript · src bill-2026-09-02#L291–L321 — the Job Log modal's own rework, from Bill: **photos move to the front page** and Attachments becomes the drawings/PDF-review surface — motive is the shipping guy's click path, *"he's clicking here and then he's clicking attachments"* [#L294]; a **photo-present indicator icon** [#L291]; **condense the data box** — Bill is *"a medium fan"* of how it reads and Daniel owes him options, target near job-log density [#L305]; and **write access to everything** — *"any functionality you have on the main page should be inside"* [#L311]. Stage progress is explicitly free to move [#L295]
+- 2026-09-04 · build · src pr#367 — **the photo indicator shipped** (a slice of the 9/2 photos thread, ahead of the modal rework): a camera glyph leads the Description in both the table row and the card when a release has photos, count in the tooltip, no icon and no extra request when it has none. It reuses `photo_count` / `cover_photo_id`, already batched server-side for the Timeline's cover thumbnails — the answer was on screen already, just not shown. Icon **leads** the text because the Description cell clamps to two lines and a trailing icon would be the first thing truncated. Does not touch the modal-front-page ask below, which is still open
 - 2026-09-02 · notes · src bill-2026-09-02 — placement pinned by Daniel: the **camera icon lives in the description field**, and the **Banana Code goes upper-right on the JL modal** (it currently sits at the bottom of `JobDetailsBody`, so that's a move, not a build)
 - 2026-09-02 · decision · src — — **the combined modal is N12's next redistribution target, not a reopened N7.** Today four components render a release across ~1,940 lines: `ReleaseHubModal` (325) + `JobDetailsBody` (497) on the Job Log, and `ReleaseDetailModal` (471) / `ReleaseCockpitModal` (647) from a timeline card — the latter two **read-only by `GanttChart`'s stated invariant**. Daniel's ask is one modal everywhere, which retires ~1,100 lines of duplicate. N7 stays `built`: it shipped the `ReleaseHubModal` unification 2026-08-06/09 and never had the timeline modals in scope
 - 2026-09-02 · decision · src — — **two open questions block a clean start.** (1) `ReleaseCockpitModal` is 647 lines of admin crew/date what-if that deliberately never writes — does it survive as a *mode* inside the combined modal, or go away? It is the largest branch in the consolidation. (2) `GanttChart`'s "clicking a card opens a read-only detail modal" invariant is retired once the combined modal carries write — correct now that drag sets `start_install` (T1), but it must be retired deliberately, not by accident
@@ -1625,6 +1688,150 @@ now; self-serve prompt authoring waits until the tool surface is broader.
 - 2026-08-21 · transcript · src bill-2026-08-21#L119 — prompt library asked for; already built server-side; expose read-only in chat
 - 2026-08-21 · decision · src bill-2026-08-21#L125 — add-permission restricted; new-data asks go through Daniel; Daniel to send Bill the current library
 
+### N16 · Carmen: hours released to the job log, by billing tag
+*W4 · built · class fix · due — · deps N1 (tag data) · owner daniel · src daniel-2026-09-05 · upd 2026-09-05*
+
+Effort S. **Daniel's ask, 2026-09-05 — and the reason W4 comes to the front.** An
+**all-admin prompt**: the user names a **time frame**, Carmen returns the **hours
+released to the job log** in that window **broken down by billing tag** —
+Contracted / Change Order / MHMW Cost. Not owner-scoped, not a new scorecard
+column: any admin can run it.
+
+**Most of it is already built.** The metric exists as
+`hours_released_to_production` (`app/brain/carmen_chat/eos_metrics.py`) and is
+exposed twice — through `get_eos_metric(metric=…)` and through the dedicated
+`TOOL_HOURS_RELEASED` alias in `carmen_chat/tools.py`. It already sums `fab_hrs`
+over `Releases.released` inside a window, excludes archived rows, and counts a
+zero-`fab_hrs` release rather than skipping it. `Releases.release_tag` shipped
+with **N1** on 2026-08-09 (migration run 8/10) and is required at creation on both
+the pasted and verbal paths. So the build is two changes:
+
+1. **Unlock the window.** The tool advertises `_WEEK_PROPS` only — `weeks_back`
+   and `week_of` — and `resolve_week` snaps any anchor to its **Monday–Sunday**
+   bounds. "User requests time frame" means an arbitrary `start`/`end`. Add the
+   range to the metric and to **both** tool schemas, keeping Mon–Sun as the
+   default so **N8**'s scorecard semantics are untouched.
+2. **Group by `release_tag`.** One `group by` over rows the query already loads.
+
+**The data is the real work, and it needs Bill.** Measured read-only on sandbox
+2026-09-05: of the **99** releases with a `released` date on or after 2026-08-09 —
+the day the tag became required — **91 are untagged**. System-wide only **12 rows
+carry a tag at all**, effectively a pilot on job 640. The forward path is sound:
+new releases arrive tagged, so the corpus grows from here. But it is roughly two
+weeks deep, and **N10's bulk-edit backfill — the mechanism N1 explicitly deferred
+the backfill to — has not run.**
+
+**Consequence, and the decision to take to Bill before this ships:** the answer
+must carry an explicit **`untagged`** bucket, and for any window reaching back
+before mid-August that bucket *is* the answer. Ship it visible rather than
+silently dropping untagged hours — a total that quietly omits 92% of the work is
+worse than one that says so out loud. The question for Bill is whether the number
+is useful enough to hand over before **N10** backfills, or whether N10 comes
+first; that is a call about what he'll do with the figure, not a build question.
+
+**Built 2026-09-05** on `feature/carmen-hours-by-tag`. The window and the breakdown
+landed together on the existing metric rather than as a new one, so there is a
+single definition of "hours released" and no second number to keep in sync:
+
+- **`resolve_window` replaces the week-only path.** No `start`/`end` → the
+  Mon–Sun week, byte-for-byte what the scorecard meant before. Either bound →
+  the exact span, with `start` omitted meaning **no lower bound** (that is the
+  shape behind an all-time total) and `end` omitted meaning today. Reversed
+  bounds are swapped rather than returning an empty window, because a model that
+  inverted them is asking for the same span either way.
+- **`week` is omitted in range mode, not filled with range bounds.** The payload
+  always carries `window` (with an explicit `mode`); the historical `week` key
+  survives only where it is true. Nothing downstream can read an arbitrary span
+  as a Mon–Sun week.
+- **`by_tag` always renders in canonical order with `Untagged` last**, and an
+  unknown tag value falls into the untagged bucket rather than inventing a
+  category. `tag_coverage` states `tagged_releases` / `untagged_releases` /
+  `untagged_fab_hrs` / `tagged_pct`, and a test asserts the per-tag figures sum
+  back to the headline so nothing can be silently dropped.
+- **The range is offered only where it means something.** `RANGE_CAPABLE_METRICS`
+  is `{hours_released_to_production}`; asking for a range on a weekly-by-definition
+  metric returns an **error**, not a quietly-substituted week, and the weekly tools
+  do not advertise `start`/`end` in their schemas at all.
+- **Admin-wide, as asked.** The tool was never owner-gated — access is the route's
+  `carmen_chat_required`, which admins always pass — but the payload's David
+  framing made it *read* like his scorecard line. The tool description and the
+  system prompt now say plainly that it is not owner-restricted and that the
+  number is the company's. Any admin (Daniel, David, Bill, Katie, …) can ask it.
+- **The prompt does the honest-reporting work.** Carmen is instructed to always
+  state the untagged share when it is non-zero and never to present a tagged
+  subtotal as the whole — the guardrail that keeps the thin tag corpus from
+  producing a confidently wrong number.
+- **The NaN landmine was closed while in there** — `finite_hours` reads non-finite
+  `fab_hrs` as zero at the point of the read rather than relying on the archive
+  filter that happens to be hiding those nine rows today.
+- `scripts/eyeball_eos_metrics.py` gained `--start` / `--end` and prints the tag
+  split, so the check harness covers the new shape.
+
+**Verified against sandbox 2026-09-05** (read-only, via the eyeball script):
+Aug 1 – Sep 5 returned **34 releases · 639.58 fab hrs**, split Contracted 75.2 /
+Change Order 34.5 / MHMW Cost 12.0 / **Untagged 517.9 across 25 releases** — i.e.
+**81% of the hours in that window are untagged**, which is exactly the shape the
+Owed decision is about. The number is correct and the caveat is doing its job.
+
+**Relationship to the other Carmen items.** This is the first *concrete instance*
+of the ad-hoc query need **N15** was filed against — Bill's own worked case there
+was the same shape (total fab hours on job 500, at project close, across archive
+and active). Build it as a **prompt in the library (N13)**, not as a one-off tool,
+so the pattern is reusable; it is deliberately **not** blocked on N15's CarMini /
+CarMid / CarMax tiering, which carries `deps T2` and is a much larger piece.
+
+**Landmine, not a defect.** Nine rows hold a literal **`NaN`** in `fab_hrs` (and
+`install_hrs`) — all archived, all legacy `V###` release numbers. The metric's
+non-archived filter shields it today; a single NaN would poison the sum and emit
+invalid JSON. **Any variant that drops the archive filter inherits it** — including
+N15's *"across archive and active"* — so coerce non-finite values to zero at that
+point rather than discovering it in an answer.
+
+**Trail**
+- 2026-09-05 · decision · src daniel-2026-09-05 — filed and queued to `queue.now`: an admin prompt taking a user-specified time frame, returning hours released to the job log with the billing-tag breakdown
+- 2026-09-05 · note · src — — code read: the metric and both tool entry points already exist; the only structural gap is that the window is locked to Mon–Sun by `_WEEK_PROPS` / `resolve_week`
+- 2026-09-05 · measurement · src — — tag coverage on sandbox: **91 of 99** releases with a `released` date ≥ 2026-08-09 are untagged; 12 tagged rows system-wide. An explicit `untagged` bucket is mandatory, and N10's backfill is what makes the breakdown mean anything historically
+- 2026-09-05 · finding · src — — nine archived legacy rows carry `NaN` in `fab_hrs`/`install_hrs`; harmless behind the current archive filter, poisonous to any archive-inclusive variant
+- 2026-09-05 · decision · src — — ships as an **admin-wide prompt**, not an owner metric: `hours_released_to_production` is registered to **David** in the `OWNERS` registry, so "my metrics" as Bill would never reach it
+- 2026-09-05 · decision · src daniel-2026-09-05 — **all admins use this tool** (Daniel, David, Bill, Katie, …). No new gate was needed — `carmen_chat_required` already admits every admin — so the change is to the *framing*: tool description and system prompt now state it is not owner-restricted
+- 2026-09-05 · build · src — — **built** on `feature/carmen-hours-by-tag`: `resolve_window` (week ⟷ arbitrary range, unbounded-below supported), `by_tag` + `tag_coverage` with an explicit untagged bucket, `RANGE_CAPABLE_METRICS` so a range on a weekly metric errors instead of silently returning a week, `finite_hours` closing the NaN landmine, prompt guidance requiring the untagged share to be reported, and `--start`/`--end` on the eyeball harness. 12 new tests in `tests/carmen_chat/test_tools.py`
+- 2026-09-05 · verification · src — — read-only sandbox run, Aug 1 – Sep 5: 34 releases, 639.58 fab hrs, **81% of hours untagged** (517.9 of 639.58 across 25 releases). Confirms both the query and the reason the untagged bucket had to be visible
+
+### N17 · Carmen chat surface — side-push panel, poppable out
+*W4 · not-started · class fix · due — · deps — · owner daniel · src bill-2026-09-02#L1305 · upd 2026-09-05*
+
+Effort S. **Filed 2026-09-05 from the 2026-09-02 session, where it was decided and
+then never carried onto this map.** Bill wants Carmen's chat as a **full side-push
+panel that can be popped out** — explicitly *not* the small popup [#L1305–L1318].
+The named design reference is the **Gemini-in-Chrome sidebar**, which is also what
+seeded **N15** and the write-back thread; the mechanic he liked was that *it only
+knows what it has seen*.
+
+**What it changes.** `BBChatWidget.jsx` today is a 420px panel that drops from the
+CM bubble beside the notification bell and grows down and left, with three stated
+invariants in its header — *"No floating bottom bubble"*, *"Panel drops from the CM
+bubble… it does not cover the last Job Log row"*. A side-push panel **retires those
+invariants** and changes the page's layout contract rather than overlaying it, so
+`AppShell` is in scope, not just the widget. Pop-out is a second surface (its own
+window rendering the same chat) — worth confirming whether Bill means a real
+window or a maximised in-page mode before building.
+
+**Rides with it — one question at a time** [#L1263–L1270]. Bill called the pattern
+a *"game changer"* and named the failure it fixes: six questions at once, most of
+which don't make sense, where answering the first would have answered two others.
+That is a **prompt-side** change, not a UI one, and it applies to every Carmen
+surface — chat, PDF review, meeting extraction. Cheap, and it belongs in whichever
+of these ships first.
+
+**Not queued** — recorded so the decision survives. Sequence it behind **N16**,
+which needs none of it.
+
+**Trail**
+- 2026-09-02 · transcript · src bill-2026-09-02#L1305–L1318 — chat is a full side-push panel, poppable out; not the small popup
+- 2026-09-02 · transcript · src bill-2026-09-02#L1263–L1270 — **ask one question at a time**: *"game changer"*; the alternative is six questions where the first answers two others
+- 2026-09-02 · note · src bill-2026-09-02#L66–L73 — the Gemini-in-Chrome sidebar is the named reference for both this and N15
+- 2026-09-05 · note · src — — filed on the roadmap-staleness pass; the 2026-09-02 roll-up carried both decisions in the findings file but neither reached an item. Retiring `BBChatWidget`'s three placement invariants is the actual scope, and it reaches `AppShell`
+
 ---
 
 ## Parked — real work, off the path
@@ -1737,7 +1944,8 @@ External dependencies, all Bill's unless noted.
 | **T&M change notes** — *"if I can get you something today"*; originals lost [#L155] | A1's shape (not its start — that's BUG-10) | 2026-08-15 |
 | **Katie's staging feedback** *(from Katie, not Bill)* | An input to AUD1, not a gate | 2026-08-15 |
 | **Distribution channel for the yellow-date prompt** — email, in-app, or both | N11 | 2026-08-15 |
-| **Confirm the updated uniqueness ruleset** — including *why* `340-26` is not needed | AUD2's change step | 2026-08-15 |
+| **Confirm the updated uniqueness ruleset** — including *why* `340-26` is not needed, and auto-advance vs. block-and-suggest. **Live as of 2026-09-05: AUD2 is `queue.now`, so this now gates work in flight rather than work on the shelf** | AUD2's change step (not its measurement — that is done) | 2026-08-15 |
+| **Is the tagged hours number useful before N10 backfills?** Only ~12 releases carry a billing tag today, so any window reaching before mid-August answers almost entirely `untagged`. Either Bill accepts the bucket or N10 goes first | N16's ship decision, not its build | 2026-09-05 |
 | **Confirm the corrected date/stage ruleset**, then take the written version | AUD1's change step | 2026-08-15 |
 | Stage weight approval · Carmen avatar | E2 · C9 cosmetics | 2026-07-22 |
 | Change order log Excel + sample CO email | A2 | 2026-07-22 |
@@ -1896,7 +2104,8 @@ Append-only log — never edited, never pruned.
 | bill-2026-08-06 | `~/Desktop/Transcripts/MHMW/processed/Bill-8-6-2026.md` | Submittal-system working session (Bill, Colton) — primary transcript; `#LNNN` anchors are its line numbers |
 | bill-2026-07-22 | `~/Desktop/Transcripts/MHMW/processed/Bill-7-22-2026.md` | Ops/roadmap review — the October deadline surfaces; A2, C3-origin, N8, J1-drop |
 | eos-todos-2026-08-29 | `~/Desktop/Reference/eos-todos-reference/` | The HPB EOS app's standalone To-Dos page, delivered by Daniel 2026-08-29 as `eos-todos-reference.zip` (44 files, Next.js/Firestore). **Outside the repo on purpose** — same convention as the transcripts, and this repo is public while that is another app's source. Scoped for our use in `SCOPE-for-MHMW.md` inside that same directory — the doc was committed to `docs/design/todos-page/` on 2026-08-29 and removed again when BUG-17 was parked, so it now sits with its source material rather than in the repo |
+| daniel-2026-09-05 | session notes (no transcript) | Daniel's 2026-09-05 roadmap session — set `queue.now` to AUD2 + N16 ("build now"), specified N16 (time-framed hours-released with a billing-tag breakdown, admin-wide), and carried the AUD2 / N1 / `NaN` measurements taken read-only against sandbox the same day |
 | daniel-2026-09-03 | session notes (no transcript) | Daniel's ASAP rework, taken live 2026-09-03 — BUG-20, plus the "treat ASAP as a hard date everywhere" call on the downstream classifiers. No line anchors; cited by slug only |
 | daniel-2026-08-29 | session notes (no transcript) | Daniel's own bug list, taken live 2026-08-29 — BUG-16/17/18, plus the archive-rules confirmation request. No line anchors; cited by slug only |
 | notes-2026-08-04 | daily notes (no transcript) | Daniel's 2026-08-04 notes — N5 origin, N4 symptom |
-| pr#NNN | GitHub PRs on the milehigh repo | Build provenance for merged work — #323–#334 (2026-08-06/08), #336–#338 (2026-08-09, v2.0.338), #339 (2026-08-10), #344/#345 (2026-08-20, archive rules · install hours on the subs tab), #348 (2026-08-21, BUG-12 + Carmen chat placement), #349 (2026-08-24, photo upload + client-side compression — see N9), #347 (2026-08-29, credential scrub) |
+| pr#NNN | GitHub PRs on the milehigh repo | Build provenance for merged work — #323–#334 (2026-08-06/08), #336–#338 (2026-08-09, v2.0.338), #339 (2026-08-10), #344/#345 (2026-08-20, archive rules · install hours on the subs tab), #348 (2026-08-21, BUG-12 + Carmen chat placement), #349 (2026-08-24, photo upload + client-side compression — see N9), #347 (2026-08-29, credential scrub), #360 (2026-09-03, BUG-19 DWL bounce-back), #361 (2026-09-03, T1 core — timeline drag-to-assign, release hub, Users page), #364 (2026-09-03, BUG-20/BUG-22 ASAP as a colour), #366 (2026-09-04, BUG-21 zoom anchor), #367 (2026-09-04, Job Log photo badge), #369 (2026-09-04, To-Dos two-column + mentions — BUG-17's first half) |
