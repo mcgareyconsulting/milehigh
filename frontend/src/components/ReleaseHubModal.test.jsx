@@ -30,6 +30,9 @@ vi.mock('../services/jobsApi', () => ({
         updateJobFields: vi.fn(() => Promise.resolve({})),
         getBBReview: vi.fn(() => Promise.resolve(null)),
         requestBBReview: vi.fn(() => Promise.resolve({ status: 'pending' })),
+        // Attachments pane: the viewer dock loads the open version's comment thread.
+        getVersionComments: vi.fn(() => Promise.resolve([])),
+        addVersionComment: vi.fn(() => Promise.resolve({ id: 1, author_name: 'Me', body: 'hi' })),
         // Activity rail reads the release event stream (notes + stage/date/fab).
         getNotesHistory: vi.fn(() => Promise.resolve({
             events: [
@@ -166,16 +169,18 @@ describe('ReleaseHubModal', () => {
     it('opens straight to Attachments when asked (legacy drawings key still works)', async () => {
         renderHub({ initialTab: 'drawings' });
         expect(screen.getByRole('tab', { name: 'Attachments' })).toHaveAttribute('aria-selected', 'true');
-        // Embedded split pane: left rail Drawings section + empty viewer prompt.
-        expect(await screen.findByText('Drawings')).toBeInTheDocument();
-        expect(screen.getByText('+ Upload PDF')).toBeInTheDocument();
-        // Photos moved to the Details pane, which this entry point never mounts —
-        // the embedded rail is drawings + findings only.
+        // Hybrid viewer: the title is the document switcher, and the drawing list
+        // (with upload) lives in its menu rather than a left rail.
+        expect(await screen.findByText('No drawing uploaded yet')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /No drawing/ }));
+        expect(screen.getByRole('menu')).toBeInTheDocument();
+        expect(screen.getByText('Drawings')).toBeInTheDocument();
+        // Upload is offered twice on an empty release: in the menu, and in the
+        // top strip where the markup button sits once a drawing exists.
+        expect(screen.getAllByText('+ Upload PDF')).toHaveLength(2);
+        // Photos moved to the Details pane; the viewer is drawings only.
         expect(screen.queryByText(/^Photos/)).not.toBeInTheDocument();
-        // Empty release: left rail empty-state and/or right viewer prompt.
-        expect(
-            screen.getAllByText(/No drawings yet|Select a drawing to preview/i).length,
-        ).toBeGreaterThanOrEqual(1);
+        expect(screen.getByText(/No drawings yet/i)).toBeInTheDocument();
     });
 
     it('drops the Attachments tab when no releaseId is available', () => {
@@ -194,7 +199,7 @@ describe('ReleaseHubModal', () => {
 
         fireEvent.click(screen.getByRole('tab', { name: 'Attachments' }));
         expect(screen.getByRole('tab', { name: 'Attachments' })).toHaveAttribute('aria-selected', 'true');
-        expect(screen.getByText('Drawings')).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Comments' })).toBeInTheDocument();
         // Details stays in the DOM (hidden) so its state survives the switch.
         expect(screen.getByText('Materials ordered')).toBeInTheDocument();
     });

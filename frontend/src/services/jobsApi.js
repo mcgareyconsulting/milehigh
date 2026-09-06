@@ -263,6 +263,44 @@ class JobsApi {
         }
     }
 
+    /**
+     * Procore Final PDF Pack candidates for a release: which submittal it resolves to
+     * and every downloadable drawing on it. `submittalId` overrides the resolution for
+     * a release the nightly FC worker has not linked yet; `debug` adds Procore's raw
+     * attachment/response objects for console inspection, and `probe` takes one
+     * attachment's ids back to Procore and reports what each endpoint returns.
+     */
+    async getReleaseProcoreDocuments(releaseId, { submittalId = null, debug = false, probe = null } = {}) {
+        try {
+            const response = await axios.get(
+                `${API_BASE_URL}/brain/releases/${releaseId}/procore-documents`,
+                {
+                    params: {
+                        ...(submittalId ? { submittal_id: submittalId } : {}),
+                        ...(debug ? { debug: 1 } : {}),
+                        ...(probe ? { probe } : {}),
+                    },
+                }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to load Procore documents');
+        }
+    }
+
+    /** Pull one Procore attachment into the release as its next drawing version. */
+    async pullReleaseProcoreDocument(releaseId, attachmentId, { submittalId = null } = {}) {
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}/brain/releases/${releaseId}/procore-documents/${encodeURIComponent(attachmentId)}/pull`,
+                submittalId ? { submittal_id: submittalId } : {}
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to pull the drawing from Procore');
+        }
+    }
+
     // Carmen code-compliance review of a drawing version (admin or drafter).
     async getBBReview(releaseId, versionId) {
         try {

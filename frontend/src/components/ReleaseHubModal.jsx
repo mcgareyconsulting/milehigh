@@ -6,7 +6,7 @@
  *   Change Log (hidden on Attachments for the full-width viewer).
  * exports:
  *   ReleaseHubModal: Portal modal shell for a release
- * imports_from: [react, react-dom, ./JobDetailsBody, ./PdfVersionHistoryModal, ./EventsList,
+ * imports_from: [react, react-dom, ./JobDetailsBody, ./pdfViewer/PdfViewerPane, ./EventsList,
  *   ./ReleaseNotesRail, ./StageIconRow, ../utils/stageTint, ../constants/modalSize]
  * imported_by: [frontend/src/components/JobsTableRow.jsx, frontend/src/components/JobLogCardGrid.jsx,
  *   frontend/src/components/GanttChart.jsx]
@@ -23,7 +23,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { JobDetailsBody } from './JobDetailsBody';
-import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
+import { PdfViewerPane } from './pdfViewer/PdfViewerPane';
 import { ReleaseNotesRail } from './ReleaseNotesRail';
 import EventsList from './EventsList';
 import { StageIconRow } from './StageIconRow';
@@ -318,14 +318,11 @@ export function ReleaseHubModal({
                                 className={`absolute inset-0 flex flex-col ${activeTab === 'attachments' ? '' : 'hidden'}`}
                                 role="tabpanel"
                             >
-                                <PdfVersionHistoryModal
-                                    embedded
-                                    isOpen
+                                <PdfViewerPane
                                     releaseId={releaseId}
-                                    title={label}
+                                    label={label}
                                     viewerUrl={viewerUrl}
                                     initialCommentVersionId={initialCommentVersionId}
-                                    onClose={onClose}
                                     onOpenVersion={onOpenVersion}
                                     onActionableCount={reportBadge}
                                 />
