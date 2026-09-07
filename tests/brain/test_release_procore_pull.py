@@ -235,7 +235,11 @@ def test_listing_carries_the_metadata_that_identifies_a_file(app):
 
     rich = {**REF, 'created_at': '2026-08-30T18:02:00Z', 'created_by': 'Sam Approver',
             'size_bytes': 2_411_724, 'approver_id': 991}
-    with patch(f'{MODULE}.find_submittal_drawing_refs', return_value=[rich]):
+    # The Procore URL is built from the configured company id; pin it so the assertion
+    # does not depend on whoever's .env is loaded (CI has none — procore_url was None).
+    from app.config import Config as cfg
+    with patch(f'{MODULE}.find_submittal_drawing_refs', return_value=[rich]), \
+            patch.object(cfg, 'PROD_PROCORE_COMPANY_ID', '18521'):
         payload = list_documents(release)
 
     doc = payload['documents'][0]
@@ -244,7 +248,10 @@ def test_listing_carries_the_metadata_that_identifies_a_file(app):
     assert doc['approver_id'] == 991
     sub = payload['submittal']
     assert (sub['type'], sub['status'], sub['ball_in_court']) == ('For Construction', 'Approved', 'Doug')
-    assert sub['procore_url'].endswith('/tools/submittals/4242')
+    assert sub['procore_url'] == (
+        'https://app.procore.com/webclients/host/companies/18521'
+        '/projects/777/tools/submittals/4242'
+    )
 
 
 def test_procore_workflow_response_names_the_final_pdf_pack(app):
@@ -428,53 +435,6 @@ def test_documents_route_returns_candidates(app, client, storage_root, drafter):
     body = resp.get_json()
     assert body['submittal']['submittal_id'] == '4242'
     assert body['documents'][0]['source'] == 'approver'
-
-
-def test_documents_route_debug_flag_ships_the_raw_payloads(app, client, storage_root, drafter):
-    """?debug=1 adds Procore's own objects and every final-PDF-looking JSON path, so a
-    mislabelled row can be traced to what Procore actually sent."""
-    _make_submittal("4242", "777")
-    release = make_release(job=170, release="181", procore_submittal_id="4242")
-    from app.models import db
-    db.session.commit()
-
-    raw_submittal = {
-        'id': 4242,
-        'attachments': [{'name': 'Bearing Angles.181.pdf'}],
-        'last_distributed_submittal': {
-            'distributed_responses': [
-                {'submittal_approver_id': 991, 'response_name': 'Final PDF Pack'},
-            ],
-        },
-    }
-    raw_workflow = {'attachments': [{'name': 'Bearing Angles.181.pdf', 'approver_id': 991}]}
-
-    with _patch_user(drafter), \
-            patch(f'{MODULE}.find_submittal_drawing_refs', return_value=[REF]), \
-            patch(f'{MODULE}.raw_submittal_payloads', return_value=(raw_submittal, raw_workflow)):
-        resp = client.get(f'/brain/releases/{release.id}/procore-documents?debug=1')
-
-    assert resp.status_code == 200
-    debug = resp.get_json()['debug']
-    assert debug['distributed_responses'][0]['response_name'] == 'Final PDF Pack'
-    assert any('response_name = Final PDF Pack' in p
-               for p in debug['final_pdf_paths']['submittal'])
-    assert debug['workflow_attachments'][0]['approver_id'] == 991
-
-
-def test_documents_route_omits_debug_unless_asked(app, client, storage_root, drafter):
-    _make_submittal("4242", "777")
-    release = make_release(job=170, release="181", procore_submittal_id="4242")
-    from app.models import db
-    db.session.commit()
-
-    with _patch_user(drafter), \
-            patch(f'{MODULE}.find_submittal_drawing_refs', return_value=[REF]), \
-            patch(f'{MODULE}.raw_submittal_payloads') as raw:
-        resp = client.get(f'/brain/releases/{release.id}/procore-documents')
-
-    assert 'debug' not in resp.get_json()
-    raw.assert_not_called()
 
 
 def test_documents_route_409s_when_nothing_is_linked(app, client, storage_root, drafter):

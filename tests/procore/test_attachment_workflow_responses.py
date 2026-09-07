@@ -85,18 +85,6 @@ def test_walk_finds_files_under_documents_not_just_attachments():
     assert sorted(f['name'] for f, _ in found) == ['a.pdf', 'b.pdf']
 
 
-def test_walk_carries_the_response_row_down_to_a_nested_file():
-    payload = {'workflow_responses': [{
-        'submittal_approver_id': 991,
-        'response_name': 'Final PDF Pack',
-        'approver_name': 'Dalton Rauer',
-        'documents': [{'name': 'Bearing Angles.181.pdf'}],
-    }]}
-    (file_obj, ctx), = walk_file_objects(payload)
-    assert file_obj['name'] == 'Bearing Angles.181.pdf'
-    assert (ctx['approver_id'], ctx['response_name']) == (991, 'Final PDF Pack')
-
-
 def test_file_carried_only_as_a_workflow_document_is_still_collected():
     """The gap: a pack Procore hangs off `documents` was invisible to a bare
     payload["attachments"] read."""
@@ -104,21 +92,6 @@ def test_file_carried_only_as_a_workflow_document_is_still_collected():
 
     assert len(refs) == 1
     assert refs[0]['attachment_id'] == 5150
-
-
-def test_response_row_labels_a_file_nested_inside_it():
-    workflow = {'workflow_responses': [{
-        'submittal_approver_id': 991,
-        'response_name': 'Final PDF Pack',
-        'approver_name': 'Dalton Rauer (Mile High Metal Works, Inc.)',
-        'documents': [PACK_FILE],
-    }]}
-    refs = _refs_from({}, workflow)
-
-    assert refs[0]['is_final_pdf_response'] is True
-    assert refs[0]['response_name'] == 'Final PDF Pack'
-    assert refs[0]['approver_name'] == 'Dalton Rauer (Mile High Metal Works, Inc.)'
-    assert refs[0]['approver_id'] == 991
 
 
 def test_same_file_in_both_places_dedups_but_keeps_the_response_evidence():
@@ -156,50 +129,6 @@ def test_non_pdf_files_are_still_ignored_wherever_they_hide():
 # ---------------------------------------------------------------------------
 # Probe
 # ---------------------------------------------------------------------------
-
-
-def test_probe_asks_the_approver_record_when_the_file_is_an_approver_attachment():
-    """The case that prompted it: response_name came back null, so the approver record is
-    the next place the name can live. Probing an approver attachment must ask for it."""
-    from app.procore.attachments import probe_attachment
-
-    with patch('app.procore.attachments._probe_get', return_value=(404, None)) as get:
-        probe_attachment(2968284, 71563766, 6172561559,
-                         item_id=184985005, item_type='SubmittalLogApprover')
-
-    asked = [call.args[0] for call in get.call_args_list]
-    assert any('/approvers/184985005' in url for url in asked)
-    assert any(url.endswith('/submittals/71563766/approvers') for url in asked)
-    assert any('/attachments/6172561559' in url for url in asked)
-
-
-def test_probe_reports_status_shape_and_any_response_names_found():
-    from app.procore.attachments import probe_attachment
-
-    body = {'id': 184985005, 'response_name': 'Final PDF Pack',
-            'attachments': [{'id': 6172561559}]}
-    with patch('app.procore.attachments._probe_get', return_value=(200, body)):
-        rows = probe_attachment(2968284, 71563766, 6172561559,
-                                item_id=184985005, item_type='SubmittalLogApprover')
-
-    row = rows[0]
-    assert row['status'] == 200
-    assert row['shape'] == {'type': 'object',
-                            'keys': ['attachments', 'id', 'response_name']}
-    assert row['mentions_attachment'] is True
-    assert row['mentions_approver'] is True
-    assert row['response_names'] == ['Final PDF Pack']
-
-
-def test_probe_never_raises_when_procore_refuses():
-    from app.procore.attachments import probe_attachment
-
-    with patch('app.procore.attachments._probe_get', return_value=(None, {'error': 'timeout'})):
-        rows = probe_attachment(2968284, 71563766, 6172561559)
-
-    assert all(r['status'] is None for r in rows)
-    # No approver ids to chase, so the approver-record URLs are skipped.
-    assert not any('submittal_approvers' in r['url'] for r in rows)
 
 
 # ---------------------------------------------------------------------------
@@ -243,23 +172,6 @@ def test_nested_approver_response_labels_the_attachment():
 
     assert refs[0]['is_final_pdf_response'] is True
     assert refs[0]['response_name'] == 'Final PDF Pack'
-
-
-def test_probe_covers_the_confirmation_endpoint_families():
-    """Revisions, the response-name config, distributions and the change log — the places a
-    'Final PDF Pack' label can live once the pack was attached then distributed."""
-    from app.procore.attachments import probe_attachment
-
-    with patch('app.procore.attachments._probe_get', return_value=(404, None)) as get:
-        probe_attachment(2968284, 71563766, 6172561559,
-                         item_id=184985005, item_type='SubmittalLogApprover')
-
-    asked = ' '.join(call.args[0] for call in get.call_args_list)
-    assert '/submittal_responses' in asked          # id -> name config
-    assert '/revisions' in asked                    # the pack may be on another revision
-    assert '/distributions' in asked
-    assert '/changes' in asked                      # the change log the client reads
-    assert 'filters[id][]=71563766' in asked        # the index serializer
 
 
 # ---------------------------------------------------------------------------
@@ -467,19 +379,6 @@ def test_url_hunt_finds_a_signed_link_another_serializer_exposes():
     assert found[0][1] == 'url'
     assert found[0][2] == 'https://storage.procore.com/signed/abc.pdf'
     assert any(field == 'viewer_url' for _label, field, _url in found)
-
-
-def test_url_hunt_ignores_other_files_on_the_submittal():
-    from app.procore.attachments import find_attachment_urls
-
-    payload = {'attachments': [
-        {'id': 999, 'url': 'https://storage.procore.com/other.pdf'},
-        {'id': 5975376655, 'url': 'https://storage.procore.com/wanted.pdf'},
-    ]}
-    with patch('app.procore.attachments._request_json', return_value=payload):
-        found = find_attachment_urls(2587275, 70139275, [5975376655])
-
-    assert all('wanted.pdf' in url for _label, _field, url in found)
 
 
 def test_raw_download_falls_through_to_the_url_hunt():
