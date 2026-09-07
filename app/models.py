@@ -2162,6 +2162,16 @@ class Subcontractor(db.Model):
     password_hash = db.Column(db.String(255), nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True, server_default='1')
 
+    # The installer crew this account is scoped to. Holds the crew NAME, matching
+    # `Releases.installer` (and the Trello list name) by value — the same string key
+    # the Subs tab, the install schedule and the timeline lanes already scope on, so
+    # sub visibility needs no new join. NULL means not yet scoped, and a NULL-crew
+    # account resolves to ZERO releases: the scope query fails closed, never open.
+    # Written only via command.set_installer_team, which validates against
+    # assignable_installer_teams() — an unvalidated typo would scope to nothing and
+    # present as "the sub sees an empty timeline", which is near-undebuggable.
+    installer_team = db.Column(db.String(64), nullable=True)
+
     invited_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     invited_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     invite_token_hash = db.Column(db.String(64), nullable=True)
@@ -2180,6 +2190,7 @@ class Subcontractor(db.Model):
             "contact_name": self.contact_name,
             "email": self.email,
             "is_active": self.is_active,
+            "installer_team": self.installer_team,
             "invited_at": _dt(self.invited_at),
             "invite_accepted": self.invite_accepted_at is not None,
             "invite_accepted_at": _dt(self.invite_accepted_at),

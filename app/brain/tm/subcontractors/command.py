@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from app.config import Config as cfg, LOCAL_APP_BASE_URL, current_environment, is_local_environment
+from app.brain.subs.service import assignable_installer_teams
 from app.models import Subcontractor, TMTicket, TMTicketSubcontractor, db
 from app.microsoft.mailer import send_mail
 from app.logging_config import get_logger
@@ -235,6 +236,53 @@ def set_active(subcontractor: Subcontractor, is_active: bool) -> None:
     subcontractor.is_active = is_active
     db.session.commit()
     logger.info("subcontractor_active_changed", subcontractor_id=subcontractor.id, is_active=is_active)
+
+
+class InvalidInstallerTeamError(ValueError):
+    """Raised when a crew name is not one an account may be scoped to."""
+
+
+def set_installer_team(subcontractor: Subcontractor, installer_team: str | None) -> None:
+    """Scope this account to an installer crew (or clear it with None).
+
+    The crew name is matched against `assignable_installer_teams()`
+    CASE-INSENSITIVELY but STORED in the roster's canonical casing, because the
+    value is a join key against `Releases.installer` and that comparison is
+    exact. Accepting "saul 2" and storing it verbatim would produce an account
+    that matches no release while looking correctly configured.
+
+    Anything not on the roster is refused rather than stored. The failure mode
+    this prevents is the expensive one: a typo'd crew scopes to zero releases,
+    so the sub logs in to an empty timeline and the bug presents as "the feature
+    doesn't work" rather than as bad data.
+
+    Clearing to None is always allowed — it revokes release visibility (the scope
+    query fails closed on NULL) without deactivating the account, which is the
+    right tool when a crew changes hands mid-job.
+    """
+    if installer_team is not None:
+        candidate = installer_team.strip()
+        if not candidate:
+            installer_team = None
+        else:
+            match = next(
+                (t for t in assignable_installer_teams() if t.casefold() == candidate.casefold()),
+                None,
+            )
+            if match is None:
+                raise InvalidInstallerTeamError(
+                    f"'{candidate}' is not an assignable installer crew"
+                )
+            installer_team = match
+
+    previous = subcontractor.installer_team
+    if previous == installer_team:
+        return
+
+    subcontractor.installer_team = installer_team
+    db.session.commit()
+    logger.info("subcontractor_installer_team_changed", subcontractor_id=subcontractor.id,
+                from_team=previous, to_team=installer_team)
 
 
 def assign_to_ticket(ticket: TMTicket, subcontractor: Subcontractor, assigned_by_user_id: int,

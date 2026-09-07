@@ -2,8 +2,9 @@
  * @milehigh-header
  * schema_version: 1
  * purpose: Admin roster page for external subcontractor accounts — invite by email, resend a
- *          pending invite, deactivate/reactivate. Assignment to a specific T&M ticket happens
- *          from TMTicketFormModal.jsx, not here (this page manages the standing roster only).
+ *          pending invite, deactivate/reactivate, and scope the account to an installer crew.
+ *          Assignment to a specific T&M ticket happens from TMTicketFormModal.jsx, not here
+ *          (this page manages the standing roster only).
  * exports:
  *   SubcontractorAdmin: Page component, admin-gated server-side on every route it calls.
  * imports_from: [react, ../services/subcontractorAdminApi]
@@ -11,11 +12,15 @@
  * invariants:
  *   - Mirrors TMTickets.jsx's mobile-first card list (below sm:) / table (sm:+) pattern for
  *     visual consistency across the T&M feature area.
+ *   - Crew is release VISIBILITY, not a T&M permission: it scopes which releases the account
+ *     sees. Unscoped (—) means no releases at all, so the picker never silently grants access.
+ *   - Crew options come from the roster's own endpoint, which excludes MHMW's in-house crews.
  */
 import { useState, useEffect, useCallback } from 'react';
 import {
     listSubcontractors, inviteSubcontractor, resendInvite,
     deactivateSubcontractor, reactivateSubcontractor,
+    listAssignableInstallerTeams, setInstallerTeam,
 } from '../services/subcontractorAdminApi';
 
 const inputClass = 'w-full px-3 py-2.5 sm:py-2 text-sm rounded-lg border border-hairline-strong bg-input-bg text-ink';
@@ -52,6 +57,7 @@ export default function SubcontractorAdmin() {
     const [email, setEmail] = useState('');
     const [saving, setSaving] = useState(false);
     const [busyId, setBusyId] = useState(null);
+    const [teams, setTeams] = useState([]);
 
     const load = useCallback(async () => {
         setError(null);
@@ -66,6 +72,15 @@ export default function SubcontractorAdmin() {
     }, []);
 
     useEffect(() => { setLoading(true); load(); }, [load]);
+
+    // Crew options are static per deploy, so they load once alongside the roster.
+    // A failure here leaves the picker empty rather than blocking the page — the
+    // rest of the roster (invite, deactivate) still works without it.
+    useEffect(() => {
+        listAssignableInstallerTeams()
+            .then(setTeams)
+            .catch(() => setTeams([]));
+    }, []);
 
     const handleInvite = async (e) => {
         e.preventDefault();
@@ -93,6 +108,26 @@ export default function SubcontractorAdmin() {
             setBusyId(null);
         }
     };
+
+    const renderCrew = (sub) => (
+        <select
+            value={sub.installer_team || ''}
+            disabled={busyId === sub.id}
+            onChange={e => withBusy(sub.id, () => setInstallerTeam(sub.id, e.target.value || null))}
+            className="w-full max-w-[150px] px-2 py-1 text-xs rounded-md border border-hairline-strong bg-input-bg text-ink disabled:opacity-50"
+        >
+            {/* An unscoped account sees no releases, so the empty option is a real
+                state worth naming rather than a blank the admin reads as a loading gap. */}
+            <option value="">— None —</option>
+            {/* A crew that was renamed in config leaves existing rows pointing at a value
+                that is no longer offered. Show it so the row reads truthfully; picking
+                anything else is a one-way fix, and the API would refuse the stale value. */}
+            {sub.installer_team && !teams.includes(sub.installer_team) && (
+                <option value={sub.installer_team}>{sub.installer_team} (unknown)</option>
+            )}
+            {teams.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+    );
 
     const renderActions = (sub) => (
         <div className="flex flex-wrap gap-2">
@@ -180,6 +215,10 @@ export default function SubcontractorAdmin() {
                                 </div>
                                 <div className="text-xs text-ink-2">{sub.contact_name}</div>
                                 <div className="text-xs text-ink-3 mb-2">{sub.email}</div>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-xs text-ink-3 shrink-0">Crew</span>
+                                    {renderCrew(sub)}
+                                </div>
                                 {renderActions(sub)}
                             </div>
                         ))}
@@ -192,6 +231,7 @@ export default function SubcontractorAdmin() {
                                     <th className="px-3 py-2 text-left font-semibold text-ink-3">Company</th>
                                     <th className="px-3 py-2 text-left font-semibold text-ink-3">Contact</th>
                                     <th className="px-3 py-2 text-left font-semibold text-ink-3">Email</th>
+                                    <th className="px-3 py-2 text-left font-semibold text-ink-3">Crew</th>
                                     <th className="px-3 py-2 text-left font-semibold text-ink-3">Status</th>
                                     <th className="px-3 py-2 text-left font-semibold text-ink-3">Invited</th>
                                     <th className="px-3 py-2 text-left font-semibold text-ink-3">Actions</th>
@@ -203,6 +243,7 @@ export default function SubcontractorAdmin() {
                                         <td className="px-3 py-2 text-ink">{sub.company_name}</td>
                                         <td className="px-3 py-2 text-ink-2">{sub.contact_name}</td>
                                         <td className="px-3 py-2 text-ink-2">{sub.email}</td>
+                                        <td className="px-3 py-2">{renderCrew(sub)}</td>
                                         <td className="px-3 py-2">
                                             <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_BADGE[statusOf(sub)]}`}>
                                                 {STATUS_LABEL[statusOf(sub)]}
