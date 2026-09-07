@@ -475,6 +475,7 @@ export function PdfViewerPane({
                             citeNonce={jumpNonce}
                             onMarkupsChange={setMarkups}
                             onDirtyChange={setMarkupDirty}
+                            onNumPages={setNumPages}
                             onClose={() => {}}
                             onSaved={async (newVersion) => {
                                 await loadVersions();

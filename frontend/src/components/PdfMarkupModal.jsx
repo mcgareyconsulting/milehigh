@@ -154,6 +154,8 @@ export function PdfMarkupModal({
     onMarkupsChange = null,
     onDirtyChange = null,
     onSavingChange = null,
+    /** hybrid: page count once pdf.js has laid the set out (0 while loading). */
+    onNumPages = null,
     initialPage = null,
     citeNonce = null,
     onClose,
@@ -575,6 +577,7 @@ export function PdfMarkupModal({
     useEffect(() => { onMarkupsChange?.(ticks); }, [ticks, onMarkupsChange]);
     useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
     useEffect(() => { onSavingChange?.(saving); }, [saving, onSavingChange]);
+    useEffect(() => { onNumPages?.(pagesCount); }, [pagesCount, onNumPages]);
 
     const goToPage = (n) => {
         const pdfViewer = viewerStateRef.current.pdfViewer;

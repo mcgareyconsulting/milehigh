@@ -17,6 +17,62 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.373',
+    date: 'September 7, 2026',
+    summary:
+      'A release\'s drawings become one place: the sheet you are reading is the sheet you mark up, the version list lives in the title, and Carmen\'s findings, the markups, the comments, and the file details sit in a dock beside it. Drafters can pull the approver\'s Final PDF Pack straight out of Procore, and ask Carmen about the open drawing and get an answer in seconds. Plus Carmen reports hours released over any time frame, split by billing tag.',
+    changes: [
+      {
+        type: 'new',
+        title: 'One drawing viewer, and the sheet you read is the sheet you mark up',
+        detail:
+          'Opening a release\'s drawings used to mean a rail of version cards, a one-page-at-a-time preview beside it, a separate panel for Carmen\'s findings, and an Edit button that threw you out into a full-screen markup window — which, on an iPad running the Brain as an installed app, opened somewhere else entirely. It is one viewer now, and it scrolls: every sheet in the set is stacked in one continuous scroll, the way a drawing set is read, with the page pill reporting where you are — no more Next button. The file name in the title is the version switcher: click it and every version is listed with its date, uploader, and a warning chip when Carmen flagged it, plus an Upload PDF button. The canvas is always the markup surface — no View/Edit split — with the tools in a floating pill at the bottom: hand, pen, text, line, arrow, box, circle, five colors, a size control that follows whichever tool is armed or whichever markup you have selected, page back and forward, zoom, and Fit and Width. Keyboard shortcuts are V hand, P pen, T text, L line, A arrow, R box, O circle, and Escape puts the tool down instead of closing anything. A Save version pill with a note box appears only once you have drawn something. Photos moved out of the viewer entirely: they live on the Details pane and in the stage-photo gate, which is now a focused dialog that does one job — require the tagged photo, then confirm the stage. The same viewer opens from the hub\'s Attachments tab, the Release # link on the iPad cards, and the History page, so a drawing reads identically wherever you came from.',
+      },
+      {
+        type: 'new',
+        title: 'A dock beside the drawing: Review, Markups, Comments, Info',
+        detail:
+          'The right side of the viewer is a dock with four tabs, each scoped to the version you are looking at, each with a count, and collapsible to a thin rail so the drawing takes the full width. Review is Carmen\'s findings with the findings-to-page jump kept exactly as it was, a Run or Re-run button, and thumbs feedback. Markups is the real change: instead of a flat pile of every shape on the sheet, markups are grouped by the version they first appeared in — "v7 · Bill · Sep 3 · 2 pages" — newest first, only the newest group open, and each page chip scrolls the canvas to that page, so a v10 drawing reads as ten lines rather than ten open lists. Comments is the @mention thread with a proper composer, and a notification click-through still lands you on the right version with the tab open. Info has the file details, the note, what the version was derived from, and a View in Procore link. Escape used to close the markup surface and the release hub together, which made the discard-your-markup confirm pointless; the viewer claims Escape first now, so while a drawing is open the hub closes from its × button.',
+      },
+      {
+        type: 'new',
+        title: 'Pull the Final PDF Pack out of Procore',
+        detail:
+          'The nightly worker only ever writes a Procore link onto a release — the drawing itself never reached the Brain, so there was nothing to view, comment on, or hand to Carmen. Drafters and admins now have a Pull from Procore button in the viewer\'s top strip. It finds the release\'s submittal — from the worker\'s link, from our own submittal records by job and release number, or from a submittal id you type in when nothing is linked — tells you which it used, and lists every downloadable PDF on it with a role pill: Final PDF Pack, Approver copy, or Submitted set. The role comes from Procore\'s own record of who returned what, never from the file name, and a "marked up" pill appears only when Procore actually says an approver drew on it. Press Pull on the row you want and it lands as the release\'s next drawing version, with the approver\'s markups burned in and a note recording exactly which submittal and attachment it came from. If Procore\'s markup renderer is not ready yet — it can lag right after a distribution — you get the clean copy and the note says so out loud rather than letting you assume the markups are in there. Already-pulled files carry their version chip and the button reads Pull again. Along the way the attachment reader was rebuilt: it walks Procore\'s whole payload instead of one documented spot, so returned sets that used to be invisible or mislabeled as submitted drawings show up under the right role, a clean drawing no longer wears a marked-up badge, and downloads that came back Item not found now try each of Procore\'s id combinations before giving up.',
+      },
+      {
+        type: 'new',
+        title: 'Ask Carmen about the open drawing',
+        detail:
+          'A full Carmen review is the heavy tool — minutes on the big model, findings saved per version. Now there is a fast path beside it: an Ask Carmen panel under the findings in the Review tab, for drafters and admins, that answers about the version you have open in seconds. Carmen sees the whole drawing set, a page-by-page inventory of the markups on it with the ones new on this version tagged as such, the saved findings if a review has run, and the recent comments — and she reads sheets with the same MHMW callout vocabulary the reviewer uses. Ask her to summarize the set, what changed in the markups, or whether every hole has hardware that fits and the counts match; the three starter chips do exactly that. Answers cite the sheet and quote the callout, say "the drawing does not say" instead of guessing, and every page reference is a chip that jumps the canvas there. The thread is session-only: it clears when you switch versions or close the modal, and there is a Clear link. Each answer shows its cost and time, and the drawing is cached after the first question so follow-ups cost a fraction of the first.',
+      },
+      {
+        type: 'fixed',
+        title: 'A review no longer dies on an inch mark',
+        detail:
+          'The reviewer is told to quote dimensions exactly, so a finding like terminal rise 8" exceeds 7" put raw inch marks inside the answer and broke it mid-object — the whole review errored and you got no findings at all, not just a bad one. Carmen is now held to a fixed findings structure by the API itself, so quoted marks come back clean and the review completes. If she is ever cut off, the older reader still catches what it can, and the raw response is kept in the log instead of thrown away.',
+      },
+      {
+        type: 'fixed',
+        title: 'Two taps on Save made two versions',
+        detail:
+          'Two fast taps on Save — or the pill\'s Save and the toolbar\'s Save close together — could both fire and land two identical versions of the same markup. The second tap is ignored now.',
+      },
+      {
+        type: 'improved',
+        title: 'Carmen reports hours released over any time frame, by billing tag',
+        detail:
+          'You could ask Carmen for the hours released to the job log this week, and only this week, and the answer never said what the hours were billed against. Now any window works — last month, since August 9th, this year to date, everything through the end of August — and every answer is split by billing tag: Contracted, Change Order, MHMW Cost, and Untagged, with the individual releases behind the numbers. The untagged bucket is deliberately loud: the tag only became required on August 9th, so for any window reaching back before then most of the hours are untagged, and Carmen says what share that is rather than presenting the tagged subtotal as the whole. Anyone with Carmen access can ask; the weekly scorecard number is unchanged.',
+      },
+      {
+        type: 'fixed',
+        title: 'One person, one entry in the mentions filter',
+        detail:
+          'Board comments stamped the mentioner\'s first name and drawing comments stamped the full name, so the same person showed up twice in the To-Dos mentioner filter, which groups on the name. Every writer stamps First Last now, and the older rows carrying a bare first name are repaired on the way out — unless two active users share the first name, in which case it is left alone rather than guessed.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.369',
     date: 'September 4, 2026',
     summary:
