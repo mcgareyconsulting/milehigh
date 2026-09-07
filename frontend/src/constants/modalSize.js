@@ -15,6 +15,6 @@
  * updated_by_agent: 2026-09-02T00:00:00Z
  */
 export const MODAL_PANEL_SIZE = {
-    width: 'min(1380px, 96vw)',
-    height: 'min(860px, 94dvh, 94vh)',
+    width: 'min(1480px, 97vw)',
+    height: 'min(920px, 95dvh, 95vh)',
 };

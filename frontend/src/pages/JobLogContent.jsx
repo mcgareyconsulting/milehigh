@@ -16,7 +16,7 @@ import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react'
 import { useOutletContext, useLocation, useNavigate } from 'react-router-dom';
 import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
 import { JobsTableRow } from '../components/JobsTableRow';
-import { PdfVersionHistoryModal } from '../components/PdfVersionHistoryModal';
+import { PdfViewerModal } from '../components/PdfViewerModal';
 import { PdfMarkupModal } from '../components/PdfMarkupModal';
 import { ReleaseHubModal } from '../components/ReleaseHubModal';
 import { AsapDividerLabel, ASAP_DIVIDER_BOX_CLASS } from '../components/AsapPropagationTag';
@@ -426,7 +426,7 @@ function JobLogContent() {
             />
 
             {drawingModal && (
-                <PdfVersionHistoryModal
+                <PdfViewerModal
                     isOpen={true}
                     releaseId={drawingModal.releaseId}
                     title={drawingModal.jobReleaseLabel}

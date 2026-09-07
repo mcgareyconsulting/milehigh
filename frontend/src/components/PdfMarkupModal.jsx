@@ -11,6 +11,10 @@
  * Tablet-friendly: native pointer events, large toolbar hit targets. The scroll
  * container allows one-finger pan in Hand mode and suppresses touch while a
  * drawing tool is active; two-finger pinch-to-zoom is handled explicitly.
+ *
+ * `inline` drops the fixed overlay and the portal so the same editor can be hosted inside
+ * another surface — the release hub's Attachments pane runs it in place of the read
+ * viewer. Inline also means another dialog owns Escape, so this one claims it in capture.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -41,7 +45,9 @@ function fingerprintAnnotation(ann, pageNum) {
     return `p${pageNum}:${ann.subtype}:${rect}:${extra}`;
 }
 
-const COLORS = ['#FF0000', '#000000', '#1F77B4', '#2CA02C', '#FFD500'];
+// Option 4c palette. Applies to NEW annotations; existing ones keep the color they
+// were saved with.
+const COLORS = ['#dc2626', '#111827', '#2563eb', '#16a34a', '#eab308'];
 
 const TOOL = {
     // pdf.js's PDFViewer rejects DISABLE (-1) — initializing with it prevents
@@ -140,6 +146,14 @@ export function PdfMarkupModal({
     title = 'Drawing markup',
     mode = 'edit',
     inline = false,
+    /** 'window' = this component's own toolbar chrome. 'hybrid' = Option 4c: tools live in
+     *  the floating pill, and the note + Save version appear above it only when there is
+     *  uncommitted markup. */
+    variant = 'window',
+    /** hybrid: report state the host's chrome renders (markup list, unsaved). */
+    onMarkupsChange = null,
+    onDirtyChange = null,
+    onSavingChange = null,
     initialPage = null,
     citeNonce = null,
     onClose,
@@ -172,8 +186,17 @@ export function PdfMarkupModal({
     const [ticks, setTicks] = useState([]);  // scrollbar ticks for each annotation
     const [shapeDraft, setShapeDraft] = useState(null);  // { sx, sy, ex, ey } overlay-relative preview
     const [hasSelection, setHasSelection] = useState(false);  // an editor is currently selected
+    // Mirrored from the pdf.js viewer for the Option 4c pill.
+    const [pageNumber, setPageNumber] = useState(1);
+    const [pagesCount, setPagesCount] = useState(0);
+    const [scalePct, setScalePct] = useState(100);
+    const [fitMode, setFitMode] = useState('fit');   // 'fit' | 'width' | null (manual zoom)
+    const [selectedKind, setSelectedKind] = useState(null);  // 'freetext' | 'ink' | null
 
     const isEdit = mode === 'edit';
+    const hybrid = variant === 'hybrid';
+    const noteValue = note;
+    const setNoteValue = setNote;
 
     // Load PDF + initialize viewer
     useEffect(() => {
@@ -214,11 +237,22 @@ export function PdfMarkupModal({
                 });
                 linkService.setViewer(pdfViewer);
 
+                eventBus.on('pagechanging', (e) => {
+                    if (e?.pageNumber) setPageNumber(e.pageNumber);
+                });
+                eventBus.on('scalechanging', (e) => {
+                    if (e?.scale) setScalePct(Math.round(e.scale * 100));
+                });
                 eventBus.on('pagesinit', () => {
+                    setPagesCount(pdfViewer.pagesCount || 0);
+                    setScalePct(Math.round((pdfViewer.currentScale || 1) * 100));
+                    setFitMode('fit');
                     // Inline review pane: fit width so the sheet fills the column and
                     // dimensions are legible (fit-page leaves it tiny in a tall pane).
                     // Fullscreen markup: 'page-fit' shows the whole sheet to work on.
-                    pdfViewer.currentScaleValue = inline ? 'page-width' : 'page-fit';
+                    // Whole sheet by default everywhere except the thin inline review pane,
+                    // where fit-page leaves the drawing unreadably small.
+                    pdfViewer.currentScaleValue = (inline && !hybrid) ? 'page-width' : 'page-fit';
                 });
                 eventBus.on('annotationeditorstateschanged', (e) => {
                     setDirty(true);
@@ -226,6 +260,16 @@ export function PdfMarkupModal({
                     if (details && 'hasSelectedEditor' in details) {
                         setHasSelection(!!details.hasSelectedEditor);
                     }
+                    // pdf.js reports THAT an editor is selected, not which kind. The kind
+                    // decides which size control belongs in the pill, and it is readable
+                    // off the DOM once pdf.js has applied its classes.
+                    setTimeout(() => {
+                        const el = document.querySelector('.annotationEditorLayer .selectedEditor');
+                        if (!el) { setSelectedKind(null); return; }
+                        if (el.classList.contains('freeTextEditor')) setSelectedKind('freetext');
+                        else if (el.classList.contains('inkEditor')) setSelectedKind('ink');
+                        else setSelectedKind(null);
+                    }, 0);
                 });
                 // The UIManager is created during setDocument (NONE mode still
                 // creates it); capture it so shape tools can inject Ink editors
@@ -376,7 +420,7 @@ export function PdfMarkupModal({
             try { state.pdfDocument?.destroy?.(); } catch { /* noop */ }
             viewerStateRef.current = { pdfDocument: null, pdfViewer: null, eventBus: null, loadingTask: null, uiManager: null };
         };
-    }, [isOpen, releaseId, versionId, fileUrl, inline]);
+    }, [isOpen, releaseId, versionId, fileUrl, inline, hybrid]);
 
     // Jump-to-page on command: react to initialPage / citeNonce changes when the
     // doc is already loaded (NOT via the init effect's deps — reloading the whole
@@ -424,14 +468,15 @@ export function PdfMarkupModal({
     // Apply font size changes. Same dispatch pattern as color.
     useEffect(() => {
         const eventBus = viewerStateRef.current.eventBus;
-        if (!eventBus || !isEdit || tool !== TOOL.FREETEXT) return;
+        if (!eventBus || !isEdit) return;
+        if (tool !== TOOL.FREETEXT && selectedKind !== 'freetext') return;
         const params = pdfjsLib.AnnotationEditorParamsType;
         try {
             if (params?.FREETEXT_SIZE != null) {
                 eventBus.dispatch('switchannotationeditorparams', { type: params.FREETEXT_SIZE, value: fontSize });
             }
         } catch { /* swallow */ }
-    }, [fontSize, tool, isEdit]);
+    }, [fontSize, tool, isEdit, selectedKind]);
 
     // Apply stroke-thickness changes to the pen. Shapes read `thickness`
     // directly when committed, so only the live INK editor needs the dispatch.
@@ -482,20 +527,66 @@ export function PdfMarkupModal({
         };
     }, [isOpen]);
 
-    // Esc-to-close
+    // Esc-to-close. Inline, this editor is hosted inside another dialog (the release hub)
+    // that also closes on Escape from a window listener — so claim the key in the capture
+    // phase and stop it there. Otherwise one Escape exits markup AND closes the host, and
+    // the discard confirm becomes pointless: the host closes whichever button is pressed.
     useEffect(() => {
-        if (!isOpen) return;
+        if (!isOpen) return undefined;
         const onKey = (e) => {
-            if (e.key === 'Escape') tryClose();
+            if (e.key !== 'Escape') return;
+            if (inline) e.stopPropagation();
+            // Hybrid chrome has no close action — markup is always on — so Escape disarms
+            // the current tool back to Hand, per the Option 4c interaction spec.
+            if (hybrid) {
+                setTool(TOOL.HAND);
+                return;
+            }
+            tryClose();
+        };
+        window.addEventListener('keydown', onKey, inline);
+        return () => window.removeEventListener('keydown', onKey, inline);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, dirty, inline, hybrid]);
+
+    // Option 4c keyboard: V hand · P pen · T text · L line · A arrow · R box · O circle.
+    // Ignored while typing, so the note field and text annotations keep their letters.
+    useEffect(() => {
+        if (!isOpen || !hybrid || !isEdit) return undefined;
+        const KEYS = {
+            v: TOOL.HAND, p: TOOL.INK, t: TOOL.FREETEXT, l: TOOL.LINE,
+            a: TOOL.ARROW, r: TOOL.SQUARE, o: TOOL.CIRCLE,
+        };
+        const onKey = (e) => {
+            if (e.metaKey || e.ctrlKey || e.altKey) return;
+            const el = e.target;
+            const typing = el && (el.isContentEditable
+                || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName));
+            if (typing) return;
+            const next = KEYS[e.key?.toLowerCase()];
+            if (next !== undefined) setTool(next);
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen, dirty]);
+    }, [isOpen, hybrid, isEdit]);
+
+    // Hybrid chrome: the host renders the markup list, the unsaved badge and Save.
+    useEffect(() => { onMarkupsChange?.(ticks); }, [ticks, onMarkupsChange]);
+    useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+    useEffect(() => { onSavingChange?.(saving); }, [saving, onSavingChange]);
+
+    const goToPage = (n) => {
+        const pdfViewer = viewerStateRef.current.pdfViewer;
+        if (!pdfViewer || !pdfViewer.pagesCount) return;
+        const clamped = Math.max(1, Math.min(pdfViewer.pagesCount, n));
+        pdfViewer.scrollPageIntoView({ pageNumber: clamped });
+        setPageNumber(clamped);
+    };
 
     const adjustZoom = (delta) => {
         const pdfViewer = viewerStateRef.current.pdfViewer;
         if (!pdfViewer) return;
+        setFitMode(null);
         const current = pdfViewer.currentScale || 1;
         const next = Math.min(8, Math.max(0.25, current * delta));
         pdfViewer.currentScale = next;
@@ -647,7 +738,7 @@ export function PdfMarkupModal({
             const fd = new FormData();
             fd.append('file', new Blob([bytes], { type: 'application/pdf' }), 'markup.pdf');
             if (versionId != null) fd.append('source_version_id', String(versionId));
-            if (note.trim()) fd.append('note', note.trim());
+            if ((noteValue || '').trim()) fd.append('note', noteValue.trim());
 
             const resp = await fetch(`${API_BASE_URL}/brain/releases/${releaseId}/drawing`, {
                 method: 'POST',
@@ -686,9 +777,237 @@ export function PdfMarkupModal({
         </button>
     );
 
-    const rootClass = inline
-        ? 'relative w-full h-full flex flex-col bg-gray-900'
-        : 'fixed inset-0 z-50 flex flex-col bg-gray-900 bg-opacity-95';
+    // ── Option 4c chrome: every canvas control in the floating bottom pill ──
+    const ToolIcon = ({ name }) => {
+        const common = {
+            width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none',
+            stroke: 'currentColor', strokeWidth: 2,
+            strokeLinecap: 'round', strokeLinejoin: 'round',
+        };
+        switch (name) {
+            case 'hand':   // feather "move"
+                return <svg {...common}><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20" /></svg>;
+            case 'pen':
+                return <svg {...common}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>;
+            case 'text':
+                return <svg {...common}><path d="M4 7V5h16v2M12 5v14M9 19h6" /></svg>;
+            case 'line':
+                return <svg {...common}><path d="M5 19L19 5" /></svg>;
+            case 'arrow':
+                return <svg {...common}><path d="M5 19L19 5M19 5h-7M19 5v7" /></svg>;
+            case 'box':
+                return <svg {...common}><rect x="4" y="6" width="16" height="12" rx="1" /></svg>;
+            case 'circle':
+                return <svg {...common}><circle cx="12" cy="12" r="8" /></svg>;
+            default:
+                return null;
+        }
+    };
+
+    const pillToolBtn = (icon, value, label) => {
+        const active = tool === value;
+        return (
+            <button
+                key={label}
+                type="button"
+                onClick={() => setTool(value)}
+                aria-label={label}
+                title={label}
+                className="grid place-items-center border-0 cursor-pointer"
+                style={{
+                    width: 30, height: 30, borderRadius: 7,
+                    background: active ? 'var(--accent-soft)' : 'transparent',
+                    color: active ? 'var(--accent)' : 'var(--text-3)',
+                }}
+            >
+                <ToolIcon name={icon} />
+            </button>
+        );
+    };
+
+    const pillDivider = (
+        <span style={{ width: 1, height: 20, background: 'var(--border)', flexShrink: 0 }} />
+    );
+
+    const pillIconBtn = {
+        border: 0, background: 'transparent', cursor: 'pointer',
+        color: 'var(--text-2)', fontSize: 14, lineHeight: 1, padding: '2px 4px',
+    };
+
+    const pillModeBtn = (active) => ({
+        border: 0, cursor: 'pointer', fontSize: 12,
+        fontWeight: active ? 700 : 500, borderRadius: 999, padding: '3px 9px',
+        background: active ? 'var(--accent-soft)' : 'transparent',
+        color: active ? 'var(--accent)' : 'var(--text-2)',
+    });
+
+    // Appears above the pill only when there are uncommitted shapes: the note and the
+    // commit action for the markup you just drew, next to where you drew it.
+    const saveBar = (isEdit && dirty) ? (
+        <div
+            className="absolute flex items-center bg-surface border border-hairline-strong"
+            style={{
+                bottom: 62, left: '50%', transform: 'translateX(-50%)',
+                gap: 8, padding: '6px 10px 6px 12px', borderRadius: 999,
+                boxShadow: '0 8px 24px rgba(15,26,48,.18)', whiteSpace: 'nowrap', zIndex: 21,
+            }}
+        >
+            <span className="font-semibold" style={{ fontSize: 12, color: '#b45309' }}>
+                Unsaved markup
+            </span>
+            <input
+                value={noteValue}
+                onChange={(e) => setNoteValue(e.target.value)}
+                placeholder="Note (optional)"
+                className="border border-hairline bg-surface text-ink"
+                style={{ width: 200, height: 26, padding: '0 8px', borderRadius: 7, fontSize: 12.5 }}
+            />
+            <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving || loading}
+                className="font-semibold text-white disabled:opacity-60"
+                style={{ height: 26, padding: '0 12px', borderRadius: 7, border: 0, fontSize: 12.5, background: '#264093' }}
+            >
+                {saving ? 'Saving…' : 'Save version'}
+            </button>
+        </div>
+    ) : null;
+
+    const markupPill = (
+        <div
+            className="absolute flex items-center bg-surface border border-hairline-strong"
+            style={{
+                bottom: 18, left: '50%', transform: 'translateX(-50%)',
+                gap: 10, padding: '6px 14px', borderRadius: 999,
+                boxShadow: '0 8px 24px rgba(15,26,48,.18)', whiteSpace: 'nowrap', zIndex: 20,
+            }}
+        >
+            {isEdit && (
+                <>
+                    <div className="flex items-center" style={{ gap: 2 }}>
+                        {pillToolBtn('hand', TOOL.HAND, 'Hand (V)')}
+                        {pillToolBtn('pen', TOOL.INK, 'Pen (P)')}
+                        {pillToolBtn('text', TOOL.FREETEXT, 'Text (T)')}
+                        {pillToolBtn('line', TOOL.LINE, 'Line (L)')}
+                        {pillToolBtn('arrow', TOOL.ARROW, 'Arrow (A)')}
+                        {pillToolBtn('box', TOOL.SQUARE, 'Box (R)')}
+                        {pillToolBtn('circle', TOOL.CIRCLE, 'Circle (O)')}
+                    </div>
+                    {pillDivider}
+                    <div className="flex items-center" style={{ gap: 8, padding: '0 4px' }}>
+                        {COLORS.map((c) => (
+                            <button
+                                key={c}
+                                type="button"
+                                onClick={() => setColor(c)}
+                                aria-label={`Color ${c}`}
+                                className="border-0 cursor-pointer"
+                                style={{
+                                    width: 16, height: 16, borderRadius: '50%', background: c,
+                                    boxShadow: color === c
+                                        ? '0 0 0 2px var(--surface), 0 0 0 3.5px var(--accent)'
+                                        : 'none',
+                                }}
+                            />
+                        ))}
+                    </div>
+                    {pillDivider}
+
+                    {/* Size controls follow the armed tool, the way the window toolbar
+                        did — text gets point size, pen and shapes get stroke weight. */}
+                    {(tool === TOOL.FREETEXT || selectedKind === 'freetext') && (
+                        <>
+                            <button
+                                type="button"
+                                style={pillIconBtn}
+                                onClick={() => setFontSize((n) => Math.max(8, n - 2))}
+                                aria-label="Decrease text size"
+                                title="Smaller text"
+                            >
+                                A−
+                            </button>
+                            <span className="text-ink-2" style={{ fontSize: 12, minWidth: 22, textAlign: 'center' }}>
+                                {fontSize}
+                            </span>
+                            <button
+                                type="button"
+                                style={{ ...pillIconBtn, fontSize: 16 }}
+                                onClick={() => setFontSize((n) => Math.min(96, n + 2))}
+                                aria-label="Increase text size"
+                                title="Larger text"
+                            >
+                                A+
+                            </button>
+                            {pillDivider}
+                        </>
+                    )}
+
+                    {(tool === TOOL.INK || isShapeTool(tool) || selectedKind === 'ink') && (
+                        <>
+                            {Object.entries(THICKNESS).map(([label, value]) => (
+                                <button
+                                    key={label}
+                                    type="button"
+                                    onClick={() => setThickness(value)}
+                                    aria-label={`${label} stroke width`}
+                                    title={`${label} stroke`}
+                                    className="grid place-items-center border-0 cursor-pointer"
+                                    style={{
+                                        width: 26, height: 26, borderRadius: 7,
+                                        background: thickness === value ? 'var(--accent-soft)' : 'transparent',
+                                    }}
+                                >
+                                    <span
+                                        style={{
+                                            display: 'block',
+                                            width: 14,
+                                            height: Math.max(1.5, value),
+                                            borderRadius: 999,
+                                            background: thickness === value ? 'var(--accent)' : 'var(--text-3)',
+                                        }}
+                                    />
+                                </button>
+                            ))}
+                            {pillDivider}
+                        </>
+                    )}
+                </>
+            )}
+            <button type="button" style={pillIconBtn} onClick={() => goToPage(pageNumber - 1)}
+                    disabled={pageNumber <= 1} aria-label="Previous page">‹</button>
+            <span className="text-ink-2" style={{ fontSize: 12 }}>
+                Page <strong className="text-ink">{pageNumber}</strong> / {pagesCount || '—'}
+            </span>
+            <button type="button" style={pillIconBtn} onClick={() => goToPage(pageNumber + 1)}
+                    disabled={pagesCount ? pageNumber >= pagesCount : true} aria-label="Next page">›</button>
+            {pillDivider}
+            <button type="button" style={pillIconBtn} onClick={() => adjustZoom(0.8)} aria-label="Zoom out">−</button>
+            <span className="text-ink-2" style={{ fontSize: 12, minWidth: 38, textAlign: 'center' }}>{scalePct}%</span>
+            <button type="button" style={pillIconBtn} onClick={() => adjustZoom(1.25)} aria-label="Zoom in">+</button>
+            {pillDivider}
+            <button
+                type="button"
+                style={pillModeBtn(fitMode === 'fit')}
+                onClick={() => { setFitMode('fit'); fitToPage(); }}
+            >
+                Fit
+            </button>
+            <button
+                type="button"
+                style={pillModeBtn(fitMode === 'width')}
+                onClick={() => { setFitMode('width'); fitToWidth(); }}
+            >
+                Width
+            </button>
+        </div>
+    );
+
+    const rootClass = hybrid
+        ? 'relative w-full h-full flex flex-col'
+        : (inline
+            ? 'relative w-full h-full flex flex-col bg-gray-900'
+            : 'fixed inset-0 z-50 flex flex-col bg-gray-900 bg-opacity-95');
 
     const tree = (
         <div className={rootClass}>
@@ -734,6 +1053,10 @@ export function PdfMarkupModal({
                     display: none !important;
                 }
             `}</style>
+            {/* Window chrome only. Hybrid puts every control in the pill and the
+                host's top strip, so this bar must not render at all — `hidden`
+                loses to the element's own `flex` class. */}
+            {!hybrid && (
             <div className="flex items-center gap-2 px-3 py-2 bg-white border-b border-gray-200 shadow-sm flex-wrap">
                 <span className="font-semibold text-gray-800 mr-2">{title}</span>
                 <div className="flex items-center gap-1 mr-2">
@@ -773,7 +1096,7 @@ export function PdfMarkupModal({
                         {toolBtn('Arrow', TOOL.ARROW)}
                         {toolBtn('Box', TOOL.SQUARE, 'Square')}
                         {toolBtn('Circle', TOOL.CIRCLE)}
-                        {(tool === TOOL.INK || isShapeTool(tool)) && (
+                        {(tool === TOOL.INK || isShapeTool(tool) || selectedKind === 'ink') && (
                             <div className="flex items-center gap-1 ml-2">
                                 {Object.entries(THICKNESS).map(([label, value]) => (
                                     <button
@@ -836,8 +1159,8 @@ export function PdfMarkupModal({
                         </button>
                         <input
                             type="text"
-                            value={note}
-                            onChange={(e) => setNote(e.target.value)}
+                            value={noteValue}
+                            onChange={(e) => setNoteValue(e.target.value)}
                             placeholder="Note (optional)"
                             className="ml-2 px-3 py-2 border border-gray-300 rounded-md text-sm w-56"
                         />
@@ -859,6 +1182,7 @@ export function PdfMarkupModal({
                     Close
                 </button>
             </div>
+            )}
 
             {error && (
                 <div className="px-4 py-2 bg-red-100 text-red-800 text-sm border-b border-red-200">
@@ -866,7 +1190,12 @@ export function PdfMarkupModal({
                 </div>
             )}
 
-            <div className="flex-1 relative bg-gray-700">
+            <div
+                className="flex-1 relative"
+                style={hybrid ? { background: 'var(--bg)' } : undefined}
+            >
+                {hybrid && saveBar}
+                {hybrid && markupPill}
                 <div
                     ref={containerRef}
                     className="absolute inset-0 overflow-auto"

@@ -14,7 +14,7 @@ vi.mock('../components/ReleaseHubModal', () => ({
     ),
 }));
 vi.mock('../components/PdfMarkupModal', () => ({ PdfMarkupModal: () => null }));
-vi.mock('../components/PdfVersionHistoryModal', () => ({ PdfVersionHistoryModal: () => null }));
+vi.mock('../components/PdfViewerModal', () => ({ PdfViewerModal: () => null }));
 vi.mock('../components/ColumnHeaderFilter', () => ({ default: ({ children }) => <span>{children}</span> }));
 vi.mock('../components/JobLogCardGrid', () => ({
     default: ({ jobs, onOpenHub }) => (
