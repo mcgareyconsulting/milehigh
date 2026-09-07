@@ -177,6 +177,7 @@ export function PdfMarkupModal({
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [saving, setSaving] = useState(false);
+    const savingRef = useRef(false);   // synchronous double-submit guard; see handleSave
     const [tool, setTool] = useState(TOOL.HAND);
     const [color, setColor] = useState(COLORS[0]);
     const [fontSize, setFontSize] = useState(16);
@@ -731,7 +732,11 @@ export function PdfMarkupModal({
 
     const handleSave = async () => {
         const pdfDocument = viewerStateRef.current.pdfDocument;
-        if (!pdfDocument || saving) return;
+        // `saving` is state and so is a render behind: two fast taps (or the pill's Save
+        // and the toolbar's Save) both saw false and each POSTed, landing two versions of
+        // the same markup. The ref flips synchronously, so the second call is a no-op.
+        if (!pdfDocument || saving || savingRef.current) return;
+        savingRef.current = true;
         setSaving(true);
         try {
             const bytes = await pdfDocument.saveDocument();
@@ -756,6 +761,7 @@ export function PdfMarkupModal({
         } catch (err) {
             setError(err?.message || 'Save failed');
         } finally {
+            savingRef.current = false;
             setSaving(false);
         }
     };

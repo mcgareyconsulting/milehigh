@@ -324,6 +324,20 @@ class JobsApi {
         }
     }
 
+    // One chat turn about the open drawing version (admin or drafter). Session-only:
+    // the caller carries `history` ([{role, content}]) and the server persists nothing.
+    async carmenDrawingChat(releaseId, versionId, message, history = []) {
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions/${versionId}/carmen-chat`,
+                { message, history }
+            );
+            return response.data;   // { configured, answer, metrics }
+        } catch (error) {
+            throw this._handleError(error, 'Carmen could not answer that');
+        }
+    }
+
     // Release-scoped PM report: latest complete review, ranked by urgency.
     // Visible to an admin OR the release's PM (403 otherwise).
     async getBBReviewReport(releaseId) {

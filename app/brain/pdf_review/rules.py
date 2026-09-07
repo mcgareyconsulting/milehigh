@@ -303,6 +303,20 @@ RULES = [
     },
 ]
 
+# Split out of the header so the drawing chat (`pdf_review/chat.py`) reads sheets with the
+# same vocabulary the reviewer does — one place to teach a new callout, not two.
+MHMW_CALLOUT_CONVENTIONS = (
+    "MHMW CALLOUT CONVENTIONS (for reading the sheets): TS=tube steel, HSS=hollow structural "
+    "section, TOS/BOS=top/bottom of steel, TOC/BOC=top/bottom of concrete, AFF=above finish "
+    "floor, PL=plate, HAS=headed anchor stud, DBA=deformed bar anchor, GA=gauge, UNO=unless "
+    "noted otherwise, T&B=top and bottom, WHR=wall handrail, LHU/RHU=left/right hand up. "
+    "Footpad codes read FP<plate-size>.<fastener>: the '.3' family uses 1/4\"Ø SDS (wood), the "
+    "'.5' family uses 3/8\" Titen HD/lag (concrete); saddle clips are 'SC' codes. MHMW's build "
+    "standard runs slightly tighter than code ('reduce by 1/4\"'): brackets like [42 1/2\"] or "
+    "[13\"] on a drawing are MHMW build targets for the >42\"/12\" code minimums. Establish "
+    "single-family (SFD) vs multi-family (MFB) occupancy first — several limits split on it.\n"
+)
+
 SYSTEM_PROMPT_HEADER = (
     "You are Carmen Miranda, a code-compliance reviewer for Mile High Metal Works, a "
     "structural-steel stair, rail, and guardrail fabricator. Review the COMPLETE "
@@ -321,15 +335,7 @@ SYSTEM_PROMPT_HEADER = (
     "viewer — it does NOT replace the sheet label; still cite the sheet label (e.g. 'F1') in "
     "`location` and each `values_used[].sheet`. If a finding spans multiple sheets, return the "
     "page of the sheet most central to the issue.\n"
-    "MHMW CALLOUT CONVENTIONS (for reading the sheets): TS=tube steel, HSS=hollow structural "
-    "section, TOS/BOS=top/bottom of steel, TOC/BOC=top/bottom of concrete, AFF=above finish "
-    "floor, PL=plate, HAS=headed anchor stud, DBA=deformed bar anchor, GA=gauge, UNO=unless "
-    "noted otherwise, T&B=top and bottom, WHR=wall handrail, LHU/RHU=left/right hand up. "
-    "Footpad codes read FP<plate-size>.<fastener>: the '.3' family uses 1/4\"Ø SDS (wood), the "
-    "'.5' family uses 3/8\" Titen HD/lag (concrete); saddle clips are 'SC' codes. MHMW's build "
-    "standard runs slightly tighter than code ('reduce by 1/4\"'): brackets like [42 1/2\"] or "
-    "[13\"] on a drawing are MHMW build targets for the >42\"/12\" code minimums. Establish "
-    "single-family (SFD) vs multi-family (MFB) occupancy first — several limits split on it.\n"
+    + MHMW_CALLOUT_CONVENTIONS
 )
 
 SYSTEM_PROMPT_FOOTER = (
