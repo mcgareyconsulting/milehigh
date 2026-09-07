@@ -11,8 +11,8 @@
  * invariants:
  *   - Every tab is scoped to the open version; switching versions reloads its data
  *   - Tabs stay mounted while the dock is open, so a comment draft survives a tab switch
- *   - A markup is a whole saved PDF version (release_drawing_versions), not an
- *     annotation record — the Markups tab lists versions, and jumping means opening one
+ *   - The Markups tab groups markups by the version each first appeared in, and reports
+ *     the PAGES they sit on; a row scrolls the canvas to that page
  * updated_by_agent: 2026-09-05T00:00:00Z
  */
 import React from 'react';
@@ -20,6 +20,9 @@ import React from 'react';
 import MentionInput from '../shared/MentionInput';
 import { ReviewTab } from './ReviewTab';
 import { fmtDate, fmtSize, renderCommentBody } from './format';
+
+//: pdf.js annotation subtypes, in the reviewer's words.
+const MARKUP_TYPE_LABEL = { Ink: 'Pen / shape', FreeText: 'Text', Stamp: 'Stamp' };
 
 const CountBadge = ({ n }) => (
     n > 0 ? (
@@ -43,6 +46,23 @@ const ChatIcon = () => (
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />
     </svg>
 );
+
+const Chevron = ({ dir = 'right', size = 18 }) => {
+    const path = {
+        right: 'M9 6l6 6-6 6',
+        left: 'M15 6l-6 6 6 6',
+        down: 'M6 9l6 6 6-6',
+    }[dir];
+    return (
+        <svg
+            width={size} height={size} viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+            aria-hidden="true"
+        >
+            <path d={path} />
+        </svg>
+    );
+};
 
 const InfoIcon = () => (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -72,12 +92,70 @@ export function ViewerDock({
     flags = 0,
     onCite,
     onFlagsChange,
-    // Markups
-    onOpenVersion = null,
+    // Markups — the annotations on the open version (Option 4c), not the version list.
+    markups = [],
+    markupDirty = false,
+    onJumpToPage = null,
 }) {
+    const [expandedGroup, setExpandedGroup] = React.useState(null);   // null = newest only
+    const [collapsedOverride, setCollapsedOverride] = React.useState(() => new Set());
+
     const commentCount = Array.isArray(comments) ? comments.length : 0;
-    // Every saved markup lands as its own version derived from another one.
-    const markups = versions.filter((v) => v.source_version_id != null);
+
+    // One group per version that introduced markup. Annotations carry over between
+    // versions, so `versionNumber` is the version a shape FIRST appeared in — that is the
+    // session a reviewer thinks in, and it is what the flat list failed to convey.
+    const versionMeta = new Map(versions.map((v) => [v.version_number, v]));
+    const markupGroups = [];
+    const groupIndex = new Map();
+    markups.forEach((m) => {
+        const key = m.versionNumber == null ? 'unsaved' : `v${m.versionNumber}`;
+        if (!groupIndex.has(key)) {
+            const meta = versionMeta.get(m.versionNumber);
+            groupIndex.set(key, markupGroups.length);
+            markupGroups.push({
+                key,
+                versionNumber: m.versionNumber ?? null,
+                subtitle: meta
+                    ? [meta.uploaded_by?.name, fmtDate(meta.uploaded_at)].filter(Boolean).join(' · ')
+                    : 'not yet saved',
+                items: [],
+                byPage: new Map(),
+                pages: [],
+            });
+        }
+        const group = markupGroups[groupIndex.get(key)];
+        group.items.push(m);
+        group.byPage.set(m.page, (group.byPage.get(m.page) || 0) + 1);
+    });
+    // Which pages carry markup — not how many are on each. Presence is the signal.
+    markupGroups.forEach((g) => { g.pages = [...g.byPage.keys()].sort((a, b) => a - b); });
+    // Newest first; anything not yet saved leads.
+    markupGroups.sort((a, b) => (b.versionNumber ?? Infinity) - (a.versionNumber ?? Infinity));
+
+    // By default only the newest group is open: at v10 the history should be ten lines,
+    // not ten open lists. Clicking a header toggles that group.
+    const newestKey = markupGroups[0]?.key;
+    const collapsedGroups = new Set(
+        markupGroups
+            .filter((g) => (g.key === newestKey
+                ? collapsedOverride.has(g.key)
+                : g.key !== expandedGroup))
+            .map((g) => g.key),
+    );
+    const toggleGroup = (key) => {
+        if (key === newestKey) {
+            setCollapsedOverride((prev) => {
+                const next = new Set(prev);
+                if (next.has(key)) next.delete(key); else next.add(key);
+                return next;
+            });
+            return;
+        }
+        setExpandedGroup((prev) => (prev === key ? null : key));
+    };
+    // The version list lives in the title menu; this tab is about the markups themselves.
+    const savedMarkupVersions = versions.filter((v) => v.source_version_id != null);
 
     if (collapsed) {
         return (
@@ -88,12 +166,12 @@ export function ViewerDock({
                 <button
                     type="button"
                     onClick={onToggleCollapse}
-                    className="bg-transparent border-0 cursor-pointer text-ink-3"
-                    style={{ height: 34, width: 30, fontSize: 13 }}
+                    className="grid place-items-center bg-transparent border-0 cursor-pointer text-ink-2 hover:text-ink"
+                    style={{ height: 44, width: 30 }}
                     aria-label="Expand panel"
                     title="Expand panel"
                 >
-                    ‹
+                    <Chevron dir="left" />
                 </button>
                 {flags > 0 && (
                     <span
@@ -152,18 +230,18 @@ export function ViewerDock({
                     </span>,
                     flags,
                 )}
-                {tabBtn('markups', 'Markups', <PenIcon />, markups.length)}
+                {tabBtn('markups', 'Markups', <PenIcon />, markups.length || savedMarkupVersions.length)}
                 {tabBtn('comments', 'Comments', <ChatIcon />, commentCount)}
                 {tabBtn('info', 'Info', <InfoIcon />, 0)}
                 <button
                     type="button"
                     onClick={onToggleCollapse}
-                    className="shrink-0 border-0 border-l border-hairline bg-transparent cursor-pointer text-ink-3"
-                    style={{ width: 30, fontSize: 13 }}
+                    className="shrink-0 grid place-items-center border-0 border-l border-hairline bg-transparent cursor-pointer text-ink-2 hover:text-ink"
+                    style={{ width: 32 }}
                     aria-label="Collapse panel"
                     title="Collapse panel"
                 >
-                    ›
+                    <Chevron dir="right" />
                 </button>
             </div>
 
@@ -175,9 +253,14 @@ export function ViewerDock({
                 <span aria-hidden="true">📄</span>
                 <span className="truncate">
                     {version
-                        ? `${version.original_filename || `Drawing v${version.version_number}`} v${version.version_number} · markups, comments & findings`
+                        ? `${version.original_filename || `Drawing v${version.version_number}`} v${version.version_number} · marking up`
                         : 'No drawing selected'}
                 </span>
+                {markupDirty && (
+                    <span className="ml-auto shrink-0 font-semibold" style={{ fontSize: 12, color: '#b45309' }}>
+                        unsaved
+                    </span>
+                )}
             </div>
 
             <div className="flex-1 min-h-0 flex flex-col">
@@ -202,49 +285,71 @@ export function ViewerDock({
                 <div className={version && tab === 'markups' ? 'flex-1 min-h-0 overflow-y-auto' : 'hidden'} style={{ padding: '10px 12px' }}>
                         {markups.length === 0 && (
                             <p className="text-ink-3" style={{ fontSize: 12.5 }}>
-                                No markups saved yet. “Edit markup” opens the editor; each save lands
-                                here as its own version.
+                                No markups on this version yet. Pick a tool from the pill and
+                                draw; Save version commits them.
                             </p>
                         )}
-                        <ul className="space-y-2">
-                            {markups.map((m) => (
-                                <li
-                                    key={m.id}
-                                    className="border border-hairline bg-surface"
-                                    style={{ borderRadius: 8, padding: '8px 10px' }}
-                                >
-                                    <div className="flex items-baseline gap-2">
-                                        <span className="font-semibold text-ink" style={{ fontSize: 13 }}>
-                                            v{m.version_number}
-                                        </span>
-                                        <span className="text-ink-3" style={{ fontSize: 11.5 }}>
-                                            {m.uploaded_by?.name || '—'}
-                                        </span>
-                                        <span className="text-ink-3 ml-auto" style={{ fontSize: 11.5 }}>
-                                            {fmtSize(m.file_size_bytes)}
-                                        </span>
-                                    </div>
-                                    <p className="text-ink-3" style={{ fontSize: 11.5, marginTop: 2 }}>
-                                        {fmtDate(m.uploaded_at)} · from v-id {m.source_version_id}
-                                    </p>
-                                    {m.note && (
-                                        <p className="text-ink-2 break-words" style={{ fontSize: 12.5, marginTop: 4 }}>
-                                            {m.note}
-                                        </p>
-                                    )}
-                                    {onOpenVersion && (
+
+                        {/* One line per version, then the pages it touched — a version with
+                            12 shapes on two sheets is two page chips, not twelve rows. */}
+                        <div className="space-y-1.5">
+                            {markupGroups.map((group) => {
+                                const open = !collapsedGroups.has(group.key);
+                                return (
+                                    <section
+                                        key={group.key}
+                                        className="border border-hairline bg-surface"
+                                        style={{ borderRadius: 8 }}
+                                    >
                                         <button
                                             type="button"
-                                            onClick={() => onOpenVersion(m.id, 'view')}
-                                            className="bg-transparent border-0 cursor-pointer text-brand font-semibold"
-                                            style={{ fontSize: 12, marginTop: 6 }}
+                                            onClick={() => toggleGroup(group.key)}
+                                            aria-expanded={open}
+                                            className="w-full flex items-center gap-2 bg-transparent border-0 cursor-pointer text-left"
+                                            style={{ padding: '8px 10px' }}
                                         >
-                                            Open in markup editor
+                                            <span
+                                                className="text-ink-3 shrink-0 grid place-items-center"
+                                                style={{ width: 16, height: 16 }}
+                                            >
+                                                <Chevron dir={open ? 'down' : 'right'} size={15} />
+                                            </span>
+                                            <span className="font-bold text-ink shrink-0" style={{ fontSize: 13 }}>
+                                                {group.versionNumber != null ? `v${group.versionNumber}` : 'Unsaved'}
+                                            </span>
+                                            <span className="text-ink-3 truncate" style={{ fontSize: 11.5 }}>
+                                                {group.subtitle}
+                                            </span>
+                                            <span className="text-ink-3 shrink-0 ml-auto" style={{ fontSize: 11.5 }}>
+                                                {group.pages.length} page{group.pages.length === 1 ? '' : 's'}
+                                            </span>
                                         </button>
-                                    )}
-                                </li>
-                            ))}
-                        </ul>
+
+                                        {open && (
+                                            <div className="border-t border-hairline">
+                                                {group.pages.map((page) => (
+                                                    <button
+                                                        key={page}
+                                                        type="button"
+                                                        onClick={() => onJumpToPage?.(page)}
+                                                        className="w-full flex items-center gap-2 bg-transparent border-0 cursor-pointer text-left hover:bg-surface-2"
+                                                        style={{ padding: '8px 10px' }}
+                                                        title={`Scroll to page ${page}`}
+                                                    >
+                                                        <span className="font-semibold text-ink" style={{ fontSize: 12.5 }}>
+                                                            Page {page}
+                                                        </span>
+                                                        <span className="ml-auto text-ink-3 shrink-0 grid place-items-center">
+                                                            <Chevron dir="right" size={14} />
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </section>
+                                );
+                            })}
+                        </div>
                 </div>
 
                 <div className={version && tab === 'comments' ? 'flex-1 min-h-0 flex flex-col' : 'hidden'}>
@@ -267,7 +372,9 @@ export function ViewerDock({
                                 </div>
                             ))}
                         </div>
-                        <div className="shrink-0 border-t border-hairline flex items-end gap-2" style={{ padding: '8px 10px 12px' }}>
+                        <div className="shrink-0 border-t border-hairline flex items-end gap-2" style={{ padding: '10px 12px 12px' }}>
+                            {/* MentionInput defaults to rows=1 + text-xs, which collapses to a
+                                sliver on this dock — give it a real composer's shape. */}
                             <MentionInput
                                 value={commentDraft}
                                 onChange={(val) => onCommentDraft?.(val)}
@@ -275,13 +382,16 @@ export function ViewerDock({
                                 users={mentionableUsers}
                                 placeholder="Add a comment… @ to tag"
                                 multiline
+                                rows={3}
+                                className="w-full resize-none overflow-y-auto max-h-40 px-3 py-2 text-sm leading-snug border border-hairline-strong rounded-[10px] bg-surface text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent-500 focus:border-transparent"
                                 disabled={commentBusy}
                             />
                             <button
                                 type="button"
                                 onClick={() => onSubmitComment?.()}
                                 disabled={commentBusy || !commentDraft.trim()}
-                                className="px-3 py-1.5 text-xs bg-accent-600 text-white rounded-md font-semibold disabled:opacity-50 shrink-0"
+                                className="px-3 text-sm bg-accent-600 text-white rounded-lg font-semibold disabled:opacity-50 shrink-0"
+                                style={{ height: 34 }}
                             >
                                 Post
                             </button>

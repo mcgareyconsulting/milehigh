@@ -817,6 +817,7 @@ its binaries live.
 - 2026-09-02 · transcript · src bill-2026-09-02#L1158–L1198 — **PDF viewer has no scroll** — page-at-a-time via a next button; Bill wants *"the drafting workflow side behavior"*. The edit surface opening its own window is **clunky and must stay in-modal**: the crews run the Brain as an **installed app, not a browser tab**, so a new window opens in Chrome somewhere else entirely. Pinch-to-zoom in-modal is acceptable on iPad; Bill does like the edit surface being bigger
 - 2026-09-02 · notes · src bill-2026-09-02 — **named design references**: the markup layer and the agentic panel are both to be modelled on **Procore's PDF markup modal** and the **Gemini sidebar**. New — the transcript discussed Gemini's behaviour but never set it as the UI target
 - 2026-09-02 · transcript · src bill-2026-09-02#L1239–L1291 — Carmen PDF review keeps its findings-to-page behaviour (*"the way that Carmen flags the pages and you click on the pages from the review is fucking great… so valuable"*) and **adds** a side-push chat that sees the full document **and** the findings, can update its own memory, and can be asked questions. Blocker Bill named: **our markups live in Procore and never reach the Brain** [#L1249], so there is nothing to train the reviewer on. He also wants the **Mile High 101 documentation** fed to the model [#L1234]. Reusable test prompt: given a cover sheet, verify every hole has hardware that fits and that counts match [#L1251]
+- 2026-09-07 · decision · src — — the side-push chat half of that ask is now its own entry, **N16**, scoped as review-is-a-tool + chat-is-the-fast-path; the markup-training blocker is half-closed by N14's Final PDF Pack puller landing approver markups in the Brain as PDF annotations
 
 ### D1 · Projects page
 *W1 · in-progress · due — · deps K2 · owner daniel · src bill-2026-08-06#L802 · upd 2026-08-06*
@@ -1624,6 +1625,52 @@ now; self-serve prompt authoring waits until the tool surface is broader.
 **Trail**
 - 2026-08-21 · transcript · src bill-2026-08-21#L119 — prompt library asked for; already built server-side; expose read-only in chat
 - 2026-08-21 · decision · src bill-2026-08-21#L125 — add-permission restricted; new-data asks go through Daniel; Daniel to send Bill the current library
+
+### N16 · Carmen drawing chat — PDF in context, beside the review
+*W4 · not-started · class build · due — · deps N13 · owner daniel · src bill-2026-09-02#L1239–L1291 · upd 2026-09-07*
+
+Effort M. Splits Carmen's drawing work in two, which is how Bill described it
+and how the surfaces differ in cost. **Full review stays the heavy tool**: a
+minutes-long Opus pass on a background thread whose findings are **saved per
+drawing version** (`CarmenDrawingReview`, keyed release + version + attachment)
+and keep the findings-to-page click-through Bill called *"fucking great"*.
+**Chat is the fast path**: the open version's PDF is already the context, so a
+drafter can ask one-offs — *"summarize the v3 markups"*, *"does every hole have
+hardware that fits"* [#L1251] — **before or after** a review exists, and get an
+answer in seconds rather than minutes.
+
+Two thirds of it is already in the repo. `carmen_chat/agent.py` does
+`cache_control: ephemeral` prompt caching and `carmen_chat/pricing.py` already
+accounts `cache_read` / `cache_write` tokens into per-turn cost;
+`pdf_review/service.py` already ships a version's full PDF as a base64 document
+block. New: `pdf_review/chat.py` (PDF block + context header — version meta,
+markup summary, the saved review's findings when one exists, comments — plus the
+turns), one `POST /brain/releases/<id>/drawing/versions/<vid>/carmen-chat` route
+at drafter-or-admin, and the chat panel under the pinned findings in the release
+hub's Review tab, per the 3a design.
+
+**Two decisions taken at scoping.** ① **Prompt-cache the PDF block.** Turn one
+pays to upload the drawing set; follow-ups read it from cache. Without this each
+question re-ships 1–2 MB and the feature is too expensive to use casually, which
+defeats its purpose. ② **Chat runs Sonnet, review stays Opus** — the alias split
+already in `pdf_review/service.py`. Chat wants seconds; review can take minutes.
+
+Chat turns are **session-only in v1** — no table. Persisting a thread per
+drawing version is one small table if it turns out reviewers want to re-read
+what Carmen said last week; reviews are already durable, so the durable half of
+Bill's ask is covered.
+
+**The training blocker Bill named is now half-solved.** He said *"our markups
+live in Procore and never reach the Brain"* [#L1249]. The Final PDF Pack puller
+(N14) pulls the approver's returned set — markups burned in by Procore's markup
+renderer — into a release drawing version, so approver markups now land in the
+Brain as PDF annotations. **Mile High 101 into the model** [#L1234] is still
+open and is the other half.
+
+**Trail**
+- 2026-09-02 · transcript · src bill-2026-09-02#L1239–L1291 — side-push chat that sees the full document *and* the findings, can be asked questions, updates its own memory; review keeps findings-to-page
+- 2026-09-07 · decision · src — — split confirmed in session: review = heavy tool saved per markup version; chat = fast path with the PDF as context, usable pre/post review. Prompt caching and the Sonnet/Opus split settled at the same time; v1 chat is session-only
+- 2026-09-07 · note · src — — scoped while building the hybrid viewer on `fix/improved-pdf-modal`; **deliberately not built there** — that branch already carries the viewer rebuild, the FC pack puller, the 4c markup chrome and the hub header changes. Chat lands on its own branch off it so the AI feature is reviewable on its own
 
 ---
 

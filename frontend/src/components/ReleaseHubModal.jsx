@@ -17,6 +17,7 @@
  *   - Activity rail renders on Details + Change Log only — Attachments takes the full width
  *   - The header owns the stage pill and the compact banana row; both follow an in-pane stage
  *     edit immediately via onStageChange, without waiting for the host's refetch
+ *   - Header identity is ONE line: label, job, description, stage, then PM/detailer
  * updated_by_agent: 2026-09-03T00:00:00Z
  */
 import React, { useEffect, useRef, useState } from 'react';
@@ -156,7 +157,7 @@ export function ReleaseHubModal({
                 aria-modal="true"
                 aria-label={`${label} ${jobName}`.trim()}
             >
-                <div className="shrink-0 border-b border-hairline bg-surface-2" style={{ padding: '14px 18px 0' }}>
+                <div className="shrink-0 border-b border-hairline bg-surface-2" style={{ padding: '12px 18px 0' }}>
                     <div className="flex items-start gap-3.5">
                         <div className="min-w-0">
                             <div className="flex items-center flex-wrap" style={{ gap: 12 }}>
@@ -192,12 +193,14 @@ export function ReleaseHubModal({
                                         {stage}
                                     </span>
                                 )}
+                                {/* Attribution rides the identity line rather than owning a
+                                    second row — the header costs one line, not two. */}
+                                {context && (
+                                    <span className="text-ink-3 truncate" style={{ fontSize: 13.5 }} title={context}>
+                                        {context}
+                                    </span>
+                                )}
                             </div>
-                            {context && (
-                                <div className="text-ink-2 truncate" style={{ fontSize: 13.5, marginTop: 4 }} title={context}>
-                                    {context}
-                                </div>
-                            )}
                         </div>
                         <div className="flex-1" />
                         <div className="flex items-center gap-1.5 shrink-0">

@@ -7,14 +7,16 @@
  * exports:
  *   PdfViewerPane: props { releaseId, label, viewerUrl, initialCommentVersionId,
  *     onOpenVersion, onActionableCount }
- * imports_from: [react, ../PdfReadViewer, ./ViewerDock, ./ProcorePullDialog, ./format,
- *   ../../services/jobsApi,
+ * imports_from: [react, ../PdfMarkupModal, ./ViewerDock,
+ *   ./ProcorePullDialog, ./format, ../../services/jobsApi,
  *   ../../services/notificationApi, ../../utils/api, ../../utils/auth]
  * imported_by: [frontend/src/components/ReleaseHubModal.jsx,
  *   frontend/src/components/PdfViewerModal.jsx]
  * invariants:
  *   - Newest version is selected on load; picking one from the title menu swaps the canvas
- *   - Markup authoring stays in PdfMarkupModal — "Edit markup" hands off via onOpenVersion
+ *   - Option 4c: markup is ALWAYS on — the canvas is PdfMarkupModal in hybrid chrome, its
+ *     tools live in the floating pill, and the note + Save version surface above it only
+ *     once there is uncommitted markup. No separate markup mode; "↗ window" is a hand-off
  *   - Escape closes the open title menu without closing the host modal
  *   - Photos are not here; they live on the Details pane and the stage-photo gate
  *   - "Pull from Procore" sits in the top strip for drafters/admins, matching the route —
@@ -28,7 +30,7 @@ import { jobsApi } from '../../services/jobsApi';
 import { fetchMentionableUsers } from '../../services/notificationApi';
 import { checkAuth } from '../../utils/auth';
 import { actionableCount } from '../bbReview/urgency';
-import { PdfReadViewer } from '../PdfReadViewer';
+import { PdfMarkupModal } from '../PdfMarkupModal';
 import { ProcorePullDialog } from './ProcorePullDialog';
 import { ViewerDock } from './ViewerDock';
 import { fmtDate, fmtSize } from './format';
@@ -53,10 +55,15 @@ export function PdfViewerPane({
     const [menuOpen, setMenuOpen] = useState(false);
     const [numPages, setNumPages] = useState(0);
     const [citePage, setCitePage] = useState(null);
-    const [citeRuleId, setCiteRuleId] = useState(null);
+    // Bumped on every jump so asking for the SAME page scrolls again.
+    const [jumpNonce, setJumpNonce] = useState(0);
     const [dockTab, setDockTab] = useState('review');
     const [dockCollapsed, setDockCollapsed] = useState(false);
     const [pullOpen, setPullOpen] = useState(false);
+    // Option 4c: markup is always available — no separate mode. The surface below IS the
+    // markup editor; its tools live in the floating pill, its note + Save live up here.
+    const [markups, setMarkups] = useState([]);
+    const [markupDirty, setMarkupDirty] = useState(false);
     const [canReview, setCanReview] = useState(false);
     // versionId → actionable finding count (hub Attachments badge).
     const [flagsByVersion, setFlagsByVersion] = useState({});
@@ -219,9 +226,10 @@ export function PdfViewerPane({
 
     const selectVersion = (versionId) => {
         setViewingVersionId(versionId);
+        setMarkups([]);
+        setMarkupDirty(false);
         setMenuOpen(false);
         setCitePage(null);
-        setCiteRuleId(null);
         setNumPages(0);
     };
 
@@ -245,9 +253,6 @@ export function PdfViewerPane({
     };
 
     const viewing = versions.find((v) => v.id === viewingVersionId) || null;
-    const fileUrl = viewing
-        ? `${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions/${viewing.id}/file`
-        : null;
     const fileName = viewing
         ? (viewing.original_filename || `Drawing v${viewing.version_number}`)
         : 'No drawing';
@@ -439,30 +444,55 @@ export function PdfViewerPane({
                     </button>
                 )}
 
+                {/* The separate window remains as a hand-off, not a mode. */}
                 {viewing && onOpenVersion && (
                     <button
                         type="button"
                         onClick={() => onOpenVersion(viewing.id, 'edit')}
-                        className="inline-flex items-center gap-1.5 border border-hairline-strong bg-surface text-ink-2 font-semibold hover:bg-surface-2"
-                        style={{ height: 28, padding: '0 11px', fontSize: 13, borderRadius: 7 }}
+                        className="bg-transparent border-0 cursor-pointer text-ink-3 font-semibold"
+                        style={{ fontSize: 12 }}
+                        title="Open this version in the full-screen markup window"
                     >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                        </svg>
-                        Edit markup
+                        ↗ window
                     </button>
                 )}
             </div>
 
-            {/* Canvas + dock */}
+            {/* The canvas IS the markup surface — tools live in its floating pill. */}
             <div className="flex-1 min-h-0 flex">
-                <PdfReadViewer
-                    fileUrl={fileUrl}
-                    citePage={citePage}
-                    citeRuleId={citeRuleId}
-                    onClearCite={() => { setCitePage(null); setCiteRuleId(null); }}
-                    onNumPages={setNumPages}
-                />
+                <div className="flex-1 min-w-0 relative">
+                    {viewing ? (
+                        <PdfMarkupModal
+                            key={viewing.id}
+                            inline
+                            variant="hybrid"
+                            isOpen
+                            releaseId={releaseId}
+                            versionId={viewing.id}
+                            mode={canReview ? 'edit' : 'view'}
+                            title={fileName}
+                            initialPage={citePage}
+                            citeNonce={jumpNonce}
+                            onMarkupsChange={setMarkups}
+                            onDirtyChange={setMarkupDirty}
+                            onClose={() => {}}
+                            onSaved={async (newVersion) => {
+                                await loadVersions();
+                                if (newVersion?.id != null) selectVersion(newVersion.id);
+                            }}
+                        />
+                    ) : (
+                        <div className="h-full grid place-items-center" style={{ background: 'var(--bg)' }}>
+                            <div className="text-center text-ink-3">
+                                <div style={{ fontSize: 28, marginBottom: 8 }}>📄</div>
+                                <p style={{ fontSize: 13 }}>No drawing selected</p>
+                                <p style={{ fontSize: 12, marginTop: 4, opacity: 0.8 }}>
+                                    Pick one from the title menu, or upload a PDF.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                </div>
                 <ViewerDock
                     releaseId={releaseId}
                     version={viewing}
@@ -482,12 +512,20 @@ export function PdfViewerPane({
                         viewing ? { ...prev, [viewing.id]: val } : prev
                     ))}
                     onSubmitComment={submitComment}
+                    markups={markups}
+                    markupDirty={markupDirty}
+                    onJumpToPage={(page) => {
+                        setCitePage(page);
+                        setJumpNonce((n) => n + 1);
+                    }}
                     flags={viewing ? (flagsByVersion[viewing.id] || 0) : 0}
-                    onCite={(page, ruleId) => { setCitePage(page); setCiteRuleId(ruleId); }}
+                    onCite={(page) => {
+                        setCitePage(page);
+                        setJumpNonce((n) => n + 1);
+                    }}
                     onFlagsChange={(n) => setFlagsByVersion((prev) => (
                         !viewing || prev[viewing.id] === n ? prev : { ...prev, [viewing.id]: n }
                     ))}
-                    onOpenVersion={onOpenVersion}
                 />
             </div>
 

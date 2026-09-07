@@ -317,9 +317,11 @@ export function ProcorePullDialog({
                             {pulled.response_name && pulled.approver_name ? ` — ${pulled.approver_name}` : ''}
                             {pulled.response_name ? ')' : ''}
                             {' — '}
-                            {pulled.carried_markup
-                                ? 'approver markups included.'
-                                : 'no markups reported by Procore.'}
+                            {pulled.render_fallback === 'raw_attachment'
+                                ? 'clean copy — Procore would not render the marked-up version.'
+                                : (pulled.carried_markup
+                                    ? 'approver markups included.'
+                                    : 'no markups reported by Procore.')}
                             {' It is now the newest version.'}
                         </p>
                     )}

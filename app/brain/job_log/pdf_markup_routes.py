@@ -357,6 +357,9 @@ def pull_release_procore_document(release_id, attachment_id):
             # Procore renders through its markup endpoint, so an approver's markups are
             # burned into these bytes; this says whether there were any to burn.
             'carried_markup': ref.get('carried_markup', False),
+            # 'raw_attachment' when the markup renderer refused every id shape and we fell
+            # back to the file itself — a clean copy, markups not burned in.
+            'render_fallback': ref.get('render_fallback'),
             'markup_paths': ref.get('markup_paths') or [],
             'size_bytes': version.file_size_bytes,
         },

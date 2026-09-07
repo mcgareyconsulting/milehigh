@@ -135,9 +135,15 @@ def test_pull_creates_v1_and_records_provenance(app, storage_root, drafter):
             patch(f'{MODULE}.download_markup_pdf', return_value=PDF_MIN) as dl:
         version, ref = pull_document(release, 5150, uploaded_by_user_id=drafter.id)
 
-    # meta is the out-dict the render fills with markup evidence.
-    dl.assert_called_once_with(777, 900, 'SubmittalLogApprover', 5150,
-                               company_id=18521, meta={})
+    # meta is the out-dict the render fills with markup evidence; alternatives are the
+    # fallback id triples for when Procore 404s the first one.
+    args, kwargs = dl.call_args
+    assert args == (777, 900, 'SubmittalLogApprover', 5150)
+    assert kwargs['company_id'] == 18521
+    assert kwargs['meta'] == {}
+    last = kwargs['alternatives'][-1]
+    assert last['item_type'] == 'SubmittalLog'
+    assert last['source'].startswith('submittal_log')
     assert version.version_number == 1
     assert version.original_filename == 'Final PDF Pack.pdf'
     assert '5150' in version.note and '4242' in version.note
@@ -347,6 +353,37 @@ def test_pull_does_not_claim_markups_when_nothing_says_there_were_any(app, stora
     assert target['carried_markup'] is False
 
 
+def test_pull_falls_back_to_the_submittal_log_triple(app, storage_root, drafter):
+    """Procore 404s "Item not found" when the posted (item_id, item_type) names no single
+    item — which happens when an attachment's viewer and download URLs disagree. The
+    render is handed the alternatives; the file itself is fine."""
+    from app.brain.job_log.features.pdf_markup.procore_pull import pull_document
+
+    _make_submittal("4242", "777")
+    release = make_release(job=170, release="448", procore_submittal_id="4242")
+    mixed = {**REF, 'approver_id': 180149488, 'id_candidates': [
+        {'item_id': 180149488, 'item_type': 'SubmittalLogApprover',
+         'attachment_id': 6050048728, 'project_id': 777, 'source': 'viewer_url'},
+    ]}
+
+    with _patch_user(drafter), \
+            patch(f'{MODULE}.find_submittal_drawing_refs', return_value=[mixed]), \
+            patch(f'{MODULE}.download_markup_pdf', return_value=PDF_MIN) as dl:
+        pull_document(release, 5150, uploaded_by_user_id=drafter.id)
+
+    # Both attachment ids are crossed with every item candidate — the working pair can be
+    # (item from one URL, attachment id from the other). The approver-id fallback dedups
+    # into the viewer_url item here: same (id, type).
+    alternatives = dl.call_args.kwargs['alternatives']
+    sources = [a['source'] for a in alternatives]
+    assert sources[0].startswith('viewer_url')
+    assert any(s.startswith('submittal_log') for s in sources)
+    pairs = {(str(a['item_id']), str(a['attachment_id'])) for a in alternatives}
+    assert ('180149488', '6050048728') in pairs
+    assert ('180149488', '5150') in pairs
+    assert ('4242', '6050048728') in pairs
+
+
 def test_pull_of_an_attachment_not_on_the_submittal_errors(app, storage_root, drafter):
     from app.brain.job_log.features.pdf_markup.procore_pull import ProcorePullError, pull_document
 
@@ -481,3 +518,41 @@ def test_pull_route_502s_when_procore_returns_nothing(app, client, storage_root,
         resp = client.post(f'/brain/releases/{release.id}/procore-documents/5150/pull')
 
     assert resp.status_code == 502
+
+
+def test_raw_download_rescues_a_pull_the_markup_renderer_refuses(app, storage_root, drafter):
+    """Procore 404s every id triple but still holds the file. A clean copy beats no
+    drawing — provided the version says it is clean."""
+    from app.brain.job_log.features.pdf_markup.procore_pull import pull_document
+
+    _make_submittal("4242", "777")
+    release = make_release(job=170, release="448", procore_submittal_id="4242")
+    pack = {**REF, 'response_name': 'Final PDF Pack', 'is_final_pdf_response': True,
+            'has_markup': True}
+
+    with _patch_user(drafter), \
+            patch(f'{MODULE}.find_submittal_drawing_refs', return_value=[pack]), \
+            patch(f'{MODULE}.download_markup_pdf', return_value=None), \
+            patch(f'{MODULE}.download_attachment_raw', return_value=PDF_MIN) as raw:
+        version, target = pull_document(release, 5150, uploaded_by_user_id=drafter.id)
+
+    raw.assert_called_once()
+    assert version.version_number == 1
+    assert 'clean copy' in version.note
+    # The payload said there were markups, but these bytes never went through the renderer.
+    assert target['carried_markup'] is False
+    assert target['render_fallback'] == 'raw_attachment'
+
+
+def test_pull_errors_only_when_the_raw_download_also_fails(app, storage_root, drafter):
+    from app.brain.job_log.features.pdf_markup.procore_pull import ProcorePullError, pull_document
+
+    _make_submittal("4242", "777")
+    release = make_release(job=170, release="448", procore_submittal_id="4242")
+
+    with _patch_user(drafter), \
+            patch(f'{MODULE}.find_submittal_drawing_refs', return_value=[REF]), \
+            patch(f'{MODULE}.download_markup_pdf', return_value=None), \
+            patch(f'{MODULE}.download_attachment_raw', return_value=None):
+        with pytest.raises(ProcorePullError):
+            pull_document(release, 5150, uploaded_by_user_id=drafter.id)

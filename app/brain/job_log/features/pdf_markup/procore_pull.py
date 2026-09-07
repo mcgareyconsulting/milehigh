@@ -30,6 +30,7 @@ from app.config import Config as cfg
 from app.models import ReleaseDrawingVersion, Submittals, db
 from app.procore.attachments import (
     attachment_ids_from_url,
+    download_attachment_raw,
     download_markup_pdf,
     find_matching_paths,
     find_submittal_drawing_refs,
@@ -342,6 +343,11 @@ def list_documents(release, submittal_id_override=None) -> dict:
             'approver_id': r.get('approver_id'),
             # Whether Procore's payload says an approver drew on this one.
             'has_markup': bool(r.get('has_markup')),
+            # 'yes' | 'no' | 'unknown' — a key merely named markup is not evidence.
+            'markup_signal': r.get('markup_signal') or 'unknown',
+            'id_candidates': r.get('id_candidates') or [],
+            'prostore_id': r.get('prostore_id'),
+            'urls': [name for name, _ in (r.get('urls') or [])],
             'created_at': r.get('created_at'),
             'updated_at': r.get('updated_at'),
             'size_bytes': r.get('size_bytes'),
@@ -388,6 +394,55 @@ def _submittal_payload(ref: 'SubmittalRef', release) -> dict:
     }
 
 
+#: Each find_or_create attempt costs a round trip, so cross the id spaces but cap it.
+_MAX_ID_ALTERNATIVES = 8
+
+
+def _id_alternatives(target, ref):
+    """Ordered fallback triples for the markup render, most specific first.
+
+    An attachment's viewer URL and its download URL can disagree on *both* halves — the
+    item they hang off AND the attachment id itself (one file, two id spaces). Pairing only
+    like with like leaves the working combination untried, so cross every item candidate
+    with every attachment id seen, in confidence order, deduped.
+    """
+    items, attachment_ids = [], []
+
+    def add_item(item_id, item_type, source):
+        if not (item_id and item_type):
+            return
+        key = (str(item_id), item_type)
+        if key not in {(str(i[0]), i[1]) for i in items}:
+            items.append((item_id, item_type, source))
+
+    def add_attachment(attachment_id):
+        if attachment_id and str(attachment_id) not in {str(a) for a in attachment_ids}:
+            attachment_ids.append(attachment_id)
+
+    for candidate in target.get('id_candidates') or []:
+        add_item(candidate.get('item_id'), candidate.get('item_type'), candidate.get('source'))
+        add_attachment(candidate.get('attachment_id'))
+    add_attachment(target.get('attachment_id'))
+    # /document-viewer/prostore/<id> — a different id space for the same file, and the one
+    # the viewer URL actually names.
+    add_attachment(target.get('prostore_id'))
+    # A file reached through a response row is still an attachment on the log itself.
+    add_item(ref.submittal_id, 'SubmittalLog', 'submittal_log')
+    add_item(target.get('approver_id'), 'SubmittalLogApprover', 'approver_id')
+
+    alternatives = []
+    for item_id, item_type, source in items:
+        for attachment_id in attachment_ids:
+            alternatives.append({
+                'item_id': item_id,
+                'item_type': item_type,
+                'attachment_id': attachment_id,
+                'project_id': target.get('project_id'),
+                'source': f"{source}+att{attachment_id}",
+            })
+    return alternatives[:_MAX_ID_ALTERNATIVES]
+
+
 def pull_document(release, attachment_id, uploaded_by_user_id, submittal_id_override=None):
     """Download one Procore attachment and attach it as this release's next drawing version.
 
@@ -410,10 +465,27 @@ def pull_document(release, attachment_id, uploaded_by_user_id, submittal_id_over
     pdf_bytes = download_markup_pdf(
         target['project_id'], target['item_id'], target['item_type'], target['attachment_id'],
         company_id=target.get('company_id'), meta=render_meta,
+        alternatives=_id_alternatives(target, ref),
     )
+    render_fallback = None
+    if not pdf_bytes:
+        # find_or_create is the only endpoint that burns markups in. When it refuses every
+        # id shape, a clean copy of the file still beats no drawing at all — as long as we
+        # say which one the user got.
+        pdf_bytes = download_attachment_raw(
+            dict(target, submittal_id=ref.submittal_id, project_id=ref.project_id),
+        )
+        if pdf_bytes:
+            render_fallback = 'raw_attachment'
+            logger.warning(
+                "release_procore_pack_raw_fallback",
+                release_id=release.id, submittal_id=ref.submittal_id,
+                attachment_id=attachment_id,
+            )
     if not pdf_bytes:
         raise ProcorePullError(
-            "Procore did not return the drawing PDF. Its render can lag — try again shortly."
+            "Procore has the file but would not render or release it for download. Its "
+            "markup render can lag right after a distribution — try again shortly."
         )
     if not is_pdf_bytes(pdf_bytes):
         raise ProcorePullError("Procore returned something that is not a PDF.")
@@ -421,6 +493,10 @@ def pull_document(release, attachment_id, uploaded_by_user_id, submittal_id_over
     # Markups burn into the rendered file; say so only when something says there were any.
     markup_paths = (target.get('markup_paths') or []) + (render_meta.get('markup_paths') or [])
     carried_markup = bool(target.get('has_markup') or render_meta.get('has_markup_evidence'))
+    if render_fallback == 'raw_attachment':
+        # The raw file has not been through the markup renderer, so any markups an approver
+        # drew are NOT in these bytes. Say so.
+        carried_markup = False
 
     filename = target.get('name') or f"procore-{ref.submittal_id}-{attachment_id}.pdf"
     if not filename.lower().endswith('.pdf'):
@@ -430,6 +506,8 @@ def pull_document(release, attachment_id, uploaded_by_user_id, submittal_id_over
         note = f"{note} · {target['response_name']}"
     if carried_markup:
         note = f"{note} · markups included"
+    if render_fallback == 'raw_attachment':
+        note = f"{note} · clean copy (Procore would not render markups)"
 
     latest = (ReleaseDrawingVersion.query
               .filter(ReleaseDrawingVersion.release_id == release.id)
@@ -473,7 +551,10 @@ def pull_document(release, attachment_id, uploaded_by_user_id, submittal_id_over
         response_name=target.get('response_name'),
         carried_markup=carried_markup,
         render_polls=render_meta.get('polls'),
+        id_source=(render_meta.get('triple_used') or {}).get('source'),
+        triples_tried=render_meta.get('triples_tried'),
+        render_fallback=render_fallback,
     )
     target = dict(target, carried_markup=carried_markup, markup_paths=markup_paths,
-                  render_meta=render_meta)
+                  render_meta=render_meta, render_fallback=render_fallback)
     return version, target

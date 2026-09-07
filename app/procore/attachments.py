@@ -14,14 +14,18 @@ Feasibility findings (2026-07-10, scripts/procore_attachment_probe.py) drive the
 Public API:
   find_submittal_drawing_refs(project_id, submittal_id) -> [AttachmentRef, ...]
   attachment_ids_from_url(url) -> {attachment_id, item_id, item_type, project_id}
+  normalize_procore_url(url) -> absolute URL (payloads mix relative and absolute)
   workflow_responses(payload) -> {approver_id: {response_name, approver_name, is_final_pdf}}
   response_name_of(node) -> "Final PDF Pack" | None   (flat or nested shapes)
   walk_file_objects(payload) -> [(file_dict, {approver_id, response_name, approver_name}), ...]
   raw_submittal_payloads(project_id, submittal_id) -> (submittal, workflow_data)   [debug]
   find_matching_paths(obj) -> ["$.path.to.key = value", ...]                        [debug]
   probe_attachment(project_id, submittal_id, attachment_id, item_id, item_type)     [debug]
-  markup_evidence(obj) -> ["$.path = value", ...]  (markup/annotation mentions)
+  markup_evidence(obj) -> ["$.path = value", ...]  (mentions; debug only)
+  markup_signal(obj) -> "yes" | "no" | "unknown"   (does markup actually exist?)
   download_markup_pdf(project_id, item_id, item_type, attachment_id, company_id=None) -> bytes | None
+  download_attachment_raw(ref, company_id=None) -> bytes | None   (clean copy, no markups)
+  find_attachment_urls(project_id, submittal_id, ids) -> [(source, field, url), ...]
   download_submittal_drawing(project_id, submittal_id, ref=None) -> (bytes|None, filename|None, ref|None)
 
 An AttachmentRef is a dict: {source, name, item_id, item_type, attachment_id, project_id,
@@ -63,14 +67,39 @@ def _headers(company_id, *, json_body=False):
     return h
 
 
+def normalize_procore_url(url):
+    """Absolute form of a Procore URL. Its payloads mix absolute and root-relative links,
+    and requests rejects the latter outright (MissingSchema)."""
+    if not url:
+        return None
+    url = str(url).strip()
+    if not url:
+        return None
+    if url.startswith("http://") or url.startswith("https://"):
+        return url
+    return f"https://app.procore.com/{url.lstrip('/')}"
+
+
+#: Procore hangs the file on several differently-named URL fields; `url` is usually the
+#: signed one that returns bytes without a browser session.
+_URL_FIELD_ORDER = ("url", "file_url", "prostore_url", "download_url", "viewer_url")
+
+#: /tools/document-viewer/prostore/<id> — the prostore file id lives in the path, not a
+#: query param, so the generic id parser never sees it.
+_PROSTORE_PATH_RE = re.compile(r"/prostore/(\d+)")
+
+
 def _ids_from_url(url):
     """Pull the {attachment_id, item_id, item_type, project_id} + company_id Procore
     embeds in an attachment's viewer/download URL."""
     if not url:
         return {}
-    parsed = urlparse(url)
+    parsed = urlparse(normalize_procore_url(url))
     q = parse_qs(parsed.query)
     out = {k: q[k][0] for k in _ID_PARAMS if k in q}
+    prostore = _PROSTORE_PATH_RE.search(parsed.path)
+    if prostore:
+        out["prostore_id"] = prostore.group(1)
     # company id lives in the path: /companies/<id>/...
     for i, seg in enumerate(parsed.path.split("/")):
         if seg == "companies" and i + 1 < len(parsed.path.split("/")):
@@ -275,15 +304,40 @@ def _ref_from_attachment(att, source, project_id):
     absent depending on which Procore endpoint the attachment came back from. It is carried
     through as-is (never inferred) so a caller can show *what* a candidate actually is.
     """
-    ids = _ids_from_url(att.get("download_url")) or {}
-    ids.update({k: v for k, v in (_ids_from_url(att.get("viewer_url")) or {}).items()
-                if k not in ids})
+    from_download = _ids_from_url(att.get("download_url")) or {}
+    from_viewer = _ids_from_url(att.get("viewer_url")) or {}
+    ids = dict(from_download)
+    ids.update({k: v for k, v in from_viewer.items() if k not in ids})
     item_id = ids.get("item_id")
     item_type = ids.get("item_type")
     attachment_id = ids.get("attachment_id") or att.get("id")
     if not (item_id and item_type and attachment_id):
         return None
+
+    # The merged triple is what we post first — it is what has always worked. But the two
+    # URLs can describe DIFFERENT Procore items (a file nested under a response row often
+    # carries an approver viewer URL and a log download URL), and merging them then yields
+    # a triple belonging to no single item: find_or_create answers 404 "Item not found".
+    # Keep each URL's own ids so the download can fall back to them intact.
+    id_candidates = []
+    for id_source, group in (("merged", ids), ("download_url", from_download),
+                             ("viewer_url", from_viewer)):
+        triple = {
+            "item_id": group.get("item_id"),
+            "item_type": group.get("item_type"),
+            "attachment_id": group.get("attachment_id") or att.get("id"),
+            "project_id": group.get("project_id") or project_id,
+            "source": id_source,
+        }
+        if not (triple["item_id"] and triple["item_type"] and triple["attachment_id"]):
+            continue
+        key = (str(triple["item_id"]), triple["item_type"], str(triple["attachment_id"]))
+        if key not in {(str(c["item_id"]), c["item_type"], str(c["attachment_id"]))
+                       for c in id_candidates}:
+            id_candidates.append(triple)
+
     return {
+        "id_candidates": id_candidates,
         "source": source,
         "name": att.get("name") or att.get("filename"),
         "item_id": int(item_id),
@@ -291,8 +345,27 @@ def _ref_from_attachment(att, source, project_id):
         "attachment_id": int(attachment_id),
         "project_id": int(ids.get("project_id") or project_id),
         "company_id": ids.get("company_id") or str(cfg.PROD_PROCORE_COMPANY_ID or ""),
+        # Every URL Procore hung on the file, in the order most likely to return bytes.
+        # `url` is usually the signed prostore link; the web-app viewer URL needs a browser
+        # session and answers HTML, so it is last.
+        "urls": [
+            (key, normalize_procore_url(att.get(key)))
+            for key in _URL_FIELD_ORDER if att.get(key)
+        ] + [
+            (key, normalize_procore_url(value))
+            for key, value in att.items()
+            if key not in _URL_FIELD_ORDER and "url" in key.lower()
+            and isinstance(value, str) and value
+        ],
+        "prostore_id": ids.get("prostore_id") or att.get("prostore_id"),
+        # Did Procore's payload say an approver drew on this file? The rendered download
+        # burns markups in either way; this is how we know there were any to burn.
+        "markup_paths": markup_evidence(att),
+        "markup_signal": markup_signal(att),
+        "has_markup": markup_signal(att) == "yes",
         # Display metadata — may be None; never guessed.
         "viewer_url": att.get("viewer_url"),
+        "download_url": att.get("download_url"),
         "created_at": att.get("created_at") or att.get("uploaded_at"),
         "updated_at": att.get("updated_at"),
         "size_bytes": att.get("byte_size") or att.get("size") or att.get("file_size"),
@@ -345,10 +418,6 @@ def find_submittal_drawing_refs(project_id, submittal_id):
         ref["response_name"] = response_name
         ref["approver_name"] = ctx.get("approver_name") or response.get("approver_name")
         ref["is_final_pdf_response"] = is_final_pdf_response_name(response_name)
-        # Did Procore's own payload mention markups on this file? The rendered download
-        # burns them in either way; this is how we know there were any to burn.
-        ref["markup_paths"] = markup_evidence(att)
-        ref["has_markup"] = bool(ref["markup_paths"])
 
         key = (ref["item_id"], ref["attachment_id"])
         if key in seen:
@@ -371,6 +440,7 @@ def find_submittal_drawing_refs(project_id, submittal_id):
             # Markup evidence on either sighting counts for the file.
             if ref.get("has_markup") and not kept.get("has_markup"):
                 kept["has_markup"] = True
+                kept["markup_signal"] = "yes"
                 kept["markup_paths"] = ref.get("markup_paths")
             return
         seen[key] = ref
@@ -539,6 +609,10 @@ def probe_attachment(project_id, submittal_id, attachment_id, item_id=None,
         # Other renderings of the submittal, in case one carries responses the others drop.
         f"{API_HOST}/rest/v1.0/projects/{project_id}/submittals/{submittal_id}",
         f"{API_HOST}/rest/v1.0/projects/{project_id}/submittal_logs/{submittal_id}",
+        # Attachment sub-resources — the serializers most likely to carry a signed url.
+        f"{API_HOST}/rest/v1.0/projects/{project_id}/submittals/{submittal_id}/attachments",
+        f"{API_HOST}/rest/v1.1/projects/{project_id}/submittals/{submittal_id}/attachments",
+        f"{API_HOST}/rest/v1.0/projects/{project_id}/submittal_logs/{submittal_id}/attachments",
         f"{API_HOST}/rest/v1.1/projects/{project_id}/submittals/{submittal_id}/workflow_data",
         # The index serializer — where the production FC-link path actually reads
         # last_distributed_submittal from. The detail endpoint may simply not return it.
@@ -572,6 +646,10 @@ def probe_attachment(project_id, submittal_id, attachment_id, item_id=None,
             "response_names": sorted({
                 r["response_name"] for r in workflow_responses(body or {}).values()
                 if r.get("response_name")
+            }),
+            "url_fields": sorted({
+                field for file_obj, _ctx in walk_file_objects(body or {})
+                for field, _link in _url_fields(file_obj)
             }),
             "approver_responses": {
                 str(k): v.get("response_name")
@@ -612,6 +690,9 @@ def _find_download_url(data):
 
 def _download_bytes(url, company_id):
     """GET a (possibly signed) download URL and return PDF bytes, or None."""
+    url = normalize_procore_url(url)
+    if not url:
+        return None
     # Signed URLs may reject an Authorization header; try with our creds, then bare.
     for hdrs in (_headers(company_id), {}):
         try:
@@ -637,18 +718,68 @@ _MARKUP_TEXT_RE = re.compile(r"markup|annotation", re.I)
 
 
 def markup_evidence(obj):
-    """Every JSON path in `obj` whose key or value talks about markups/annotations.
+    """Every JSON path in `obj` that mentions markups/annotations — key names included.
 
-    The rendered PDF always comes back through document_markup_downloadable_pdfs, so the
-    bytes we save already carry whatever an approver drew. This says whether Procore's own
-    payload admits there *was* anything drawn — which is what a reviewer wants to know
-    before choosing between two candidate files.
+    Debug output only. A path here means the payload *talks about* markup, not that any
+    exists: `markup_count: 0` matches too. Use markup_signal() to decide anything.
     """
     return find_matching_paths(obj or {}, _MARKUP_TEXT_RE)
 
 
+def _markup_vote(value):
+    """Does one markup-named field assert markup exists? True / False / None (no opinion)."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value > 0
+    if isinstance(value, (list, tuple, dict)):
+        return len(value) > 0
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if not text or text in {"false", "0", "none", "null", "[]", "{}"}:
+            return False
+        return None  # a URL or label says nothing about whether anything was drawn
+    return None
+
+
+def markup_signal(obj, _depth=0):
+    """'yes' | 'no' | 'unknown' — whether Procore's payload says markups exist.
+
+    A key merely *named* markup is not evidence: `markup_count: 0` and `has_markups: false`
+    are Procore telling us the drawing is clean. Only an affirmative value counts as 'yes',
+    an explicit zero/false as 'no', and everything else — including a payload that never
+    mentions markup — as 'unknown', which must never reach a user as though it were a fact.
+    """
+    if _depth > 8 or not isinstance(obj, (dict, list)):
+        return "unknown"
+    votes = []
+    items = enumerate(obj) if isinstance(obj, list) else obj.items()
+    for key, value in items:
+        if isinstance(key, str) and _MARKUP_TEXT_RE.search(key):
+            vote = _markup_vote(value)
+            if vote is not None:
+                votes.append(vote)
+        if isinstance(value, (dict, list)):
+            nested = markup_signal(value, _depth + 1)
+            if nested == "yes":
+                votes.append(True)
+            elif nested == "no":
+                votes.append(False)
+    if any(votes):
+        return "yes"
+    if votes:
+        return "no"
+    return "unknown"
+
+
+#: find_or_create answers these when the (item_id, item_type, attachment_id) triple does
+#: not name one real item. Worth retrying with a different triple; anything else is not.
+_RETRYABLE_TRIPLE_STATUSES = (404, 422)
+
+
 def download_markup_pdf(project_id, item_id, item_type, attachment_id, company_id=None,
-                        *, poll_max=_POLL_MAX, poll_interval=_POLL_INTERVAL_S, meta=None):
+                        *, poll_max=_POLL_MAX, poll_interval=_POLL_INTERVAL_S, meta=None,
+                        alternatives=None):
     """Render + download one submittal-attachment PDF via find_or_create (async).
 
     Returns the PDF bytes, or None on failure. Polls the endpoint until it returns a
@@ -658,13 +789,47 @@ def download_markup_pdf(project_id, item_id, item_type, attachment_id, company_i
     Pass a dict as `meta` to receive what the render reported (its keys, the polls it took,
     and any markup/annotation fields it mentioned) — the caller can then tell the user
     whether markups came through rather than assuming.
+
+    `alternatives` is an ordered list of {item_id, item_type, attachment_id, project_id}
+    triples to fall back to when Procore answers 404/422 — the file exists but the triple
+    we posted does not name one item. See _ref_from_attachment: an attachment's viewer and
+    download URLs can point at different items.
     """
     company_id = company_id or cfg.PROD_PROCORE_COMPANY_ID
+    triples = [{
+        "item_id": item_id,
+        "item_type": item_type,
+        "attachment_id": attachment_id,
+        "project_id": project_id,
+        "source": "given",
+    }]
+    seen = {(str(item_id), item_type, str(attachment_id))}
+    for alt in alternatives or []:
+        key = (str(alt.get("item_id")), alt.get("item_type"), str(alt.get("attachment_id")))
+        if all(key) and key not in seen:
+            seen.add(key)
+            triples.append({**alt, "project_id": alt.get("project_id") or project_id})
+
+    for index, triple in enumerate(triples):
+        result = _render_markup_pdf(triple, company_id, poll_max, poll_interval, meta)
+        if result is not None:
+            if meta is not None:
+                meta["triple_used"] = triple
+                meta["triples_tried"] = index + 1
+            return result
+    return None
+
+
+def _render_markup_pdf(triple, company_id, poll_max, poll_interval, meta):
+    """One find_or_create render attempt for a single id triple."""
+    item_id = triple["item_id"]
+    item_type = triple["item_type"]
+    attachment_id = triple["attachment_id"]
     body = {
         "item_id": int(item_id),
         "item_type": item_type,
         "attachment_id": int(attachment_id),
-        "project_id": int(project_id),
+        "project_id": int(triple["project_id"]),
     }
     url = f"{API_HOST}{MARKUP_PDF_PATH}"
 
@@ -681,9 +846,14 @@ def download_markup_pdf(project_id, item_id, item_type, attachment_id, company_i
         # 202 Accepted = the render is in progress; 200/201 = done. The download URL
         # appears (url != null) once rendering completes. Anything else is a real error.
         if resp.status_code not in (200, 201, 202):
-            logger.error("procore_markup_pdf_bad_status", item_id=item_id,
-                         item_type=item_type, attachment_id=attachment_id,
-                         status=resp.status_code, body=(resp.text or "")[:300])
+            # A bad triple is a routine outcome, not a failure: the caller has others to
+            # try. Only a status that no other triple could fix is an ERROR.
+            level = (logger.warning if resp.status_code in _RETRYABLE_TRIPLE_STATUSES
+                     else logger.error)
+            level("procore_markup_pdf_bad_status", item_id=item_id,
+                  item_type=item_type, attachment_id=attachment_id,
+                  id_source=triple.get("source"),
+                  status=resp.status_code, body=(resp.text or "")[:300])
             return None
 
         try:
@@ -701,7 +871,8 @@ def download_markup_pdf(project_id, item_id, item_type, attachment_id, company_i
                     "polls": attempt,
                     "response_keys": sorted(data.keys()) if isinstance(data, dict) else None,
                     "markup_paths": hits,
-                    "has_markup_evidence": bool(hits),
+                    "markup_signal": markup_signal(data),
+                    "has_markup_evidence": markup_signal(data) == "yes",
                 })
             return _download_bytes(download_url, company_id)
 
@@ -717,6 +888,131 @@ def download_markup_pdf(project_id, item_id, item_type, attachment_id, company_i
 
     logger.error("procore_markup_pdf_timeout", item_id=item_id, item_type=item_type,
                  polls=poll_max)
+    return None
+
+
+def _url_fields(obj):
+    """Every url-ish (key, value) on one object, normalized."""
+    return [
+        (key, normalize_procore_url(value))
+        for key, value in obj.items()
+        if isinstance(value, str) and value and ("url" in key.lower())
+    ]
+
+
+def find_attachment_urls(project_id, submittal_id, attachment_ids, company_id=None):
+    """Hunt the same file across every rendering of the submittal, for a usable URL.
+
+    Procore's serializers disagree about which fields a file object carries: the payload we
+    walked may expose only web-app links (which need a browser session), while another
+    endpoint returns the same attachment with a signed `url`. Matches on id — either id
+    space — and returns [(source, field, url), ...] best-first.
+    """
+    company_id = company_id or cfg.PROD_PROCORE_COMPANY_ID
+    wanted = {str(a) for a in attachment_ids if a}
+    sources = (
+        ("v1.1 submittal", f"{API_HOST}/rest/v1.1/projects/{project_id}/submittals/{submittal_id}"),
+        ("v1.0 submittal", f"{API_HOST}/rest/v1.0/projects/{project_id}/submittals/{submittal_id}"),
+        ("v1.1 workflow_data",
+         f"{API_HOST}/rest/v1.1/projects/{project_id}/submittals/{submittal_id}/workflow_data"),
+        ("submittal attachments",
+         f"{API_HOST}/rest/v1.0/projects/{project_id}/submittals/{submittal_id}/attachments"),
+    )
+
+    found = []
+    for label, url in sources:
+        body = _request_json(url, company_id=company_id)
+        if body is None:
+            continue
+        for file_obj, _ctx in walk_file_objects(body):
+            ids = {str(file_obj.get("id"))}
+            for key in ("attachment_id", "prostore_id", "prostore_file_id"):
+                if file_obj.get(key):
+                    ids.add(str(file_obj[key]))
+            for _name, link in _url_fields(file_obj):
+                ids.update(str(v) for v in (_ids_from_url(link) or {}).values())
+            if not (ids & wanted):
+                continue
+            for field, link in _url_fields(file_obj):
+                # The web-app viewer needs a browser session; it is the last resort.
+                rank = 0 if field in ("url", "file_url", "prostore_url") else 1
+                found.append((rank, label, field, link))
+
+    found.sort(key=lambda row: row[0])
+    logger.info("procore_attachment_url_hunt", project_id=project_id,
+                submittal_id=submittal_id, wanted=sorted(wanted),
+                found=[(label, field) for _r, label, field, _u in found])
+    return [(label, field, link) for _r, label, field, link in found]
+
+
+def download_attachment_raw(ref, company_id=None):
+    """Last resort: fetch the attachment's own bytes without the markup renderer.
+
+    find_or_create is the only endpoint that burns approver markups into the PDF, so this
+    can return a *clean* copy — callers must say so rather than implying markups came
+    through. Tries the URLs Procore put on the attachment, then the REST records that hand
+    back a signed URL. Only %PDF bytes are accepted; an HTML login page is not a drawing.
+    """
+    company_id = company_id or ref.get("company_id") or cfg.PROD_PROCORE_COMPANY_ID
+    project_id = ref.get("project_id")
+    attachment_ids = []
+    for candidate in [ref.get("attachment_id")] + [
+        c.get("attachment_id") for c in (ref.get("id_candidates") or [])
+    ]:
+        if candidate and str(candidate) not in {str(a) for a in attachment_ids}:
+            attachment_ids.append(candidate)
+
+    direct = ref.get("urls") or [
+        (name, normalize_procore_url(ref.get(name)))
+        for name in ("download_url", "viewer_url") if ref.get(name)
+    ]
+    for name, url in direct:
+        data = _download_bytes(url, company_id)
+        if data and data[:5] == b"%PDF-":
+            logger.info("procore_attachment_raw_downloaded", field=name,
+                        url=url.split("?", 1)[0],
+                        attachment_id=ref.get("attachment_id"), size=len(data))
+            return data
+
+    if ref.get("prostore_id"):
+        add = str(ref["prostore_id"])
+        if add not in {str(a) for a in attachment_ids}:
+            attachment_ids.append(ref["prostore_id"])
+
+    for attachment_id in attachment_ids:
+        for url in (
+            f"{API_HOST}/rest/v1.0/projects/{project_id}/attachments/{attachment_id}",
+            f"{API_HOST}/rest/v1.0/companies/{company_id}/prostore/files/{attachment_id}",
+        ):
+            body = _request_json(url, company_id=company_id)
+            signed = _find_download_url(body)
+            if not signed:
+                continue
+            data = _download_bytes(signed, company_id)
+            if data and data[:5] == b"%PDF-":
+                logger.info("procore_attachment_raw_downloaded", url=url,
+                            attachment_id=attachment_id, size=len(data))
+                return data
+
+    # Nothing on the object we walked worked — ask Procore's other serializers for the
+    # same file; one of them may carry a signed url the walked payload omitted.
+    submittal_id = ref.get("submittal_id")
+    if submittal_id:
+        for label, field, link in find_attachment_urls(
+            project_id, submittal_id, attachment_ids, company_id
+        ):
+            data = _download_bytes(link, company_id)
+            if data and data[:5] == b"%PDF-":
+                logger.info("procore_attachment_raw_downloaded", field=f"{label}:{field}",
+                            url=link.split("?", 1)[0],
+                            attachment_id=ref.get("attachment_id"), size=len(data))
+                return data
+
+    logger.warning("procore_attachment_raw_unavailable",
+                   attachment_id=ref.get("attachment_id"), project_id=project_id,
+                   prostore_id=ref.get("prostore_id"),
+                   tried_urls=[name for name, _ in direct],
+                   tried_ids=attachment_ids)
     return None
 
 
