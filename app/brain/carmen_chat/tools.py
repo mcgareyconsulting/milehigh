@@ -76,6 +76,27 @@ _WEEK_PROPS = {
     },
 }
 
+# Arbitrary-window props. Only offered on tools whose metric is range-capable —
+# the rest of the scorecard is defined Mon–Sun and stays that way.
+_RANGE_PROPS = {
+    "start": {
+        "type": "string",
+        "description": (
+            "Optional ISO date (YYYY-MM-DD) — first day of an arbitrary window, "
+            "inclusive. Omit for no lower bound (everything up to end). Setting "
+            "start or end switches off the Mon–Sun week and uses the exact span."
+        ),
+    },
+    "end": {
+        "type": "string",
+        "description": (
+            "Optional ISO date (YYYY-MM-DD) — last day of the window, inclusive. "
+            "Defaults to today when start is given. Setting start or end switches "
+            "off the Mon–Sun week."
+        ),
+    },
+}
+
 TOOL_DEFINITIONS = [
     {
         "name": TOOL_SEARCH_BY_ID,
@@ -286,7 +307,9 @@ TOOL_DEFINITIONS = [
             "with install date in week that are complete or have an installer). "
             "Use when the user names a metric, says 'EOS', 'scorecard', or an owner's "
             "number (David/Bill/Luis/Doug). Prefer get_eos_metrics_for_owner when they want "
-            "everything for one person. Week default = current; weeks_back=1 = last week."
+            "everything for one person. Week default = current; weeks_back=1 = last week. "
+            "start/end are accepted ONLY for hours_released_to_production; every other "
+            "metric is weekly by definition and returns an error if given a range."
         ),
         "input_schema": {
             "type": "object",
@@ -300,6 +323,7 @@ TOOL_DEFINITIONS = [
                     ),
                 },
                 **_WEEK_PROPS,
+                **_RANGE_PROPS,
             },
             "required": ["metric"],
         },
@@ -329,13 +353,21 @@ TOOL_DEFINITIONS = [
     {
         "name": TOOL_HOURS_RELEASED,
         "description": (
-            "Alias for get_eos_metric(metric=hours_released_to_production). David's drafting "
-            "metric: new releases this Mon–Sun week + sum of fab_hrs by released date. "
-            "Non-archived only; zero fab_hrs still count."
+            "Hours released to the job log over ANY time frame, broken down by billing "
+            "tag. Counts releases and sums fab_hrs by released date; non-archived only; "
+            "zero fab_hrs still count. Default window is the Mon–Sun week (this is also "
+            "David Servold's EOS metric); pass start and/or end for any other span — "
+            "'last month', 'since August 9th', 'so far this year', 'all time'. "
+            "Every result carries by_tag (Contracted / Change Order / MHMW Cost, plus an "
+            "Untagged bucket) and tag_coverage. NOT owner-restricted: any admin can ask, "
+            "and the answer is the company's number, not one person's scorecard. "
+            "ALWAYS report the untagged bucket when it is non-zero — the billing tag only "
+            "became required on releases created from 2026-08-09, so older releases are "
+            "untagged and a total that omits them understates the work."
         ),
         "input_schema": {
             "type": "object",
-            "properties": {**_WEEK_PROPS},
+            "properties": {**_WEEK_PROPS, **_RANGE_PROPS},
             "required": [],
         },
     },
@@ -721,10 +753,18 @@ _mountain_today = eos_metrics.mountain_today
 def get_hours_released_to_production(
     weeks_back: int = 0,
     week_of: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
 ) -> dict[str, Any]:
-    """David Servold — Hours Released to Production (thin wrapper)."""
+    """Hours released to the job log, by billing tag (thin wrapper).
+
+    Mon–Sun by default (David Servold's EOS metric); any span when start/end are
+    given. Open to every Carmen user — access is the route's `carmen_chat_required`
+    gate, which admins always pass — because the number is the company's, not an
+    owner's scorecard line.
+    """
     return eos_metrics.hours_released_to_production(
-        weeks_back=weeks_back, week_of=week_of
+        weeks_back=weeks_back, week_of=week_of, start=start, end=end
     )
 
 
@@ -732,9 +772,11 @@ def get_eos_metric(
     metric: str,
     weeks_back: int = 0,
     week_of: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
 ) -> dict[str, Any]:
     return eos_metrics.get_eos_metric(
-        metric=metric, weeks_back=weeks_back, week_of=week_of
+        metric=metric, weeks_back=weeks_back, week_of=week_of, start=start, end=end
     )
 
 

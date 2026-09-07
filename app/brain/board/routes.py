@@ -23,7 +23,7 @@ from flask import request, jsonify
 from sqlalchemy import func
 from app.brain import brain_bp
 from app.auth.utils import admin_required, get_current_user
-from app.brain.mentions import parse_mentions, resolve_mentioned_users
+from app.brain.mentions import parse_mentions, resolve_mentioned_users, user_display_name
 from app.models import db, BoardItem, BoardActivity, User, Notification
 from app.logging_config import get_logger
 
@@ -147,7 +147,7 @@ def create_board_item():
         status=data.get('status', 'open'),
         priority=data.get('priority', 'normal'),
         author_id=user.id,
-        author_name=user.first_name or user.username,
+        author_name=user_display_name(user),
     )
     db.session.add(item)
     db.session.commit()
@@ -193,7 +193,7 @@ def update_board_item(item_id):
             old_value=old_status,
             new_value=new_status,
             author_id=user.id,
-            author_name=user.first_name or user.username,
+            author_name=user_display_name(user),
         )
         db.session.add(activity)
 
@@ -230,7 +230,7 @@ def add_board_activity(item_id):
         type='comment',
         body=body,
         author_id=user.id,
-        author_name=user.first_name or user.username,
+        author_name=user_display_name(user),
     )
     db.session.add(activity)
     db.session.commit()
@@ -238,7 +238,7 @@ def add_board_activity(item_id):
     # Parse @FirstName mentions and create notifications
     mentioned_users = resolve_mentioned_users(parse_mentions(body))
     if mentioned_users:
-        author_name = user.first_name or user.username
+        author_name = user_display_name(user)
         for mu in mentioned_users:
             notif = Notification(
                 user_id=mu.id,
