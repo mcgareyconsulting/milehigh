@@ -3,20 +3,24 @@
  * schema_version: 1
  * purpose: Carmen code-compliance findings for the open drawing version, rendered in the
  *   hybrid viewer's right dock. Loads the latest review, enqueues a re-run, polls while
- *   pending, and jumps the canvas to a finding's cited page.
+ *   pending, and jumps the canvas to a finding's cited page. Carries the drawing chat
+ *   (`DrawingChat`) underneath it — same PDF, seconds instead of minutes.
  * exports:
  *   ReviewTab: props { releaseId, versionId, enabled, onCite, onFlagsChange }
- * imports_from: [react, ../../services/jobsApi, ../bbReview/shared, ../bbReview/urgency]
+ * imports_from: [react, ../../services/jobsApi, ./DrawingChat, ../bbReview/shared, ../bbReview/urgency]
  * imported_by: [frontend/src/components/pdfViewer/ViewerDock.jsx]
  * invariants:
  *   - Disabled (non admin/drafter) renders the gated empty state, never a request
  *   - Poll stops on unmount and whenever the review leaves 'pending'
- *   - Carmen chat is not built yet — the tab is findings only
- * updated_by_agent: 2026-09-05T00:00:00Z
+ *   - Space is content-driven: the findings list claims flex-1 only when it HAS findings;
+ *     otherwise the chat below takes the dock and its composer stays bottom-docked
+ *   - Chat turns are session-only and reset when the version changes
+ * updated_by_agent: 2026-09-07T00:00:00Z
  */
 import React, { useEffect, useRef, useState } from 'react';
 
 import { jobsApi } from '../../services/jobsApi';
+import { DrawingChat } from './DrawingChat';
 import { FeedbackControls } from '../bbReview/shared';
 import { actionableCount, URGENCY_STYLES, urgencyOf } from '../bbReview/urgency';
 
@@ -110,9 +114,15 @@ export function ReviewTab({
     const findings = review?.findings || [];
     const flags = actionableCount(findings);
     const isPending = review?.status === 'pending';
+    // Only a real findings list earns the dock's free space. Every other state here is a
+    // one-line message, and claiming flex-1 for it left a dead block above the chat.
+    const hasFindingRows = review?.status === 'complete' && findings.length > 0;
 
     return (
-        <div className="flex flex-col min-h-0">
+        // flex-1 matters: the dock body is a column flex container, and without it this
+        // panel sizes to its content — leaving dead space below that the chat's mt-auto
+        // has nothing to push against.
+        <div className="flex-1 flex flex-col min-h-0">
             {/* Pinned findings header */}
             <div
                 className="shrink-0 flex items-center border-b border-hairline"
@@ -150,7 +160,10 @@ export function ReviewTab({
                 </button>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto" style={{ padding: '10px 12px' }}>
+            <div
+                className={hasFindingRows ? 'flex-1 min-h-0 overflow-y-auto' : 'shrink-0'}
+                style={{ padding: '10px 12px' }}
+            >
                 {review === undefined && <p className="text-xs text-ink-3 italic">Loading…</p>}
                 {review === null && (
                     <p className="text-xs text-ink-3">
@@ -238,6 +251,15 @@ export function ReviewTab({
                     </p>
                 )}
             </div>
+
+            {/* The fast path: the review above can take minutes, this answers in seconds
+                against the same PDF. Usable whether or not a review exists. */}
+            <DrawingChat
+                releaseId={releaseId}
+                versionId={versionId}
+                enabled={enabled}
+                onCite={onCite}
+            />
         </div>
     );
 }

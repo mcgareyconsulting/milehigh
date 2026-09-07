@@ -3,6 +3,7 @@
 Registered on brain_bp under /brain:
   POST /releases/<release_id>/drawing/versions/<vid>/carmen-review  — enqueue a review (202)
   GET  /releases/<release_id>/drawing/versions/<vid>/carmen-review  — latest review status + findings
+  POST /releases/<release_id>/drawing/versions/<vid>/carmen-chat    — one chat turn about the drawing
 
 Per-version GET/POST are open to admin OR drafter (AI review loop in the release hub).
 The POST returns immediately (202) with a `pending` row; the review runs on a background
@@ -17,12 +18,14 @@ from app.auth.utils import admin_required, drafter_or_admin_required, login_requ
 from flask import request
 
 from app.models import (
-    ReleaseDrawingVersion, CarmenDrawingReview, CarmenReviewFeedback, Releases, Submittals,
+    ReleaseDrawingVersion, CarmenDrawingReview, CarmenReviewFeedback, DrawingVersionComment,
+    Releases, Submittals,
     is_gc_approval_type, db,
 )
 from app.logging_config import get_logger
 
 from app.brain.pdf_review import service
+from app.brain.pdf_review import chat
 from app.brain.pdf_review import cache as procore_pdf_cache
 from app.brain.pdf_review.worker import start_review, start_submittal_review
 from app.brain.pdf_review.report import build_report
@@ -31,6 +34,7 @@ from app.procore.attachments import (
     find_submittal_drawing_refs, download_submittal_drawing, download_markup_pdf,
 )
 from app.brain.job_log.features.pdf_markup.command import UploadInitialDrawingCommand
+from app.brain.job_log.features.pdf_markup.storage import read_pdf
 
 logger = get_logger(__name__)
 
@@ -99,6 +103,99 @@ def get_bb_review(release_id, version_id):
     # Keyed by finding_index = the finding's slot in review.findings (raw order).
     payload['feedback'] = _feedback_map(review.id)
     return jsonify({'review': payload}), 200
+
+
+@brain_bp.route(
+    '/releases/<int:release_id>/drawing/versions/<int:version_id>/carmen-chat',
+    methods=['POST'],
+)
+@drafter_or_admin_required
+def carmen_drawing_chat(release_id, version_id):
+    """Ask Carmen one question about the open drawing version (N18 — the fast path).
+
+    Body: {message, history?: [{role, content}]}. **Session-only** — the client carries the
+    thread and nothing is persisted, so this endpoint is stateless per turn. The PDF block is
+    prompt-cached, so a follow-up costs a fraction of the first question (see `chat.py`).
+
+    Runs in-request on Sonnet (seconds), unlike the POST above, which enqueues the minutes-long
+    Opus review on a background thread. Both are scoped to one version and open to drafters.
+    """
+    version = _load_version(release_id, version_id)
+    if not version:
+        return jsonify({'error': 'Version not found'}), 404
+
+    data = request.get_json(silent=True) or {}
+    message = (data.get('message') or '').strip()
+    if not message:
+        return jsonify({'error': 'message is required'}), 400
+
+    try:
+        pdf_bytes = read_pdf(version.storage_key)
+    except FileNotFoundError:
+        return jsonify({'error': 'Drawing file missing on disk'}), 404
+
+    release = db.session.get(Releases, release_id)
+    review = (CarmenDrawingReview.query
+              .filter(CarmenDrawingReview.drawing_version_id == version_id)
+              .order_by(CarmenDrawingReview.created_at.desc())
+              .first())
+    comments = (DrawingVersionComment.query
+                .filter_by(drawing_version_id=version_id)
+                .order_by(DrawingVersionComment.created_at.desc())
+                .limit(10).all())
+    versions = (ReleaseDrawingVersion.query
+                .filter_by(release_id=release_id, is_deleted=False).all())
+
+    # The markup inventory, and what is new since the version this one was saved from.
+    # Claude can see the shapes in the render but cannot count them or read a note's
+    # payload reliably, and "summarize the markups" is the question people actually ask.
+    markups = chat.summarize_markups(pdf_bytes)
+    prior_keys = None
+    if version.source_version_id:
+        source = db.session.get(ReleaseDrawingVersion, version.source_version_id)
+        if source:
+            try:
+                prior_keys = {m["key"] for m in chat.summarize_markups(read_pdf(source.storage_key))}
+            except FileNotFoundError:
+                prior_keys = None
+
+    header = chat.build_context_header(
+        job_release=_job_release(release),
+        version=version,
+        versions=versions,
+        review=review,
+        comments=list(reversed(comments)),
+        markups=markups,
+        prior_keys=prior_keys,
+    )
+
+    user = get_current_user()
+    try:
+        result = chat.ask(pdf_bytes, header, data.get('history') or [], message,
+                          version_id=version_id, user_id=user.id if user else None)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception:  # noqa: BLE001 — chat.ask already logged with traceback
+        return jsonify({'error': 'Carmen is temporarily unavailable.'}), 502
+
+    m = result['metrics']
+    if result.get('configured'):
+        from app.services import ai_usage
+        ai_usage.record(
+            'carmen_drawing_chat',
+            model=m.get('model'),
+            input_tokens=m.get('input_tokens') or 0,
+            output_tokens=m.get('output_tokens') or 0,
+            cache_read_tokens=m.get('cache_read_tokens') or 0,
+            cache_write_tokens=m.get('cache_write_tokens') or 0,
+            cost_usd=m.get('cost_usd'),
+            duration_ms=m.get('duration_ms'),
+            user_id=user.id if user else None,
+            request_id=m.get('request_id'),
+            entity_type='drawing_version',
+            entity_id=version_id,
+        )
+    return jsonify(result), 200
 
 
 def _feedback_map(review_id):
