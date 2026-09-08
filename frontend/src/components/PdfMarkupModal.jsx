@@ -15,6 +15,12 @@
  * `inline` drops the fixed overlay and the portal so the same editor can be hosted inside
  * another surface — the release hub's Attachments pane runs it in place of the read
  * viewer. Inline also means another dialog owns Escape, so this one claims it in capture.
+ *
+ * Undo / redo / delete ride pdf.js's own command stack (every pen stroke, text box,
+ * injected shape, move, resize, restyle and delete is a command), surfaced as buttons in
+ * the pill and as Ctrl/⌘+Z, Ctrl+Y / ⌘⇧Z and Delete. pdf.js only services those keys
+ * while a drawing tool is armed, so Hand mode gets its own handler that calls the same
+ * UIManager methods — the shortcuts work whatever tool is up.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -80,6 +86,28 @@ function hexToRgbArray(hex) {
         parseInt(h.slice(2, 4), 16),
         parseInt(h.slice(4, 6), 16),
     ];
+}
+
+// pdf.js reports editor colors as hex ("#dc2626"); anything else (a CSS keyword such
+// as "CanvasText") is not a value the palette can show, so it is ignored.
+function normalizeHex(value) {
+    if (typeof value !== 'string') return null;
+    const v = value.trim().toLowerCase();
+    if (/^#[0-9a-f]{6}$/.test(v)) return v;
+    if (/^#[0-9a-f]{3}$/.test(v)) return `#${v[1]}${v[1]}${v[2]}${v[2]}${v[3]}${v[3]}`;
+    return null;
+}
+
+const IS_MAC = typeof navigator !== 'undefined'
+    && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '');
+const UNDO_KEYS = IS_MAC ? '⌘Z' : 'Ctrl+Z';
+const REDO_KEYS = IS_MAC ? '⌘⇧Z' : 'Ctrl+Y';
+
+// True when the keystroke belongs to a text field — the note box, the comment composer,
+// or a text annotation being typed into — so markup shortcuts must leave it alone.
+function isTypingTarget(el) {
+    return !!el && (el.isContentEditable
+        || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName));
 }
 
 // Two arrowhead barbs for an arrow from s -> e (page-space points).
@@ -189,12 +217,28 @@ export function PdfMarkupModal({
     const [ticks, setTicks] = useState([]);  // scrollbar ticks for each annotation
     const [shapeDraft, setShapeDraft] = useState(null);  // { sx, sy, ex, ey } overlay-relative preview
     const [hasSelection, setHasSelection] = useState(false);  // an editor is currently selected
+    const [canUndo, setCanUndo] = useState(false);
+    const [canRedo, setCanRedo] = useState(false);
+    // Same flags, readable from window key handlers without a stale closure.
+    const undoStackRef = useRef({ canUndo: false, canRedo: false });
     // Mirrored from the pdf.js viewer for the Option 4c pill.
     const [pageNumber, setPageNumber] = useState(1);
     const [pagesCount, setPagesCount] = useState(0);
     const [scalePct, setScalePct] = useState(100);
     const [fitMode, setFitMode] = useState('fit');   // 'fit' | 'width' | null (manual zoom)
-    const [selectedKind, setSelectedKind] = useState(null);  // 'freetext' | 'ink' | null
+    // The selected markup, mirrored from pdf.js: { kind: 'freetext' | 'ink' | null,
+    // color, thickness, fontSize }. `color` / `thickness` / `fontSize` above are the
+    // DEFAULTS for the next markup (pdf.js's own defaults after the first push); while
+    // something is selected the pill shows the selection's values instead, and a
+    // control click restyles the selection and moves the default in one dispatch.
+    const [selection, setSelection] = useState(null);
+    const selectedKind = selection?.kind ?? null;
+    const shownColor = selection ? (selection.color ?? null) : color;
+    const shownThickness = selectedKind === 'ink' && selection.thickness ? selection.thickness : thickness;
+    const shownFontSize = selectedKind === 'freetext' && selection.fontSize ? selection.fontSize : fontSize;
+    // Latest defaults for pdf.js listeners and effects that must not close over a render.
+    const paramsRef = useRef({ color, thickness, fontSize });
+    paramsRef.current = { color, thickness, fontSize };
 
     const isEdit = mode === 'edit';
     const hybrid = variant === 'hybrid';
@@ -216,6 +260,10 @@ export function PdfMarkupModal({
         setShapeDraft(null);
         shapeStartRef.current = null;
         setHasSelection(false);
+        setSelection(null);
+        setCanUndo(false);
+        setCanRedo(false);
+        undoStackRef.current = { canUndo: false, canRedo: false };
         setNote('');  // optional save-note resets every time the editor opens
 
         const init = async () => {
@@ -257,22 +305,57 @@ export function PdfMarkupModal({
                     // where fit-page leaves the drawing unreadably small.
                     pdfViewer.currentScaleValue = (inline && !hybrid) ? 'page-width' : 'page-fit';
                 });
+                // pdf.js merges every change into one state object, so each event carries
+                // every flag. The undo stack is the source of truth for "unsaved markup":
+                // every edit is a command, so undoing back to the start clears the badge,
+                // and merely selecting a markup no longer raises it.
                 eventBus.on('annotationeditorstateschanged', (e) => {
-                    setDirty(true);
                     const details = e?.details;
-                    if (details && 'hasSelectedEditor' in details) {
-                        setHasSelection(!!details.hasSelectedEditor);
+                    if (!details) return;
+                    if ('hasSomethingToUndo' in details) {
+                        const v = !!details.hasSomethingToUndo;
+                        undoStackRef.current.canUndo = v;
+                        setCanUndo(v);
+                        setDirty(v);
                     }
-                    // pdf.js reports THAT an editor is selected, not which kind. The kind
-                    // decides which size control belongs in the pill, and it is readable
-                    // off the DOM once pdf.js has applied its classes.
-                    setTimeout(() => {
-                        const el = document.querySelector('.annotationEditorLayer .selectedEditor');
-                        if (!el) { setSelectedKind(null); return; }
-                        if (el.classList.contains('freeTextEditor')) setSelectedKind('freetext');
-                        else if (el.classList.contains('inkEditor')) setSelectedKind('ink');
-                        else setSelectedKind(null);
-                    }, 0);
+                    if ('hasSomethingToRedo' in details) {
+                        const v = !!details.hasSomethingToRedo;
+                        undoStackRef.current.canRedo = v;
+                        setCanRedo(v);
+                    }
+                    if ('hasSelectedEditor' in details) {
+                        setHasSelection(!!details.hasSelectedEditor);
+                        if (!details.hasSelectedEditor) setSelection(null);
+                    }
+                });
+                // Fires with the selected editor's own properties every time the selection
+                // lands on an editor — including a straight hop from one markup to another,
+                // which the states event above does not report because "has a selection"
+                // did not change. The pill mirrors the selection: its kind picks the size
+                // control, and its color/weight/size are what the controls show. Without
+                // a selection this is pdf.js broadcasting defaults, which the pill owns —
+                // so those are left alone.
+                eventBus.on('annotationeditorparamschanged', (e) => {
+                    const uiManager = viewerStateRef.current.uiManager || e?.source;
+                    const editor = uiManager?.firstSelectedEditor;
+                    if (!editor) return;
+                    const next = {
+                        kind: editor.editorType === 'freetext' ? 'freetext'
+                            : editor.editorType === 'ink' ? 'ink' : null,
+                    };
+                    const params = pdfjsLib.AnnotationEditorParamsType || {};
+                    for (const [type, value] of e?.details || []) {
+                        if (type === params.INK_COLOR || type === params.FREETEXT_COLOR) {
+                            next.color = normalizeHex(value);
+                        } else if (type === params.INK_THICKNESS) {
+                            const n = Number(value);
+                            if (Number.isFinite(n) && n > 0) next.thickness = n;
+                        } else if (type === params.FREETEXT_SIZE) {
+                            const n = Number(value);
+                            if (Number.isFinite(n) && n > 0) next.fontSize = Math.round(n);
+                        }
+                    }
+                    setSelection(next);
                 });
                 // The UIManager is created during setDocument (NONE mode still
                 // creates it); capture it so shape tools can inject Ink editors
@@ -437,6 +520,31 @@ export function PdfMarkupModal({
         v.scrollPageIntoView({ pageNumber: clamped });
     }, [initialPage, citeNonce, isOpen, loading]);
 
+    // The right API in pdf.js 4.x is dispatching 'switchannotationeditorparams' on the
+    // EventBus — there is no pdfViewer.annotationEditorParams setter. The UI manager
+    // applies the value to every selected editor AND makes it the default for the next
+    // one created. Each editor kind ignores the other kind's parameter, so a color goes
+    // out as both INK_COLOR and FREETEXT_COLOR: one palette for pen, shapes and text.
+    const dispatchParam = (type, value) => {
+        const eventBus = viewerStateRef.current.eventBus;
+        if (!eventBus || type == null) return;
+        try {
+            eventBus.dispatch('switchannotationeditorparams', { type, value });
+        } catch { /* viewer not ready yet */ }
+    };
+
+    // Make the pill's defaults pdf.js's defaults. Only ever called with nothing
+    // selected: pdf.js applies a parameter to the selection too, and re-applying a
+    // markup's own value to it would push a no-op entry onto the undo stack.
+    const pushDefaults = () => {
+        const params = pdfjsLib.AnnotationEditorParamsType || {};
+        const { color: c, thickness: t, fontSize: f } = paramsRef.current;
+        dispatchParam(params.INK_COLOR, c);
+        dispatchParam(params.FREETEXT_COLOR, c);
+        dispatchParam(params.INK_THICKNESS, t);
+        dispatchParam(params.FREETEXT_SIZE, f);
+    };
+
     // Apply tool changes to the viewer
     useEffect(() => {
         const pdfViewer = viewerStateRef.current.pdfViewer;
@@ -445,54 +553,55 @@ export function PdfMarkupModal({
             // Shape tools ride on the INK editor layer (which provides the page
             // layers we inject into); the shape input overlay handles drawing.
             const mode = isShapeTool(tool) ? TOOL.INK : tool;
+            const uiManager = viewerStateRef.current.uiManager;
+            // Commit whatever is in flight — an open pen session, a text box mid-edit —
+            // and drop the selection BEFORE the mode flips. pdf.js does the same from
+            // inside updateMode, but only after the mode has changed, and in 4.10 ending
+            // a pen session once the mode is already NONE throws (its editor type lookup
+            // is by mode), which left the stroke uncommitted: undo could not reach it and
+            // Save silently dropped it. Doing it here also means the defaults pushed
+            // below reach the defaults only, never a still-selected markup.
+            try { uiManager?.unselectAll(); } catch { /* noop */ }
             pdfViewer.annotationEditorMode = { mode };
+            // A selection that survived (pdf.js keeps an editor mid-edit selected) means
+            // skip: the control handlers keep the defaults in step on every click anyway,
+            // this push only matters for the very first markup.
+            if (tool !== TOOL.HAND && uiManager && !uiManager.hasSelection) pushDefaults();
         } catch {
             // pdfViewer not yet ready — ignored, will retry on next state change.
         }
+        // pushDefaults reads paramsRef, so it never goes stale.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tool, isEdit]);
 
-    // Apply color changes. The right API in pdf.js 4.x is dispatching
-    // 'switchannotationeditorparams' on the EventBus — there is no
-    // pdfViewer.annotationEditorParams setter. The UI manager applies the
-    // value to the selected editor AND updates the default for next-created.
-    useEffect(() => {
-        const eventBus = viewerStateRef.current.eventBus;
-        if (!eventBus || !isEdit) return;
-        const params = pdfjsLib.AnnotationEditorParamsType;
-        try {
-            if (tool === TOOL.INK && params?.INK_COLOR != null) {
-                eventBus.dispatch('switchannotationeditorparams', { type: params.INK_COLOR, value: color });
-            } else if (tool === TOOL.FREETEXT && params?.FREETEXT_COLOR != null) {
-                eventBus.dispatch('switchannotationeditorparams', { type: params.FREETEXT_COLOR, value: color });
-            }
-        } catch { /* swallow */ }
-    }, [color, tool, isEdit]);
+    // Pill controls: each one restyles whatever is selected — in Hand mode too — and
+    // sets the default for the next markup (pdf.js does both in one dispatch). A click
+    // on the value already shown is skipped so the undo stack only records real changes.
+    // pdf.js echoes an editor's properties back only on undo/redo, not on the change
+    // itself, so the mirrored selection is moved here too.
+    const chooseColor = (c) => {
+        if (c === shownColor) return;
+        setColor(c);
+        setSelection((sel) => (sel?.kind ? { ...sel, color: c } : sel));
+        const params = pdfjsLib.AnnotationEditorParamsType || {};
+        dispatchParam(params.INK_COLOR, c);
+        dispatchParam(params.FREETEXT_COLOR, c);
+    };
 
-    // Apply font size changes. Same dispatch pattern as color.
-    useEffect(() => {
-        const eventBus = viewerStateRef.current.eventBus;
-        if (!eventBus || !isEdit) return;
-        if (tool !== TOOL.FREETEXT && selectedKind !== 'freetext') return;
-        const params = pdfjsLib.AnnotationEditorParamsType;
-        try {
-            if (params?.FREETEXT_SIZE != null) {
-                eventBus.dispatch('switchannotationeditorparams', { type: params.FREETEXT_SIZE, value: fontSize });
-            }
-        } catch { /* swallow */ }
-    }, [fontSize, tool, isEdit, selectedKind]);
+    const chooseThickness = (value) => {
+        if (value === shownThickness) return;
+        setThickness(value);
+        setSelection((sel) => (sel?.kind === 'ink' ? { ...sel, thickness: value } : sel));
+        dispatchParam((pdfjsLib.AnnotationEditorParamsType || {}).INK_THICKNESS, value);
+    };
 
-    // Apply stroke-thickness changes to the pen. Shapes read `thickness`
-    // directly when committed, so only the live INK editor needs the dispatch.
-    useEffect(() => {
-        const eventBus = viewerStateRef.current.eventBus;
-        if (!eventBus || !isEdit || tool !== TOOL.INK) return;
-        const params = pdfjsLib.AnnotationEditorParamsType;
-        try {
-            if (params?.INK_THICKNESS != null) {
-                eventBus.dispatch('switchannotationeditorparams', { type: params.INK_THICKNESS, value: thickness });
-            }
-        } catch { /* swallow */ }
-    }, [thickness, tool, isEdit]);
+    const chooseFontSize = (value) => {
+        const next = Math.min(96, Math.max(8, value));
+        if (next === shownFontSize) return;
+        setFontSize(next);
+        setSelection((sel) => (sel?.kind === 'freetext' ? { ...sel, fontSize: next } : sel));
+        dispatchParam((pdfjsLib.AnnotationEditorParamsType || {}).FREETEXT_SIZE, next);
+    };
 
     // Two-finger pinch-to-zoom. pdf.js's own TouchManager only resizes the
     // selected editor, so page zoom is handled here: adjust currentScale by the
@@ -552,6 +661,50 @@ export function PdfMarkupModal({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, dirty, inline, hybrid]);
 
+    // Undo / redo / delete shortcuts. pdf.js binds these on window itself but only acts
+    // while a drawing tool is armed (its handler returns early in NONE mode), so Hand —
+    // the mode you select and move markups in — needs the same keys wired here. Runs in
+    // capture so it can also keep the keys away from pdf.js while the user is typing in
+    // a text field: pdf.js exempts <input> but not <textarea>, so Ctrl+Z in the comment
+    // composer would otherwise undo a markup instead of the typing.
+    useEffect(() => {
+        if (!isOpen || !isEdit) return undefined;
+        const onKey = (e) => {
+            const mod = e.metaKey || e.ctrlKey;
+            const key = (e.key || '').toLowerCase();
+            const isUndo = mod && !e.shiftKey && key === 'z';
+            const isRedo = mod && (key === 'y' || (e.shiftKey && key === 'z'));
+            const isDelete = !mod && !e.altKey && (e.key === 'Delete' || e.key === 'Backspace');
+            if (!isUndo && !isRedo && !isDelete) return;
+            if (isTypingTarget(e.target)) {
+                // Native text editing owns the key; stop pdf.js's window handler seeing it.
+                if (isUndo || isRedo) e.stopPropagation();
+                return;
+            }
+            const uiManager = viewerStateRef.current.uiManager;
+            if (!uiManager) return;
+            // A drawing tool is armed: pdf.js's own keyboard manager handles it.
+            if (uiManager.getMode() !== TOOL.HAND) return;
+            if (isUndo) {
+                if (!undoStackRef.current.canUndo) return;
+                e.preventDefault();
+                e.stopPropagation();
+                uiManager.undo();
+            } else if (isRedo) {
+                if (!undoStackRef.current.canRedo) return;
+                e.preventDefault();
+                e.stopPropagation();
+                uiManager.redo();
+            } else if (uiManager.hasSelection) {
+                e.preventDefault();
+                e.stopPropagation();
+                uiManager.delete();
+            }
+        };
+        window.addEventListener('keydown', onKey, true);
+        return () => window.removeEventListener('keydown', onKey, true);
+    }, [isOpen, isEdit]);
+
     // Option 4c keyboard: V hand · P pen · T text · L line · A arrow · R box · O circle.
     // Ignored while typing, so the note field and text annotations keep their letters.
     useEffect(() => {
@@ -562,10 +715,7 @@ export function PdfMarkupModal({
         };
         const onKey = (e) => {
             if (e.metaKey || e.ctrlKey || e.altKey) return;
-            const el = e.target;
-            const typing = el && (el.isContentEditable
-                || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName));
-            if (typing) return;
+            if (isTypingTarget(e.target)) return;
             const next = KEYS[e.key?.toLowerCase()];
             if (next !== undefined) setTool(next);
         };
@@ -719,10 +869,24 @@ export function PdfMarkupModal({
     // touch equivalent of pressing Delete/Backspace.
     const deleteSelected = () => {
         const uiManager = viewerStateRef.current.uiManager;
-        if (!uiManager) return;
+        if (!uiManager || !uiManager.hasSelection) return;
         uiManager.delete();
         setHasSelection(false);
         setDirty(true);
+    };
+
+    // Button equivalents of Ctrl+Z / Ctrl+Y. Guarded by the stack flags: pdf.js's
+    // undo() on an empty stack still reports "something to redo".
+    const undoLast = () => {
+        const uiManager = viewerStateRef.current.uiManager;
+        if (!uiManager || !undoStackRef.current.canUndo) return;
+        uiManager.undo();
+    };
+
+    const redoLast = () => {
+        const uiManager = viewerStateRef.current.uiManager;
+        if (!uiManager || !undoStackRef.current.canRedo) return;
+        uiManager.redo();
     };
 
     const tryClose = () => {
@@ -808,6 +972,12 @@ export function PdfMarkupModal({
                 return <svg {...common}><rect x="4" y="6" width="16" height="12" rx="1" /></svg>;
             case 'circle':
                 return <svg {...common}><circle cx="12" cy="12" r="8" /></svg>;
+            case 'undo':   // feather "corner-up-left"
+                return <svg {...common}><polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" /></svg>;
+            case 'redo':   // feather "corner-up-right"
+                return <svg {...common}><polyline points="15 14 20 9 15 4" /><path d="M4 20v-7a4 4 0 0 1 4-4h12" /></svg>;
+            case 'trash':  // feather "trash-2"
+                return <svg {...common}><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>;
             default:
                 return null;
         }
@@ -833,6 +1003,27 @@ export function PdfMarkupModal({
             </button>
         );
     };
+
+    // Undo / redo / delete: same footprint as a tool button, greyed out until there is
+    // something to act on, never "active".
+    const pillActionBtn = (icon, onClick, enabled, label, danger = false) => (
+        <button
+            key={label}
+            type="button"
+            onClick={onClick}
+            disabled={!enabled}
+            aria-label={label}
+            title={label}
+            className="grid place-items-center border-0 cursor-pointer disabled:cursor-not-allowed"
+            style={{
+                width: 30, height: 30, borderRadius: 7, background: 'transparent',
+                color: !enabled ? 'var(--text-3)' : (danger ? '#dc2626' : 'var(--text-2)'),
+                opacity: enabled ? 1 : 0.4,
+            }}
+        >
+            <ToolIcon name={icon} />
+        </button>
+    );
 
     const pillDivider = (
         <span style={{ width: 1, height: 20, background: 'var(--border)', flexShrink: 0 }} />
@@ -909,12 +1100,13 @@ export function PdfMarkupModal({
                             <button
                                 key={c}
                                 type="button"
-                                onClick={() => setColor(c)}
+                                onClick={() => chooseColor(c)}
                                 aria-label={`Color ${c}`}
+                                aria-pressed={shownColor === c}
                                 className="border-0 cursor-pointer"
                                 style={{
                                     width: 16, height: 16, borderRadius: '50%', background: c,
-                                    boxShadow: color === c
+                                    boxShadow: shownColor === c
                                         ? '0 0 0 2px var(--surface), 0 0 0 3.5px var(--accent)'
                                         : 'none',
                                 }}
@@ -930,19 +1122,19 @@ export function PdfMarkupModal({
                             <button
                                 type="button"
                                 style={pillIconBtn}
-                                onClick={() => setFontSize((n) => Math.max(8, n - 2))}
+                                onClick={() => chooseFontSize(shownFontSize - 2)}
                                 aria-label="Decrease text size"
                                 title="Smaller text"
                             >
                                 A−
                             </button>
                             <span className="text-ink-2" style={{ fontSize: 12, minWidth: 22, textAlign: 'center' }}>
-                                {fontSize}
+                                {shownFontSize}
                             </span>
                             <button
                                 type="button"
                                 style={{ ...pillIconBtn, fontSize: 16 }}
-                                onClick={() => setFontSize((n) => Math.min(96, n + 2))}
+                                onClick={() => chooseFontSize(shownFontSize + 2)}
                                 aria-label="Increase text size"
                                 title="Larger text"
                             >
@@ -958,13 +1150,14 @@ export function PdfMarkupModal({
                                 <button
                                     key={label}
                                     type="button"
-                                    onClick={() => setThickness(value)}
+                                    onClick={() => chooseThickness(value)}
                                     aria-label={`${label} stroke width`}
+                                    aria-pressed={shownThickness === value}
                                     title={`${label} stroke`}
                                     className="grid place-items-center border-0 cursor-pointer"
                                     style={{
                                         width: 26, height: 26, borderRadius: 7,
-                                        background: thickness === value ? 'var(--accent-soft)' : 'transparent',
+                                        background: shownThickness === value ? 'var(--accent-soft)' : 'transparent',
                                     }}
                                 >
                                     <span
@@ -973,7 +1166,7 @@ export function PdfMarkupModal({
                                             width: 14,
                                             height: Math.max(1.5, value),
                                             borderRadius: 999,
-                                            background: thickness === value ? 'var(--accent)' : 'var(--text-3)',
+                                            background: shownThickness === value ? 'var(--accent)' : 'var(--text-3)',
                                         }}
                                     />
                                 </button>
@@ -981,6 +1174,14 @@ export function PdfMarkupModal({
                             {pillDivider}
                         </>
                     )}
+
+                    {/* Edit history: the button form of Ctrl+Z / Ctrl+Y / Delete. */}
+                    <div className="flex items-center" style={{ gap: 2 }}>
+                        {pillActionBtn('undo', undoLast, canUndo, `Undo (${UNDO_KEYS})`)}
+                        {pillActionBtn('redo', redoLast, canRedo, `Redo (${REDO_KEYS})`)}
+                        {pillActionBtn('trash', deleteSelected, hasSelection, 'Delete selected markup (Delete)', true)}
+                    </div>
+                    {pillDivider}
                 </>
             )}
             <button type="button" style={pillIconBtn} onClick={() => goToPage(pageNumber - 1)}
@@ -1021,7 +1222,7 @@ export function PdfMarkupModal({
     const tree = (
         <div className={rootClass}>
             {/* Hide pdf.js's floating per-editor delete/altText buttons — they
-                land in odd spots; users delete annotations with Backspace/Delete. */}
+                land in odd spots; the pill's Delete button and the Delete key cover it. */}
             <style>{`
                 .pdfViewer .editToolbar,
                 .pdfViewer button.delete,
@@ -1111,9 +1312,10 @@ export function PdfMarkupModal({
                                     <button
                                         key={label}
                                         type="button"
-                                        onClick={() => setThickness(value)}
+                                        onClick={() => chooseThickness(value)}
+                                        aria-pressed={shownThickness === value}
                                         className={`px-3 py-3 min-h-[44px] rounded-md text-sm font-semibold border ${
-                                            thickness === value
+                                            shownThickness === value
                                                 ? 'bg-accent-600 text-white border-accent-600'
                                                 : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-100'
                                         }`}
@@ -1125,19 +1327,19 @@ export function PdfMarkupModal({
                                 ))}
                             </div>
                         )}
-                        {tool === TOOL.FREETEXT && (
+                        {(tool === TOOL.FREETEXT || selectedKind === 'freetext') && (
                             <div className="flex items-center gap-1 ml-2">
                                 <button
                                     type="button"
-                                    onClick={() => setFontSize((s) => Math.max(8, s - 2))}
+                                    onClick={() => chooseFontSize(shownFontSize - 2)}
                                     className="px-3 py-3 min-w-[44px] min-h-[44px] rounded-md text-sm font-semibold border bg-white text-gray-800 border-gray-300 hover:bg-gray-100"
                                     title="Smaller text"
                                     aria-label="Decrease font size"
                                 >A−</button>
-                                <span className="px-2 text-sm text-gray-700 select-none min-w-[36px] text-center">{fontSize}</span>
+                                <span className="px-2 text-sm text-gray-700 select-none min-w-[36px] text-center">{shownFontSize}</span>
                                 <button
                                     type="button"
-                                    onClick={() => setFontSize((s) => Math.min(96, s + 2))}
+                                    onClick={() => chooseFontSize(shownFontSize + 2)}
                                     className="px-3 py-3 min-w-[44px] min-h-[44px] rounded-md text-sm font-semibold border bg-white text-gray-800 border-gray-300 hover:bg-gray-100"
                                     title="Larger text"
                                     aria-label="Increase font size"
@@ -1149,20 +1351,41 @@ export function PdfMarkupModal({
                                 <button
                                     key={c}
                                     type="button"
-                                    onClick={() => setColor(c)}
+                                    onClick={() => chooseColor(c)}
                                     aria-label={`Color ${c}`}
-                                    className={`w-9 h-9 rounded-full border-2 ${color === c ? 'border-accent-600 ring-2 ring-accent-300' : 'border-gray-300'}`}
+                                    aria-pressed={shownColor === c}
+                                    className={`w-9 h-9 rounded-full border-2 ${shownColor === c ? 'border-accent-600 ring-2 ring-accent-300' : 'border-gray-300'}`}
                                     style={{ backgroundColor: c }}
                                 />
                             ))}
                         </div>
                         <button
                             type="button"
+                            onClick={undoLast}
+                            disabled={!canUndo}
+                            className="ml-2 px-4 py-3 min-h-[44px] rounded-md font-semibold border bg-white text-gray-800 border-gray-300 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={`Undo (${UNDO_KEYS})`}
+                            aria-label={`Undo (${UNDO_KEYS})`}
+                        >
+                            Undo
+                        </button>
+                        <button
+                            type="button"
+                            onClick={redoLast}
+                            disabled={!canRedo}
+                            className="px-4 py-3 min-h-[44px] rounded-md font-semibold border bg-white text-gray-800 border-gray-300 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={`Redo (${REDO_KEYS})`}
+                            aria-label={`Redo (${REDO_KEYS})`}
+                        >
+                            Redo
+                        </button>
+                        <button
+                            type="button"
                             onClick={deleteSelected}
                             disabled={!hasSelection}
                             className="ml-2 px-4 py-3 min-h-[44px] rounded-md font-semibold border border-red-300 text-red-700 bg-white hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                            title="Delete selected annotation (or press Delete)"
-                            aria-label="Delete selected annotation"
+                            title="Delete selected markup (Delete)"
+                            aria-label="Delete selected markup (Delete)"
                         >
                             Delete
                         </button>
