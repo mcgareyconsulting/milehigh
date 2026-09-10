@@ -430,12 +430,7 @@ function HubChangeRow({
             onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(30,90,200,.05)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >
-            <div
-                className="grid items-center gap-2"
-                style={{
-                    gridTemplateColumns: '66px 118px minmax(0,1fr) 64px 64px',
-                }}
-            >
+            <div className="jl-hub-event-row">
                 <span className="font-mono text-ink-3" style={{ fontSize: 12.5 }}>
                     {formatTimeOnly(event.created_at)}
                 </span>
@@ -518,10 +513,9 @@ function HubChangeRow({
             </div>
             {expanded && (
                 <pre
-                    className="font-mono border border-hairline bg-surface-2 text-ink overflow-x-auto"
+                    className="jl-hub-event-indent font-mono border border-hairline bg-surface-2 text-ink overflow-x-auto"
                     style={{
                         marginTop: 8,
-                        marginLeft: 66 + 8 + 118 + 8,
                         padding: 10,
                         borderRadius: 8,
                         fontSize: 12,
@@ -534,7 +528,7 @@ function HubChangeRow({
             )}
             {/* Short notes: optional expand for raw payload */}
             {!longNotes && (
-                <div style={{ marginLeft: 66 + 8 + 118 + 8, marginTop: 2 }}>
+                <div className="jl-hub-event-indent" style={{ marginTop: 2 }}>
                     <button
                         type="button"
                         onClick={() => onTogglePayload(uniqueKey)}

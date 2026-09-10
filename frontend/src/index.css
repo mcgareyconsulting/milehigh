@@ -347,3 +347,60 @@ tr.jl-done td textarea {
     transform: scaleY(0.8);
   }
 }
+/* ── Release hub: phone layouts ───────────────────────────────────────────────
+   Both of these are fixed-column grids sized for a desk. Below `md` the fixed
+   columns exceed the viewport, so the flexible column collapses to a few pixels
+   and its text wraps one or two characters per line. CSS rather than a JS
+   breakpoint on purpose: the layout changes without swapping the React tree, so
+   an open pane keeps its scroll position and its drafts across a rotate. */
+
+/* Details pane: photos/notes/materials | schedule/details. One column on a
+   phone — 1.25fr of ~350px is 190px, which is not a photo column, and the
+   right-hand selects overflowed the panel. */
+.jl-dossier-split {
+    display: grid;
+    grid-template-columns: 1.25fr 1fr;
+    column-gap: 24px;
+}
+
+@media (max-width: 767px) {
+    .jl-dossier-split {
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: 18px;
+    }
+}
+
+/* Change Log row: time | user | change | source | undo. The four fixed columns
+   plus gaps come to ~344px, leaving the change itself almost nothing on a
+   390px screen — which is why the field name overlapped the source chip. On a
+   phone the change takes its own full-width row underneath. Placement is by
+   position so the row's markup needs no per-child classes. */
+.jl-hub-event-row {
+    display: grid;
+    align-items: center;
+    gap: 8px;
+    grid-template-columns: 66px 118px minmax(0, 1fr) 64px 64px;
+}
+
+/* Indent aligning payload controls under the change column (66 + 8 + 118 + 8). */
+.jl-hub-event-indent {
+    margin-left: 200px;
+}
+
+@media (max-width: 767px) {
+    .jl-hub-event-row {
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
+        row-gap: 4px;
+    }
+
+    .jl-hub-event-row > :nth-child(1) { grid-column: 1; grid-row: 1; }   /* time */
+    .jl-hub-event-row > :nth-child(2) { grid-column: 2; grid-row: 1; }   /* user */
+    .jl-hub-event-row > :nth-child(4) { grid-column: 3; grid-row: 1; }   /* source */
+    .jl-hub-event-row > :nth-child(5) { grid-column: 4; grid-row: 1; }   /* undo */
+    .jl-hub-event-row > :nth-child(3) { grid-column: 1 / -1; grid-row: 2; } /* the change */
+
+    /* Nothing to align under any more — the change starts at the left edge. */
+    .jl-hub-event-indent {
+        margin-left: 0;
+    }
+}

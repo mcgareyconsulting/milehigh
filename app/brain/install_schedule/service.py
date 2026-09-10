@@ -1,9 +1,14 @@
 """
 @milehigh-header
 schema_version: 1
-purpose: Assemble the next-week installation schedule payload — active releases with a start_install in the coming N days, grouped by crew, hard dates first, with per-crew overload and hard-date-overlap flags.
+purpose: Assemble the installation schedule payload in two shapes off ONE card builder — active
+  releases with a start_install in the window, either grouped by CREW (the production-meeting view,
+  hard dates first, with per-crew overload and hard-date-overlap flags) or by DAY (the vertical
+  calendar behind the phone view, past-due triaged out to its own bucket).
 exports:
   build_next_week_schedule: (days:int=7, today:date|None=None) -> dict envelope {window, summary, crews[]}
+  build_day_schedule: (days:int=14, past_days:int=14, today:date|None=None, installer:str|None=None)
+    -> dict envelope {window, summary, past_due[], days[]}
 imports_from: [app.models, app.brain.job_log.scheduling.calculator, app.brain.job_log.scheduling.config]
 imported_by: [app/brain/install_schedule/routes.py, tests]
 invariants:
@@ -12,6 +17,12 @@ invariants:
     An ASAP row is a hard date too — it is labelled `asap` for its colour and sorts ahead of plain hard.
   - Estimated hours come ONLY from the manual install_hrs field; never fabricated. Blank stays blank.
   - Crew grouping is by the installer string; releases with no installer fall into a single UNASSIGNED bucket.
+  - Both builders share _card/_classify_date, so the crew view and the day view can never disagree
+    about a release. They differ ONLY in grouping, sort and window.
+  - The day view's past-due bucket holds MISSED COMMITMENTS: hard/ASAP dates only. A projected date
+    that has slipped is a stale formula, not a broken promise, and would bury the real misses.
+  - A multi-day install appears ONCE, on its start day, carrying span_days — never repeated across
+    every day it spans.
 """
 from datetime import date, timedelta
 
@@ -193,4 +204,140 @@ def build_next_week_schedule(days=7, today=None):
         "window": {"start": today.isoformat(), "end": end.isoformat(), "days": days},
         "summary": summary,
         "crews": crews,
+    }
+
+
+# --- Day-row schedule (mobile vertical calendar) ------------------------------
+#
+# Same cards as the crew view, pivoted: DAYS are the rows and the crew becomes a
+# chip on the card. The desktop timeline needs 392px of frozen lane chrome before
+# it can draw a column, which is wider than a phone; days-as-rows needs none of it.
+
+
+def _span_days(card):
+    """Calendar days a card's install window covers, inclusive.
+
+    1 when comp_eta is missing or lands on the start day. A multi-day install is
+    rendered ONCE on its start day carrying this count — never repeated on each
+    day it spans, which would make one 3-day job read as three jobs.
+    """
+    start, end = card["start_install"], card["comp_eta"]
+    if not start or not end or end <= start:
+        return 1
+    return (date.fromisoformat(end) - date.fromisoformat(start)).days + 1
+
+
+def _day_row_sort_key(card):
+    """Order within ONE day row: rush first, then code.
+
+    Deliberately not `_card_sort_key`. That one sorts by date because a crew column
+    mixes dates; here the row IS the date, so the date carries no information and
+    sorting by it would just scramble the rush ordering.
+    """
+    return (_KIND_ORDER.get(card["date_kind"], 9), card["code"])
+
+
+def _hours(cards):
+    known = [c["est_hours"] for c in cards if c["est_hours"] is not None]
+    return round(sum(known), 1) if known else 0.0
+
+
+def build_day_schedule(days=14, past_days=14, today=None, installer=None):
+    """
+    Assemble the installation schedule as DAY ROWS for the vertical calendar.
+
+    Window runs ``past_days`` back to ``days`` forward. Everything before today is
+    triaged into ``past_due`` rather than given a row of its own, so the list opens
+    on what is next without hiding what was missed.
+
+    Returns an envelope:
+      {window: {...}, summary: {...}, past_due: [card], days: [{date, cards, ...}]}
+    """
+    today = today or date.today()
+    window_start = today - timedelta(days=past_days)
+    window_end = today + timedelta(days=days)
+    today_iso = today.isoformat()
+
+    q = (
+        Releases.query
+        .filter(Releases.is_active.isnot(False))
+        .filter(Releases.is_archived.is_(False))
+        .filter(Releases.start_install.isnot(None))
+        .filter(Releases.start_install >= window_start)
+        .filter(Releases.start_install <= window_end)
+    )
+    if installer:
+        q = q.filter(Releases.installer == installer)
+
+    cards = []
+    for rel in q.all():
+        card = _card(rel, today)
+        card["span_days"] = _span_days(card)
+        cards.append(card)
+
+    # Past due == a MISSED COMMITMENT, so hard dates only. A projected date that has
+    # slipped by is a stale formula, not a promise anyone broke; including those would
+    # bury the real misses under every drafting row the calculator ever dated. Neutral
+    # (already installed) rows are excluded for free — `is_hard` never covers them.
+    past_due = sorted(
+        (c for c in cards if c["start_install"] < today_iso and c["is_hard"]),
+        key=lambda c: (c["start_install"], c["code"]),   # longest-overdue leads
+    )
+
+    by_day = {}
+    for c in cards:
+        if c["start_install"] >= today_iso:
+            by_day.setdefault(c["start_install"], []).append(c)
+
+    # Emit EVERY day in the forward window, empty ones included, so the frontend
+    # renders the shape of the week rather than reconstructing the gaps itself.
+    day_rows = []
+    for offset in range(days + 1):
+        d = today + timedelta(days=offset)
+        day_cards = sorted(by_day.get(d.isoformat(), []), key=_day_row_sort_key)
+        day_rows.append({
+            "date": d.isoformat(),
+            "weekday": d.strftime("%a"),
+            "is_today": d == today,
+            "is_weekend": d.weekday() >= 5,
+            "card_count": len(day_cards),
+            "known_hours": _hours(day_cards),
+            "unknown_hours_count": sum(1 for c in day_cards if c["est_hours"] is None),
+            "cards": day_cards,
+        })
+
+    scheduled = sum(r["card_count"] for r in day_rows)
+    summary = {
+        "total_releases": len(cards),
+        "scheduled": scheduled,
+        "past_due": len(past_due),
+        "hard_dates": sum(1 for c in cards if c["is_hard"]),
+        "asap_dates": sum(1 for c in cards if c["date_kind"] == KIND_ASAP),
+        "unassigned_releases": sum(1 for c in cards if c["unassigned"]),
+        "releases_missing_hours": sum(1 for c in cards if c["est_hours"] is None),
+        # Drives the crew filter chips; sorted so the control doesn't reshuffle per poll.
+        "crews": sorted({c["crew"] for c in cards}),
+    }
+
+    logger.info(
+        "day_schedule_built",
+        window_start=window_start.isoformat(),
+        window_end=window_end.isoformat(),
+        installer=installer,
+        scheduled=scheduled,
+        past_due=len(past_due),
+    )
+
+    return {
+        "window": {
+            "start": window_start.isoformat(),
+            "end": window_end.isoformat(),
+            "today": today_iso,
+            "days": days,
+            "past_days": past_days,
+            "installer": installer,
+        },
+        "summary": summary,
+        "past_due": past_due,
+        "days": day_rows,
     }

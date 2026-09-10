@@ -3,16 +3,26 @@
  * schema_version: 1
  * purpose: Slide-in mobile/iPad drawer that exposes the AppShell nav links when the horizontal button row is collapsed.
  * exports:
- *   MobileNavDrawer: Drawer with nav links. Props: open, onClose, isAuthenticated, subcontractor, isAdmin, canSeeReport, locationEnabled, locationRequesting, onLocationToggle, onLogout, onLogin.
- * imports_from: [react, react-router-dom]
+ *   MobileNavDrawer: Drawer with nav links. Props: open, onClose, isAuthenticated, subcontractor, isAdmin, canSeeReport, locationEnabled, locationRequesting, onLocationToggle, onLogout, onLogin, onOpenPatchNotes.
+ * imports_from: [react, react-router-dom, ../context/ThemeContext, ../data/patchNotes]
  * imported_by: [frontend/src/components/AppShell.jsx]
  * invariants:
  *   - Closes after every navigation to avoid stale drawer state on the new route.
  *   - Backdrop click closes drawer; ESC key also closes.
+ *   - THE THEME TOGGLES AND THE VERSION LIVE HERE ON SMALL SCREENS, not in the top bar. The bar ran
+ *     ~392px of content on a 390px phone, so it scrolled sideways and the hamburger — the only way
+ *     into this drawer — sat off the right edge. Dark/Old Man are settings people set once, so a
+ *     drawer is the right home for them anyway; the top bar keeps them from `lg` up where there is
+ *     room. Left Sidebar Mode is deliberately NOT mirrored here: it only takes effect at ≥1440px,
+ *     which is a width this drawer never appears at.
+ *   - The version badge is the patch-notes entry point, so moving it out of the bar means carrying it
+ *     in here — dropping it entirely would strip the only way a phone user reads what shipped.
  */
 import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { SHOW_INVOICING_NAV } from '../constants/navFlags';
+import { useTheme } from '../context/ThemeContext';
+import { CURRENT_VERSION } from '../data/patchNotes';
 
 const NAV_ITEMS = [
     { label: 'Projects', path: '/projects' },
@@ -36,6 +46,25 @@ const ADMIN_ITEMS = [
     { label: 'Submittal Matching', path: '/admin/submittal-matching' },
 ];
 
+/** One labelled switch, same shape as the top bar's theme menu so the two read as one setting. */
+function SettingRow({ label, on, onToggle, tone = 'accent' }) {
+    const track = on ? (tone === 'amber' ? 'bg-amber-500' : 'bg-accent-500') : 'bg-gray-200 dark:bg-slate-600';
+    return (
+        <div className="flex items-center justify-between gap-3 px-4 py-2 min-h-[44px]">
+            <span className="text-sm font-medium text-gray-700 dark:text-slate-200">{label}</span>
+            <button
+                type="button"
+                onClick={onToggle}
+                aria-pressed={on}
+                aria-label={label}
+                className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-accent-500 ${track}`}
+            >
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${on ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+        </div>
+    );
+}
+
 export default function MobileNavDrawer({
     open,
     onClose,
@@ -48,9 +77,11 @@ export default function MobileNavDrawer({
     onLocationToggle,
     onLogout,
     onLogin,
+    onOpenPatchNotes,
 }) {
     const navigate = useNavigate();
     const location = useLocation();
+    const { isDark, isOldMan, toggleDark, toggleOldMan } = useTheme();
 
     useEffect(() => {
         if (!open) return undefined;
@@ -173,7 +204,25 @@ export default function MobileNavDrawer({
                     )}
                 </nav>
 
+                {/* Display settings — moved off the top bar, which had run out of width. */}
+                {!subcontractor && (
+                    <div className="px-3 py-2 border-t border-gray-200 dark:border-slate-600 flex-shrink-0 space-y-1">
+                        <SettingRow label="Dark Mode" on={isDark} onToggle={toggleDark} />
+                        <SettingRow label="Old Man Mode" on={isOldMan} onToggle={toggleOldMan} tone="amber" />
+                    </div>
+                )}
+
                 <div className="p-3 border-t border-gray-200 dark:border-slate-600 flex-shrink-0" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+                    {onOpenPatchNotes && (
+                        <button
+                            type="button"
+                            onClick={() => { onOpenPatchNotes(); onClose(); }}
+                            className="w-full mb-1 px-4 py-2 text-xs font-medium text-gray-500 dark:text-slate-400 hover:text-accent-600 dark:hover:text-accent-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                            title="What's new — view patch notes"
+                        >
+                            {CURRENT_VERSION} · What&apos;s new
+                        </button>
+                    )}
                     {isAuthenticated ? (
                         <button
                             type="button"

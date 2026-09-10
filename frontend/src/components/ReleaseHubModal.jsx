@@ -7,7 +7,8 @@
  * exports:
  *   ReleaseHubModal: Portal modal shell for a release
  * imports_from: [react, react-dom, ./JobDetailsBody, ./PdfVersionHistoryModal, ./EventsList,
- *   ./ReleaseNotesRail, ./StageIconRow, ../utils/stageTint, ../constants/modalSize]
+ *   ./ReleaseNotesRail, ./StageIconRow, ../utils/stageTint, ../constants/modalSize,
+ *   ../hooks/useBreakpoint]
  * imported_by: [frontend/src/components/JobsTableRow.jsx, frontend/src/components/JobLogCardGrid.jsx,
  *   frontend/src/components/GanttChart.jsx]
  * invariants:
@@ -15,6 +16,15 @@
  *   - Leaves a click-out margin around the panel: the backdrop stays reachable on every edge
  *   - A tab pane stays mounted once visited, so drafts and uploads survive tab switching
  *   - Activity rail renders on Details + Change Log only — Attachments takes the full width
+ *   - ON A PHONE THE RAIL IS A TAB, not a column. It is a FIXED 346px beside a `minmax(0,1fr)` pane,
+ *     so on a 390px screen the pane collapsed to a ~40px ribbon of single-letter lines with the rail
+ *     overflowing across it — the two read as one broken, overlapping surface. Below `md` it becomes
+ *     a fourth tab and takes the full width instead. Nothing is lost by moving it: the rail already
+ *     unmounts when Attachments is selected, so it has never survived a tab switch anyway.
+ *   - The header's right cluster (bananas / Procore / Trello / close) must NEVER be `shrink-0` on a
+ *     phone. It was, and at ~330px it starved the `min-w-0` title block down to about 28px — which is
+ *     why the job-release label wrapped one number per line — while pushing the CLOSE BUTTON off the
+ *     panel entirely, leaving no way out of the modal but the backdrop.
  *   - The header owns the stage pill and the compact banana row; both follow an in-pane stage
  *     edit immediately via onStageChange, without waiting for the host's refetch
  * updated_by_agent: 2026-09-03T00:00:00Z
@@ -30,6 +40,7 @@ import { StageIconRow } from './StageIconRow';
 import { stageTint } from '../utils/stageTint';
 import { MODAL_PANEL_SIZE } from '../constants/modalSize';
 import { usePersistScroll } from '../hooks/usePersistScroll';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 
 const TABS = [
     { key: 'details', label: 'Details' },
@@ -75,6 +86,8 @@ export function ReleaseHubModal({
     const [visited, setVisited] = useState(() => ({ [startTab]: true }));
     // Local badge can be lifted from the Attachments pane once reviews load.
     const [badgeFromPane, setBadgeFromPane] = useState(0);
+    // Phones get the Activity rail as a tab rather than a column (see invariants).
+    const { isMobile } = useBreakpoint();
     // Stage the header renders. Seeded from the row, then owned by the Details
     // pane's select until the host's refetch brings a fresh row in.
     const [liveStage, setLiveStage] = useState(null);
@@ -127,7 +140,13 @@ export function ReleaseHubModal({
     const context = [pm ? `PM ${pm}` : null, by ? `Detailed by ${by}` : null]
         .filter(Boolean).join(' · ');
 
-    const showActivityRail = activeTab === 'details' || activeTab === 'changelog';
+    // Attachments needs the release row's id to fetch versions/photos; without it the pane would
+    // just render 404s, so that tab drops out. Activity is a tab only where the rail cannot fit.
+    const tabs = [
+        ...TABS.filter((tab) => tab.key !== 'attachments' || releaseId != null),
+        ...(isMobile ? [{ key: 'activity', label: 'Activity' }] : []),
+    ];
+    const showActivityRail = !isMobile && (activeTab === 'details' || activeTab === 'changelog');
     const badgeCount = Math.max(0, Number(attachmentsBadgeCount) || 0, Number(badgeFromPane) || 0);
 
     const reportBadge = (n) => {
@@ -138,7 +157,7 @@ export function ReleaseHubModal({
 
     const content = (
         <div
-            className="fixed inset-0 z-50 dc-fade flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 dc-fade flex items-center justify-center p-2 sm:p-4"
             style={{ background: 'rgba(10,16,28,.55)', backdropFilter: 'blur(2px)' }}
             onClick={onClose}
         >
@@ -156,15 +175,16 @@ export function ReleaseHubModal({
                 aria-modal="true"
                 aria-label={`${label} ${jobName}`.trim()}
             >
-                <div className="shrink-0 border-b border-hairline bg-surface-2" style={{ padding: '14px 18px 0' }}>
-                    <div className="flex items-start gap-3.5">
-                        <div className="min-w-0">
-                            <div className="flex items-center flex-wrap" style={{ gap: 12 }}>
+                <div className="shrink-0 border-b border-hairline bg-surface-2 px-3 sm:px-[18px]" style={{ paddingTop: 14 }}>
+                    <div className="flex items-start gap-2 sm:gap-3.5 flex-wrap">
+                        {/* Full width on a phone: sharing the row is what collapsed this block to
+                            28px and wrapped "170-561" one number per line. */}
+                        <div className="min-w-0 w-full sm:w-auto order-2 sm:order-1">
+                            <div className="flex items-center flex-wrap gap-x-2 gap-y-1 sm:gap-3">
                                 <span
-                                    className="font-mono"
+                                    className="font-mono whitespace-nowrap text-[13px] sm:text-[15px]"
                                     style={{
                                         fontWeight: 700,
-                                        fontSize: 15,
                                         padding: '4px 10px',
                                         borderRadius: 6,
                                         color: 'var(--accent)',
@@ -174,13 +194,13 @@ export function ReleaseHubModal({
                                     {label}
                                 </span>
                                 <span
-                                    className="text-ink truncate"
-                                    style={{ fontWeight: 700, fontSize: 20, letterSpacing: '-.3px' }}
+                                    className="text-ink truncate text-base sm:text-xl"
+                                    style={{ fontWeight: 700, letterSpacing: '-.3px' }}
                                 >
                                     {jobName || '—'}
                                 </span>
                                 {description && (
-                                    <span className="text-ink-2 truncate" style={{ fontWeight: 500, fontSize: 17 }}>
+                                    <span className="text-ink-2 truncate text-[13px] sm:text-[17px]" style={{ fontWeight: 500 }}>
                                         {description}
                                     </span>
                                 )}
@@ -199,13 +219,16 @@ export function ReleaseHubModal({
                                 </div>
                             )}
                         </div>
-                        <div className="flex-1" />
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="hidden sm:block flex-1" />
+                        {/* Never shrink-0 on a phone: at ~330px this cluster starved the title block
+                            and pushed the close button off the panel. */}
+                        <div className="flex items-center gap-1.5 ml-auto shrink-0 order-1 sm:order-2">
                             {/* Stage progress, compacted out of the Details pane and into the
-                                header — it reads as identity, not as a section. */}
+                                header — it reads as identity, not as a section. Hidden on a phone:
+                                seven bananas is ~360px of decoration on a 390px screen. */}
                             {stage && (
                                 <span
-                                    className="inline-flex items-center bg-surface border border-hairline"
+                                    className="hidden sm:inline-flex items-center bg-surface border border-hairline"
                                     style={{ padding: '4px 8px', borderRadius: 8, marginRight: 4 }}
                                     title={stage}
                                 >
@@ -240,9 +263,7 @@ export function ReleaseHubModal({
                     </div>
 
                     <div className="flex items-center" style={{ gap: 18, marginTop: 12 }}>
-                        {/* Attachments needs the release row's id to fetch versions/photos;
-                            without it the pane would just render 404s, so drop the tab. */}
-                        {TABS.filter((tab) => tab.key !== 'attachments' || releaseId != null).map((tab) => {
+                        {tabs.map((tab) => {
                             const active = tab.key === activeTab;
                             const showBadge = tab.key === 'attachments' && badgeCount > 0;
                             return (
@@ -344,6 +365,22 @@ export function ReleaseHubModal({
                                     jobFilter={jobNumber}
                                     releaseFilter={releaseNumber}
                                     variant="hub"
+                                />
+                            </div>
+                        )}
+
+                        {/* Phone only: the rail as a full-width pane. Same component the desktop
+                            column renders, so notes behave identically either way. */}
+                        {isMobile && visited.activity && (
+                            <div
+                                className={`absolute inset-0 flex flex-col ${activeTab === 'activity' ? '' : 'hidden'}`}
+                                role="tabpanel"
+                            >
+                                <ReleaseNotesRail
+                                    job={jobNumber}
+                                    release={releaseNumber}
+                                    currentNotes={job['Notes'] ?? job.notes}
+                                    onNotesChanged={onNotesChanged}
                                 />
                             </div>
                         )}

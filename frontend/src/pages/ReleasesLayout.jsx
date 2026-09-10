@@ -876,25 +876,24 @@ function ReleasesLayout() {
                                             <ViewToggle value={viewMode} onChange={setViewMode} />
                                         )}
 
-                                        <button
-                                            onClick={handleReleaseClick}
-                                            className="px-2 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-blue-700 text-white border border-blue-700 hover:bg-blue-800"
-                                            title="Create new releases from a CSV paste"
+                                        {/* One "New" menu rather than two coloured buttons. Both items
+                                            create a release — the only difference is whether drafting
+                                            has happened yet — so they belong behind one control, and on
+                                            a phone the pair cost enough width to push the view switcher
+                                            off-screen. */}
+                                        <Dropdown
+                                            label="New"
+                                            menuWidth={232}
+                                            buttonClassName="px-2 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-blue-700 text-white border border-blue-700 hover:bg-blue-800"
+                                            icon={<svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10" /></svg>}
                                         >
-                                            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10" /></svg>
-                                            <span className="hidden min-[1100px]:inline">New Release</span>
-                                            <span className="min-[1100px]:hidden">New</span>
-                                        </button>
-
-                                        <button
-                                            onClick={openVerbalModal}
-                                            className="px-2 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-amber-600 text-white border border-amber-600 hover:bg-amber-700"
-                                            title="Quick-capture a release before drafting is done — release # is prefilled but editable"
-                                        >
-                                            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10" /></svg>
-                                            <span className="hidden min-[1100px]:inline">Verbal Release</span>
-                                            <span className="min-[1100px]:hidden">Verbal</span>
-                                        </button>
+                                            <DropdownItem onClick={handleReleaseClick}>
+                                                📋 New Release <span className="text-gray-400">— paste</span>
+                                            </DropdownItem>
+                                            <DropdownItem onClick={openVerbalModal}>
+                                                🗣️ Verbal Release <span className="text-gray-400">— pre-drafting</span>
+                                            </DropdownItem>
+                                        </Dropdown>
 
                                         <Dropdown label="Actions">
                                             <DropdownItem onClick={handlePrint} disabled={!hasData || loading || !reviewMode || printing}>
