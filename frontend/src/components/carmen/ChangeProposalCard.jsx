@@ -95,11 +95,13 @@ export default function ChangeProposalCard({ proposal, outcome = null, onApplied
             <div className="px-3 py-2 border-b border-amber-200 dark:border-amber-800/60">
                 <p className="text-[12px] font-semibold text-gray-800 dark:text-slate-100">
                     {state === 'done'
-                        ? `Applied to ${who}`
-                        : `Change ${who}${changes.length > 1 ? ` — ${changes.length} changes` : ''}`}
+                        ? (plan.kind === 'todo' ? 'To-do created' : `Applied to ${who}`)
+                        : (plan.headline || `Change ${who}`)}
                 </p>
-                {plan.job_name && (
-                    <p className="text-[11px] text-gray-500 dark:text-slate-400 truncate">{plan.job_name}</p>
+                {(plan.job_name || plan.job) && (
+                    <p className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
+                        {plan.kind === 'todo' && plan.job ? `${who} · ` : ''}{plan.job_name}
+                    </p>
                 )}
             </div>
 

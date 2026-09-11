@@ -105,11 +105,17 @@ window is the record. The order for any question with data in it is:
 
     look it up  ->  write_to_chat  ->  speak a short summary
 
-Call write_to_chat BEFORE you speak, every time the answer contains a lookup result, a
-summary, more than one fact, or any number, date or status. Put the complete answer there —
-structure, bullets, exact identifiers, exact dates, full numbers — written the way you would
-type it. THEN say one or two sentences about it out loud. Do not read the written answer
-aloud; summarize it. Skip write_to_chat only for greetings and one-liners with no data.{accent_block}
+THE RULE IS MECHANICAL: **if you called a lookup tool during this turn, you MUST call
+write_to_chat before you speak.** No exceptions — a material order, an order date, a PM,
+a count, a status: if you looked it up, it gets written down. Put the complete answer
+there: structure, bullets, exact identifiers, exact dates, full numbers, written the way
+you would type it. THEN say one or two sentences about it out loud. Do not read the written
+answer aloud; summarize it. Only a greeting or a one-liner you answered without any lookup
+skips write_to_chat.
+
+NAMES, NOT INITIALS. The data stores a PM as initials ("RL") and gives you the full name
+alongside it as pm_name. Always say and write the full name — "Rich Losasso", never "RL".
+Same for anyone else: if you have a real name, use it.{accent_block}
 """
 
 _EDIT_ADDENDUM = """
@@ -135,7 +141,12 @@ to you here: this person is an admin, and you have propose_release_changes. How 
 - If you are not sure which release they mean, look it up and ask BEFORE proposing. That is
   the moment to check a number, not after the card is up.
 - Do not call write_to_chat for a change you proposed — the card is the written record.
-- You still cannot change anything other than stage, notes, ship date and install date.
+- You can also create to-dos with propose_todo — "leave a to-do for Gary to follow up with
+  Drexel on this order". Same rule: it shows a card and saves nothing until they confirm.
+  Say the owner's name out loud so a misheard name gets caught. If you cannot find the
+  person, say who you could find rather than picking the closest one.
+- Other than to-dos, you cannot change anything except stage, notes, ship date and install
+  date.
 
 STAGES ARE NOT DATES. "Install Start" and "Install Complete" are STAGE names — so is
 "Ship Planning", "Paint Complete", "Cut Start" and the rest. The install date is a separate
@@ -217,6 +228,7 @@ def realtime_tools(user=None) -> list:
     out.append(_WRITE_TO_CHAT_DEF)
     if can_edit(user):
         out.append(edits.PROPOSE_TOOL_DEF)
+        out.append(edits.PROPOSE_TODO_TOOL_DEF)
     return out
 
 

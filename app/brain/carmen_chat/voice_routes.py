@@ -207,23 +207,30 @@ def carmen_live_tool():
     if not isinstance(arguments, dict):
         return jsonify({'error': 'arguments must be an object'}), 400
 
-    if name == edits.TOOL_PROPOSE_CHANGES:
-        # Second gate: the tool isn't declared to a non-admin's session, but never trust
-        # that the client only asks for what it was offered.
+    if name in (edits.TOOL_PROPOSE_CHANGES, edits.TOOL_PROPOSE_TODO):
+        # Second gate: these tools aren't declared to a non-admin's session, but never
+        # trust that the client only asks for what it was offered.
         if not live.can_edit(user):
             return jsonify({'result': {'error': 'You can look, but you cannot make changes here.'},
                             'artifact': None}), 200
         try:
-            proposal = edits.propose(arguments.get('identifier'),
-                                     arguments.get('changes') or [], user_id=user.id)
+            if name == edits.TOOL_PROPOSE_TODO:
+                proposal = edits.propose_todo(
+                    arguments.get('title'), arguments.get('owner'),
+                    due_date=arguments.get('due_date'), release=arguments.get('release'),
+                    detail=arguments.get('detail'), user_id=user.id)
+            else:
+                proposal = edits.propose(arguments.get('identifier'),
+                                         arguments.get('changes') or [], user_id=user.id)
         except edits.EditError as exc:
+            # A speakable reason, handed back as a tool result so she can relay it.
             return jsonify({'result': {'error': str(exc)}, 'artifact': None}), 200
         except Exception as exc:
-            logger.error('carmen_edit_propose_failed', user_id=user.id, error=str(exc),
+            logger.error('carmen_propose_failed', user_id=user.id, tool=name, error=str(exc),
                          error_type=type(exc).__name__, exc_info=True)
-            return jsonify({'result': {'error': 'I could not put that change together.'},
+            return jsonify({'result': {'error': 'I could not put that together.'},
                             'artifact': None}), 200
-        # `proposal` goes back to the model (so she can read the number aloud) and to the
+        # `proposal` goes back to the model (so she can say what she proposed) and to the
         # UI as a card. The signed token rides along; it is worthless without confirmation.
         return jsonify({'result': proposal, 'proposal': proposal, 'artifact': None}), 200
 
@@ -236,6 +243,17 @@ def carmen_live_tool():
         # Hand the model a readable failure instead of dropping the turn on the floor.
         return jsonify({'result': {'error': 'that lookup failed'}, 'artifact': None}), 200
     duration_ms = int((time.monotonic() - started) * 1000)
+
+    # The instruction to write the answer down lives in the session prompt, but a prompt
+    # rule competes with everything else in a long conversation and she was dropping it
+    # on roughly half of lookups. Restating it in the tool result puts it in front of her
+    # at the only moment it matters — right as the data lands — and costs nothing.
+    if isinstance(result, dict) and not result.get('error'):
+        result = {**result, '_next_step': (
+            'Call write_to_chat now with the full written answer — the data above, laid '
+            'out with exact numbers, dates and identifiers — and only then speak a one '
+            'or two sentence summary of it.'
+        )}
 
     artifact = _artifact_from_tool(name, result if isinstance(result, dict) else {})
     logger.info('carmen_live_tool_call', user_id=user.id, tool=name,

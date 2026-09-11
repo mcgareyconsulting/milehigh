@@ -20,6 +20,10 @@ spoken edit is indistinguishable from one typed into the Job Log: same validatio
 `ReleaseEvents` row, same Trello outbox entry, same undo. The apply response carries every
 event id back so the UI can offer an Undo straight away.
 
+Two kinds of plan travel through here — release field changes and new to-dos — and both
+take the identical route: validated, signed, shown, confirmed, written. `plan["kind"]`
+says which. A plan with no kind is a release change (the original shape).
+
 Known gap: release notes are a plain text column, so "@Bill" lands as text and notifies
 nobody. Mentions notify on *board* comments, not release notes.
 """
@@ -32,7 +36,7 @@ from datetime import date, datetime
 from app.api.helpers import DYNAMIC_STAGE_ORDER, FIXED_TIER_STAGES
 from app.config import Config as cfg
 from app.logging_config import get_logger
-from app.models import Releases
+from app.models import ChecklistItem, Releases, User, db
 
 from .tools import _parse_identifier
 
@@ -54,6 +58,10 @@ VALID_STAGES = sorted(
     | {"Complete", "Hold"}
 )
 _STAGE_BY_LOWER = {s.lower(): s for s in VALID_STAGES}
+
+
+KIND_RELEASE = "release_changes"
+KIND_TODO = "todo"
 
 
 class EditError(ValueError):
@@ -119,6 +127,50 @@ PROPOSE_TOOL_DEF = {
             },
         },
         "required": ["identifier", "changes"],
+    },
+}
+
+
+TOOL_PROPOSE_TODO = "propose_todo"
+
+PROPOSE_TODO_TOOL_DEF = {
+    "type": "function",
+    "name": TOOL_PROPOSE_TODO,
+    "description": (
+        "Propose a new to-do for someone and show it for confirmation. NOTHING IS SAVED "
+        "until they confirm on screen, so this is safe to call. Use it whenever the person "
+        "asks you to leave, add, create or assign a to-do, a task, a reminder or a "
+        "follow-up for someone. The to-do lands in that person's To-Dos list."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "title": {
+                "type": "string",
+                "description": (
+                    "What needs doing, in the person's own words and phrased as an action — "
+                    "\"follow up with Drexel Supply on the decking order\". Do not add "
+                    "detail they did not say."
+                ),
+            },
+            "owner": {
+                "type": "string",
+                "description": "Who it is for: a first name, full name, or email. Must match a real person in the app.",
+            },
+            "due_date": {
+                "type": "string",
+                "description": "Optional ISO date (YYYY-MM-DD). Resolve 'Friday' or 'next week' to a real date yourself. Omit if no date was mentioned.",
+            },
+            "release": {
+                "type": "string",
+                "description": "Optional job-release this is about, e.g. '170-181', so the to-do links to that release.",
+            },
+            "detail": {
+                "type": "string",
+                "description": "Optional extra context, only if the person actually gave some.",
+            },
+        },
+        "required": ["title", "owner"],
     },
 }
 
@@ -258,6 +310,9 @@ def propose(identifier: str, changes: list, *, user_id: int) -> dict:
         built.append(change)
 
     plan = {
+        "kind": KIND_RELEASE,
+        "headline": f"Change {job}-{release_no}"
+                    + (f" — {len(built)} changes" if len(built) > 1 else ""),
         "job": job,
         "release": release_no,
         "job_name": row.job_name,
@@ -281,10 +336,165 @@ def propose(identifier: str, changes: list, *, user_id: int) -> dict:
     }
 
 
+def _resolve_owner(name: str) -> User:
+    """Match a spoken name to a real person, or say who it could have been.
+
+    A to-do assigned to the wrong person is worse than one that failed to save, so an
+    ambiguous name is refused with the candidates rather than guessed at.
+    """
+    text = (name or "").strip()
+    if not text:
+        raise EditError("Who is that to-do for?")
+    needle = text.lower()
+
+    rows = User.query.filter(User.is_active.is_(True)).all() if hasattr(User, "is_active") \
+        else User.query.all()
+
+    def full(u):
+        return f"{(u.first_name or '').strip()} {(u.last_name or '').strip()}".strip()
+
+    exact = [u for u in rows
+             if full(u).lower() == needle
+             or (u.username or "").lower() == needle
+             or (u.first_name or "").strip().lower() == needle]
+    if len(exact) == 1:
+        return exact[0]
+    if len(exact) > 1:
+        raise EditError(
+            f"There's more than one {text}: " + ", ".join(sorted(full(u) or u.username for u in exact))
+            + ". Which one?"
+        )
+
+    partial = [u for u in rows if needle in full(u).lower() or needle in (u.username or "").lower()]
+    if len(partial) == 1:
+        return partial[0]
+    if len(partial) > 1:
+        raise EditError(
+            f"I found a few people matching '{text}': "
+            + ", ".join(sorted(full(u) or u.username for u in partial)) + ". Which one?"
+        )
+    raise EditError(f"I can't find anyone called '{text}' in the app.")
+
+
+def propose_todo(title: str, owner: str, *, due_date=None, release=None, detail=None,
+                 user_id: int) -> dict:
+    """Resolve and validate a new to-do, and sign it. Writes nothing."""
+    title = (title or "").strip()
+    if not title:
+        raise EditError("What should the to-do say?")
+
+    person = _resolve_owner(owner)
+    owner_name = f"{(person.first_name or '').strip()} {(person.last_name or '').strip()}".strip() \
+        or person.username
+    due = _parse_date(due_date, "the due date") if due_date else None
+
+    release_id = job = release_no = job_name = None
+    if release:
+        job, release_no = _parse_identifier(release)
+        row = Releases.resolve(job, release_no) if (job and release_no) else None
+        if row is None:
+            raise EditError(f"I can't find release {release} to attach that to-do to.")
+        release_id, job_name = row.id, row.job_name
+
+    changes = [
+        {"field": "title", "label": "To-do", "from_display": "—", "to_display": title},
+        {"field": "owner", "label": "For", "from_display": "—", "to_display": owner_name},
+    ]
+    if due:
+        changes.append({"field": "due_date", "label": "Due",
+                        "from_display": "—", "to_display": _fmt(due)})
+    if release_id:
+        changes.append({"field": "release", "label": "Release", "from_display": "—",
+                        "to_display": f"{job}-{release_no}"})
+    if (detail or "").strip():
+        changes.append({"field": "detail", "label": "Detail", "from_display": "—",
+                        "to_display": detail.strip()})
+
+    plan = {
+        "kind": KIND_TODO,
+        "headline": f"New to-do for {owner_name}",
+        "title": title,
+        "detail": (detail or "").strip() or None,
+        "owner_user_id": person.id,
+        "owner_name": owner_name,
+        "due_date": due.isoformat() if due else None,
+        "release_id": release_id,
+        "job": job,
+        "release": release_no,
+        "job_name": job_name,
+        "changes": changes,
+    }
+    issued_at = int(time.time())
+    logger.info("carmen_todo_proposed", user_id=user_id, owner_user_id=person.id,
+                release_id=release_id, has_due_date=bool(due))
+    return {
+        "proposed": True,
+        "applied": False,
+        "plan": plan,
+        "token": _sign(plan, user_id, issued_at),
+        "issued_at": issued_at,
+        "expires_in_seconds": _TTL_SECONDS,
+        "message": (
+            f"Proposed a to-do for {owner_name}. NOT SAVED YET — waiting for them to "
+            f"confirm on screen."
+        ),
+    }
+
+
 # --- applying ---------------------------------------------------------------------------
 
 def apply(plan: dict, *, user_id: int) -> dict:
-    """Execute a verified plan through the real job-log commands. Call verify() first."""
+    """Execute a verified plan. Call verify() first — this trusts what it is given."""
+    if plan.get("kind") == KIND_TODO:
+        return _apply_todo(plan, user_id=user_id)
+    return _apply_release_changes(plan, user_id=user_id)
+
+
+def _apply_todo(plan: dict, *, user_id: int) -> dict:
+    """Create the to-do. It lands as an accepted, owned checklist item — the same shape
+    the meeting extractor produces on accept, so the To-Dos page treats it identically."""
+    try:
+        item = ChecklistItem(
+            meeting_id=None,            # raised directly, not mined from a transcript
+            title=plan["title"],
+            detail=plan.get("detail"),
+            item_type="action",
+            status="accepted",          # skips the propose/curate step: a human just did it
+            owner_user_id=plan["owner_user_id"],
+            due_date=_parse_date(plan["due_date"], "the due date") if plan.get("due_date") else None,
+            release_id=plan.get("release_id"),
+        )
+        db.session.add(item)
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        logger.error("carmen_todo_apply_failed", user_id=user_id,
+                     owner_user_id=plan.get("owner_user_id"), error=str(exc),
+                     error_type=type(exc).__name__, exc_info=True)
+        return {"applied": 0, "failed": 1, "event_ids": [],
+                "results": [{"field": "todo", "label": "To-do", "status": "failed",
+                             "error": "that to-do could not be saved"}]}
+
+    logger.info("carmen_todo_created", user_id=user_id, todo_id=item.id,
+                owner_user_id=item.owner_user_id, release_id=item.release_id,
+                due_date=item.due_date.isoformat() if item.due_date else None)
+    return {
+        "applied": 1,
+        "failed": 0,
+        "todo_id": item.id,
+        # No ReleaseEvents row behind a to-do, so there is nothing for the undo endpoint
+        # to reverse — the To-Dos page is where it gets closed or removed.
+        "event_ids": [],
+        "results": [{"field": "todo", "label": f"To-do for {plan['owner_name']}",
+                     "status": "applied", "event_id": None,
+                     "detail": {"todo_id": item.id}}],
+        "job": plan.get("job"),
+        "release": plan.get("release"),
+    }
+
+
+def _apply_release_changes(plan: dict, *, user_id: int) -> dict:
+    """Execute release field changes through the real job-log commands."""
     from app.brain.job_log.features.notes.command import UpdateNotesCommand
     from app.brain.job_log.features.ship_date.command import UpdateShipDateCommand
     from app.brain.job_log.features.stage.command import UpdateStageCommand

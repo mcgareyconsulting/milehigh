@@ -1641,9 +1641,12 @@ class ChecklistItem(db.Model):
     """
     __tablename__ = "checklist_items"
     id = db.Column(db.Integer, primary_key=True)
+    # Nullable since Carmen can create a to-do directly (no meeting behind it). Rows
+    # from the transcript extractor still carry their meeting; a null here means the
+    # to-do was raised by hand or by voice. See migrations/allow_todo_without_meeting.py.
     meeting_id = db.Column(
         db.Integer, db.ForeignKey('meetings.id', ondelete='CASCADE'),
-        nullable=False, index=True,
+        nullable=True, index=True,
     )
     title = db.Column(db.Text, nullable=False)
     detail = db.Column(db.Text, nullable=True)

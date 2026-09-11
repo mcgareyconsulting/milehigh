@@ -350,6 +350,39 @@ def _clamp_limit(value, default: int, ceiling: int = MAX_RESULTS) -> int:
     return max(1, min(n, ceiling))
 
 
+def _pm_directory() -> dict:
+    """Initials -> full name, derived from the ProjectManager rows.
+
+    `Releases.pm` stores initials ("RL"); the names live in project_managers. Without
+    this Carmen answers "RL is the PM", which is not a name anyone says out loud.
+    Best-effort and cached per request: unmapped initials fall through unchanged.
+    """
+    from flask import g, has_request_context
+    if has_request_context() and hasattr(g, "_carmen_pm_directory"):
+        return g._carmen_pm_directory
+    directory = {}
+    try:
+        from app.models import ProjectManager
+        for pm in ProjectManager.query.all():
+            parts = [w for w in (pm.name or "").split() if w]
+            if not parts:
+                continue
+            initials = "".join(w[0] for w in parts).upper()
+            directory.setdefault(initials, pm.name)
+    except Exception as exc:  # noqa: BLE001 — a name lookup must not break an answer
+        logger.warning("carmen_pm_directory_failed", error=str(exc), error_type=type(exc).__name__)
+    if has_request_context():
+        g._carmen_pm_directory = directory
+    return directory
+
+
+def _pm_name(initials):
+    """Full PM name for stored initials, or the raw value when it doesn't map."""
+    if not initials:
+        return None
+    return _pm_directory().get(str(initials).strip().upper()) or None
+
+
 def _release_to_compact(r: Releases) -> dict:
     return {
         "job": r.job,
@@ -359,7 +392,9 @@ def _release_to_compact(r: Releases) -> dict:
         "description": r.description,
         "fab_hrs": r.fab_hrs,
         "install_hrs": r.install_hrs,
+        # Initials as stored, plus the resolved name — say the name, not the initials.
         "pm": r.pm,
+        "pm_name": _pm_name(r.pm),
         "drafter": r.by,
         "stage": r.stage,
         "stage_group": r.stage_group,
