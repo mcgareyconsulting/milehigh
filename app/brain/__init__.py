@@ -37,6 +37,7 @@ from app.brain.board import routes as board_routes
 from app.brain.board import photo_routes as board_photo_routes  # noqa: F401  (registers /board/items/<id>/photos endpoints)
 from app.brain.meetings import routes as meetings_routes
 from app.brain.carmen_chat import routes as carmen_chat_routes  # noqa: F401  (registers /carmen-chat endpoints)
+from app.brain.carmen_chat import voice_routes as carmen_voice_routes  # noqa: F401  (registers /carmen-chat/voice endpoints)
 from app.brain import notification_routes
 from app.brain import todos_routes  # noqa: F401  (registers /todos endpoints)
 from app.brain.material_orders import routes as material_orders_routes  # noqa: F401  (registers /material-orders endpoints)

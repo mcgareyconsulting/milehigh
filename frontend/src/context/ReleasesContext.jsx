@@ -256,6 +256,15 @@ export function ReleasesProvider({ children, enabled = true }) {
         let intervalId = null;
         let visibilityChangeHandler = null;
 
+        // Carmen writes through the same commands the Job Log does, but from a widget
+        // that owns no page data. Without this the row sits stale until the next 30s
+        // poll, which reads as "the change didn't take" right after you confirmed it.
+        const onCarmenChange = () => {
+            fetchData(true);
+            fetchMaterialSummary();
+        };
+        window.addEventListener('carmen:data-changed', onCarmenChange);
+
         const startPolling = () => {
             // Clear any existing interval
             if (intervalId) {
@@ -303,6 +312,7 @@ export function ReleasesProvider({ children, enabled = true }) {
 
         // Cleanup
         return () => {
+            window.removeEventListener('carmen:data-changed', onCarmenChange);
             stopPolling();
             document.removeEventListener('visibilitychange', visibilityChangeHandler);
         };

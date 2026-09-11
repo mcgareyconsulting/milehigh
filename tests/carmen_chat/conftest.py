@@ -15,6 +15,7 @@ from tests.conftest import make_user
 _PATCH_TARGETS = (
     "app.auth.utils.get_current_user",
     "app.brain.carmen_chat.routes.get_current_user",
+    "app.brain.carmen_chat.voice_routes.get_current_user",
 )
 
 

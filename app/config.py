@@ -249,6 +249,60 @@ class Config:
     # Max agent tool-loop iterations before we force a final answer.
     CARMEN_CHAT_MAX_STEPS = int(_carmen_env("CHAT_MAX_STEPS", "12"))
 
+    # --- Carmen voice (xAI / Grok) -------------------------------------------------
+    # Voice-to-voice runs on xAI's plain HTTP audio endpoints: /v1/stt transcribes the
+    # user's clip, the existing Anthropic tool-agent answers it (so Carmen keeps her
+    # database tools), and /v1/tts speaks the answer back in a female voice. Grok is
+    # the ears and the mouth here, not the brain — see app/brain/carmen_chat/voice.py.
+    # Accepts GROK_API_KEY as an alias so either name in .env works.
+    XAI_API_KEY = os.environ.get("XAI_API_KEY") or os.environ.get("GROK_API_KEY")
+    XAI_API_BASE = os.environ.get("XAI_API_BASE", "https://api.x.ai/v1")
+    CARMEN_VOICE_ENABLED = _carmen_env("VOICE_ENABLED", "1") == "1"
+    # Voice roster is shared by /v1/tts and the realtime API; "eve" is xAI's default
+    # female voice. Override once the live roster is listed via the /voice/voices route.
+    CARMEN_VOICE_ID = _carmen_env("VOICE_ID", "eve")
+    CARMEN_VOICE_LANGUAGE = _carmen_env("VOICE_LANGUAGE", "en")
+    # 1.0 reads noticeably slow for short operational answers; 1.15 lands near
+    # conversational pace without the chipmunk edge. xAI range is 0.7-1.5.
+    CARMEN_VOICE_SPEED = float(_carmen_env("VOICE_SPEED", "1.15"))
+    CARMEN_VOICE_CODEC = _carmen_env("VOICE_CODEC", "mp3")
+    CARMEN_VOICE_SAMPLE_RATE = int(_carmen_env("VOICE_SAMPLE_RATE", "24000"))
+    CARMEN_VOICE_BIT_RATE = int(_carmen_env("VOICE_BIT_RATE", "64000"))
+    # Answers are written for the eye; speaking all of a long one is slow and costly.
+    # The spoken text is trimmed to this many characters (xAI's own cap is 15,000).
+    CARMEN_VOICE_MAX_CHARS = int(_carmen_env("VOICE_MAX_CHARS", "1800"))
+    CARMEN_VOICE_MAX_UPLOAD_BYTES = int(_carmen_env("VOICE_MAX_UPLOAD_BYTES", str(20 * 1024 * 1024)))
+    CARMEN_VOICE_TIMEOUT_SECONDS = int(_carmen_env("VOICE_TIMEOUT_SECONDS", "60"))
+
+    # Live (realtime) Carmen — xAI speech-to-speech over a WebSocket the BROWSER owns.
+    # Flask only mints a short-lived client secret and executes tool calls; see
+    # app/brain/carmen_chat/live.py for why the socket is not server-side.
+    CARMEN_LIVE_ENABLED = _carmen_env("LIVE_ENABLED", "1") == "1"
+    CARMEN_LIVE_MODEL = _carmen_env("LIVE_MODEL", "grok-voice-latest")
+    CARMEN_LIVE_TOKEN_TTL_SECONDS = int(_carmen_env("LIVE_TOKEN_TTL_SECONDS", "300"))
+    # PCM rate for both directions. 24k is the realtime API's native rate — resampling
+    # anywhere in the chain costs latency and quality, so match it end to end.
+    CARMEN_LIVE_SAMPLE_RATE = int(_carmen_env("LIVE_SAMPLE_RATE", "24000"))
+    # Hard stop on an open mic, so a forgotten tab can't bill audio-minutes all afternoon.
+    CARMEN_LIVE_MAX_SESSION_SECONDS = int(_carmen_env("LIVE_MAX_SESSION_SECONDS", "900"))
+    CARMEN_LIVE_SPEED = float(_carmen_env("LIVE_SPEED", "1.15"))  # audio.output.speed, 0.7-1.5
+    # xAI defaults realtime reasoning to "high", which is the single biggest source of
+    # dead air before she starts talking. Carmen's live job is lookup-and-report, not
+    # deliberation — the tools do the thinking — so "none" is the right default here.
+    # Allowed: "high" | "none".
+    CARMEN_LIVE_REASONING_EFFORT = _carmen_env("LIVE_REASONING_EFFORT", "none")
+    # How much trailing silence ends your turn. The API default feels like a beat too
+    # long in conversation; ~500ms reads as attentive without cutting people off.
+    CARMEN_LIVE_SILENCE_MS = int(_carmen_env("LIVE_SILENCE_MS", "500"))
+    # Accent/delivery steer for LIVE mode only, applied through the session prompt —
+    # xAI exposes no accent parameter on either voice API. Empty string = no steer.
+    # Push-to-talk (/v1/tts) cannot honour this; see docs in live.py.
+    CARMEN_VOICE_ACCENT = _carmen_env("VOICE_ACCENT", "warm Latin American Spanish")
+    # Spoken release edits. Admin-only and always propose-then-confirm — Carmen never
+    # writes on the strength of a transcript alone (see carmen_chat/edits.py). Set to 0
+    # to take the capability away entirely without touching code.
+    CARMEN_EDIT_ENABLED = _carmen_env("EDIT_ENABLED", "1") == "1"
+
     # Recall.ai — dispatches a notetaker bot to a meeting URL (Teams/Zoom/Meet) and
     # produces an async transcript we PULL down post-meeting (no webhook/data-lake
     # dependency yet). The API host is region-pinned; set RECALL_REGION to match the
