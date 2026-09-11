@@ -7,7 +7,8 @@ rule library in `rules.py`.
 
 Mirrors app/brain/material_orders/extractors/llm.py: raw `requests`, ANTHROPIC_API_KEY
 from Config, model claude-opus-4-8, and a graceful return of None on a missing key or
-ANY failure, so the feature (and tests) stay hermetic without a key. Runs on a
+ANY failure. The findings come back under `output_config.format` (a schema the API
+enforces), not as JSON fished out of prose, so the feature (and tests) stay hermetic without a key. Runs on a
 background thread (see worker.py) — the call takes minutes at adaptive-thinking depth.
 """
 import base64
@@ -48,6 +49,52 @@ MAX_TOKENS = int(os.environ.get("BB_PDF_REVIEW_MAX_TOKENS", "32000"))
 REQUEST_TIMEOUT = 600
 
 
+# The findings contract, as a schema the API enforces rather than a shape we ask for in
+# prose and then dig out of the reply with a regex. That older approach broke on the
+# domain's own vocabulary: the prompt asks Claude to quote exact dimension text, so a
+# finding reading `terminal rise 8" exceeds 7"` put raw quotes inside a JSON string and
+# json.loads died mid-object. Under `output_config.format` the inch marks come back
+# properly escaped. Optional fields are deliberately NOT in `required` — the prompt asks
+# for bare rule_id + issue on 'ok' entries, and forcing every key would fight that.
+FINDINGS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "findings": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "rule_id": {"type": "string"},
+                    "page": {"type": "integer"},
+                    "issue": {"type": "string"},
+                    "verdict": {"enum": ["violation", "ok", "needs_field_verification"]},
+                    "severity": {"enum": ["high", "medium", "low"]},
+                    "computation": {"type": "string"},
+                    "values_used": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "value": {"type": "string"},
+                                "sheet": {"type": "string"},
+                            },
+                            "required": ["name", "value"],
+                            "additionalProperties": False,
+                        },
+                    },
+                    "location": {"type": "string"},
+                },
+                "required": ["rule_id", "issue", "verdict"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["findings"],
+    "additionalProperties": False,
+}
+
+
 def _content_blocks(pdf_bytes: bytes, job_release: str) -> list:
     return [
         {
@@ -60,6 +107,29 @@ def _content_blocks(pdf_bytes: bytes, job_release: str) -> list:
         },
         {"type": "text", "text": USER_INSTRUCTION.format(job_release=job_release or "unknown")},
     ]
+
+
+def _parse_findings(text: str, stop_reason=None) -> dict:
+    """The response body as a dict. Schema-constrained, so plain json.loads is the path.
+
+    The regex fallback stays for the two cases the schema cannot cover — a truncated
+    reply (`max_tokens`) and a refusal, where the text is not schema-shaped. It logs the
+    raw text when everything fails: this class of bug is undebuggable without seeing what
+    came back, and the old code discarded it.
+    """
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        pass
+    m = re.search(r"\{.*\}", text or "", re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError:
+            pass
+    logger.error("bb_pdf_review_unparseable", stop_reason=stop_reason,
+                 response_text=(text or "")[:2000])
+    raise ValueError(f"could not parse findings (stop_reason={stop_reason})")
 
 
 def _call_anthropic(pdf_bytes: bytes, job_release: str, model: str = None) -> dict:
@@ -77,6 +147,7 @@ def _call_anthropic(pdf_bytes: bytes, job_release: str, model: str = None) -> di
             "model": model or REVIEW_MODEL,
             "max_tokens": MAX_TOKENS,
             "thinking": {"type": "adaptive"},
+            "output_config": {"format": {"type": "json_schema", "schema": FINDINGS_SCHEMA}},
             "system": build_system_prompt(),
             "messages": [{"role": "user", "content": _content_blocks(pdf_bytes, job_release)}],
         },
@@ -86,10 +157,8 @@ def _call_anthropic(pdf_bytes: bytes, job_release: str, model: str = None) -> di
     body = resp.json()
     text = "".join(b.get("text", "") for b in body.get("content", []) if b.get("type") == "text")
     usage = body.get("usage") or {}
-    m = re.search(r"\{.*\}", text, re.DOTALL)
-    if not m:
-        raise ValueError(f"no JSON in response (stop_reason={body.get('stop_reason')})")
-    data = json.loads(m.group(0))
+    stop_reason = body.get("stop_reason")
+    data = _parse_findings(text, stop_reason)
     return {
         "findings": data.get("findings") or [],
         "model": body.get("model") or REVIEW_MODEL,

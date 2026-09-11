@@ -32,7 +32,7 @@ from app.logging_config import get_logger
 from app.models import Submittals, ProcoreOutbox, Notification, PendingStartInstall, CarmenDrawingReview, db, is_gc_approval_type
 from app.brain.pdf_review.report import build_report
 from app.auth.utils import login_required, admin_required, drafter_or_admin_required, get_current_user
-from app.brain.mentions import parse_mentions, resolve_mentioned_users
+from app.brain.mentions import parse_mentions, resolve_mentioned_users, user_display_name
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.procore.api import SUBMITTAL_STATUSES, VALID_SUBMITTAL_STATUS_IDS, SUBMITTAL_STATUS_ID_TO_NAME
 from app.procore.client import get_procore_client
@@ -250,7 +250,7 @@ def update_submittal_notes():
 
         if added:
             added_users = resolve_mentioned_users(added)
-            author_name = (user.first_name if user else None) or (user.username if user else 'Someone')
+            author_name = user_display_name(user) or 'Someone'
             for mu in added_users:
                 db.session.add(Notification(
                     user_id=mu.id,

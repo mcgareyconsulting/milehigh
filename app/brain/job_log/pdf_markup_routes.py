@@ -3,6 +3,8 @@
 Endpoints (registered on brain_bp under the /brain prefix):
   POST   /releases/<release_id>/drawing                          — upload v1 or save next version
   GET    /releases/<release_id>/drawing/versions                 — list versions (newest first)
+  GET    /releases/<release_id>/procore-documents                — Final PDF Pack candidates
+  POST   /releases/<release_id>/procore-documents/<aid>/pull     — pull one into a version
   GET    /releases/<release_id>/drawing/versions/<vid>/file      — stream the PDF bytes
   DELETE /releases/<release_id>/drawing/versions/<vid>           — admin-only soft delete
 
@@ -16,6 +18,7 @@ from flask import jsonify, request, send_file
 from app.brain import brain_bp
 from app.auth.utils import (
     admin_required,
+    drafter_or_admin_required,
     login_required,
     get_current_user,
 )
@@ -24,10 +27,9 @@ from app.models import (
     ReleaseDrawingVersion,
     DrawingVersionComment,
     Notification,
-    User,
     db,
 )
-from app.brain.mentions import parse_mentions, resolve_mentioned_users
+from app.brain.mentions import parse_mentions, resolve_mentioned_users, user_display_name
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
 
@@ -36,17 +38,17 @@ from app.brain.job_log.features.pdf_markup.command import (
     UploadInitialDrawingCommand,
 )
 from app.brain.job_log.features.pdf_markup.payloads import is_pdf_bytes
+from app.brain.job_log.features.pdf_markup.procore_pull import (
+    ProcorePullError,
+    SubmittalNotResolved,
+    debug_payloads,
+    list_documents,
+    probe_candidate,
+    pull_document,
+)
 from app.brain.job_log.features.pdf_markup.storage import absolute_path
 
 logger = get_logger(__name__)
-
-
-def _resolve_user_display_name(user: User) -> str:
-    if not user:
-        return None
-    first = (user.first_name or '').strip()
-    last = (user.last_name or '').strip()
-    return (f"{first} {last}".strip()) or user.username
 
 
 @brain_bp.route('/releases/<int:release_id>/drawing', methods=['POST'])
@@ -200,7 +202,7 @@ def add_drawing_version_comment(release_id, version_id):
         return jsonify({'error': 'Comment body is required'}), 400
 
     user = get_current_user()
-    author_name = _resolve_user_display_name(user)
+    author_name = user_display_name(user)
 
     comment = DrawingVersionComment(
         drawing_version_id=version.id,
@@ -259,3 +261,97 @@ def delete_release_drawing_version(release_id, version_id):
     db.session.commit()
 
     return jsonify({'status': 'deleted', 'version_id': version_id})
+
+
+# ── Final PDF Pack puller ────────────────────────────────────────────────────
+# The nightly FC worker only links a release to its Procore submittal; these two
+# endpoints fetch the pack itself. Manual by design — they cover the gaps the
+# worker leaves (no link yet, wrong submittal, a pack revised after the pull)
+# and give the drawing pipeline something to test against on demand.
+
+@brain_bp.route('/releases/<int:release_id>/procore-documents', methods=['GET'])
+@drafter_or_admin_required
+def list_release_procore_documents(release_id):
+    """Which Procore submittal this release resolves to, and what can be pulled from it.
+
+    ?submittal_id=<id> overrides the resolution for a release the worker has not linked.
+    ?debug=1 adds Procore's raw attachment/response objects plus every JSON path that looks
+    like a final-PDF label — for reading in the browser console, never for decisions.
+    ?probe=<attachment_id> additionally takes that attachment's ids back to Procore and
+    reports what each candidate endpoint returns (the approver record included).
+    """
+    release = db.session.get(Releases, release_id)
+    if not release:
+        return jsonify({'error': 'Release not found'}), 404
+
+    submittal_id = request.args.get('submittal_id')
+    try:
+        payload = list_documents(release, submittal_id)
+        if request.args.get('debug') in ('1', 'true', 'yes'):
+            payload['debug'] = debug_payloads(release, submittal_id)
+        probe_id = request.args.get('probe')
+        if probe_id:
+            payload.setdefault('debug', {})['probe'] = probe_candidate(
+                release, probe_id, submittal_id,
+            )
+    except SubmittalNotResolved as exc:
+        return jsonify({'error': str(exc), 'resolvable': False}), 409
+    except Exception as exc:
+        logger.error("release_procore_documents_failed", release_id=release_id,
+                     error=str(exc), error_type=type(exc).__name__, exc_info=True)
+        return jsonify({'error': 'Could not reach Procore for this release'}), 502
+
+    return jsonify(payload), 200
+
+
+@brain_bp.route(
+    '/releases/<int:release_id>/procore-documents/<attachment_id>/pull', methods=['POST'],
+)
+@drafter_or_admin_required
+def pull_release_procore_document(release_id, attachment_id):
+    """Download one Procore attachment and attach it as this release's next version."""
+    release = db.session.get(Releases, release_id)
+    if not release:
+        return jsonify({'error': 'Release not found'}), 404
+
+    user = get_current_user()
+    submittal_id = (request.get_json(silent=True) or {}).get('submittal_id') \
+        or request.args.get('submittal_id')
+
+    try:
+        version, ref = pull_document(
+            release, attachment_id,
+            uploaded_by_user_id=user.id if user else None,
+            submittal_id_override=submittal_id,
+        )
+    except SubmittalNotResolved as exc:
+        return jsonify({'error': str(exc), 'resolvable': False}), 409
+    except ProcorePullError as exc:
+        return jsonify({'error': str(exc)}), 502
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 409
+    except Exception as exc:
+        logger.error("release_procore_pull_failed", release_id=release_id,
+                     attachment_id=attachment_id, error=str(exc),
+                     error_type=type(exc).__name__, exc_info=True)
+        return jsonify({'error': 'Pull failed (see logs)'}), 502
+
+    return jsonify({
+        'ok': True,
+        'version': version.to_dict(),
+        'pulled': {
+            'attachment_id': ref.get('attachment_id'),
+            'name': ref.get('name'),
+            'source': ref.get('source'),
+            'response_name': ref.get('response_name'),
+            'approver_name': ref.get('approver_name'),
+            # Procore renders through its markup endpoint, so an approver's markups are
+            # burned into these bytes; this says whether there were any to burn.
+            'carried_markup': ref.get('carried_markup', False),
+            # 'raw_attachment' when the markup renderer refused every id shape and we fell
+            # back to the file itself — a clean copy, markups not burned in.
+            'render_fallback': ref.get('render_fallback'),
+            'markup_paths': ref.get('markup_paths') or [],
+            'size_bytes': version.file_size_bytes,
+        },
+    }), 201

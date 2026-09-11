@@ -33,6 +33,7 @@ from app.logging_config import get_logger
 from app.models import db, Releases, Submittals
 from app.trello.api import add_procore_link
 from app.procore.procore_auth import get_access_token
+from app.procore.attachments import is_final_pdf_response_name
 from app.procore.client import get_procore_client
 from app.procore.helpers import (
     parse_ball_in_court_from_submittal,
@@ -574,11 +575,9 @@ def _final_pdf_approver_ids(submittal):
     for r in responses:
         if not isinstance(r, dict):
             continue
-        name = (r.get("response_name") or "").strip().lower()
         # Exact + tolerant match — Procore sometimes renames after FC set updates.
-        if name == "final pdf pack" or (
-            "final" in name and "pdf" in name
-        ):
+        # One definition, shared with the attachment puller.
+        if is_final_pdf_response_name(r.get("response_name")):
             aid = r.get("submittal_approver_id")
             if aid is not None:
                 ids.append(aid)

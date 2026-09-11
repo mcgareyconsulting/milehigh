@@ -16,7 +16,7 @@ import axios from 'axios';
 
 import { API_BASE_URL } from '../utils/api';
 import { PdfMarkupModal } from '../components/PdfMarkupModal';
-import { PdfVersionHistoryModal } from '../components/PdfVersionHistoryModal';
+import { PdfViewerModal } from '../components/PdfViewerModal';
 
 function History() {
     const [job, setJob] = useState('');
@@ -596,7 +596,7 @@ function History() {
                 mode={pdfMarkupMode}
                 onClose={() => setPdfMarkupOpen(false)}
             />
-            <PdfVersionHistoryModal
+            <PdfViewerModal
                 isOpen={pdfHistoryOpen}
                 releaseId={selectedJobDetails?.id}
                 title={selectedJobDetails ? `${selectedJobDetails.job}-${selectedJobDetails.release}` : ''}

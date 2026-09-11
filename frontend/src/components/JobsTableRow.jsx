@@ -25,7 +25,7 @@ import { StartInstallDateModal } from './StartInstallDateModal';
 import { StageIconRow } from './StageIconRow';
 import { ASAP_PROPAGATED_ROW_CLASS } from './AsapPropagationTag';
 import { PdfMarkupModal } from './PdfMarkupModal';
-import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
+import { StagePhotoGateModal } from './StagePhotoGateModal';
 import { useTheme } from '../context/ThemeContext';
 import { useReleases } from '../context/ReleasesContext';
 
@@ -1606,11 +1606,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             />
             {/* Stage-photo gate only. Browsing drawings goes through the release
                 hub's Drawings & Photos tab; this stays a focused confirm dialog. */}
-            <PdfVersionHistoryModal
+            <StagePhotoGateModal
                 isOpen={pdfHistoryOpen}
                 releaseId={row.id}
                 title={`${row['Job #']}-${row['Release #']}`}
-                viewerUrl={row.viewer_url}
                 gateStage={gateStage}
                 onConfirmStage={() => {
                     const stageToApply = gateStage;
@@ -1619,13 +1618,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     applyStageChange(stageToApply);
                 }}
                 onClose={() => { setPdfHistoryOpen(false); setGateStage(null); }}
-                onOpenVersion={(vid, mode) => {
-                    setPdfHistoryOpen(false);
-                    setGateStage(null);
-                    setPdfMarkupVersionId(vid);
-                    setPdfMarkupMode(canMarkup ? mode : 'view');
-                    setPdfMarkupOpen(true);
-                }}
             />
             {showEditModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

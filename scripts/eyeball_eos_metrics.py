@@ -44,9 +44,12 @@ def _headline(result: dict) -> str:
     """One-line headline for a metric result."""
     mid = result.get("metric")
     if mid == "hours_released_to_production":
+        cov = result.get("tag_coverage") or {}
+        untagged = cov.get("untagged_releases") or 0
+        tail = f" · {untagged} untagged" if untagged else ""
         return (
             f"{result.get('release_count', 0)} releases · "
-            f"{result.get('total_fab_hrs', 0)} fab hrs released"
+            f"{result.get('total_fab_hrs', 0)} fab hrs released{tail}"
         )
     if mid == "yellow_dates":
         n = result.get("yellow_count", 0)
@@ -104,6 +107,11 @@ def _detail_lines(result: dict, limit: int) -> list[str]:
     mid = result.get("metric")
 
     if mid == "hours_released_to_production":
+        for b in (result.get("by_tag") or []):
+            lines.append(
+                f"    {b['label']:14}  {b['fab_hrs']:8.1f} hrs  "
+                f"{b['release_count']:3d} releases"
+            )
         for r in (result.get("releases") or [])[:limit]:
             lines.append(
                 f"    {r.get('identifier'):12}  {r.get('fab_hrs', 0):7.1f} hrs  "
@@ -200,6 +208,8 @@ def _print_metric(result: dict, detail: int) -> None:
 def run(
     weeks_back: int = 0,
     week_of: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
     owner: str | None = None,
     metric: str | None = None,
     as_json: bool = False,
@@ -224,7 +234,16 @@ def run(
         if metric:
             results.append(
                 eos_metrics.get_eos_metric(
-                    metric, weeks_back=weeks_back, week_of=week_of
+                    metric, weeks_back=weeks_back, week_of=week_of,
+                    start=start, end=end,
+                )
+            )
+        elif start or end:
+            # A range only means something for the range-capable metric; running
+            # the whole catalog would return seven errors and one number.
+            results.append(
+                eos_metrics.get_eos_metric(
+                    "hours_released_to_production", start=start, end=end
                 )
             )
         elif owner:
@@ -256,7 +275,9 @@ def run(
         print("EOS metrics eyeball (read-only)")
         print(f"  ENVIRONMENT: {env}")
         print(f"  DB:          {db_hint}")
-        if week_of:
+        if start or end:
+            print(f"  window:      {start or '(unbounded)'} → {end or 'today'}")
+        elif week_of:
             print(f"  week_of:     {week_of}")
         else:
             print(f"  weeks_back:  {weeks_back}")
@@ -310,6 +331,21 @@ def main() -> int:
         help="ISO date in the desired Mon–Sun week (overrides --weeks-back).",
     )
     p.add_argument(
+        "--start",
+        type=str,
+        default=None,
+        help=(
+            "ISO start date for an arbitrary window (hours_released_to_production "
+            "only). Setting --start/--end switches off the Mon–Sun week."
+        ),
+    )
+    p.add_argument(
+        "--end",
+        type=str,
+        default=None,
+        help="ISO end date for an arbitrary window; defaults to today when --start is set.",
+    )
+    p.add_argument(
         "--owner",
         type=str,
         default=None,
@@ -336,6 +372,8 @@ def main() -> int:
     return run(
         weeks_back=args.weeks_back,
         week_of=args.week_of,
+        start=args.start,
+        end=args.end,
         owner=args.owner,
         metric=args.metric,
         as_json=args.json,
