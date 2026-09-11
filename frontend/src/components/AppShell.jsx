@@ -158,11 +158,13 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
           MHMW Brain
         </h1>
 
-        {/* Version badge — opens patch notes */}
+        {/* Version badge — opens patch notes. Hidden below lg: the bar ran ~392px of content on a
+            390px phone, which pushed the hamburger (the only route into the nav drawer) off the
+            right edge. The drawer carries the version and the patch-notes link instead. */}
         <button
           type="button"
           onClick={() => setShowPatchNotes(true)}
-          className="shrink-0 px-1.5 py-0.5 text-[11px] font-medium rounded-md text-gray-500 dark:text-slate-400 hover:text-accent-600 dark:hover:text-accent-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+          className="hidden lg:inline-flex shrink-0 px-1.5 py-0.5 text-[11px] font-medium rounded-md text-gray-500 dark:text-slate-400 hover:text-accent-600 dark:hover:text-accent-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
           title="What's new — view patch notes"
         >
           {CURRENT_VERSION}
@@ -253,8 +255,9 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
             </span>
           )}
 
-          {/* Theme picker (always visible) */}
-          <div className="relative" data-theme-menu>
+          {/* Theme picker — lg and up. Below that the same toggles live in the nav drawer, which
+              is where a set-once setting belongs anyway, and the bar gets its width back. */}
+          <div className="relative hidden lg:block" data-theme-menu>
             <button
               type="button"
               onClick={() => setShowThemeMenu(prev => !prev)}
@@ -357,6 +360,7 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
       <MobileNavDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
+        onOpenPatchNotes={() => setShowPatchNotes(true)}
         isAuthenticated={isAuthenticated}
         subcontractor={subcontractor}
         isAdmin={isAdmin}

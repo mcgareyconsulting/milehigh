@@ -86,7 +86,11 @@ export default function ReleasesViewSwitcher() {
                     }`}
                 >
                     {view.icon}
-                    {view.label}
+                    {/* On a phone the toolbar cannot afford both labels, and the row
+                        overflowed so far that this switcher sat off-screen entirely. The
+                        ACTIVE view keeps its word (you always know where you are); the other
+                        is its icon alone until there is room. */}
+                    <span className={active === view.key ? '' : 'hidden sm:inline'}>{view.label}</span>
                 </button>
             ))}
         </div>

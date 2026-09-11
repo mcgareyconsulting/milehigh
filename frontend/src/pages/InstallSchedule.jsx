@@ -1,38 +1,68 @@
 /**
  * @milehigh-header
- * schema_version: 1
- * purpose: Next-week installation schedule for the production meeting. Pulls active releases with a
- *          start_install in the coming N days, groups them into Trello-shaped cards by crew, pins hard
- *          (green) dates first, and flags crews with overlapping hard dates or an overloaded week.
+ * schema_version: 2
+ * purpose: Installation schedule in two shapes off one endpoint family. CREW columns is the
+ *          production-meeting view — active releases with a start_install in the coming N days,
+ *          grouped into Trello-shaped cards by crew, hard dates first, flagging crews with
+ *          overlapping hard dates or an overloaded week. DAY rows is the vertical calendar for
+ *          phones, where the Timeline's frozen lane chrome does not fit.
  * exports:
- *   InstallSchedule: Page component (any authenticated user).
- * imports_from: [react, ../services/installScheduleApi]
+ *   InstallSchedule: Page component (any authenticated user). Owns fetching, window and view state.
+ * imports_from: [react, ../services/installScheduleApi, ../utils/installScheduleFormat,
+ *   ../hooks/useBreakpoint, ../hooks/useDaySchedule, ../components/installSchedule/DatePill,
+ *   ../components/installSchedule/DaySchedule, ../components/installSchedule/CrewSelect,
+ *   ../components/ReleaseHubModal]
  * imported_by: [App.jsx]
  * invariants:
- *   - Read-only view. Estimated hours come only from the manual install_hrs field; blanks render as "—".
- *   - date_kind drives the pill color, mirroring the Job Log StartInstallEditor convention.
+ *   - Read-only view. Estimated hours come only from the manual install_hrs field; blanks render "—".
+ *   - date_kind drives the pill color, mirroring the Job Log StartInstallEditor convention. The pill
+ *     lives in ./installSchedule/DatePill so the two views cannot disagree about a release.
+ *   - The Crew/Day choice is STICKY, seeded once from the viewport width at first mount and then
+ *     remembered. It is deliberately NOT reactive to width: an iPhone crossing 768px on rotate would
+ *     otherwise swap the mounted tree mid-scroll, which is the BUG-14 failure documented in
+ *     utils/viewportView.js. Rotating the device must never change which view you are reading.
+ *   - Fetch state lives here, above the view swap, so toggling or rotating never strands a
+ *     half-loaded child. The release-hub modal lives here too, for the same reason: it must outlive
+ *     a crew-filter change, which refetches and rebuilds the whole list underneath it.
+ *   - PHONES ARE CLAMPED TO THE CALENDAR. Crew columns are a horizontally-scrolled desk layout; on a
+ *     handset they are the same unusable shape as the Timeline. The clamp is reactive (unlike the
+ *     stored preference, which stays sticky) so that someone who last chose Crews on a desktop is not
+ *     stranded on a phone with the toggle hidden.
+ *   - ONE control row, and the installer picker is the only filter in it. A native <select> rather
+ *     than a chip row: it collapses N installers into one line, and on iOS it opens the system
+ *     picker, which is a better target than a 28px chip. Its options come from the ROSTER, not from
+ *     the current (filtered) response — see hooks/useDaySchedule.
+ *   - Tapping a card opens the shared release hub. The card payload is deliberately slim, so the full
+ *     row is looked up in the shared ReleasesContext by id; when it isn't loaded we still open on the
+ *     bare job/release (mirroring GanttChart.openOrderHub) rather than making the tap do nothing.
+ *   - The day-view fetch and that lookup live in hooks/useDaySchedule, shared with the Job Log's
+ *     Timeline, which renders the same calendar in place on a phone. One fetch path, so the two
+ *     surfaces cannot drift into showing different installs for the same day.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { getNextWeekSchedule } from '../services/installScheduleApi';
+import { useBreakpoint } from '../hooks/useBreakpoint';
+import { useDaySchedule, useReleaseHub } from '../hooks/useDaySchedule';
+import { DatePill } from '../components/installSchedule/DatePill';
+import { fmtDate, fmtHours } from '../utils/installScheduleFormat';
+import DaySchedule from '../components/installSchedule/DaySchedule';
+import CrewSelect from '../components/installSchedule/CrewSelect';
+import { ReleaseHubModal } from '../components/ReleaseHubModal';
 
-const DATE_KIND = {
-    hard: { label: 'Hard', cls: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 ring-1 ring-green-400/50' },
-    asap: { label: 'ASAP', cls: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 ring-1 ring-red-400/50' },
-    projected: { label: 'Projected', cls: 'bg-surface-2 text-ink-2 ring-1 ring-hairline' },
-    neutral: { label: 'Done', cls: 'bg-surface-2 text-ink-3' },
-};
+const VIEW_KEY = 'mhmw:install-schedule-view';
+const DAY_VIEW_PAST_DAYS = 14;
+const RANGE_OPTIONS = [7, 14, 31];
 
-const fmtDate = (iso) => {
-    if (!iso) return '—';
-    const d = new Date(`${iso}T00:00:00`);
-    return isNaN(d) ? iso : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-};
+const SELECT_CLS = 'px-2.5 py-1.5 text-sm rounded-lg bg-surface text-ink border border-hairline '
+    + 'focus:outline-none focus:ring-2 focus:ring-accent-500 min-w-0';
 
-const fmtHours = (h) => (h === null || h === undefined ? '—' : `${h}h`);
-
-function DatePill({ kind }) {
-    const meta = DATE_KIND[kind] || DATE_KIND.projected;
-    return <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${meta.cls}`}>{meta.label}</span>;
+/** Seed the view once: phones open on the calendar, everything else on crew columns. */
+function initialView() {
+    try {
+        const stored = localStorage.getItem(VIEW_KEY);
+        if (stored === 'day' || stored === 'crew') return stored;
+    } catch { /* storage disabled — fall through to the width guess */ }
+    return typeof window !== 'undefined' && window.innerWidth < 768 ? 'day' : 'crew';
 }
 
 function Stat({ label, value, tone = '' }) {
@@ -98,63 +128,131 @@ function CrewColumn({ crew }) {
     );
 }
 
-export default function InstallSchedule() {
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [days, setDays] = useState(7);
+function ViewToggle({ view, onChange }) {
+    return (
+        <div className="inline-flex rounded-lg border border-hairline overflow-hidden shrink-0">
+            {[['day', 'Calendar'], ['crew', 'Crews']].map(([key, label]) => (
+                <button
+                    key={key}
+                    type="button"
+                    onClick={() => onChange(key)}
+                    aria-pressed={view === key}
+                    className={`px-3 py-1.5 text-sm font-medium ${
+                        view === key ? 'bg-accent-600 text-white' : 'bg-surface text-ink-2 hover:bg-surface-2'
+                    }`}
+                >
+                    {label}
+                </button>
+            ))}
+        </div>
+    );
+}
 
-    const load = useCallback(async (d) => {
-        setLoading(true);
-        setError(null);
+export default function InstallSchedule() {
+    const [days, setDays] = useState(14);
+    const [view, setView] = useState(initialView);
+    const [crewFilter, setCrewFilter] = useState(null);
+
+    const { isMobile } = useBreakpoint();
+    // Crew columns scroll sideways; that is the very shape that does not fit a phone.
+    const isDay = view === 'day' || isMobile;
+
+    // Day view: the shared hook, so this page and the Job Log Timeline read one source.
+    const dayView = useDaySchedule({
+        days, pastDays: DAY_VIEW_PAST_DAYS, installer: crewFilter, enabled: isDay,
+    });
+    const { hubJob, openRelease, closeHub } = useReleaseHub();
+
+    // Crew view keeps its own fetch — a different endpoint and a different envelope shape.
+    const [crewData, setCrewData] = useState(null);
+    const [crewLoading, setCrewLoading] = useState(false);
+    const [crewError, setCrewError] = useState(null);
+
+    const loadCrews = useCallback(async (d) => {
+        setCrewLoading(true);
+        setCrewError(null);
         try {
-            setData(await getNextWeekSchedule(d));
+            setCrewData(await getNextWeekSchedule(d));
         } catch (e) {
-            setError(e?.response?.data?.error || e.message || 'Failed to load schedule');
+            setCrewError(e?.response?.data?.error || e.message || 'Failed to load schedule');
         } finally {
-            setLoading(false);
+            setCrewLoading(false);
         }
     }, []);
 
-    useEffect(() => { load(days); }, [days, load]);
+    useEffect(() => { if (!isDay) loadCrews(days); }, [isDay, days, loadCrews]);
+
+    const data = isDay ? dayView.data : crewData;
+    const loading = isDay ? dayView.loading : crewLoading;
+    const error = isDay ? dayView.error : crewError;
+    const roster = dayView.roster;
+    const reload = () => (isDay ? dayView.reload() : loadCrews(days));
+
+    const chooseView = (next) => {
+        if (next === view) return;
+        setView(next);
+        try { localStorage.setItem(VIEW_KEY, next); } catch { /* preference is best-effort */ }
+    };
 
     const s = data?.summary;
 
     return (
-        <div className="flex flex-col h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas p-4 gap-4 overflow-hidden">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                    <h1 className="text-xl font-bold text-ink">Installation Schedule</h1>
-                    {data?.window && (
-                        <p className="text-sm text-ink-3">
+        <div className="flex flex-col h-[calc(100vh_-_var(--app-chrome-h))] bg-canvas p-3 sm:p-4 gap-2 sm:gap-3 overflow-hidden">
+            {/* Title + the one number that changes what someone does today. The crew view keeps its
+                stat wall below; the calendar folds it into this line, because seven tiles was most of
+                a phone screen before the first card. */}
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                    <h1 className="text-lg sm:text-xl font-bold text-ink">Installation Schedule</h1>
+                    {s && isDay && (
+                        <p className="text-xs sm:text-sm text-ink-3">
+                            {s.past_due > 0 && (
+                                <span className="text-red-600 dark:text-red-400 font-semibold">{s.past_due} past due · </span>
+                            )}
+                            {s.scheduled} scheduled
+                            {s.asap_dates > 0 && <span className="text-red-600 dark:text-red-400"> · {s.asap_dates} ASAP</span>}
+                            {` · next ${data.window.days} days`}
+                        </p>
+                    )}
+                    {data?.window && !isDay && (
+                        <p className="text-xs sm:text-sm text-ink-3">
                             {fmtDate(data.window.start)} – {fmtDate(data.window.end)} · hard dates first
                         </p>
                     )}
                 </div>
-                <div className="flex items-center gap-2 notif-pod-reserve">
-                    {[7, 14, 31].map((d) => (
-                        <button
-                            key={d}
-                            onClick={() => setDays(d)}
-                            className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
-                                days === d
-                                    ? 'bg-accent-600 text-white'
-                                    : 'bg-surface text-ink-2 hover:bg-surface-2 border border-hairline'
-                            }`}
-                        >
-                            {d} days
-                        </button>
-                    ))}
-                    <button
-                        onClick={() => load(days)}
-                        className="px-3 py-1.5 text-sm rounded-lg bg-surface text-ink-2 hover:bg-surface-2 border border-hairline"
-                    >
-                        ↻ Refresh
-                    </button>
-                </div>
+                <button
+                    onClick={reload}
+                    aria-label="Refresh schedule"
+                    className="shrink-0 px-3 py-1.5 text-sm rounded-lg bg-surface text-ink-2 hover:bg-surface-2 border border-hairline notif-pod-reserve"
+                >
+                    ↻
+                </button>
             </div>
 
-            {s && (
+            {/* One control row. Crew is the only filter. */}
+            <div className="flex items-center gap-2 flex-wrap">
+                {isDay && (
+                    <CrewSelect
+                        crews={dayView.crewOptions}
+                        value={crewFilter}
+                        onChange={setCrewFilter}
+                        className="flex-1 max-w-[16rem]"
+                    />
+                )}
+                <select
+                    value={days}
+                    onChange={(e) => setDays(Number(e.target.value))}
+                    aria-label="Days to show"
+                    className={SELECT_CLS}
+                >
+                    {RANGE_OPTIONS.map((d) => <option key={d} value={d}>{d} days</option>)}
+                </select>
+                {/* Hidden on phones, where the Crews layout is the unusable shape this view exists
+                    to replace. */}
+                {!isMobile && <ViewToggle view={view} onChange={chooseView} />}
+            </div>
+
+            {s && !isDay && (
                 <div className="flex flex-wrap gap-2">
                     <Stat label="Releases" value={s.total_releases} />
                     <Stat label="Hard dates" value={s.hard_dates} tone="text-green-600 dark:text-green-400" />
@@ -168,17 +266,36 @@ export default function InstallSchedule() {
 
             {loading && <div className="text-ink-3">Loading schedule…</div>}
             {error && <div className="text-red-600 dark:text-red-400">{error}</div>}
-            {!loading && !error && data && data.crews.length === 0 && (
-                <div className="text-ink-3">No releases scheduled to install in this window.</div>
+
+            {!loading && !error && data && isDay && (
+                <DaySchedule
+                    data={data}
+                    roster={roster}
+                    crewFilter={crewFilter}
+                    onOpenRelease={openRelease}
+                />
             )}
 
-            {!loading && !error && data && data.crews.length > 0 && (
-                <div className="flex-1 flex gap-4 overflow-x-auto pb-2">
-                    {data.crews.map((crew) => (
-                        <CrewColumn key={crew.crew} crew={crew} />
-                    ))}
-                </div>
+            {!loading && !error && data && !isDay && (
+                data.crews.length === 0
+                    ? <div className="text-ink-3">No releases scheduled to install in this window.</div>
+                    : (
+                        <div className="flex-1 flex gap-4 overflow-x-auto pb-2">
+                            {data.crews.map((crew) => <CrewColumn key={crew.crew} crew={crew} />)}
+                        </div>
+                    )
             )}
+
+            {/* The SAME modal a Job Log row or the Timeline opens — one release, one identity. */}
+            <ReleaseHubModal
+                isOpen={!!hubJob}
+                job={hubJob}
+                releaseId={hubJob?.id}
+                viewerUrl={hubJob?.viewer_url}
+                initialTab="details"
+                onClose={closeHub}
+                onJobUpdate={reload}
+            />
         </div>
     );
 }

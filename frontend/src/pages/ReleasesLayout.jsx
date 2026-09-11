@@ -876,9 +876,32 @@ function ReleasesLayout() {
                                             <ViewToggle value={viewMode} onChange={setViewMode} />
                                         )}
 
+                                        {/* PHONES ONLY: the two create buttons collapse into one menu.
+                                            Together they cost enough width to push the view switcher
+                                            off the right edge of a 390px toolbar. From `md` up there is
+                                            room, and two visible buttons beat a menu that hides the
+                                            thing you came to click — so the pair below is the real
+                                            control and this is the narrow-screen stand-in. CSS rather
+                                            than a breakpoint hook: no tree swap on rotate. */}
+                                        <div className="md:hidden">
+                                            <Dropdown
+                                                label="New"
+                                                menuWidth={232}
+                                                buttonClassName="px-2 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-blue-700 text-white border border-blue-700 hover:bg-blue-800"
+                                                icon={<svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10" /></svg>}
+                                            >
+                                                <DropdownItem onClick={handleReleaseClick}>
+                                                    📋 New Release <span className="text-gray-400">— paste</span>
+                                                </DropdownItem>
+                                                <DropdownItem onClick={openVerbalModal}>
+                                                    🗣️ Verbal Release <span className="text-gray-400">— pre-drafting</span>
+                                                </DropdownItem>
+                                            </Dropdown>
+                                        </div>
+
                                         <button
                                             onClick={handleReleaseClick}
-                                            className="px-2 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-blue-700 text-white border border-blue-700 hover:bg-blue-800"
+                                            className="hidden md:inline-flex px-2 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap items-center gap-1 bg-blue-700 text-white border border-blue-700 hover:bg-blue-800"
                                             title="Create new releases from a CSV paste"
                                         >
                                             <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10" /></svg>
@@ -888,7 +911,7 @@ function ReleasesLayout() {
 
                                         <button
                                             onClick={openVerbalModal}
-                                            className="px-2 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-amber-600 text-white border border-amber-600 hover:bg-amber-700"
+                                            className="hidden md:inline-flex px-2 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap items-center gap-1 bg-amber-600 text-white border border-amber-600 hover:bg-amber-700"
                                             title="Quick-capture a release before drafting is done — release # is prefilled but editable"
                                         >
                                             <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10" /></svg>

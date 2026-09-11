@@ -219,6 +219,7 @@ function JobLogContent() {
             {!loading && !fetchError && (effectiveView === 'mobilecard' || effectiveView === 'cards') && (
                 <JobLogCardGrid
                     layout="column"
+                    compact={effectiveView === 'mobilecard'}
                     jobs={renderRows}
                     secondaryResults={secondarySearchResults}
                     search={search}

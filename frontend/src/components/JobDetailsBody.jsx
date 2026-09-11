@@ -651,7 +651,7 @@ export function JobDetailsBody({
             )}
 
             {/* ── Dossier split: photos/notes/materials | schedule/details ─── */}
-            <div className="grid" style={{ gridTemplateColumns: '1.25fr 1fr', columnGap: 24 }}>
+            <div className="jl-dossier-split">
                 {/* LEFT ─────────────────────────────────────────────────── */}
                 <div className="min-w-0">
                     <SectionLabel
