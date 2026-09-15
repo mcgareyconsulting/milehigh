@@ -4,7 +4,7 @@ schema_version: 1
 purpose: Processes inbound Trello webhooks by reconciling card changes (moves, edits, due-date updates) with the DB and creating JobEvents for the audit trail.
 exports:
   sync_from_trello: Main webhook handler that fetches card data, updates the Job record, and emits JobEvents.
-imports_from: [app.trello.api, app.trello.utils, app.trello.operations, app.trello.context, app.trello.logging, app.trello.list_mapper, app.models, app.services.job_event_service, app.brain.job_log.features.fab_order.tier, app.brain.job_log.features.start_install.asap_drop, app.config]
+imports_from: [app.trello.api, app.trello.utils, app.trello.operations, app.trello.context, app.trello.logging, app.trello.list_mapper, app.models, app.services.job_event_service, app.brain.job_log.features.fab_order.tier, app.config]
 imported_by: [app/trello/__init__.py]
 invariants:
   - Echo webhooks from Brain's own outbox calls are detected and skipped (90-second window, content-matched).
@@ -49,7 +49,6 @@ from app.brain.job_log.features.fab_order.tier import apply_fab_order_for_stage
 from app.brain.job_log.features.start_install.neutralize_install_date_cascade import (
     COLOR_DUMP_STAGES,
 )
-from app.brain.job_log.features.start_install.asap_drop import drop_asap_on_completion
 import uuid
 import re
 from app.config import Config as cfg
@@ -649,27 +648,10 @@ def sync_from_trello(event_info):
                         reason=fab_plan.reason,
                     )
 
-                # ASAP drop: the shop advances work by dragging the card, and this
-                # path writes the stage itself instead of going through
-                # UpdateStageCommand — so while the drop lived inside that command, a
-                # card dragged to "Shipping completed" kept its red forever (two such
-                # rows found in production 2026-09-03). Same shared rule the command
-                # calls, keyed on rec.stage — what apply_trello_list_to_db actually
-                # set — not the raw Trello list name.
-                if drop_asap_on_completion(
-                    rec,
-                    new_stage=rec.stage,
-                    parent_event_id=event.id if event else None,
-                    source=trello_source,
-                ):
-                    safe_log_sync_event(
-                        sync_op.operation_id,
-                        "INFO",
-                        "Dropped ASAP flag on inbound completion",
-                        job=rec.job,
-                        release=rec.release,
-                        new_stage=rec.stage,
-                    )
+                # No ASAP drop here: the flag now comes off only at `Install Start` or
+                # later, and inbound lands on the floor of a list's zone — "Shipping
+                # completed" floors at `Ship Complete` — so no Trello drag can reach it.
+                # An ASAP card dragged to Shipping completed keeps its red on purpose.
 
                 if event:
                     created_events.append(event)

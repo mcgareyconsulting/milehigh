@@ -100,7 +100,9 @@ import {
     useSensors,
     useDraggable,
     useDroppable,
+    pointerWithin,
 } from '@dnd-kit/core';
+import { getEventCoordinates } from '@dnd-kit/utilities';
 import { INSTALLER_PALETTE } from '../constants/installerPalette';
 import { selectUnassigned } from '../utils/unassignedLane';
 import { dateAtDropX } from '../utils/timelineDrop';
@@ -1187,6 +1189,22 @@ function GanttChart({ filterComplete = false }) {
         });
     };
 
+    // The drop date and the column highlight are both read off the POINTER, but DragOverlay draws
+    // the held card at the grabbed element's origin plus the drag delta — i.e. offset left of the
+    // pointer by wherever inside the card you grabbed it. Grabbing a card mid-body put the card a
+    // column to the left of the highlight it was about to land in. Pin the card's LEFT edge to the
+    // pointer (vertically centred on it) so the card always starts in the highlighted column.
+    const pinCardToPointer = ({ activatorEvent, draggingNodeRect, overlayNodeRect, transform }) => {
+        const start = activatorEvent && getEventCoordinates(activatorEvent);
+        if (!start || !draggingNodeRect) return transform;
+        const cardH = overlayNodeRect?.height ?? draggingNodeRect.height;
+        return {
+            ...transform,
+            x: transform.x + start.x - draggingNodeRect.left,
+            y: transform.y + start.y - draggingNodeRect.top - cardH / 2,
+        };
+    };
+
     const handleDragStart = ({ active }) => {
         setDropError(null);
         setDragRow(active?.data?.current?.row ?? null);
@@ -1296,6 +1314,9 @@ function GanttChart({ filterComplete = false }) {
         <>
             <DndContext
                 sensors={sensors}
+                // Lane under the POINTER, matching the date math — the default rect-intersection
+                // test used the held card's box, which could pick the lane next door.
+                collisionDetection={pointerWithin}
                 onDragStart={handleDragStart}
                 onDragMove={handleDragMove}
                 onDragCancel={handleDragCancel}
@@ -1658,7 +1679,7 @@ function GanttChart({ filterComplete = false }) {
             </div>
             {/* The card follows the pointer at its tray size, so what you're holding stays legible
                 even when it came off a two-week-wide gantt bar. */}
-            <DragOverlay dropAnimation={null}>
+            <DragOverlay dropAnimation={null} modifiers={[pinCardToPointer]}>
                 {dragRow && (
                     <div className="rounded border border-accent-500 bg-white px-1.5 py-1 shadow-lg text-[11px] w-40 cursor-grabbing">
                         <div className="font-bold text-gray-900 truncate">
@@ -1765,7 +1786,9 @@ function GanttChart({ filterComplete = false }) {
                 its own — no cockpit, no read-only variant, no lane-colored accent (the hub derives
                 its own tint from the stage). */}
             <ReleaseHubModal
-                onJobUpdate={refetch}
+                // Silent: a hub edit (crew size, dates, stage) merges the changed row in place.
+                // A bare `refetch` passed no arg → non-silent → loading flip redrew the whole view.
+                onJobUpdate={() => refetch(true)}
                 isOpen={!!hubJob}
                 job={hubJob}
                 releaseId={hubJob?.id}
