@@ -808,6 +808,14 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         # Join all description parts with newlines
         card_description = "\n".join(description_parts)
 
+        if _mock_write("create_card_from_excel", list_id=list_id, name=card_title):
+            mock_id = f"mock-card-{card_title[:32]}"
+            return {
+                "success": True,
+                "card_id": mock_id,
+                "card_data": {"id": mock_id, "name": card_title, "desc": card_description},
+            }
+
         # Create the card
         url = "https://api.trello.com/1/cards"
 
@@ -1047,6 +1055,9 @@ def update_card_custom_field(card_id, custom_field_id, text_value):
     Returns:
         True if successful, False otherwise
     """
+    if _mock_write("update_custom_field", card_id=card_id, field=custom_field_id, value=text_value):
+        return True
+
     url = f"https://api.trello.com/1/cards/{card_id}/customField/{custom_field_id}/item"
     params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
     data = {"value": {"text": text_value}}
@@ -1156,6 +1167,9 @@ def update_card_custom_field_number(card_id, custom_field_id, number_value):
     Returns:
         True if successful, False otherwise
     """
+    if _mock_write("update_custom_field_number", card_id=card_id, field=custom_field_id, value=number_value):
+        return True
+
     url = f"https://api.trello.com/1/cards/{card_id}/customField/{custom_field_id}/item"
     params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
     data = {
@@ -1217,6 +1231,12 @@ def sort_list_by_fab_order(list_id, fab_order_field_id):
             - total_cards: int (total cards in list)
             - error: str (if success is False)
     """
+    # Guarded as a WRITE even though it starts with a read: the sort's whole purpose is the
+    # `pos` PUT it issues per card, so running it for real against a live board is exactly what
+    # local dev must not do.
+    if _mock_write("sort_list_by_fab_order", list_id=list_id):
+        return {"success": True, "cards_sorted": 0, "cards_failed": 0, "total_cards": 0}
+
     # Get all cards in the list with custom field items
     url = f"https://api.trello.com/1/lists/{list_id}/cards"
     params = {
@@ -1406,6 +1426,9 @@ def add_comment_to_trello_card(card_id, comment_text, operation_id=None, sender_
     """
     if not comment_text or not comment_text.strip():
         logger.debug("comment_skipped", card_id=card_id, reason="empty comment")
+        return True
+
+    if _mock_write("add_comment", card_id=card_id, comment=comment_text.strip()[:120]):
         return True
 
     # Format comment with timestamp and sender initials
@@ -2032,6 +2055,11 @@ def update_trello_card_description(card_id, new_description):
     Returns:
         dict: Response from Trello API, or None if update fails
     """
+    if _mock_write("update_card_description", card_id=card_id):
+        # A card-shaped dict, matching what the real PUT returns, so callers that read the
+        # response in local dev see the value they just wrote rather than None.
+        return {"id": card_id, "desc": new_description}
+
     url = f"https://api.trello.com/1/cards/{card_id}"
 
     params = {
@@ -2085,6 +2113,9 @@ def update_trello_card_name(card_id, new_name):
     Returns:
         dict: Response from Trello API, or None if update fails
     """
+    if _mock_write("update_card_name", card_id=card_id, name=new_name):
+        return {"id": card_id, "name": new_name}
+
     url = f"https://api.trello.com/1/cards/{card_id}"
 
     params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN, "name": new_name}
@@ -2205,6 +2236,21 @@ def update_card_date_range(card_short_link, start_date, due_date):
     Returns:
         dict: Dictionary containing success status and details
     """
+    if _mock_write(
+        "update_card_date_range",
+        card_id=card_short_link,
+        start_date=str(start_date),
+        due_date=str(due_date),
+        due_only=MIRROR_DUE_ONLY,
+    ):
+        # Same success shape a real push returns, so callers behave identically in local dev.
+        return {
+            "success": True,
+            "card_short_link": card_short_link,
+            "start_date": None if MIRROR_DUE_ONLY else str(start_date),
+            "due_date": str(start_date if MIRROR_DUE_ONLY else due_date),
+        }
+
     try:
         url = f"https://api.trello.com/1/cards/{card_short_link}"
 
@@ -2299,6 +2345,9 @@ def add_procore_link(card_id, procore_url, link_name=None):
         logger.debug("procore_link_skipped", card_id=card_id, reason="empty url")
         return {"success": False, "error": "Procore URL is required"}
 
+    if _mock_write("add_procore_link", card_id=card_id, url=procore_url.strip()):
+        return {"success": True, "attachment": {"id": f"mock-attach-{card_id}", "url": procore_url.strip()}}
+
     url = f"https://api.trello.com/1/cards/{card_id}/attachments"
 
     params = {
@@ -2368,6 +2417,12 @@ def add_procore_link(card_id, procore_url, link_name=None):
 # Copy Card to Unassigned and Link
 ########################################################
 def copy_trello_card(card_id, target_list_id, pos="bottom"):
+    if _mock_write("copy_card", card_id=card_id, target_list_id=target_list_id):
+        # Synthetic card, same shape the real POST returns — callers read ["id"] and
+        # ["shortLink"] off it to persist the mirror.
+        mock_id = f"mock-copy-{card_id}"
+        return {"id": mock_id, "shortLink": mock_id, "idList": target_list_id}
+
     url = "https://api.trello.com/1/cards"
     params = {
         "key": cfg.TRELLO_API_KEY,
@@ -2565,6 +2620,9 @@ def update_mirror_card_content(primary_card_id, new_title=None, new_description=
 
 
 def link_cards(primary_id, secondary_id):
+    if _mock_write("link_cards", primary_id=primary_id, secondary_id=secondary_id):
+        return
+
     base = "https://trello.com/c/"
     for src, dst in ((primary_id, secondary_id), (secondary_id, primary_id)):
         url = f"https://api.trello.com/1/cards/{src}/attachments"

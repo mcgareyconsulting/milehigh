@@ -162,6 +162,18 @@ def create_trello_card_core(
                     error_type=type(scan_err).__name__,
                 )
 
+        from app.trello.api import _mock_write
+        if _mock_write("create_card", list_id=list_id, name=card_title):
+            # A synthetic id, the same shape set_mirror_date_range mocks with, so the caller
+            # persists something and the rest of the flow behaves identically in local dev.
+            mock_id = f"mock-card-{list_id}-{card_title[:24]}"
+            return {
+                "success": True,
+                "card_data": {"id": mock_id, "name": card_title, "desc": card_description},
+                "card_id": mock_id,
+                "adopted": False,
+            }
+
         url = "https://api.trello.com/1/cards"
         payload = {
             "key": cfg.TRELLO_API_KEY,
