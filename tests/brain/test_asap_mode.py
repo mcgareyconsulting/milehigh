@@ -7,8 +7,8 @@ stamp start_install five business days out and derive comp_eta from num_guys;
 that placeholder is gone.) While set, a transition into stage 'Paint Complete'
 makes UpdateStageCommand rip the release straight to 'Ship Planning' — one event
 in DB (action='update_stage', payload includes asap_intercepted/via), one Trello
-move (to Shipping planning list). Reaching Ship Complete clears the flag but
-LEAVES the date intact.
+move (to Shipping planning list). Ship Complete KEEPS the flag (BUG-27); reaching
+Install Start or later clears it but LEAVES the date intact.
 """
 from unittest.mock import patch
 
@@ -306,9 +306,9 @@ class TestAsapAutoAdvance:
             assert r.stage_group == "READY_TO_SHIP"
             # Ship Planning is fixed tier 2
             assert r.fab_order == 2
-            # Fixture has ASAP flag but no hard date — N5 formula path locks blank dates;
-            # ASAP flag is cleared as part of that blanking/lock.
-            assert r.start_install_asap is False
+            # Fixture has ASAP flag but no hard date — N5 formula path locks blank dates,
+            # but the ASAP flag rides through the ship stages untouched (BUG-27).
+            assert r.start_install_asap is True
             assert r.start_install is None
             assert r.start_install_formulaTF is False
 
@@ -377,13 +377,13 @@ class TestAsapAutoAdvance:
 
 
 # ---------------------------------------------------------------------------
-# UpdateStageCommand: ASAP drop on Ship Complete or later
+# UpdateStageCommand: ASAP kept through Ship Complete, dropped at Install Start or later
 # ---------------------------------------------------------------------------
 
 class TestAsapDropOnCompletion:
-    def test_ship_complete_clears_flag_and_keeps_date(self, app):
-        """Reaching Ship Complete clears the ASAP flag but leaves the hard
-        start_install / comp_eta set at ASAP-flag time untouched."""
+    def test_ship_complete_keeps_flag_and_date(self, app):
+        """BUG-27: Ship Complete no longer drops ASAP — the red must persist on the
+        ship lanes. The hard start_install / comp_eta are untouched too."""
         from datetime import date
 
         with app.app_context():
@@ -402,20 +402,47 @@ class TestAsapDropOnCompletion:
             from app.brain.job_log.features.stage.command import UpdateStageCommand
             patches = _stage_command_patches()
             with patches[0], patches[1], patches[2]:
-                UpdateStageCommand(job_id=1, release="A", stage="Ship Complete").execute()
+                result = UpdateStageCommand(job_id=1, release="A", stage="Ship Complete").execute()
 
             db.session.refresh(r)
             assert r.stage == "Ship Complete"
-            # ASAP drop clears the rush flag; the dates it set are left intact.
-            assert r.start_install_asap is False
+            assert r.start_install_asap is True
             assert r.start_install == date(2026, 7, 1)
             assert r.comp_eta == date(2026, 7, 3)
             assert r.start_install_formulaTF is False
-            # BUG-11: the ship stages no longer wash the color. Dropping ASAP takes the
-            # red off, but the date still shows green/yellow until install starts.
             assert r.start_install_no_color is False
+            assert result.extras.get("asap_dropped") is None
+            assert not any(
+                isinstance(e.payload, dict)
+                and e.payload.get("reason") == "asap_dropped_on_ship_complete"
+                for e in ReleaseEvents.query.all()
+            )
 
-            # A child event records the ASAP drop, linked to the stage event, with no date.
+    def test_install_start_drops_flag_and_keeps_date(self, app):
+        """Reaching Install Start clears the ASAP flag with a linked child event, and
+        leaves the date alone. Formula-dated on purpose: the colour cascade no-ops
+        without a hard date, so this isolates the ASAP drop rule itself."""
+        with app.app_context():
+            r = _make_release(
+                1, "A",
+                stage="Ship Complete",
+                fab_order=2,
+                start_install_asap=True,
+                start_install=None,
+                start_install_formulaTF=True,
+            )
+            db.session.commit()
+
+            from app.brain.job_log.features.stage.command import UpdateStageCommand
+            patches = _stage_command_patches()
+            with patches[0], patches[1], patches[2]:
+                result = UpdateStageCommand(job_id=1, release="A", stage="Install Start").execute()
+
+            db.session.refresh(r)
+            assert r.stage == "Install Start"
+            assert r.start_install_asap is False
+            assert result.extras.get("asap_dropped") is True
+
             stage_event = ReleaseEvents.query.filter_by(action="update_stage").one()
             drop = [
                 e for e in ReleaseEvents.query.all()
@@ -425,6 +452,21 @@ class TestAsapDropOnCompletion:
             assert len(drop) == 1
             assert drop[0].payload["parent_event_id"] == stage_event.id
             assert "start_install" not in drop[0].payload
+
+    def test_hold_keeps_flag(self, app):
+        """Hold ranks above Install Start numerically (99) but is not progress — a
+        held rush release keeps its flag."""
+        with app.app_context():
+            r = _make_release(1, "A", stage="Ship Complete", start_install_asap=True)
+            db.session.commit()
+
+            from app.brain.job_log.features.stage.command import UpdateStageCommand
+            patches = _stage_command_patches()
+            with patches[0], patches[1], patches[2]:
+                UpdateStageCommand(job_id=1, release="A", stage="Hold").execute()
+
+            db.session.refresh(r)
+            assert r.start_install_asap is True
 
     def test_non_asap_reaching_ship_complete_is_untouched(self, app):
         with app.app_context():

@@ -433,16 +433,16 @@ class TestInboundListMoveRetiersFabOrder:
 
 
 # ---------------------------------------------------------------------------
-# Inbound list move runs the shared ASAP-drop rule
+# Inbound list moves never drop ASAP
 # ---------------------------------------------------------------------------
 
 class TestInboundAsapDrop:
-    """The shop advances work by dragging cards. This path writes the stage itself
-    rather than going through UpdateStageCommand, so it has to call the same ASAP-drop
-    rule — while that rule lived inside the command, a card dragged to 'Shipping
-    completed' kept its red forever (two such rows found in production 2026-09-03)."""
+    """BUG-27: ASAP is kept through Ship Complete and comes off only at Install Start or
+    later. Inbound lands on the floor of a list's zone and 'Shipping completed' floors at
+    Ship Complete, so no Trello drag can reach the drop — a rush card dragged to Shipping
+    completed keeps its red on purpose."""
 
-    def test_drag_to_shipping_completed_drops_the_asap_flag(self, app):
+    def test_drag_to_shipping_completed_keeps_the_asap_flag(self, app):
         from datetime import date
         from app.models import Releases, ReleaseEvents
 
@@ -464,21 +464,17 @@ class TestInboundAsapDrop:
             db.session.expire_all()
             r = Releases.query.filter_by(job=1, release="A").one()
             assert r.stage == "Ship Complete"
-            assert r.start_install_asap is False, "the drag must drop the rush flag"
-            # Flag only — the dates the PM owns are untouched.
+            assert r.start_install_asap is True, "ASAP persists through Ship Complete"
+            # And the dates the PM owns are untouched.
             assert r.start_install == date(2026, 9, 10)
             assert r.comp_eta == date(2026, 9, 11)
             assert r.start_install_no_color is False
 
-            stage_event = ReleaseEvents.query.filter_by(action="update_stage").one()
-            drops = [
-                e for e in ReleaseEvents.query.all()
-                if isinstance(e.payload, dict)
+            assert not any(
+                isinstance(e.payload, dict)
                 and e.payload.get("reason") == "asap_dropped_on_ship_complete"
-            ]
-            assert len(drops) == 1
-            assert drops[0].source == "Trello"
-            assert drops[0].payload["parent_event_id"] == stage_event.id
+                for e in ReleaseEvents.query.all()
+            )
 
     def test_drag_short_of_ship_complete_keeps_the_asap_flag(self, app):
         from app.models import Releases, ReleaseEvents
