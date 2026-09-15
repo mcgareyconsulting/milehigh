@@ -23,6 +23,7 @@ import axios from 'axios';
 
 import { API_BASE_URL } from '../utils/api';
 import { stageTint } from '../utils/stageTint';
+import { ISSUE_ACTIONS, issueEventSummary } from './ReleaseActivityFeed';
 
 const UNDO_WHITELIST = new Set([
     'update_stage',
@@ -51,9 +52,11 @@ const ATTACHMENT_ACTIONS = new Set([
     'upload_drawing',
     'save_drawing_version',
     'delete_drawing_version',
+    ...ISSUE_ACTIONS,
 ]);
 
 function attachmentSummary(event) {
+    if (ISSUE_ACTIONS.has(event?.action)) return issueEventSummary(event);
     const payload = event?.payload || {};
     const to = payload.to && typeof payload.to === 'object' ? payload.to : {};
     const from = payload.from && typeof payload.from === 'object' ? payload.from : {};
@@ -103,6 +106,9 @@ const ACTION_FIELD_LABEL = {
     upload_drawing: 'Drawing',
     save_drawing_version: 'Drawing',
     delete_drawing_version: 'Drawing',
+    create_issue: 'Issue',
+    update_issue: 'Issue',
+    add_issue_attachment: 'Issue',
 };
 
 export function fieldLabelForAction(action) {

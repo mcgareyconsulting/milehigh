@@ -5,16 +5,71 @@
  * exports:
  *   ACTIVITY_ACTIONS: Set of non-note event actions that appear in the rail
  *   summarizeActivity: One human sentence + author for a ReleaseEvents row
+ *   issueEventSummary: One sentence for a Release Issue Register event (shared with Change Log)
+ *   ISSUE_ACTIONS: The release-event actions the Issue Register writes
  *   formatDateValue: Display a date payload without UTC off-by-one
  * imports_from: []
  * imported_by: [frontend/src/components/ReleaseNotesRail.jsx,
  *   frontend/src/components/ReleaseActivityFeed.test.jsx]
  * invariants:
  *   - Activity rail: notes (separate action), stage, fab order, ship date, start install,
- *     clear_hard_date. Everything else stays on Change Log only.
+ *     clear_hard_date, photo/drawing uploads, and issue create/update/evidence. Everything else
+ *     stays on Change Log only.
  *   - Pure helpers — no network, no React.
- * updated_by_agent: 2026-08-08T00:00:00Z
+ * updated_by_agent: 2026-09-15T00:00:00Z
  */
+
+/** Issue Register events (app/brain/release_issues/service.py). Payload `to` holds the issue. */
+export const ISSUE_ACTIONS = new Set([
+    'create_issue',
+    'update_issue',
+    'add_issue_attachment',
+]);
+
+const ISSUE_FIELD_LABEL = {
+    title: 'title',
+    description: 'description',
+    department: 'department',
+    category: 'category',
+    priority: 'priority',
+    status: 'status',
+    estimated_cost: 'estimated cost',
+};
+
+const issueCost = (value) => {
+    if (value == null || value === '') return 'Unknown/TBD';
+    const n = Number(value);
+    return Number.isFinite(n)
+        ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+        : String(value);
+};
+
+const describeIssueChange = (c) => {
+    const label = ISSUE_FIELD_LABEL[c.field] || c.field;
+    if (c.field === 'description') return 'description edited';
+    if (c.field === 'estimated_cost') return `${label} ${issueCost(c.from)} → ${issueCost(c.to)}`;
+    return `${label} ${c.from ?? '—'} → ${c.to ?? '—'}`;
+};
+
+export function issueEventSummary(event) {
+    const to = event?.payload?.to && typeof event.payload.to === 'object' ? event.payload.to : {};
+    const ref = [to.display_id, to.title ? `“${to.title}”` : null].filter(Boolean).join(' ');
+    switch (event?.action) {
+        case 'create_issue': {
+            const bits = [to.department, to.priority].filter(Boolean).join(' · ');
+            return `Issue opened — ${ref || 'untitled'}${bits ? ` (${bits})` : ''}`;
+        }
+        case 'update_issue': {
+            const changes = Array.isArray(to.changes) ? to.changes : [];
+            const detail = changes.map(describeIssueChange).join('; ');
+            return `Issue ${ref || 'updated'}${detail ? ` — ${detail}` : ' updated'}`;
+        }
+        case 'add_issue_attachment':
+            return `Evidence added to issue ${ref}${to.filename ? ` — ${to.filename}` : ''}`;
+        default:
+            return null;
+    }
+}
 
 /** Non-note actions that belong in the mixed activity rail. */
 export const ACTIVITY_ACTIONS = new Set([
@@ -31,6 +86,7 @@ export const ACTIVITY_ACTIONS = new Set([
     'upload_drawing',
     'save_drawing_version',
     'delete_drawing_version',
+    ...ISSUE_ACTIONS,
 ]);
 
 /** Display a date payload value (ISO date or ASAP flag) without UTC off-by-one. */
@@ -120,6 +176,11 @@ export function summarizeActivity(event) {
         const next = to && typeof to === 'object' ? to.version : null;
         if (prev != null && next != null) return { text: `Markup saved — v${prev} → v${next}`, author };
         return { text: 'Markup saved', author };
+    }
+
+    if (ISSUE_ACTIONS.has(action)) {
+        const text = issueEventSummary(event);
+        return text ? { text, author } : null;
     }
 
     if (action === 'delete_drawing_version') {

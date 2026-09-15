@@ -1,14 +1,14 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: The single release modal — Details / Attachments / Change Log — opened from the Job
+ * purpose: The single release modal — Details / Attachments / Issues / Change Log — opened from the Job
  *   Log table, the card grid, the Timeline, Archive and Subs. Activity rail on Details and
  *   Change Log (hidden on Attachments for the full-width viewer).
  * exports:
  *   ReleaseHubModal: Portal modal shell for a release
  * imports_from: [react, react-dom, ./JobDetailsBody, ./pdfViewer/PdfViewerPane, ./EventsList,
- *   ./ReleaseNotesRail, ./StageIconRow, ../utils/stageTint, ../constants/modalSize,
- *   ../hooks/useBreakpoint]
+ *   ./ReleaseNotesRail, ./StageIconRow, ./releaseIssues/ReleaseIssuesPane, ../utils/stageTint,
+ *   ../utils/auth, ../constants/modalSize, ../hooks/useBreakpoint]
  * imported_by: [frontend/src/components/JobsTableRow.jsx, frontend/src/components/JobLogCardGrid.jsx,
  *   frontend/src/components/GanttChart.jsx]
  * invariants:
@@ -28,7 +28,9 @@
  *   - The header owns the stage pill and the compact banana row; both follow an in-pane stage
  *     edit immediately via onStageChange, without waiting for the host's refetch
  *   - Header identity is ONE line: label, job, description, stage, then PM/detailer
- * updated_by_agent: 2026-09-03T00:00:00Z
+ *   - Issues (Release Issue Register, T11) is ADMIN-ONLY in v1 and needs the release id; the
+ *     server gates every issue route regardless, the tab check is presentation only
+ * updated_by_agent: 2026-09-15T00:00:00Z
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -38,7 +40,9 @@ import { PdfViewerPane } from './pdfViewer/PdfViewerPane';
 import { ReleaseNotesRail } from './ReleaseNotesRail';
 import EventsList from './EventsList';
 import { StageIconRow } from './StageIconRow';
+import { ReleaseIssuesPane } from './releaseIssues/ReleaseIssuesPane';
 import { stageTint } from '../utils/stageTint';
+import { checkAuth, readCachedRoleFlags } from '../utils/auth';
 import { MODAL_PANEL_SIZE } from '../constants/modalSize';
 import { usePersistScroll } from '../hooks/usePersistScroll';
 import { useBreakpoint } from '../hooks/useBreakpoint';
@@ -46,6 +50,7 @@ import { useBreakpoint } from '../hooks/useBreakpoint';
 const TABS = [
     { key: 'details', label: 'Details' },
     { key: 'attachments', label: 'Attachments' },
+    { key: 'issues', label: 'Issues', adminOnly: true },
     { key: 'changelog', label: 'Change Log' },
 ];
 
@@ -75,6 +80,8 @@ export function ReleaseHubModal({
     onNotesChanged = null,
     /** Refetch hook for the host list — every write in the Details pane calls it. */
     onJobUpdate = null,
+    /** Opens the Issues tab on this issue (notification click-through). */
+    initialIssueId = null,
 }) {
     const startTab = normalizeTab(initialTab);
     const [activeTab, setActiveTab] = useState(startTab);
@@ -92,6 +99,16 @@ export function ReleaseHubModal({
     // Stage the header renders. Seeded from the row, then owned by the Details
     // pane's select until the host's refetch brings a fresh row in.
     const [liveStage, setLiveStage] = useState(null);
+    // Issues tab is admin-only. Cached role flags paint first; checkAuth confirms.
+    const [isAdmin, setIsAdmin] = useState(() => readCachedRoleFlags().isAdmin);
+    const [openIssueCount, setOpenIssueCount] = useState(0);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        let cancelled = false;
+        checkAuth().then((u) => { if (!cancelled) setIsAdmin(!!u?.is_admin); });
+        return () => { cancelled = true; };
+    }, [isOpen]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -99,10 +116,11 @@ export function ReleaseHubModal({
         setActiveTab(tab);
         setVisited((prev) => ({ ...prev, [tab]: true }));
         setBadgeFromPane(0);
+        setOpenIssueCount(0);
         setLiveStage(null);
         detailsScrollStore.current = 0;
         changelogScrollStore.current = 0;
-    }, [isOpen, initialTab, job?.id]);
+    }, [isOpen, initialTab, job?.id, initialIssueId]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -144,7 +162,12 @@ export function ReleaseHubModal({
     // Attachments needs the release row's id to fetch versions/photos; without it the pane would
     // just render 404s, so that tab drops out. Activity is a tab only where the rail cannot fit.
     const tabs = [
-        ...TABS.filter((tab) => tab.key !== 'attachments' || releaseId != null),
+        ...TABS.filter((tab) => {
+            if (tab.key === 'attachments' || tab.key === 'issues') {
+                if (releaseId == null) return false;
+            }
+            return !tab.adminOnly || isAdmin;
+        }),
         ...(isMobile ? [{ key: 'activity', label: 'Activity' }] : []),
     ];
     const showActivityRail = !isMobile && (activeTab === 'details' || activeTab === 'changelog');
@@ -269,6 +292,7 @@ export function ReleaseHubModal({
                         {tabs.map((tab) => {
                             const active = tab.key === activeTab;
                             const showBadge = tab.key === 'attachments' && badgeCount > 0;
+                            const showIssueCount = tab.key === 'issues' && openIssueCount > 0;
                             return (
                                 <button
                                     key={tab.key}
@@ -300,6 +324,22 @@ export function ReleaseHubModal({
                                             aria-label={`${badgeCount} findings to confirm`}
                                         >
                                             {badgeCount}
+                                        </span>
+                                    )}
+                                    {showIssueCount && (
+                                        <span
+                                            className="font-mono font-semibold"
+                                            style={{
+                                                fontSize: 11.5,
+                                                padding: '1px 6px',
+                                                borderRadius: 999,
+                                                background: 'var(--accent-soft)',
+                                                color: 'var(--accent)',
+                                                lineHeight: 1.3,
+                                            }}
+                                            aria-label={`${openIssueCount} open issues`}
+                                        >
+                                            {openIssueCount}
                                         </span>
                                     )}
                                 </button>
@@ -349,6 +389,19 @@ export function ReleaseHubModal({
                                     initialCommentVersionId={initialCommentVersionId}
                                     onOpenVersion={onOpenVersion}
                                     onActionableCount={reportBadge}
+                                />
+                            </div>
+                        )}
+
+                        {isAdmin && visited.issues && releaseId != null && (
+                            <div
+                                className={`absolute inset-0 ${activeTab === 'issues' ? '' : 'hidden'}`}
+                                role="tabpanel"
+                            >
+                                <ReleaseIssuesPane
+                                    releaseId={releaseId}
+                                    initialIssueId={initialIssueId}
+                                    onSummary={(s) => setOpenIssueCount(s?.open_count || 0)}
                                 />
                             </div>
                         )}

@@ -188,6 +188,15 @@ class Config:
             os.path.dirname(PDF_STORAGE_ROOT.rstrip("/")), "order_attachments"
         )
 
+    # Release Issue Register evidence (photos + PDFs per issue). Same derivation
+    # as above so it lands on the persistent disk, never the code tree. Moves with
+    # everything else when the object-storage decision (K3) is made.
+    RELEASE_ISSUE_STORAGE_ROOT = os.environ.get("RELEASE_ISSUE_STORAGE_ROOT")
+    if not RELEASE_ISSUE_STORAGE_ROOT and PDF_STORAGE_ROOT:
+        RELEASE_ISSUE_STORAGE_ROOT = os.path.join(
+            os.path.dirname(PDF_STORAGE_ROOT.rstrip("/")), "release_issues"
+        )
+
     LOOKAHEAD_PDF_STORAGE_ROOT = os.environ.get("LOOKAHEAD_PDF_STORAGE_ROOT")
     if not LOOKAHEAD_PDF_STORAGE_ROOT and PDF_STORAGE_ROOT:
         LOOKAHEAD_PDF_STORAGE_ROOT = os.path.join(
