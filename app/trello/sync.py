@@ -721,7 +721,10 @@ def sync_from_trello(event_info):
             # Ensure the Number of Guys field exists, seeded from the DB (the source of truth)
             # so we never clobber a value set on the other card with a default.
             if rec.install_hrs and "Number of Guys:" not in new_description:
-                seed = int(rec.num_guys) if rec.num_guys else 2
+                # Fallback is the shop default (BUG-24: 3), never a literal — a hardcoded 2 here
+                # got parsed straight back off the card and persisted as the release's crew.
+                from app.brain.job_log.scheduling.config import SchedulingConfig
+                seed = int(rec.num_guys) if rec.num_guys else int(SchedulingConfig.DEFAULT_NUM_GUYS)
                 updated_description = set_num_guys_in_description(new_description, seed)
                 if updated_description != new_description:
                     update_trello_card_description(card_id, updated_description)
