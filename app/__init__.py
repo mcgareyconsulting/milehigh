@@ -445,6 +445,13 @@ def create_app():
     # Initialize database
     db.init_app(app)
 
+    # Cascade trace — a flag-gated walkthrough surface (CASCADE_TRACE=1), off everywhere else.
+    # Prints one readable block per write showing every field that moved, every audit event
+    # written and everything that would have gone to Trello. Hooked at the SQLAlchemy session,
+    # so it reports what actually changed rather than what a command remembered to announce.
+    from app.cascade_trace import init_cascade_trace
+    init_cascade_trace(app, db)
+
     # Initialize the database - only create tables, don't drop and reseed
     with app.app_context():
         # Only create tables if they don't exist

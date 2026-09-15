@@ -51,6 +51,14 @@ def _mock_write(op, **fields):
     Uses cfg (a module-level class attribute), not current_app.config, so it also holds inside the
     outbox retry worker's daemon thread where there is no app context.
     """
+    # Record it either way, so the cascade trace can show the outbound half of an action and
+    # say plainly whether it was simulated or actually sent.
+    try:
+        from app.cascade_trace import note_outbound
+        note_outbound(op, fields, simulated=bool(cfg.TRELLO_MOCK))
+    except Exception:
+        pass
+
     if not cfg.TRELLO_MOCK:
         return False
     logger.info("trello_mock_write_skipped", op=op, **fields)
@@ -70,7 +78,14 @@ def update_trello_card(
         new_due_date: New due date as datetime object (optional)
         clear_due_date: If True, explicitly clear the due date even if new_due_date is None
     """
-    if _mock_write("update_card", card_id=card_id, new_list_id=new_list_id):
+    # The outgoing values, not just the card id: this is the start_install -> Trello due push,
+    # and "what date are we actually sending" is the first question anyone asks of it.
+    if _mock_write(
+        "update_card",
+        card_id=card_id,
+        due=str(new_due_date) if new_due_date else ("cleared" if clear_due_date else None),
+        new_list_id=new_list_id,
+    ):
         return None
 
     url = f"https://api.trello.com/1/cards/{card_id}"
@@ -1853,8 +1868,20 @@ def sync_num_guys_on_card(card_id, install_hrs, num_guys):
             error=str(e),
             error_type=type(e).__name__,
         )
-        return False
+        card = None
     if not card:
+        # This is the one write in the package that has to READ the card first — it only pushes
+        # a description that actually changed. Reads are deliberately not mocked, so with no
+        # Trello credentials the read fails and the write is never reached, which would make the
+        # crew-size push invisible in a walkthrough. Under TRELLO_MOCK, declare the intent so the
+        # cascade block still shows what would have gone out.
+        if cfg.TRELLO_MOCK:
+            _mock_write(
+                "update_card_description",
+                card_id=card_id,
+                would_set=f"Number of Guys: {int(num_guys) if float(num_guys).is_integer() else num_guys}",
+                note="no Trello creds — read skipped",
+            )
         return False
 
     desc = card.get("desc", "") or ""
