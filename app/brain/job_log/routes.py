@@ -1763,6 +1763,65 @@ def get_installer_teams():
     return jsonify({'installer_teams': Config.INSTALLER_TEAMS}), 200
 
 
+@brain_bp.route("/update-num-guys/<int:job>/<release>", methods=["PATCH"])
+@login_required
+@admin_required
+def update_num_guys(job, release):
+    """
+    Set the installer headcount (num_guys) for a job-release.
+
+    BUG-24. The Brain has never had this write path — num_guys was readable everywhere and
+    settable only by editing a Trello card description, which is the "control that disappeared".
+    Writing it here recomputes comp_eta, records a ReleaseEvents row (so it shows in the Change
+    Log and can be undone) and pushes the new count to both Trello card descriptions.
+
+    Admin-gated on purpose: this is a scheduling control, and the same gate the Timeline's
+    drag-to-schedule already uses. Sub users must never see or reach it.
+
+    Parameters:
+        job: int
+        release: str
+
+    Request Body:
+        { "num_guys": number }   # must be > 0
+
+    Returns:
+        JSON object with 'status': 'success', the new num_guys, comp_eta and event_id
+    """
+    from app.brain.job_log.features.num_guys.command import UpdateNumGuysCommand
+
+    body = request.json or {}
+    if 'num_guys' not in body:
+        return jsonify({'error': 'num_guys is required'}), 400
+
+    raw = body.get('num_guys')
+    try:
+        num_guys = float(raw)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'num_guys must be a number'}), 400
+
+    # A crew of zero is not a schedule, it is a divide-by-zero dressed as data: comp_eta would
+    # silently fall back to the default headcount and report a window nobody planned.
+    if num_guys <= 0:
+        return jsonify({'error': 'num_guys must be greater than zero'}), 400
+
+    logger.debug("num_guys_update_received", job=job, release=release, num_guys=num_guys)
+
+    try:
+        result = UpdateNumGuysCommand(
+            job_id=job,
+            release=release,
+            num_guys=num_guys,
+        ).execute()
+    except ValueError as e:
+        msg = str(e)
+        if 'not found' in msg:
+            return jsonify({'error': msg}), 404
+        return jsonify({'error': msg}), 400
+
+    return jsonify(result.to_dict()), 200
+
+
 @brain_bp.route("/update-start-install/<int:job>/<release>", methods=["PATCH"])
 @login_required
 def update_start_install(job, release):
@@ -2801,7 +2860,7 @@ def get_events():
         from app.models import Releases
         UNDO_WHITELIST = {
             'update_stage', 'update_notes', 'update_fab_order', 'update_start_install',
-            'update_ship_date', 'update_installer',
+            'update_ship_date', 'update_installer', 'update_num_guys',
         }
         UNDO_FIELD = {
             'update_stage': 'stage',
@@ -2810,6 +2869,7 @@ def get_events():
             'update_start_install': 'start_install',
             'update_ship_date': 'ship_date',
             'update_installer': 'installer',
+            'update_num_guys': 'num_guys',
         }
         # DWL whitelist: submittal events with action='updated' whose payload
         # targets one of these fields. Mirrors _DWL_UNDO_FIELDS in the undo
@@ -2960,6 +3020,9 @@ _UNDO_WHITELIST_FIELD = {
     # A timeline drag writes the installer, so a mis-drop has to be reversible. Undoing it re-runs
     # AssignInstallerCommand with the old value, which also walks the mirror Trello card back.
     'update_installer': 'installer',
+    # BUG-24: a crew-size edit is an ordinary scheduling write, so it undoes like one. Reverting
+    # it re-runs the command with the old count, which recomputes comp_eta back as a side effect.
+    'update_num_guys': 'num_guys',
     'set_asap': 'start_install_asap',
     'clear_asap': 'start_install_asap',
 }
@@ -3020,6 +3083,14 @@ def _dispatch_undo(event, *, source, defer_cascade):
             job_id=event.job, release=event.release,
             start_install=from_date,
             is_hard_date=payload.get('is_hard_date', True),
+            source=source,
+            undone_event_id=event.id,
+        ).execute()
+    if action == 'update_num_guys':
+        from app.brain.job_log.features.num_guys.command import UpdateNumGuysCommand
+        return UpdateNumGuysCommand(
+            job_id=event.job, release=event.release,
+            num_guys=payload['from'],
             source=source,
             undone_event_id=event.id,
         ).execute()
@@ -4031,3 +4102,84 @@ def sync_health():
     except Exception as e:
         logger.error("sync_health_check_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({'error': str(e)}), 500
+
+
+@brain_bp.route("/sync-failures", methods=["GET"])
+@login_required
+@admin_required
+def sync_failures():
+    """List outbound pushes that were given up on, newest first.
+
+    BUG-25 "no silent mismatch": a Brain update that never reached Trello/Procore is currently
+    an ERROR line in a log file nobody on this team reads. /sync-health already counts them;
+    this names them — job, release, action and the error — so an authorized user can see WHICH
+    release is out of sync and go fix it by hand. Read-only, admin-only.
+
+    The permanent home for these is the Release Issue & Error Register (T11); this endpoint is
+    the data it will read, and the stopgap until it exists.
+
+    Query params:
+        limit: max rows per destination (default 50, capped at 200)
+
+    Returns:
+        JSON: { "trello": [...], "procore": [...], "total": <int> }
+    """
+    from app.models import TrelloOutbox, ProcoreOutbox
+
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+    except (TypeError, ValueError):
+        limit = 50
+
+    trello_rows = (
+        TrelloOutbox.query
+        .filter(TrelloOutbox.status == 'failed')
+        .order_by(TrelloOutbox.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    procore_rows = (
+        ProcoreOutbox.query
+        .filter(ProcoreOutbox.status == 'failed')
+        .order_by(ProcoreOutbox.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    def _trello(item):
+        event = item.event
+        return {
+            'id': item.id,
+            'destination': 'trello',
+            'action': item.action,
+            'job': getattr(event, 'job', None),
+            'release': getattr(event, 'release', None),
+            'event_id': item.event_id,
+            'event_action': getattr(event, 'action', None),
+            'retry_count': item.retry_count,
+            'max_retries': item.max_retries,
+            'error': item.error_message,
+            'created_at': item.created_at.isoformat() if item.created_at else None,
+        }
+
+    def _procore(item):
+        return {
+            'id': item.id,
+            'destination': 'procore',
+            'action': item.action,
+            'submittal_id': item.submittal_id,
+            'project_id': item.project_id,
+            'retry_count': item.retry_count,
+            'max_retries': item.max_retries,
+            'error': item.error_message,
+            'created_at': item.created_at.isoformat() if item.created_at else None,
+        }
+
+    trello = [_trello(i) for i in trello_rows]
+    procore = [_procore(i) for i in procore_rows]
+
+    return jsonify({
+        'trello': trello,
+        'procore': procore,
+        'total': len(trello) + len(procore),
+    }), 200

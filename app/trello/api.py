@@ -2159,40 +2159,80 @@ def calculate_business_days_after(start_date, days, calendar=None):
     )
 
 
+# BUG-25 — where a Brain-originated install date lands on a Trello card.
+#
+# Bill: "Start Install goes to the Trello Due Date only, never Start." The PRIMARY card already
+# obeys that (its writers push new_due_date=start_install and nothing else). The MIRROR card did
+# not: it was pushed as a RANGE, start=start_install and due=comp_eta, so Trello's Due showed the
+# completion day and the install day sat in Start — the inversion Bill is describing.
+#
+# With this True the mirror is pushed as a POINT on the install day: due=start_install, start
+# cleared. That is the package's rule read as covering every Brain-originated card write. It costs
+# the mirror its duration in Trello, which the mirror was designed to carry
+# (project_mirror_cards_timeline) — the tension the roadmap flagged as "settle before the one-line
+# fix". This constant IS that switch: flip it to False and the range bar comes back, nothing else
+# changes. All of it dies with T4; do not build more on top of it.
+MIRROR_DUE_ONLY = True
+
+
 def update_card_date_range(card_short_link, start_date, due_date):
     """
-    Update a card's start and due dates.
+    Push a release's install window to a card.
+
+    With MIRROR_DUE_ONLY (the default) only `due` is written — set to `start_date`, the install
+    day — and any existing `start` is cleared, so the install date is on the Due Date and nowhere
+    else. `due_date` (comp_eta) is then unused; it is still accepted so the three call sites and
+    their tests keep their shape for the flip back.
 
     Args:
         card_short_link (str): The card's short link (from fileName)
-        start_date (datetime.date): The start date
-        due_date (datetime.date): The due date
+        start_date (datetime.date): The start date — the install day, and the DUE date written
+        due_date (datetime.date): The completion day (comp_eta); ignored while MIRROR_DUE_ONLY
 
     Returns:
         dict: Dictionary containing success status and details
     """
     try:
-        # Convert dates to proper timezone-aware format for Trello
-        start_date_str = mountain_start_datetime(start_date)
-        due_date_str = mountain_due_datetime(due_date)
-
         url = f"https://api.trello.com/1/cards/{card_short_link}"
 
-        payload = {
-            "key": cfg.TRELLO_API_KEY,
-            "token": cfg.TRELLO_TOKEN,
-            "start": start_date_str,
-            "due": due_date_str,
-        }
+        if MIRROR_DUE_ONLY:
+            # The install day, as Due. `start` must be cleared explicitly with a JSON null —
+            # leaving it out of the payload would leave a stale Start on the card, which is the
+            # exact field Bill is reading the wrong date off.
+            due_date_str = mountain_due_datetime(start_date)
+            start_date_str = None
 
-        logger.debug(
-            "mirror_card_date_range_update_requested",
-            card_id=card_short_link,
-            start_date=start_date_str,
-            due_date=due_date_str,
-        )
+            logger.debug(
+                "mirror_card_due_only_update_requested",
+                card_id=card_short_link,
+                due_date=due_date_str,
+            )
 
-        response = requests.put(url, params=payload)
+            response = requests.put(
+                url,
+                params={"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN},
+                json={"due": due_date_str, "start": None},
+            )
+        else:
+            # Legacy range bar: start=install day, due=comp_eta.
+            start_date_str = mountain_start_datetime(start_date)
+            due_date_str = mountain_due_datetime(due_date)
+
+            payload = {
+                "key": cfg.TRELLO_API_KEY,
+                "token": cfg.TRELLO_TOKEN,
+                "start": start_date_str,
+                "due": due_date_str,
+            }
+
+            logger.debug(
+                "mirror_card_date_range_update_requested",
+                card_id=card_short_link,
+                start_date=start_date_str,
+                due_date=due_date_str,
+            )
+
+            response = requests.put(url, params=payload)
 
         if response.status_code == 200:
             logger.debug("mirror_card_date_range_updated", card_id=card_short_link)

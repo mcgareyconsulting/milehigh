@@ -107,6 +107,7 @@ import { dateAtDropX } from '../utils/timelineDrop';
 import { shipLaneDropOutcome, shipLabelFor } from '../utils/shipLaneDrop';
 import { localTodayStr as todayIso, subtractBusinessDays, formatDateShort } from '../utils/formatters';
 import { classifyInstallDate } from '../utils/installDateColor';
+import { installCompleteDate } from '../utils/scheduling';
 import { API_BASE_URL } from '../utils/api';
 import { ReleaseHubModal } from './ReleaseHubModal';
 import { PdfMarkupModal } from './PdfMarkupModal';
@@ -374,6 +375,11 @@ function EyeIcon({ off }) {
 //   grey   no hard date: a projection, or nothing at all. Not a warning, just not a commitment.
 // A card only wears this in the tray. Dropped onto a lane it takes that lane's installer colour,
 // because there the question is whose work it is, not when it is due.
+// The red a card carries when the release is ASAP, as an inline colour rather than a Tailwind class
+// because both the ship-lane point card and the installer bar set `borderColor` inline from their
+// lane palette. Same red as TRAY_BORDER.asap (red-500) so the tray and the lanes agree.
+const ASAP_BORDER_COLOR = 'rgb(239 68 68)';
+
 const TRAY_BORDER = {
     asap: 'border-red-400 border-l-4 border-l-red-500 bg-red-50 ring-2 ring-red-300',
     overdue: 'border-amber-400 border-l-4 border-l-amber-500 bg-amber-50',
@@ -520,20 +526,29 @@ function LaneDropArea({ lane, enabled, registerRef, hintLeft, hintLabel, colPx, 
 // from Shipping Planning to Shipping Completed without leaving the board — that drop writes the
 // STAGE ONLY. Unlike an installer lane, a shipping lane's X position is derived (planning sits on
 // the ship date, completed on the hard Start install), never chosen, so the drop column is ignored.
+//
+// BUG-27: a ship-lane card wears its lane's colour EXCEPT when the release is ASAP, which overrides
+// it in red. The lane colour answers "where is this in shipping"; ASAP answers "this one is a
+// rush", and the rush has to survive the pull out of the Unassigned tray — a release that lost its
+// red the moment it reached Shipping Planning was exactly the card nobody expedited. The flag is
+// read off the row on every render, so the red survives drag, reorder, refresh and filters, and
+// disappears by itself when `asap_drop` clears the flag at Ship Complete.
 function ShipCard({ release, lane, color, minCardH, imgH, detail, wrap, draggable, onClick, onMouseMove, onMouseLeave }) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: `ship:${release.id}:${lane}`,
         data: { row: release.raw, fromLane: lane },
         disabled: !draggable,
     });
+    const isAsap = !!release.raw && trayDateState(release.raw).kind === 'asap';
     return (
         <div
             ref={setNodeRef}
             role="button"
             tabIndex={0}
-            className={`rounded border-2 bg-gray-50 shadow-sm hover:shadow px-2 py-1.5 overflow-hidden select-none text-left ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+            title={isAsap ? 'ASAP — rush release' : undefined}
+            className={`rounded border-2 shadow-sm hover:shadow px-2 py-1.5 overflow-hidden select-none text-left ${isAsap ? 'bg-red-50 ring-2 ring-red-300' : 'bg-gray-50'} ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
             style={{
-                borderColor: color,
+                borderColor: isAsap ? ASAP_BORDER_COLOR : color,
                 opacity: isDragging ? 0.35 : 1,
                 minHeight: minCardH,
                 touchAction: draggable ? 'manipulation' : undefined,
@@ -1020,6 +1035,15 @@ function GanttChart({ filterComplete = false }) {
         return out;
     }, [chartRange.firstDay, totalCols, colPx, colDays]);
 
+    // BUG-26 (1): weekend columns as overlays the LANE BODIES paint, not just the header strip.
+    // Before this the only weekend cue was a faint tint on the date header — inside the chart
+    // Sat and Sun looked like any other working day, which is how installs kept getting planned
+    // across them without anyone noticing. Day zoom only: a week column is not a weekend.
+    const weekendCols = useMemo(
+        () => (colDays === 1 ? columns.filter((c) => c.isWeekend) : []),
+        [columns, colDays],
+    );
+
     const handleMouseMove = (e, item) => {
         setHoveredItem(item);
         setHoverPosition({ x: e.clientX, y: e.clientY });
@@ -1210,6 +1234,7 @@ function GanttChart({ filterComplete = false }) {
             'Start install': row['Start install'] ?? null,
             start_install_formulaTF: row.start_install_formulaTF,
             Stage: row['Stage'] ?? null,
+            comp_eta_effective: row.comp_eta_effective ?? null,
         };
 
         const toShipStage = toLane ? LANE_TO_SHIP_STAGE.get(toLane) : undefined;
@@ -1238,7 +1263,19 @@ function GanttChart({ filterComplete = false }) {
             // Same crew, same day — the user put it back where it was.
             if (fromLane === toLane && dayPart(before['Start install']) === date
                 && before.start_install_formulaTF === false) return;
-            optimistic = { installer: toLane, 'Start install': date, start_install_formulaTF: false };
+            // The bar's end comes from comp_eta_effective, so patching only the start left the
+            // old end in place until the next poll — a drop across a weekend read as a bar of
+            // the wrong length, which is the "install hours don't compute on a weekend drop"
+            // defect. Recompute it here with the same math the server will (utils/scheduling
+            // mirrors calculate_install_complete_date), so the bar is right on the first frame
+            // and spans its work days CONTINUOUSLY through the weekend it bridges.
+            const optimisticEnd = installCompleteDate(date, row['Install HRS'], row.num_guys);
+            optimistic = {
+                installer: toLane,
+                'Start install': date,
+                start_install_formulaTF: false,
+                comp_eta_effective: optimisticEnd || date,
+            };
             call = () => jobsApi.updateStartInstall(job, release, date, toLane);
         }
 
@@ -1366,7 +1403,7 @@ function GanttChart({ filterComplete = false }) {
                                 {columns.map((col) => (
                                     <div
                                         key={col.key}
-                                        className={`absolute border-r border-gray-300 text-center py-1 flex flex-col items-center justify-center ${col.isWeekend ? 'bg-gray-200/40' : ''} ${col.isToday ? 'bg-accent-200' : ''}`}
+                                        className={`absolute border-r border-gray-300 text-center py-1 flex flex-col items-center justify-center ${col.isWeekend ? 'bg-gray-400/45' : ''} ${col.isToday ? 'bg-accent-200' : ''}`}
                                         style={{
                                             left: col.leftPx,
                                             width: colPx,
@@ -1490,6 +1527,14 @@ function GanttChart({ filterComplete = false }) {
                                             className={`relative flex-shrink-0 ${laneCollapsed ? 'bg-gray-200/60' : 'bg-white'}`}
                                             style={{ width: totalPx, height: laneH, ...colGridStyle }}
                                         >
+                                            {/* Weekend columns — drawn first so everything else sits on top. */}
+                                            {weekendCols.map((col) => (
+                                                <div
+                                                    key={`wk-${col.key}`}
+                                                    className="absolute top-0 bottom-0 bg-gray-400/30 pointer-events-none"
+                                                    style={{ left: col.leftPx, width: colPx }}
+                                                />
+                                            ))}
                                             {/* Snapped-week tint */}
                                             <div
                                                 className="absolute top-0 bottom-0 bg-accent-50/40 pointer-events-none"

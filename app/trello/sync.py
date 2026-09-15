@@ -37,6 +37,7 @@ from app.trello.api import (
     update_card_custom_field_number,
     update_card_date_range,
     sync_num_guys_on_card,
+    MIRROR_DUE_ONLY,
     set_num_guys_in_description,
 )
 from app.models import Releases, SyncOperation, SyncLog, SyncStatus, ReleaseEvents, TrelloOutbox, db
@@ -202,8 +203,9 @@ def _apply_num_guys_change(rec, new_num_guys, *, source, trello_user_id=None):
                 },
                 external_user_id=trello_user_id,
             )
-            # Push the new bar end straight to the already-persisted (board-verified) mirror
+            # Push the install window straight to the already-persisted (board-verified) mirror
             # card — no attachment walk needed. Best-effort; the due webhook is a no-op echo.
+            # Under MIRROR_DUE_ONLY what lands on the card is the install day, not the bar end.
             if rec.mirror_trello_card_id:
                 try:
                     update_card_date_range(
@@ -245,6 +247,16 @@ def _handle_mirror_writeback(card_id, card_data, event_info, sync_op):
 
         new_start_date = _card_date("start")
         new_due_date = _card_date("due")
+
+        # BUG-25: outbound now pushes the mirror as a POINT — due = the install day, start
+        # cleared — so on such a card the install day lives in `due` and a due slide is a
+        # start_install move, not a comp_eta move. Reading it the old way would take the
+        # Brain's own push straight back in as "comp_eta = start_install" and flatten the bar
+        # on every single write. A card that still carries a `start` is a legacy range bar and
+        # keeps the original reading, untouched.
+        if MIRROR_DUE_ONLY and new_start_date is None and new_due_date is not None:
+            new_start_date = new_due_date
+            new_due_date = None
 
         cur_start = mirror_rec.start_install
         cur_due = mirror_rec.comp_eta

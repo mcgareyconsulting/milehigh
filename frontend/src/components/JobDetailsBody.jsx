@@ -36,9 +36,10 @@ import { RELEASE_TAGS } from '../constants/releaseTags';
 import { STAGE_OPTIONS } from '../constants/stages';
 import { API_BASE_URL } from '../utils/api';
 import { toYmd, subtractBusinessDays } from '../utils/formatters';
-import { installDays } from '../utils/scheduling';
+import { installDays, DEFAULT_NUM_GUYS } from '../utils/scheduling';
 import { stageTint } from '../utils/stageTint';
 import { setAsapAndAssign } from '../utils/asap';
+import { checkAuth } from '../utils/auth';
 import { compressImage } from '../utils/imageCompress';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { ConfirmDialog } from './shared/ConfirmDialog';
@@ -233,6 +234,12 @@ export function JobDetailsBody({
     /** Stage changed here — lets the host header pill + banana row follow. */
     onStageChange = null,
 }) {
+    // BUG-24: the crew size is now writable from here, so it needs a local mirror like the other
+    // editable fields (optimistic on save, rolled back if the PATCH is rejected) and an admin flag
+    // — the control is a scheduling decision and must never render for a sub.
+    const [localNumGuys, setLocalNumGuys] = useState(null);
+    const [numGuysBusy, setNumGuysBusy] = useState(false);
+    const [canEditCrew, setCanEditCrew] = useState(false);
     const [materialOrders, setMaterialOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(false);
     const [markAllBusy, setMarkAllBusy] = useState(false);
@@ -291,6 +298,15 @@ export function JobDetailsBody({
     useEffect(() => { setLocalInstaller(job?.installer || ''); }, [job?.installer]);
     useEffect(() => { setLocalStartInstall(rowStartInstall); }, [rowStartInstall]);
     useEffect(() => { setLocalShipDate(rowShipDate); }, [rowShipDate]);
+    useEffect(() => { setLocalNumGuys(job?.num_guys ?? null); }, [job?.num_guys]);
+
+    // Who may edit the crew size. Same gate the Timeline's drag-to-schedule uses, and the reason
+    // the control is absent rather than disabled for everyone else: a sub must not see it at all.
+    useEffect(() => {
+        let cancelled = false;
+        checkAuth().then((u) => { if (!cancelled) setCanEditCrew(!!u?.is_admin); }).catch(() => {});
+        return () => { cancelled = true; };
+    }, []);
 
     useEffect(() => {
         setReleaseTag(job?.release_tag || '');
@@ -590,6 +606,31 @@ export function JobDetailsBody({
         }
     };
 
+    // BUG-24. comp_eta moves with the crew size, so the server's answer is the one that counts:
+    // patch optimistically for the number itself, then ask the host to refetch so Comp. ETA and
+    // the Gantt bar pick up the recomputed window rather than a locally guessed one.
+    const handleNumGuysSave = async (next) => {
+        const n = Number(next);
+        if (!Number.isFinite(n) || n <= 0) {
+            setWriteError('Crew size must be a number greater than zero');
+            return;
+        }
+        if (n === Number(localNumGuys)) return;
+        const prev = localNumGuys;
+        setLocalNumGuys(n);
+        setNumGuysBusy(true);
+        setWriteError(null);
+        try {
+            await jobsApi.updateNumGuys(jobId, relId, n);
+            onJobUpdate?.();
+        } catch (err) {
+            setLocalNumGuys(prev);
+            setWriteError(err.message || 'Could not update crew size');
+        } finally {
+            setNumGuysBusy(false);
+        }
+    };
+
     const handleClearAsap = async () => {
         setStartInstallOpen(false);
         setWriteError(null);
@@ -626,11 +667,11 @@ export function JobDetailsBody({
     const tint = stageTint(localStage);
     const installProg = formatInstallProg(pick('Job Comp', 'job_comp'));
     const installHrs = pick('Install HRS', 'install_hrs');
-    const numGuys = job.num_guys;
+    const numGuys = localNumGuys ?? job.num_guys;
     const workDays = installHrs ? installDays(installHrs, numGuys) : null;
-    const scheduleFootnote = workDays
-        ? `${workDays} work days · ${installHrs} hrs · crew of ${numGuys || 2}`
-        : null;
+    // The crew size half of this line is now a control (BUG-24), so the sentence is split: the
+    // derived part stays text, the number becomes editable for a scheduler.
+    const schedulePrefix = workDays ? `${workDays} work days · ${installHrs} hrs · ` : null;
 
     const heroPhoto = photos.find((p) => p.id === heroId) || photos[0] || null;
     const photoUrl = (pid) => `${API_BASE_URL}/brain/releases/${relPk}/photos/${pid}/file`;
@@ -999,9 +1040,37 @@ export function JobDetailsBody({
                         value={formatDateShort(pick('Comp. ETA', 'comp_eta') || job.comp_eta_effective)}
                     />
                     <Row label="Install Prog" value={installProg} />
-                    {scheduleFootnote && (
+                    {schedulePrefix && (
                         <p className="text-ink-3" style={{ fontSize: 11.5, marginTop: 6 }}>
-                            {scheduleFootnote}
+                            {schedulePrefix}
+                            {canEditCrew ? (
+                                <>
+                                    crew of{' '}
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        disabled={numGuysBusy}
+                                        defaultValue={numGuys ?? DEFAULT_NUM_GUYS}
+                                        key={numGuys ?? DEFAULT_NUM_GUYS}
+                                        onBlur={(e) => handleNumGuysSave(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+                                            if (e.key === 'Escape') {
+                                                e.preventDefault();
+                                                e.target.value = numGuys ?? DEFAULT_NUM_GUYS;
+                                                e.target.blur();
+                                            }
+                                        }}
+                                        title="Installers on this release — changes the Comp. ETA"
+                                        aria-label="Crew size"
+                                        className="font-semibold text-ink bg-transparent border border-hairline-strong rounded"
+                                        style={{ fontSize: 11.5, padding: '0 4px', width: 44 }}
+                                    />
+                                </>
+                            ) : (
+                                `crew of ${numGuys || DEFAULT_NUM_GUYS}`
+                            )}
                         </p>
                     )}
 

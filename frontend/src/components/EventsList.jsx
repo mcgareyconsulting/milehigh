@@ -36,6 +36,7 @@ const UNDO_ACTION_LABEL = {
     update_notes: 'Notes',
     update_fab_order: 'Fab Order',
     update_start_install: 'Start Install',
+    update_num_guys: 'Crew',
 };
 
 /**

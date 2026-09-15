@@ -6,8 +6,9 @@ exports:
   parse_webhook_data: Parse raw Trello webhook JSON into a normalised event dict.
   parse_trello_datetime: Convert Trello ISO-8601 strings to naive Python datetimes.
   extract_identifier: Pull the "NNN-NNN" job-release prefix from a card name.
-  mountain_due_datetime: Convert a local date to 6 pm Mountain ISO string for Trello due dates.
+  mountain_due_datetime: Convert a local date to 6 AM Mountain ISO string for Trello due dates.
   CALENDAR_FIELD / CALENDAR_SHOP / is_business_day: N4 two-calendar model.
+  next_business_day: Snap a projected date forward off a non-working day (BUG-26).
   add_business_days / calculate_business_days_before: working-day math with calendar=.
   should_sort_list_by_fab_order: Decide whether a list needs Fab-Order re-sorting.
   sort_list_if_needed: Sort a list by Fab Order if it is a target list, with logging.
@@ -53,6 +54,24 @@ def is_business_day(d, calendar=CALENDAR_FIELD) -> bool:
             f"unknown calendar {calendar!r}; use CALENDAR_FIELD or CALENDAR_SHOP"
         )
     return d.weekday() <= max_wd
+
+
+def next_business_day(d, calendar=CALENDAR_FIELD):
+    """The first working day on or after ``d`` for the given calendar.
+
+    A no-op when ``d`` is already a working day, so it is safe to wrap any projected
+    date with it. BUG-26: the scheduler must never AUTO-place a start on Sat/Sun — a
+    projection that lands on a weekend is an artifact of the arithmetic, not a plan
+    anyone made. A date a human deliberately chose never passes through here; the
+    Timeline drop writes exactly the day it was dropped on.
+    """
+    if isinstance(d, datetime):
+        d = d.date()
+    if d is None:
+        return None
+    while not is_business_day(d, calendar=calendar):
+        d = d + timedelta(days=1)
+    return d
 
 
 def parse_webhook_data(data):
@@ -212,7 +231,13 @@ def extract_identifier(card_name):
 
 def mountain_due_datetime(local_date):
     """
-    Given a date or datetime, return ISO8601 string for 6pm Mountain time, converted to UTC.
+    Given a date or datetime, return ISO8601 string for 6 AM Mountain time, converted to UTC.
+
+    The docstring said "6pm" for as long as the function has existed while the code built
+    time(6, 0) — 6 AM. Checked under BUG-25 and left as 6 AM deliberately: it is the same
+    CALENDAR day in every US zone, which is all a due date has to be, and moving it to 18:00
+    would rewrite the due time on every card the Brain has ever pushed for no stated need.
+    The text is what was wrong, so the text is what changed.
     """
     # If it's already a datetime, just use the date part
     if isinstance(local_date, datetime):
@@ -220,7 +245,7 @@ def mountain_due_datetime(local_date):
     else:
         d = local_date
 
-    # Combine with 6pm time
+    # Combine with 6 AM Mountain
     dt_mountain = datetime.combine(d, time(6, 0))
     dt_mountain = dt_mountain.replace(tzinfo=ZoneInfo("America/Denver"))
 

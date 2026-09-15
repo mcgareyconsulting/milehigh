@@ -202,6 +202,23 @@ class JobsApi {
         }
     }
 
+    /**
+     * Set the installer headcount for a release (BUG-24). Admin-only server-side; the control
+     * is not rendered for anyone else. Recomputes comp_eta and records an undoable event, so
+     * the caller should refresh the row rather than trust its local copy of the bar.
+     */
+    async updateNumGuys(job, release, numGuys) {
+        try {
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/update-num-guys/${job}/${release}`,
+                { num_guys: numGuys }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update crew size');
+        }
+    }
+
     async getInstallerTeams() {
         try {
             const response = await axios.get(`${API_BASE_URL}/brain/installer-teams`);
