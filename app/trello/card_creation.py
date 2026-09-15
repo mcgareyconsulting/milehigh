@@ -54,7 +54,7 @@ def build_card_description(
     pm: Optional[str] = None,
     by: Optional[str] = None,
     released: Optional[Any] = None,
-    num_guys: float = 2
+    num_guys: float = 3           # SchedulingConfig.DEFAULT_NUM_GUYS — keep in step
 ) -> str:
     """
     Build a standardized Trello card description.
@@ -66,7 +66,7 @@ def build_card_description(
         pm: Project manager
         by: Buyer
         released: Released date
-        num_guys: Number of guys (default: 2)
+        num_guys: Number of guys (default: 3, the shop crew — SchedulingConfig.DEFAULT_NUM_GUYS)
     
     Returns:
         Formatted card description

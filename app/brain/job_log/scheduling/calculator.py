@@ -217,8 +217,8 @@ def calculate_install_complete_date(
     Calculate install completion ETA (a.k.a. comp_eta).
 
     Canonical formula used everywhere (job log, scheduling, mirror seed, Gantt):
-    - daily capacity = num_guys * HOURS_PER_INSTALLER_DAY (default num_guys=2 -> 16,
-      which equals the legacy INSTALL_HOURS_PER_DAY, so the default case is unchanged)
+    - daily capacity = num_guys * HOURS_PER_INSTALLER_DAY (default num_guys=3 -> 24,
+      which equals the legacy INSTALL_HOURS_PER_DAY)
     - install days = ceil(install_hours / daily capacity)
     - completion date = install start + (install days - 1) working days, i.e. the last
       working day of the install (a 1-day install completes the day it starts)

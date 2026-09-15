@@ -774,8 +774,10 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         if excel_data.get("Install HRS"):
             install_hrs = excel_data.get("Install HRS")
             description_parts.append(f"**Install HRS:** {install_hrs}")
-            # Number of Guys
-            num_guys = 2
+            # Number of Guys — the shop default, read from the scheduler so a new card and the
+            # comp_eta computed for it can never disagree about crew size.
+            from app.brain.job_log.scheduling.config import SchedulingConfig
+            num_guys = int(SchedulingConfig.DEFAULT_NUM_GUYS)
             description_parts.append(f"**Number of Guys:** {num_guys}")
 
             # Installation Duration calculation with error handling
@@ -1693,20 +1695,26 @@ def get_card_attachments_by_card_id(trello_card_id):
         return {"success": False, "error": error_msg, "attachments": []}
 
 
-def calculate_installation_duration(install_hrs, num_guys=2):
+def calculate_installation_duration(install_hrs, num_guys=None):
     """
     Calculate installation duration in days from installation hours and number of guys.
 
     Mirrors the canonical comp_eta formula: ceil(install_hrs / (num_guys * 8)) working days.
-    Default num_guys=2 (matches the card-creation default and SchedulingConfig.DEFAULT_NUM_GUYS).
+    num_guys=None falls back to SchedulingConfig.DEFAULT_NUM_GUYS — the ONE place the default
+    crew size lives. It used to be a literal 2 here, which meant the shop default had to be
+    changed in six files at once and could silently disagree with the scheduler.
 
     Args:
         install_hrs (float): Installation hours
-        num_guys (float): Number of guys (default: 2)
+        num_guys (float): Number of guys (default: SchedulingConfig.DEFAULT_NUM_GUYS)
 
     Returns:
         int: Installation duration in days, or None if calculation fails
     """
+    from app.brain.job_log.scheduling.config import SchedulingConfig
+    if num_guys is None:
+        num_guys = SchedulingConfig.DEFAULT_NUM_GUYS
+
     try:
         if install_hrs is None or str(install_hrs).lower() in ["nan", "none", ""]:
             logger.debug("install_hrs_empty", install_hrs=str(install_hrs))
@@ -1927,7 +1935,7 @@ def update_installation_duration_in_description(description, install_hrs, num_gu
     return description
 
 
-def update_num_guys_in_description(description, install_hrs, default_num_guys=2):
+def update_num_guys_in_description(description, install_hrs, default_num_guys=None):
     """
     Update or add the 'Number of Guys' field in a description string.
     If install_hrs exists but Number of Guys is missing, add it with default value.
@@ -1936,13 +1944,18 @@ def update_num_guys_in_description(description, install_hrs, default_num_guys=2)
     Args:
         description (str): The current card description
         install_hrs (float): Installation hours from database
-        default_num_guys (float): Default number of guys if missing (default: 2)
+        default_num_guys (float): Crew size to seed a missing line with; None reads
+            SchedulingConfig.DEFAULT_NUM_GUYS, the single source for the shop default
 
     Returns:
         str: Updated description with Number of Guys field, or original if update fails
     """
     if not description:
         return description
+
+    if default_num_guys is None:
+        from app.brain.job_log.scheduling.config import SchedulingConfig
+        default_num_guys = int(SchedulingConfig.DEFAULT_NUM_GUYS)
 
     # Check if install_hrs exists - if not, we don't need to add Number of Guys
     if not install_hrs or str(install_hrs).lower() in ["nan", "none", ""]:
