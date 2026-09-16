@@ -78,7 +78,9 @@ function JobLogContent() {
     const [pdfMarkupMode, setPdfMarkupMode] = useState('view');
     const [pdfMarkupReleaseId, setPdfMarkupReleaseId] = useState(null);
     // Hosted above the cards/table swap so rotate cannot dump it (BUG-14).
-    const [hub, setHub] = useState(null); // { job, tab, scrollToMaterials }
+    const [hub, setHub] = useState(null); // { job, tab, scrollToMaterials, issueId }
+    // Issue-mention click-through waits here until the release's row has loaded.
+    const [pendingIssue, setPendingIssue] = useState(null); // { releaseId, issueId }
     const restoredHub = useRef(false);
 
     const persistHub = useCallback((next) => {
@@ -117,7 +119,25 @@ function JobLogContent() {
             // Clear nav state so a refresh or back-navigation doesn't reopen the modal.
             navigate(location.pathname, { replace: true, state: null });
         }
+        const oi = location.state?.openIssue;
+        if (oi?.releaseId) {
+            setPendingIssue(oi);
+            navigate(location.pathname, { replace: true, state: null });
+        }
     }, [location.state, location.pathname, navigate]);
+
+    // Open the hub on the Issues tab once the release's row is available. A release
+    // hidden by the current filters is not in the loaded rows, so nothing opens.
+    useEffect(() => {
+        if (!pendingIssue || loading) return;
+        const job = renderRows.find((r) => r.id === pendingIssue.releaseId)
+            || secondarySearchResults.find((r) => r.id === pendingIssue.releaseId);
+        setPendingIssue(null);
+        if (!job) return;
+        const next = { job, tab: 'issues', scrollToMaterials: false, issueId: pendingIssue.issueId };
+        setHub(next);
+        persistHub(next);
+    }, [pendingIssue, loading, renderRows, secondarySearchResults, persistHub]);
 
     // Reopen the hub after a Safari reload-on-rotate. Wait until rows are in so
     // we have the job object; only run once so a later filter change cannot
@@ -411,6 +431,7 @@ function JobLogContent() {
                 releaseId={hub?.job?.id}
                 viewerUrl={hub?.job?.viewer_url}
                 initialTab={hub?.tab || 'details'}
+                initialIssueId={hub?.issueId ?? null}
                 scrollToMaterials={!!hub?.scrollToMaterials}
                 onOrdersChanged={() => refetch(true)}
                 onNotesChanged={(notes) => {

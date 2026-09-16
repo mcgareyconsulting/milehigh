@@ -230,6 +230,20 @@ function FabEntry({ author, at, from, to }) {
     );
 }
 
+function SentenceEntry({ author, at, text }) {
+    return (
+        <div style={{ marginBottom: 12 }}>
+            <div className="flex items-start" style={{ gap: 9 }}>
+                <Avatar name={author} />
+                <div className="min-w-0 flex-1">
+                    <EntryHeader author={author} at={at} />
+                    <div className="text-ink-2 break-words" style={{ marginTop: 5, fontSize: 13.5 }}>{text}</div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function DateEntry({ author, at, label, valueLabel, hard, cleared }) {
     return (
         <div style={{ marginBottom: 12 }}>
@@ -383,18 +397,16 @@ export function buildTimeline(rawEvents, { currentNotes = '' } = {}) {
             continue;
         }
 
-        // Fallback sentence for anything else in ACTIVITY_ACTIONS.
+        // Fallback sentence for anything else in ACTIVITY_ACTIONS (photos, drawings,
+        // issues). Its own kind: routed through DateEntry it read "Photo added … cleared".
         const summary = summarizeActivity(e);
         if (!summary) continue;
         others.push({
             id: e.id,
-            kind: 'date',
+            kind: 'sentence',
             author: summary.author,
             at,
-            label: summary.text,
-            valueLabel: null,
-            cleared: true,
-            hard: false,
+            text: summary.text,
             sortKey: sortMs(at),
         });
     }
@@ -650,6 +662,9 @@ export function ReleaseNotesRail({
                                         cleared={item.body.trim() === ''}
                                     />
                                 );
+                            }
+                            if (item.kind === 'sentence') {
+                                return <SentenceEntry key={key} author={item.author} at={item.at} text={item.text} />;
                             }
                             if (item.kind === 'stage') {
                                 return (

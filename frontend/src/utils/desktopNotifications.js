@@ -170,6 +170,12 @@ export function navigateForNotification(notif, navigate) {
         navigate(`/drafting-work-load?highlight=${encodeURIComponent(notif.submittal_id)}`);
         return;
     }
+    if (notif.release_issue_id) {
+        navigate('/job-log', {
+            state: { openIssue: { releaseId: notif.release_id, issueId: notif.release_issue_id } },
+        });
+        return;
+    }
     if (notif.drawing_version_comment_id || notif.bb_drawing_review_id) {
         navigate('/job-log', {
             state: {

@@ -31,7 +31,11 @@ vi.mock('../services/jobsApi', () => ({
     },
 }));
 vi.mock('../services/notificationApi', () => ({ fetchMentionableUsers: vi.fn(() => Promise.resolve([])) }));
-vi.mock('../utils/auth', () => ({ checkAuth: vi.fn(() => Promise.resolve({ is_admin: true, is_drafter: true })) }));
+vi.mock('../utils/auth', () => ({
+    checkAuth: vi.fn(() => Promise.resolve({ is_admin: true, is_drafter: true })),
+    // No cached role here: the Issues tab's admin gate is covered in ReleaseHubModal.test.jsx.
+    readCachedRoleFlags: vi.fn(() => ({ isAdmin: false, canSeeReport: false, canUseBBChat: false })),
+}));
 
 import { ReleaseHubModal } from './ReleaseHubModal.jsx';
 
