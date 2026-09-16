@@ -8,7 +8,8 @@
  * exports:
  *   Subs: Page component (admin-gated).
  * imports_from: [react, ../utils/auth, ../utils/formatters, ../services/subsApi,
- *   ../components/ReleaseHubModal, ../components/JobDetailsBody]
+ *   ../components/ReleaseHubModal, ../components/JobDetailsBody, ../components/Dropdown,
+ *   ../utils/subsInvoiceExport]
  * imported_by: [App.jsx via SubsLayout at /subs/invoice-paid]
  * invariants:
  *   - Renders an access message (no fetch) unless the authenticated user is_admin.
@@ -19,6 +20,9 @@
  *   - "Install Prog" mirrors the Job Log (job_comp) and is READ-ONLY here; the
  *     editable "Progress" column is the separate installer_invoice_progress field.
  *   - "Install Hrs" mirrors the Job Log (install_hrs) and is READ-ONLY here.
+ *   - Company / Project filters and CSV / PDF export live in the header; exports are
+ *     exactly the filtered rows on screen, with Company + Crew columns (see
+ *     utils/subsInvoiceExport.js). Crew = installer team; company comes from the API.
  *   - Budget = Install Hrs x $55; Est. Billable = Install Prog % x Budget. Both are
  *     derived on render (never stored), and blank rather than $0 when an input is
  *     missing — an unknown progress is not the same claim as zero work done.
@@ -28,12 +32,21 @@ import { checkAuth } from '../utils/auth';
 import { ReleaseHubModal } from '../components/ReleaseHubModal';
 import { formatInstallProg } from '../components/JobDetailsBody';
 import { formatCellValue } from '../utils/formatters';
+import Dropdown, { DropdownItem } from '../components/Dropdown';
 import {
     fetchSubsReleases,
     updateInstallerInvoicePaid,
     updateInstallerInvoiceProgress,
     updateInstallerInvoiceNumbers,
 } from '../services/subsApi';
+import {
+    INSTALL_RATE_PER_HOUR,
+    installBudget,
+    estimatedBillable,
+    fmtUsd,
+    exportSubsInvoicesCsv,
+    exportSubsInvoicesPdf,
+} from '../utils/subsInvoiceExport';
 
 const PAID_FILTERS = [
     { key: 'all', label: 'All', paid: undefined },
@@ -44,54 +57,14 @@ const PAID_FILTERS = [
 const inputClass =
     'rounded border border-hairline-strong bg-input-bg text-ink focus:outline-none focus:ring-1 focus:ring-accent-500';
 
-/** Sub install rate. Budget = Install Hrs x this. */
-const INSTALL_RATE_PER_HOUR = 55;
+/** Toolbar button — same trigger look as the Job Log's Dropdown buttons. */
+const TOOLBAR_BUTTON =
+    'px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1.5 border bg-white dark:bg-slate-600 border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500 disabled:opacity-40 disabled:cursor-not-allowed';
 
-/** Install Hrs -> budget dollars. Null when hours are missing/non-numeric. */
-function installBudget(installHrs) {
-    const n = Number(installHrs);
-    if (installHrs == null || installHrs === '' || !Number.isFinite(n)) return null;
-    return n * INSTALL_RATE_PER_HOUR;
+/** Scroll cap for long dropdown menus (projects can run to dozens). */
+function FilterMenu({ children }) {
+    return <div className="max-h-80 overflow-y-auto">{children}</div>;
 }
-
-/**
- * Job Log install progress (job_comp) as a 0–1 fraction for billing math.
- *   "90" / "90%" / "90.5%" -> 0.9 / 0.9 / 0.905
- *   "X"                    -> 1 (the Job Log's complete marker)
- *   blank / "O" / junk     -> null (unknown, not zero — caller renders an em dash)
- *
- * The percent sign is part of the stored value on real rows (job_comp is free
- * text typed on the Job Log, e.g. "90%"), so it has to be tolerated, not just
- * bare digits. Over-100 entries clamp to 100% — a release cannot bill more than
- * its budget on progress alone.
- */
-function installProgFraction(jobComp) {
-    if (jobComp == null || jobComp === false) return null;
-    const s = String(jobComp).trim();
-    if (!s || s.toUpperCase() === 'O') return null;
-    if (s.toUpperCase() === 'X') return 1;
-    const m = /^(\d+(?:\.\d+)?)\s*%?$/.exec(s);
-    if (!m) return null;
-    return Math.min(Number(m[1]) / 100, 1);
-}
-
-/** Budget earned so far: install progress % x budget. Null if either is unknown. */
-function estimatedBillable(jobComp, installHrs) {
-    const budget = installBudget(installHrs);
-    const fraction = installProgFraction(jobComp);
-    if (budget == null || fraction == null) return null;
-    return budget * fraction;
-}
-
-const fmtUsd = (amount) =>
-    amount == null
-        ? '—'
-        : amount.toLocaleString('en-US', {
-              style: 'currency',
-              currency: 'USD',
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-          });
 
 const fmtDate = (iso) => {
     if (!iso) return '—';
@@ -249,6 +222,11 @@ export default function Subs() {
     const [installers, setInstallers] = useState([]);
     const [paidFilter, setPaidFilter] = useState('all');
     const [installerFilter, setInstallerFilter] = useState('');
+    const [companyFilter, setCompanyFilter] = useState('');
+    const [projectFilter, setProjectFilter] = useState('');
+    const [companies, setCompanies] = useState([]);
+    const [projects, setProjects] = useState([]);
+    const [exporting, setExporting] = useState(false);
     const [searchInput, setSearchInput] = useState('');
     const [searchQ, setSearchQ] = useState('');
     const [busyKey, setBusyKey] = useState(null);
@@ -274,16 +252,20 @@ export default function Subs() {
             const data = await fetchSubsReleases({
                 paid: paidOpt,
                 installer: installerFilter || undefined,
+                company: companyFilter || undefined,
+                job: projectFilter || undefined,
                 q: searchQ || undefined,
             });
             setReleases(data.releases || []);
             setInstallers(data.installers || []);
+            setCompanies(data.companies || []);
+            setProjects(data.projects || []);
         } catch (e) {
             setError(e?.response?.data?.error || e.message || 'Failed to load subs');
         } finally {
             setLoading(false);
         }
-    }, [paidFilter, installerFilter, searchQ]);
+    }, [paidFilter, installerFilter, companyFilter, projectFilter, searchQ]);
 
     useEffect(() => {
         if (authorized) load();
@@ -295,6 +277,47 @@ export default function Subs() {
         const unpaid = releases.filter((r) => !r.installer_invoice_paid).length;
         return { total: releases.length, unpaid, paid: releases.length - unpaid };
     }, [releases]);
+
+    const projectLabel = useMemo(() => {
+        if (!projectFilter) return '';
+        const p = projects.find((x) => String(x.job) === String(projectFilter));
+        return p?.job_name ? `${p.job} — ${p.job_name}` : `Job ${projectFilter}`;
+    }, [projectFilter, projects]);
+
+    // Human label for the active filters — PDF subtitle and export filename.
+    const exportFilterLabel = useMemo(() => {
+        const parts = [];
+        if (companyFilter) parts.push(companyFilter);
+        if (projectLabel) parts.push(projectLabel);
+        if (installerFilter) parts.push(installerFilter);
+        const paidLabel = PAID_FILTERS.find((f) => f.key === paidFilter);
+        if (paidLabel && paidLabel.key !== 'all') parts.push(paidLabel.label);
+        if (searchQ) parts.push(`“${searchQ}”`);
+        return parts.join(' · ');
+    }, [companyFilter, projectLabel, installerFilter, paidFilter, searchQ]);
+
+    const resetFilters = () => {
+        setPaidFilter('all');
+        setCompanyFilter('');
+        setProjectFilter('');
+        setInstallerFilter('');
+        setSearchInput('');
+        setSearchQ('');
+    };
+
+    const handleExport = async (kind) => {
+        if (releases.length === 0 || exporting) return;
+        setExporting(true);
+        setError(null);
+        try {
+            if (kind === 'csv') exportSubsInvoicesCsv({ releases, filterLabel: exportFilterLabel });
+            else await exportSubsInvoicesPdf({ releases, filterLabel: exportFilterLabel });
+        } catch (e) {
+            setError(e?.message || 'Export failed');
+        } finally {
+            setExporting(false);
+        }
+    };
 
     const rowKey = (r) => `${r.job}-${r.release}`;
     const hubRow = useMemo(
@@ -422,51 +445,142 @@ export default function Subs() {
                     </div>
                 </div>
 
-                {/* Filters — pill buttons like T&M status tabs */}
+                {/* Filters — Job Log toolbar dropdowns + search box */}
                 <div className="flex items-center gap-1.5 flex-wrap mb-4">
-                    {PAID_FILTERS.map((f) => (
-                        <button
-                            key={f.key}
-                            type="button"
-                            onClick={() => setPaidFilter(f.key)}
-                            className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
-                                paidFilter === f.key
-                                    ? 'bg-accent-500 border-accent-500 text-white'
-                                    : 'bg-surface border-hairline text-ink-2 hover:bg-surface-2'
-                            }`}
-                        >
-                            {f.label}
-                        </button>
-                    ))}
-
-                    <select
-                        value={installerFilter}
-                        onChange={(e) => setInstallerFilter(e.target.value)}
-                        className="text-sm rounded-lg border border-hairline bg-surface text-ink-2 px-3 py-1.5"
+                    <Dropdown
+                        label={`Paid: ${PAID_FILTERS.find((f) => f.key === paidFilter)?.label || 'All'}`}
+                        active={paidFilter !== 'all'}
+                        menuWidth={140}
                     >
-                        <option value="">All installers</option>
-                        {installers.map((name) => (
-                            <option key={name} value={name}>{name}</option>
+                        {PAID_FILTERS.map((f) => (
+                            <DropdownItem
+                                key={f.key}
+                                active={paidFilter === f.key}
+                                onClick={() => setPaidFilter(f.key)}
+                            >
+                                {f.label}
+                            </DropdownItem>
                         ))}
-                    </select>
+                    </Dropdown>
 
-                    <input
-                        type="search"
-                        value={searchInput}
-                        onChange={(e) => setSearchInput(e.target.value)}
-                        placeholder="Search job, name, invoice #…"
-                        aria-label="Search releases"
-                        className="text-sm rounded-lg border border-hairline bg-surface text-ink px-3 py-1.5 min-w-[12rem] flex-1 max-w-xs focus:outline-none focus:ring-1 focus:ring-accent-500"
-                    />
-
-                    <button
-                        type="button"
-                        onClick={load}
-                        disabled={loading}
-                        className="text-sm px-3 py-1.5 rounded-lg border border-hairline-strong text-ink-2 hover:bg-surface-2 disabled:opacity-50"
+                    <Dropdown
+                        label={companyFilter || 'All companies'}
+                        active={!!companyFilter}
+                        menuWidth={260}
                     >
-                        Refresh
-                    </button>
+                        <FilterMenu>
+                            <DropdownItem active={!companyFilter} onClick={() => setCompanyFilter('')}>
+                                All companies
+                            </DropdownItem>
+                            {companies.map((name) => (
+                                <DropdownItem
+                                    key={name}
+                                    active={companyFilter === name}
+                                    onClick={() => setCompanyFilter(name)}
+                                >
+                                    {name}
+                                </DropdownItem>
+                            ))}
+                        </FilterMenu>
+                    </Dropdown>
+
+                    <Dropdown
+                        label={projectLabel || 'All projects'}
+                        active={!!projectFilter}
+                        menuWidth={280}
+                    >
+                        <FilterMenu>
+                            <DropdownItem active={!projectFilter} onClick={() => setProjectFilter('')}>
+                                All projects
+                            </DropdownItem>
+                            {projects.map((p) => (
+                                <DropdownItem
+                                    key={p.job}
+                                    active={projectFilter === String(p.job)}
+                                    onClick={() => setProjectFilter(String(p.job))}
+                                >
+                                    {p.job_name ? `${p.job} — ${p.job_name}` : p.job}
+                                </DropdownItem>
+                            ))}
+                        </FilterMenu>
+                    </Dropdown>
+
+                    <Dropdown
+                        label={installerFilter || 'All crews'}
+                        active={!!installerFilter}
+                        menuWidth={160}
+                    >
+                        <FilterMenu>
+                            <DropdownItem active={!installerFilter} onClick={() => setInstallerFilter('')}>
+                                All crews
+                            </DropdownItem>
+                            {installers.map((name) => (
+                                <DropdownItem
+                                    key={name}
+                                    active={installerFilter === name}
+                                    onClick={() => setInstallerFilter(name)}
+                                >
+                                    {name}
+                                </DropdownItem>
+                            ))}
+                        </FilterMenu>
+                    </Dropdown>
+
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1 max-w-sm">
+                        <label
+                            htmlFor="subs-search"
+                            className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap shrink-0"
+                        >
+                            Search:
+                        </label>
+                        <input
+                            id="subs-search"
+                            type="text"
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                            placeholder="Job, name, invoice #..."
+                            aria-label="Search releases"
+                            className="min-w-0 flex-1 px-2 py-0.5 text-xs border border-hairline-strong rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-input-bg text-ink"
+                        />
+                        <button
+                            type="button"
+                            onClick={resetFilters}
+                            className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap shrink-0"
+                            title="Clear paid, company, project, crew, and search filters."
+                        >
+                            Reset Filters
+                        </button>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 ml-auto">
+                        <button
+                            type="button"
+                            onClick={load}
+                            disabled={loading}
+                            title="Reload releases"
+                            className={TOOLBAR_BUTTON}
+                        >
+                            {loading ? 'Refreshing…' : 'Refresh'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleExport('csv')}
+                            disabled={loading || exporting || releases.length === 0}
+                            title="Download the rows shown as CSV (Company + Crew columns)"
+                            className={TOOLBAR_BUTTON}
+                        >
+                            Export CSV
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleExport('pdf')}
+                            disabled={loading || exporting || releases.length === 0}
+                            title="Download the rows shown as PDF (Company + Crew columns)"
+                            className={TOOLBAR_BUTTON}
+                        >
+                            {exporting ? 'Exporting…' : 'Export PDF'}
+                        </button>
+                    </div>
                 </div>
 
                 {error && (
@@ -556,6 +670,11 @@ export default function Subs() {
                                                     <div className="flex items-baseline justify-between gap-2">
                                                         <span className="text-sm font-bold text-ink">
                                                             {installer}
+                                                            {rows[0]?.company && (
+                                                                <span className="ml-2 text-xs font-normal text-ink-3">
+                                                                    {rows[0].company}
+                                                                </span>
+                                                            )}
                                                         </span>
                                                         <span className="text-xs text-ink-3 font-mono tabular-nums">
                                                             {unpaidCount} unpaid · {rows.length} total

@@ -56,18 +56,27 @@ def list_subs_releases():
 
     Query params:
         paid: true|false (optional) — filter by installer_invoice_paid
-        installer: exact team name (optional)
+        installer: exact team (crew) name (optional)
+        company: exact sub company name (optional)
+        job: project job number (optional; non-integer is ignored)
         q: free-text search (optional)
     """
     paid = _parse_paid_arg(request.args.get("paid"))
     installer = request.args.get("installer") or None
     if installer is not None:
         installer = installer.strip() or None
+    company = (request.args.get("company") or "").strip() or None
+    try:
+        job = int(request.args.get("job")) if request.args.get("job") else None
+    except ValueError:
+        job = None
     q = request.args.get("q") or None
     if q is not None:
         q = q.strip() or None
 
-    payload = service.list_subs_releases(paid=paid, installer=installer, q=q)
+    payload = service.list_subs_releases(
+        paid=paid, installer=installer, company=company, job=job, q=q
+    )
     return jsonify(payload), 200
 
 
