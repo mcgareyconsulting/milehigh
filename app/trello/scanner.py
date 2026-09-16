@@ -305,8 +305,13 @@ def delete_trello_card(card_id: str) -> Dict:
         Dictionary with success status and result
     """
     from app.config import Config as cfg
+    from app.trello.api import _mock_write
     import requests
-    
+
+    # The only irreversible call in the package — never let local dev reach a live board.
+    if _mock_write("delete_card", card_id=card_id):
+        return {"success": True, "card_id": card_id}
+
     url = f"https://api.trello.com/1/cards/{card_id}"
     params = {
         "key": cfg.TRELLO_API_KEY,

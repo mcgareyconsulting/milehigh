@@ -51,6 +51,14 @@ def _mock_write(op, **fields):
     Uses cfg (a module-level class attribute), not current_app.config, so it also holds inside the
     outbox retry worker's daemon thread where there is no app context.
     """
+    # Record it either way, so the cascade trace can show the outbound half of an action and
+    # say plainly whether it was simulated or actually sent.
+    try:
+        from app.cascade_trace import note_outbound
+        note_outbound(op, fields, simulated=bool(cfg.TRELLO_MOCK))
+    except Exception:
+        pass
+
     if not cfg.TRELLO_MOCK:
         return False
     logger.info("trello_mock_write_skipped", op=op, **fields)
@@ -70,7 +78,14 @@ def update_trello_card(
         new_due_date: New due date as datetime object (optional)
         clear_due_date: If True, explicitly clear the due date even if new_due_date is None
     """
-    if _mock_write("update_card", card_id=card_id, new_list_id=new_list_id):
+    # The outgoing values, not just the card id: this is the start_install -> Trello due push,
+    # and "what date are we actually sending" is the first question anyone asks of it.
+    if _mock_write(
+        "update_card",
+        card_id=card_id,
+        due=str(new_due_date) if new_due_date else ("cleared" if clear_due_date else None),
+        new_list_id=new_list_id,
+    ):
         return None
 
     url = f"https://api.trello.com/1/cards/{card_id}"
@@ -774,8 +789,10 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         if excel_data.get("Install HRS"):
             install_hrs = excel_data.get("Install HRS")
             description_parts.append(f"**Install HRS:** {install_hrs}")
-            # Number of Guys
-            num_guys = 2
+            # Number of Guys — the shop default, read from the scheduler so a new card and the
+            # comp_eta computed for it can never disagree about crew size.
+            from app.brain.job_log.scheduling.config import SchedulingConfig
+            num_guys = int(SchedulingConfig.DEFAULT_NUM_GUYS)
             description_parts.append(f"**Number of Guys:** {num_guys}")
 
             # Installation Duration calculation with error handling
@@ -805,6 +822,14 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
 
         # Join all description parts with newlines
         card_description = "\n".join(description_parts)
+
+        if _mock_write("create_card_from_excel", list_id=list_id, name=card_title):
+            mock_id = f"mock-card-{card_title[:32]}"
+            return {
+                "success": True,
+                "card_id": mock_id,
+                "card_data": {"id": mock_id, "name": card_title, "desc": card_description},
+            }
 
         # Create the card
         url = "https://api.trello.com/1/cards"
@@ -1045,6 +1070,9 @@ def update_card_custom_field(card_id, custom_field_id, text_value):
     Returns:
         True if successful, False otherwise
     """
+    if _mock_write("update_custom_field", card_id=card_id, field=custom_field_id, value=text_value):
+        return True
+
     url = f"https://api.trello.com/1/cards/{card_id}/customField/{custom_field_id}/item"
     params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
     data = {"value": {"text": text_value}}
@@ -1154,6 +1182,9 @@ def update_card_custom_field_number(card_id, custom_field_id, number_value):
     Returns:
         True if successful, False otherwise
     """
+    if _mock_write("update_custom_field_number", card_id=card_id, field=custom_field_id, value=number_value):
+        return True
+
     url = f"https://api.trello.com/1/cards/{card_id}/customField/{custom_field_id}/item"
     params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
     data = {
@@ -1215,6 +1246,12 @@ def sort_list_by_fab_order(list_id, fab_order_field_id):
             - total_cards: int (total cards in list)
             - error: str (if success is False)
     """
+    # Guarded as a WRITE even though it starts with a read: the sort's whole purpose is the
+    # `pos` PUT it issues per card, so running it for real against a live board is exactly what
+    # local dev must not do.
+    if _mock_write("sort_list_by_fab_order", list_id=list_id):
+        return {"success": True, "cards_sorted": 0, "cards_failed": 0, "total_cards": 0}
+
     # Get all cards in the list with custom field items
     url = f"https://api.trello.com/1/lists/{list_id}/cards"
     params = {
@@ -1404,6 +1441,9 @@ def add_comment_to_trello_card(card_id, comment_text, operation_id=None, sender_
     """
     if not comment_text or not comment_text.strip():
         logger.debug("comment_skipped", card_id=card_id, reason="empty comment")
+        return True
+
+    if _mock_write("add_comment", card_id=card_id, comment=comment_text.strip()[:120]):
         return True
 
     # Format comment with timestamp and sender initials
@@ -1693,20 +1733,26 @@ def get_card_attachments_by_card_id(trello_card_id):
         return {"success": False, "error": error_msg, "attachments": []}
 
 
-def calculate_installation_duration(install_hrs, num_guys=2):
+def calculate_installation_duration(install_hrs, num_guys=None):
     """
     Calculate installation duration in days from installation hours and number of guys.
 
     Mirrors the canonical comp_eta formula: ceil(install_hrs / (num_guys * 8)) working days.
-    Default num_guys=2 (matches the card-creation default and SchedulingConfig.DEFAULT_NUM_GUYS).
+    num_guys=None falls back to SchedulingConfig.DEFAULT_NUM_GUYS — the ONE place the default
+    crew size lives. It used to be a literal 2 here, which meant the shop default had to be
+    changed in six files at once and could silently disagree with the scheduler.
 
     Args:
         install_hrs (float): Installation hours
-        num_guys (float): Number of guys (default: 2)
+        num_guys (float): Number of guys (default: SchedulingConfig.DEFAULT_NUM_GUYS)
 
     Returns:
         int: Installation duration in days, or None if calculation fails
     """
+    from app.brain.job_log.scheduling.config import SchedulingConfig
+    if num_guys is None:
+        num_guys = SchedulingConfig.DEFAULT_NUM_GUYS
+
     try:
         if install_hrs is None or str(install_hrs).lower() in ["nan", "none", ""]:
             logger.debug("install_hrs_empty", install_hrs=str(install_hrs))
@@ -1822,8 +1868,20 @@ def sync_num_guys_on_card(card_id, install_hrs, num_guys):
             error=str(e),
             error_type=type(e).__name__,
         )
-        return False
+        card = None
     if not card:
+        # This is the one write in the package that has to READ the card first — it only pushes
+        # a description that actually changed. Reads are deliberately not mocked, so with no
+        # Trello credentials the read fails and the write is never reached, which would make the
+        # crew-size push invisible in a walkthrough. Under TRELLO_MOCK, declare the intent so the
+        # cascade block still shows what would have gone out.
+        if cfg.TRELLO_MOCK:
+            _mock_write(
+                "update_card_description",
+                card_id=card_id,
+                would_set=f"Number of Guys: {int(num_guys) if float(num_guys).is_integer() else num_guys}",
+                note="no Trello creds — read skipped",
+            )
         return False
 
     desc = card.get("desc", "") or ""
@@ -1927,7 +1985,7 @@ def update_installation_duration_in_description(description, install_hrs, num_gu
     return description
 
 
-def update_num_guys_in_description(description, install_hrs, default_num_guys=2):
+def update_num_guys_in_description(description, install_hrs, default_num_guys=None):
     """
     Update or add the 'Number of Guys' field in a description string.
     If install_hrs exists but Number of Guys is missing, add it with default value.
@@ -1936,13 +1994,18 @@ def update_num_guys_in_description(description, install_hrs, default_num_guys=2)
     Args:
         description (str): The current card description
         install_hrs (float): Installation hours from database
-        default_num_guys (float): Default number of guys if missing (default: 2)
+        default_num_guys (float): Crew size to seed a missing line with; None reads
+            SchedulingConfig.DEFAULT_NUM_GUYS, the single source for the shop default
 
     Returns:
         str: Updated description with Number of Guys field, or original if update fails
     """
     if not description:
         return description
+
+    if default_num_guys is None:
+        from app.brain.job_log.scheduling.config import SchedulingConfig
+        default_num_guys = int(SchedulingConfig.DEFAULT_NUM_GUYS)
 
     # Check if install_hrs exists - if not, we don't need to add Number of Guys
     if not install_hrs or str(install_hrs).lower() in ["nan", "none", ""]:
@@ -2019,6 +2082,11 @@ def update_trello_card_description(card_id, new_description):
     Returns:
         dict: Response from Trello API, or None if update fails
     """
+    if _mock_write("update_card_description", card_id=card_id):
+        # A card-shaped dict, matching what the real PUT returns, so callers that read the
+        # response in local dev see the value they just wrote rather than None.
+        return {"id": card_id, "desc": new_description}
+
     url = f"https://api.trello.com/1/cards/{card_id}"
 
     params = {
@@ -2072,6 +2140,9 @@ def update_trello_card_name(card_id, new_name):
     Returns:
         dict: Response from Trello API, or None if update fails
     """
+    if _mock_write("update_card_name", card_id=card_id, name=new_name):
+        return {"id": card_id, "name": new_name}
+
     url = f"https://api.trello.com/1/cards/{card_id}"
 
     params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN, "name": new_name}
@@ -2159,40 +2230,95 @@ def calculate_business_days_after(start_date, days, calendar=None):
     )
 
 
+# BUG-25 — where a Brain-originated install date lands on a Trello card.
+#
+# Bill: "Start Install goes to the Trello Due Date only, never Start." The PRIMARY card already
+# obeys that (its writers push new_due_date=start_install and nothing else). The MIRROR card did
+# not: it was pushed as a RANGE, start=start_install and due=comp_eta, so Trello's Due showed the
+# completion day and the install day sat in Start — the inversion Bill is describing.
+#
+# With this True the mirror is pushed as a POINT on the install day: due=start_install, start
+# cleared. That is the package's rule read as covering every Brain-originated card write. It costs
+# the mirror its duration in Trello, which the mirror was designed to carry
+# (project_mirror_cards_timeline) — the tension the roadmap flagged as "settle before the one-line
+# fix". This constant IS that switch: flip it to False and the range bar comes back, nothing else
+# changes. All of it dies with T4; do not build more on top of it.
+MIRROR_DUE_ONLY = True
+
+
 def update_card_date_range(card_short_link, start_date, due_date):
     """
-    Update a card's start and due dates.
+    Push a release's install window to a card.
+
+    With MIRROR_DUE_ONLY (the default) only `due` is written — set to `start_date`, the install
+    day — and any existing `start` is cleared, so the install date is on the Due Date and nowhere
+    else. `due_date` (comp_eta) is then unused; it is still accepted so the three call sites and
+    their tests keep their shape for the flip back.
 
     Args:
         card_short_link (str): The card's short link (from fileName)
-        start_date (datetime.date): The start date
-        due_date (datetime.date): The due date
+        start_date (datetime.date): The start date — the install day, and the DUE date written
+        due_date (datetime.date): The completion day (comp_eta); ignored while MIRROR_DUE_ONLY
 
     Returns:
         dict: Dictionary containing success status and details
     """
-    try:
-        # Convert dates to proper timezone-aware format for Trello
-        start_date_str = mountain_start_datetime(start_date)
-        due_date_str = mountain_due_datetime(due_date)
-
-        url = f"https://api.trello.com/1/cards/{card_short_link}"
-
-        payload = {
-            "key": cfg.TRELLO_API_KEY,
-            "token": cfg.TRELLO_TOKEN,
-            "start": start_date_str,
-            "due": due_date_str,
+    if _mock_write(
+        "update_card_date_range",
+        card_id=card_short_link,
+        start_date=str(start_date),
+        due_date=str(due_date),
+        due_only=MIRROR_DUE_ONLY,
+    ):
+        # Same success shape a real push returns, so callers behave identically in local dev.
+        return {
+            "success": True,
+            "card_short_link": card_short_link,
+            "start_date": None if MIRROR_DUE_ONLY else str(start_date),
+            "due_date": str(start_date if MIRROR_DUE_ONLY else due_date),
         }
 
-        logger.debug(
-            "mirror_card_date_range_update_requested",
-            card_id=card_short_link,
-            start_date=start_date_str,
-            due_date=due_date_str,
-        )
+    try:
+        url = f"https://api.trello.com/1/cards/{card_short_link}"
 
-        response = requests.put(url, params=payload)
+        if MIRROR_DUE_ONLY:
+            # The install day, as Due. `start` must be cleared explicitly with a JSON null —
+            # leaving it out of the payload would leave a stale Start on the card, which is the
+            # exact field Bill is reading the wrong date off.
+            due_date_str = mountain_due_datetime(start_date)
+            start_date_str = None
+
+            logger.debug(
+                "mirror_card_due_only_update_requested",
+                card_id=card_short_link,
+                due_date=due_date_str,
+            )
+
+            response = requests.put(
+                url,
+                params={"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN},
+                json={"due": due_date_str, "start": None},
+            )
+        else:
+            # Legacy range bar: start=install day, due=comp_eta.
+            start_date_str = mountain_start_datetime(start_date)
+            due_date_str = mountain_due_datetime(due_date)
+
+            payload = {
+                "key": cfg.TRELLO_API_KEY,
+                "token": cfg.TRELLO_TOKEN,
+                "start": start_date_str,
+                "due": due_date_str,
+            }
+
+            logger.debug(
+                "mirror_card_date_range_update_requested",
+                card_id=card_short_link,
+                start_date=start_date_str,
+                due_date=due_date_str,
+            )
+
+            response = requests.put(url, params=payload)
 
         if response.status_code == 200:
             logger.debug("mirror_card_date_range_updated", card_id=card_short_link)
@@ -2245,6 +2371,9 @@ def add_procore_link(card_id, procore_url, link_name=None):
     if not procore_url or not procore_url.strip():
         logger.debug("procore_link_skipped", card_id=card_id, reason="empty url")
         return {"success": False, "error": "Procore URL is required"}
+
+    if _mock_write("add_procore_link", card_id=card_id, url=procore_url.strip()):
+        return {"success": True, "attachment": {"id": f"mock-attach-{card_id}", "url": procore_url.strip()}}
 
     url = f"https://api.trello.com/1/cards/{card_id}/attachments"
 
@@ -2315,6 +2444,12 @@ def add_procore_link(card_id, procore_url, link_name=None):
 # Copy Card to Unassigned and Link
 ########################################################
 def copy_trello_card(card_id, target_list_id, pos="bottom"):
+    if _mock_write("copy_card", card_id=card_id, target_list_id=target_list_id):
+        # Synthetic card, same shape the real POST returns — callers read ["id"] and
+        # ["shortLink"] off it to persist the mirror.
+        mock_id = f"mock-copy-{card_id}"
+        return {"id": mock_id, "shortLink": mock_id, "idList": target_list_id}
+
     url = "https://api.trello.com/1/cards"
     params = {
         "key": cfg.TRELLO_API_KEY,
@@ -2512,6 +2647,9 @@ def update_mirror_card_content(primary_card_id, new_title=None, new_description=
 
 
 def link_cards(primary_id, secondary_id):
+    if _mock_write("link_cards", primary_id=primary_id, secondary_id=secondary_id):
+        return
+
     base = "https://trello.com/c/"
     for src, dst in ((primary_id, secondary_id), (secondary_id, primary_id)):
         url = f"https://api.trello.com/1/cards/{src}/attachments"

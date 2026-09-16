@@ -269,7 +269,7 @@ describe('ReleaseHubModal', () => {
         expect(screen.getByRole('button', { name: '+ Note' })).toBeInTheDocument();
     });
 
-    it('renders the release fields the Job Log row carries', () => {
+    it('renders the release fields the Job Log row carries', async () => {
         renderHub();
         const dialog = screen.getByRole('dialog');
         // Commitments keep the full date; derived rows carry the weekday.
@@ -277,8 +277,10 @@ describe('ReleaseHubModal', () => {
         expect(within(dialog).getByText('Sat, Aug 1')).toBeInTheDocument();      // Comp. ETA
         // PM and By share one row now.
         expect(within(dialog).getByText('Doug · Rich')).toBeInTheDocument();
-        // Crew · Install Hrs likewise.
-        expect(within(dialog).getByText('3 · 24')).toBeInTheDocument();
+        // Install Hrs has its own row; crew size is its own control (admin) so a release with
+        // no install hours can still set it.
+        expect(within(within(dialog).getByText('Install Hrs').parentElement).getByText('24')).toBeInTheDocument();
+        expect(await within(dialog).findByLabelText('Crew size')).toHaveValue(3);
         expect(within(dialog).getByText('14')).toBeInTheDocument();              // Fab Order
         expect(within(dialog).getByText('Black')).toBeInTheDocument();           // Paint color
     });
@@ -286,15 +288,19 @@ describe('ReleaseHubModal', () => {
     it('shows an em dash for empty fields rather than dropping the row', () => {
         renderHub();
         const dialog = screen.getByRole('dialog');
-        // Job Comp / Install Prog and Invoiced are null on this release.
-        expect(within(dialog).getAllByText('—').length).toBeGreaterThanOrEqual(2);
+        // Invoiced is null on this release and still reads as an em dash.
+        expect(within(dialog).getAllByText('—').length).toBeGreaterThanOrEqual(1);
+        // Install Prog is an editable field now: empty, with the em dash as its placeholder.
+        const prog = within(dialog).getByLabelText('Install progress');
+        expect(prog).toHaveValue('');
+        expect(prog).toHaveAttribute('placeholder', '—');
     });
 
-    it('appends % to whole-number Install Prog', () => {
+    it('shows Install Prog in an editable field', () => {
         renderHub({ job: { ...JOB, 'Job Comp': 75 } });
         const dialog = screen.getByRole('dialog');
-        // One place now: the Schedule column's Install Prog row.
-        expect(within(dialog).getByText('75%')).toBeInTheDocument();
+        // The field carries the raw value the Job Log cell edits (75, 50%, X), not a formatted label.
+        expect(within(dialog).getByLabelText('Install progress')).toHaveValue('75');
     });
 
     it('flags an ASAP install with the mini-flag beside the date', () => {

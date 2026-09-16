@@ -11,6 +11,7 @@ invariants:
   - Fork is hard date vs formula: hard = start_install_formulaTF is False AND start_install is set
   - Hard path is a deliberate no-op — it exists only to protect the date from the formula blanking below (BUG-11)
   - Formula path blanks start_install, ship_date, formula text, and comp_eta; sets formulaTF=False so scheduling never re-estimates
+  - start_install_asap is NEVER touched here — ASAP persists through the ship stages and drops only at Install Start or later (asap_drop.py)
   - Idempotent: already-blank locked rows and already-neutral hard dates are no-ops
   - Child audit events carry parent_event_id for stage-undo bundling visibility
 """
@@ -85,7 +86,6 @@ def apply_shipping_stage_date_discipline(
     old_formula = job_record.start_install_formula
     old_tf = job_record.start_install_formulaTF
     old_comp_eta = job_record.comp_eta
-    old_asap = bool(getattr(job_record, "start_install_asap", False))
 
     job_record.start_install = None
     job_record.ship_date = None
@@ -93,7 +93,7 @@ def apply_shipping_stage_date_discipline(
     # False + null dates = scheduling skips re-estimation (hard-date protection).
     job_record.start_install_formulaTF = False
     job_record.comp_eta = None
-    job_record.start_install_asap = False
+    # ASAP is a flag, not a date — it rides through the ship stages untouched.
     job_record.start_install_no_color = False
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = source
@@ -111,7 +111,6 @@ def apply_shipping_stage_date_discipline(
                 "start_install_formula": old_formula,
                 "start_install_formulaTF": old_tf,
                 "comp_eta": old_comp_eta.isoformat() if old_comp_eta else None,
-                "start_install_asap": old_asap,
             },
             "new_value": {
                 "start_install": None,
@@ -119,7 +118,6 @@ def apply_shipping_stage_date_discipline(
                 "start_install_formula": None,
                 "start_install_formulaTF": False,
                 "comp_eta": None,
-                "start_install_asap": False,
             },
             "reason": reason,
             "parent_event_id": parent_event_id,

@@ -31,9 +31,10 @@ export async function setAsapWithCapConfirm(job, release) {
 export async function setAsapAndAssign(job, release, installer, startInstall) {
     const ok = await setAsapWithCapConfirm(job, release);
     // The flag goes first because it is the call that can 409 on the per-PM cap — no point
-    // writing a date onto a row that was refused. The modal will not set ASAP without a
-    // date, so startInstall is always a real YYYY-MM-DD by the time we get here.
-    if (ok) {
+    // writing a date onto a row that was refused. The modal passes startInstall only when the
+    // date actually needs writing (new, or not yet hard); with no date and no installer change
+    // there is nothing to save — and a dateless save would CLEAR the existing date.
+    if (ok && (startInstall || installer !== undefined)) {
         try {
             await jobsApi.updateStartInstall(job, release, startInstall, installer);
         } catch (error) {
