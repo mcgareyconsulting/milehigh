@@ -146,6 +146,10 @@ describe('dropping an unassigned card on a crew lane', () => {
             'Start install': null,
             start_install_formulaTF: true,
             Stage: 'Paint Complete',   // rollback restores the stage too, now that a drop can move it
+            // ...and the bar's end (BUG-26): the optimistic patch now recomputes comp_eta so the
+            // bar is the right length on the first frame, so a rejected write has to put the old
+            // end back or the card keeps a length nothing in the DB supports.
+            comp_eta_effective: null,
         });
         expect(await screen.findByRole('alert')).toHaveTextContent(/560-923.*Event already exists/);
     });

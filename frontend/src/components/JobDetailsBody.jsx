@@ -36,9 +36,10 @@ import { RELEASE_TAGS } from '../constants/releaseTags';
 import { STAGE_OPTIONS } from '../constants/stages';
 import { API_BASE_URL } from '../utils/api';
 import { toYmd, subtractBusinessDays } from '../utils/formatters';
-import { installDays } from '../utils/scheduling';
+import { installDays, DEFAULT_NUM_GUYS } from '../utils/scheduling';
 import { stageTint } from '../utils/stageTint';
 import { setAsapAndAssign } from '../utils/asap';
+import { checkAuth } from '../utils/auth';
 import { compressImage } from '../utils/imageCompress';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { SpliceReleaseModal } from './SpliceReleaseModal';
@@ -234,6 +235,12 @@ export function JobDetailsBody({
     /** Stage changed here — lets the host header pill + banana row follow. */
     onStageChange = null,
 }) {
+    // BUG-24: the crew size is now writable from here, so it needs a local mirror like the other
+    // editable fields (optimistic on save, rolled back if the PATCH is rejected) and an admin flag
+    // — the control is a scheduling decision and must never render for a sub.
+    const [localNumGuys, setLocalNumGuys] = useState(null);
+    const [numGuysBusy, setNumGuysBusy] = useState(false);
+    const [canEditCrew, setCanEditCrew] = useState(false);
     const [materialOrders, setMaterialOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(false);
     const [markAllBusy, setMarkAllBusy] = useState(false);
@@ -304,9 +311,26 @@ export function JobDetailsBody({
     const [localShipDate, setLocalShipDate] = useState(rowShipDate);
 
     useEffect(() => { setLocalStage(rowStage); }, [rowStage]);
+    // Install Prog is editable here; mirror it locally like the other hub fields.
+    const rowJobComp = job ? (job['Job Comp'] ?? job.job_comp ?? '') : '';
+    const [localJobComp, setLocalJobComp] = useState(rowJobComp);
+    useEffect(() => { setLocalJobComp(rowJobComp); }, [rowJobComp]);
     useEffect(() => { setLocalInstaller(job?.installer || ''); }, [job?.installer]);
     useEffect(() => { setLocalStartInstall(rowStartInstall); }, [rowStartInstall]);
     useEffect(() => { setLocalShipDate(rowShipDate); }, [rowShipDate]);
+    useEffect(() => { setLocalNumGuys(job?.num_guys ?? null); }, [job?.num_guys]);
+    // Comp. ETA recomputed by a crew-size save, shown straight from the PATCH response so the hub
+    // updates without waiting on (or forcing) a host refetch. Undefined = use the row's value.
+    const [localCompEta, setLocalCompEta] = useState(undefined);
+    useEffect(() => { setLocalCompEta(undefined); }, [job?.comp_eta, job?.id]);
+
+    // Who may edit the crew size. Same gate the Timeline's drag-to-schedule uses, and the reason
+    // the control is absent rather than disabled for everyone else: a sub must not see it at all.
+    useEffect(() => {
+        let cancelled = false;
+        checkAuth().then((u) => { if (!cancelled) setCanEditCrew(!!u?.is_admin); }).catch(() => {});
+        return () => { cancelled = true; };
+    }, []);
 
     useEffect(() => {
         setReleaseTag(job?.release_tag || '');
@@ -445,6 +469,43 @@ export function JobDetailsBody({
             setLocalStage(prev);
             onStageChange?.(prev);
             setWriteError(err.message || 'Could not update stage');
+        } finally {
+            setSavingField(null);
+        }
+    };
+
+    // Install Prog (job_comp) — same write and same stage rules as the Job Log cell: a percentage
+    // moves the release to Install Start, 'X' to Install Complete, blank leaves the stage alone.
+    // Stage is patched optimistically, then corrected from the server's answer.
+    const handleJobCompSave = async (raw) => {
+        const next = String(raw ?? '').trim();
+        const prev = localJobComp ?? '';
+        if (!jobId || relId == null || next === String(prev).trim()) return;
+        const prevStage = localStage;
+        setLocalJobComp(next);
+        let optimisticStage = null;
+        if (next.toUpperCase() === 'X') optimisticStage = 'Install Complete';
+        else if (next !== '' && !Number.isNaN(parseFloat(next.replace('%', '')))) optimisticStage = 'Install Start';
+        if (optimisticStage && optimisticStage !== prevStage) {
+            setLocalStage(optimisticStage);
+            onStageChange?.(optimisticStage);
+        }
+        setSavingField('job_comp');
+        setWriteError(null);
+        try {
+            const res = await jobsApi.updateJobComp(jobId, relId, next);
+            if (res?.stage && res.stage !== optimisticStage) {
+                setLocalStage(res.stage);
+                onStageChange?.(res.stage);
+            }
+            onJobUpdate?.();
+        } catch (err) {
+            setLocalJobComp(prev);
+            if (optimisticStage && optimisticStage !== prevStage) {
+                setLocalStage(prevStage);
+                onStageChange?.(prevStage);
+            }
+            setWriteError(err.message || 'Could not update install progress');
         } finally {
             setSavingField(null);
         }
@@ -595,14 +656,42 @@ export function JobDetailsBody({
         }
     };
 
-    const handleSetAsap = async (installer) => {
+    // The date MUST be passed through: without it the follow-up date save went out with no
+    // start_install, which the server reads as "clear the date" — so ticking ASAP wiped a hard date.
+    const handleSetAsap = async (installer, startInstall) => {
         setStartInstallOpen(false);
         setWriteError(null);
         try {
-            const ok = await setAsapAndAssign(jobId, relId, installer);
+            const ok = await setAsapAndAssign(jobId, relId, installer, startInstall);
             if (ok) onJobUpdate?.();
         } catch (err) {
             setWriteError(err.message || 'Could not set ASAP');
+        }
+    };
+
+    // BUG-24. comp_eta moves with the crew size, so the server's answer is the one that counts:
+    // patch optimistically for the number itself, then ask the host to refetch so Comp. ETA and
+    // the Gantt bar pick up the recomputed window rather than a locally guessed one.
+    const handleNumGuysSave = async (next) => {
+        const n = Number(next);
+        if (!Number.isFinite(n) || n <= 0) {
+            setWriteError('Crew size must be a number greater than zero');
+            return;
+        }
+        if (n === Number(localNumGuys)) return;
+        const prev = localNumGuys;
+        setLocalNumGuys(n);
+        setNumGuysBusy(true);
+        setWriteError(null);
+        try {
+            const res = await jobsApi.updateNumGuys(jobId, relId, n);
+            if (res && 'comp_eta' in res) setLocalCompEta(res.comp_eta);
+            onJobUpdate?.();
+        } catch (err) {
+            setLocalNumGuys(prev);
+            setWriteError(err.message || 'Could not update crew size');
+        } finally {
+            setNumGuysBusy(false);
         }
     };
 
@@ -640,15 +729,14 @@ export function JobDetailsBody({
     const shipEffective = localShipDate || (startYmd ? subtractBusinessDays(startYmd, 1) : null);
 
     const tint = stageTint(localStage);
-    const installProg = formatInstallProg(pick('Job Comp', 'job_comp'));
     const installHrs = pick('Install HRS', 'install_hrs');
     const isSplice = job.parent_release_id != null;
     const canSplice = !isSplice && installHrs != null && installHrs !== '' && Number(installHrs) > 0;
-    const numGuys = job.num_guys;
+    const numGuys = localNumGuys ?? job.num_guys;
     const workDays = installHrs ? installDays(installHrs, numGuys) : null;
-    const scheduleFootnote = workDays
-        ? `${workDays} work days · ${installHrs} hrs · crew of ${numGuys || 2}`
-        : null;
+    // The crew size half of this line is now a control (BUG-24), so the sentence is split: the
+    // derived part stays text, the number becomes editable for a scheduler.
+    const schedulePrefix = workDays ? `${workDays} work days · ${installHrs} hrs · ` : null;
 
     const heroPhoto = photos.find((p) => p.id === heroId) || photos[0] || null;
     const photoUrl = (pid) => `${API_BASE_URL}/brain/releases/${relPk}/photos/${pid}/file`;
@@ -1014,12 +1102,37 @@ export function JobDetailsBody({
                     />
                     <Row
                         label="Comp. ETA"
-                        value={formatDateShort(pick('Comp. ETA', 'comp_eta') || job.comp_eta_effective)}
+                        value={formatDateShort(
+                            localCompEta !== undefined
+                                ? localCompEta
+                                : (pick('Comp. ETA', 'comp_eta') || job.comp_eta_effective)
+                        )}
                     />
-                    <Row label="Install Prog" value={installProg} />
-                    {scheduleFootnote && (
+                    <ControlRow label="Install Prog" title="A percentage (e.g. 50) starts install; X marks it complete">
+                        <input
+                            type="text"
+                            inputMode="text"
+                            defaultValue={localJobComp ?? ''}
+                            key={`jc-${localJobComp ?? ''}`}
+                            placeholder="—"
+                            disabled={savingField === 'job_comp'}
+                            onBlur={(e) => handleJobCompSave(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+                                if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    e.target.value = localJobComp ?? '';
+                                    e.target.blur();
+                                }
+                            }}
+                            aria-label="Install progress"
+                            className={controlCls}
+                            style={{ ...controlStyle, minWidth: 0, width: 80 }}
+                        />
+                    </ControlRow>
+                    {schedulePrefix && (
                         <p className="text-ink-3" style={{ fontSize: 11.5, marginTop: 6 }}>
-                            {scheduleFootnote}
+                            {schedulePrefix}crew of {numGuys || DEFAULT_NUM_GUYS}
                         </p>
                     )}
 
@@ -1102,10 +1215,36 @@ export function JobDetailsBody({
                             })}
                         </select>
                     </ControlRow>
-                    <Row
-                        label="Crew · Install Hrs"
-                        value={[numGuys, installHrs].filter((v) => v != null && v !== '').join(' · ')}
-                    />
+                    {/* Crew size gets its own row (BUG-24). It used to live only inside the
+                        "N work days · hrs · crew of" line, which renders only when install hours
+                        exist — so a release without hours had no way to set its crew at all. */}
+                    {canEditCrew ? (
+                        <ControlRow label="Crew (num guys)" title="Installers on this release — changes the Comp. ETA">
+                            <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                disabled={numGuysBusy}
+                                defaultValue={numGuys ?? DEFAULT_NUM_GUYS}
+                                key={numGuys ?? DEFAULT_NUM_GUYS}
+                                onBlur={(e) => handleNumGuysSave(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+                                    if (e.key === 'Escape') {
+                                        e.preventDefault();
+                                        e.target.value = numGuys ?? DEFAULT_NUM_GUYS;
+                                        e.target.blur();
+                                    }
+                                }}
+                                aria-label="Crew size"
+                                className={controlCls}
+                                style={{ ...controlStyle, minWidth: 0, width: 80 }}
+                            />
+                        </ControlRow>
+                    ) : (
+                        <Row label="Crew" value={numGuys ?? DEFAULT_NUM_GUYS} />
+                    )}
+                    <Row label="Install Hrs" value={installHrs} />
                     <ControlRow label={labelFor('Stage')}>
                         <select
                             value={localStage || ''}

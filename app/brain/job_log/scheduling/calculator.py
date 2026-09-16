@@ -16,6 +16,8 @@ imported_by: [app/brain/job_log/scheduling/__init__.py, app/brain/job_log/schedu
 invariants:
   - Hard-date jobs (is_hard_date=True) are excluded from hours_in_front sums
   - Fab projections use SHOP calendar (Mon–Thu); install uses FIELD (Mon–Fri) — N4
+  - AUTO-projected dates never land on a non-working day (BUG-26); user-chosen hard dates
+    never pass through here and are written exactly as given
   - Unknown stages default to 100% remaining (conservative)
 updated_by_agent: 2026-08-09T00:00:00Z
 
@@ -30,7 +32,12 @@ from datetime import date, datetime
 from typing import Dict, List, Optional, Tuple, Any
 
 from app.brain.job_log.scheduling.config import SchedulingConfig
-from app.trello.utils import CALENDAR_FIELD, CALENDAR_SHOP, add_business_days
+from app.trello.utils import (
+    CALENDAR_FIELD,
+    CALENDAR_SHOP,
+    add_business_days,
+    next_business_day,
+)
 
 
 def calculate_remaining_fab_hours(
@@ -158,6 +165,10 @@ def calculate_projected_fab_complete_date(
     if reference_date is None:
         reference_date = date.today()
     
+    # NOT snapped to a working day, deliberately: fab completing "today" is a statement about
+    # the work, not a slot on the shop calendar, and today can legitimately be a Friday the shop
+    # is closed (test_fab_projection_uses_shop_calendar pins this). BUG-26's "never auto-place on
+    # Sat/Sun" is about install STARTS, and is applied in calculate_install_start_date below.
     if days_in_front == 0:
         return reference_date
 
@@ -187,9 +198,14 @@ def calculate_install_start_date(
         return None
     
     buffer_days = SchedulingConfig.INSTALL_BUFFER_DAYS
-    return add_business_days(
+    projected = add_business_days(
         projected_fab_complete_date, buffer_days, calendar=CALENDAR_SHOP
     )
+    # BUG-26: crews do not start installs on a weekend unless someone puts them there
+    # deliberately. The buffer is shop-paced (Mon–Thu), but the date it produces is a FIELD
+    # date, so it is snapped onto the field calendar before it becomes a projected start.
+    # A hard date typed in or dropped on the Timeline bypasses this function entirely.
+    return next_business_day(projected, calendar=CALENDAR_FIELD)
 
 
 def calculate_install_complete_date(
@@ -201,8 +217,8 @@ def calculate_install_complete_date(
     Calculate install completion ETA (a.k.a. comp_eta).
 
     Canonical formula used everywhere (job log, scheduling, mirror seed, Gantt):
-    - daily capacity = num_guys * HOURS_PER_INSTALLER_DAY (default num_guys=2 -> 16,
-      which equals the legacy INSTALL_HOURS_PER_DAY, so the default case is unchanged)
+    - daily capacity = num_guys * HOURS_PER_INSTALLER_DAY (default num_guys=3 -> 24,
+      which equals the legacy INSTALL_HOURS_PER_DAY)
     - install days = ceil(install_hours / daily capacity)
     - completion date = install start + (install days - 1) working days, i.e. the last
       working day of the install (a 1-day install completes the day it starts)

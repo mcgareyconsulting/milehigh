@@ -21,8 +21,10 @@ export function useArchiveDataFetching() {
     const [error, setError] = useState(null);
     const hasFetchedRef = useRef(false);
 
-    const fetchAll = useCallback(async () => {
-        setLoading(true);
+    // `silent` refreshes the rows in place without flipping `loading`, which unmounts the list —
+    // used after a hub edit so the view doesn't redraw like a page reload.
+    const fetchAll = useCallback(async (silent = false) => {
+        if (!silent) setLoading(true);
         setError(null);
         try {
             console.log('[ARCHIVE] Fetching all archived jobs...');
@@ -35,7 +37,7 @@ export function useArchiveDataFetching() {
             console.error('[ARCHIVE] Error fetching archived jobs:', err);
             setError(err.message);
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     }, []);
 

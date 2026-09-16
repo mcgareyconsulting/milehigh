@@ -112,7 +112,8 @@ def build_card_description(job):
         parts.append(f"**Description:** {job.description}")
     if job.install_hrs:
         parts.append(f"**Install HRS:** {job.install_hrs}")
-        num_guys = 2
+        from app.brain.job_log.scheduling.config import SchedulingConfig
+        num_guys = job.num_guys or int(SchedulingConfig.DEFAULT_NUM_GUYS)
         parts.append(f"**Number of Guys:** {num_guys}")
         duration = calculate_installation_duration(job.install_hrs, num_guys)
         if duration is not None:

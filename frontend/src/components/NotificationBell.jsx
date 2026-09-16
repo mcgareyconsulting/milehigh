@@ -533,6 +533,11 @@ export default function NotificationBell({
                                         {[n.submittal_project_number, n.submittal_project_name, n.submittal_title].filter(Boolean).join(' · ') || `Submittal #${n.submittal_id}`}
                                     </p>
                                 )}
+                                {n.release_issue_id && (
+                                    <p className="text-xs text-ink-3 mt-0.5 truncate">
+                                        {[n.release_issue_display_id, n.release_issue_title].filter(Boolean).join(' · ')}
+                                    </p>
+                                )}
                                 {(n.drawing_version_comment_id || n.bb_drawing_review_id) && (
                                     <p className="text-xs text-ink-3 mt-0.5 truncate">
                                         {[

@@ -725,6 +725,7 @@ class OutboxService:
                         update_trello_card_description,
                         update_mirror_card_content,
                     )
+                    from app.brain.job_log.scheduling.config import SchedulingConfig
 
                     new_title = None
                     new_description = None
@@ -743,7 +744,7 @@ class OutboxService:
                             pm=job_record.pm,
                             by=job_record.by,
                             released=job_record.released,
-                            num_guys=job_record.num_guys or 2,
+                            num_guys=job_record.num_guys or SchedulingConfig.DEFAULT_NUM_GUYS,
                         )
                         update_trello_card_description(card_id, new_description)
 

@@ -1,7 +1,7 @@
 ---
 project: MHMW
-updated: 2026-09-05
-verified: origin/main @ fdaa880 (PR #369 To-Dos + mentions)
+updated: 2026-09-15
+verified: origin/main @ 1c3d09a (PR #376 timeline mobile view)
 config:                       # inputs to derived math — store inputs, never results
   horizon:
     - 2027-10 Procore absolute dead date (renewed 2026-08-15)
@@ -13,13 +13,32 @@ classes:                      # what KIND of work an item is — orthogonal to e
   lane: ongoing, never "done"
   deferred: off the active path, with a stated re-check trigger
 queue:                        # agent-maintained, set by agreement in session
-  now: [AUD2]           # 2026-09-05: set in session by Daniel — "build now". The release-number
+  now: [BUG-24, BUG-25, BUG-26, T11]
+                        # 2026-09-15: BUG-27 complete (ASAP kept through Ship Complete) and off
+                        # the queue. BUG-24 awaits the hand-shortened bars ruling; BUG-25 awaits
+                        # Bill's date confirmation (expected 2026-09-16).
+                        # 2026-09-14: Bill's weekly request package (thisweek-2026-09-14) takes
+                        # the front — Daniel: "probably these elevate to highest urgency". Its own
+                        # P0 pair leads: schedule integrity (BUG-24..27, filed as fixes — each is
+                        # small and measured against code this session) and the Release Issue
+                        # Register (T11). Package P1–P3 sit at the head of next in the package's
+                        # order. AUD2 steps back to next, NOT dropped — its measurement is done and
+                        # its change step was already waiting on Bill's ruleset confirm.
+                        # Previous now, retained for the trail:
+  # now (2026-09-05): [AUD2]  # set in session by Daniel — "build now". The release-number
                         # ruleset (AUD2) and the tagged hours-released prompt (N16) took the front;
                         # N16 was built the same day, so only AUD2 is left standing here.
                         # T1 drops to next with its core shipped (PR #361/#366) and its 2026-09-02
                         # scope unlanded. First time since 2026-08-15 that W5 is not queue.now —
                         # a deliberate pause on the front lane, not a re-ranking of it.
-  next: [T1, N9, T2, AUD1]  # 2026-08-21: N9 elevated by Bill ("short timeline"); A1 deliberately stalled behind T1 [bill-2026-08-21#L169]
+  next: [T12, T13, T9, T14, AUD2, T1, N9, T2, AUD1]
+                        # 2026-09-14: T12 release flow → T13 photo evidence gate → T9 splicing →
+                        # T14 iPad parity is the package's own P1→P3 order. T1 keeps its place
+                        # behind them but most of the package IS T1's surface (Timeline), so T1's
+                        # open 2026-09-02 defects get picked up where they overlap (weekend drop →
+                        # BUG-26). N9 sits behind T13 deliberately: the gate captures the photos,
+                        # the stamp makes them self-describing — build the capture path once.
+  # next (2026-09-05): [T1, N9, T2, AUD1]  # 2026-08-21: N9 elevated by Bill ("short timeline"); A1 deliberately stalled behind T1 [bill-2026-08-21#L169]
                         # 2026-08-29: N9 unblocked (Open question 3 answered) — order unchanged. Its
                         # individual-logins answer needs accounts, which T2 makes self-serve, but Daniel
                         # can create them by hand today, so N9 does not move behind T2.
@@ -117,8 +136,21 @@ filed *by* the audit of the ASAP work, so the ASAP work does not close it; the o
 finding that could have ridden along was deliberately pulled back out (`e10feee`).
 ~~**BUG-17 is parked** (Daniel, 2026-08-29) and is not part of this pass.~~ **BUG-17 unparked and half-built 2026-09-04** (PR #369) — the two-column to-dos/mentions page shipped; only the editability half is still open. **Open as of 2026-09-05: BUG-23 and BUG-17's remainder.**
 
+**Re-stocked 2026-09-14** from Bill's weekly request package
+(`thisweek-2026-09-14`, §4 "P0 — Schedule integrity"): **BUG-24 through BUG-27**,
+all `queue.now`. The package's framing is the reason they outrank everything else:
+*"so the team does not continue operating two schedules that disagree"* [§2].
+Each was checked against `main` @ 1c3d09a before filing, and **two of the four
+are not what they sound like** — the installer count was never a Brain control to
+restore (BUG-24), and the Trello date bug is on the mirror card, not the primary
+(BUG-25).
+
 | ID | Fix | Entry point | Pri |
 |---|---|---|---|
+| BUG-24 | **BUILT 2026-09-15. Open question 5 answered the same day — default crew is 3 (24 labor-hrs/day). AWAITING one ruling: hand-shortened bar behavior — does a crew edit recompute over a Timeline edge-compressed `comp_eta` (current build: yes, it overwrites)? Existing rows saved at 2 deliberately NOT backfilled (2026-09-15); only edits and new cards get 3. The "default conflict, not decided" text below is historical.** **Installer count per release — a Brain control, not a restore** [thisweek-2026-09-14#§4.1]. Bill: the card-level control *"has disappeared and must be restored."* **Found in code: the Brain has never had a write path for `num_guys`.** It is read everywhere (`_comp_eta_effective`, `routes.py:488`; the hub footnote `JobDetailsBody.jsx:629`; the outbox mirror push `outbox_service.py:746`) but the only writer is **inbound Trello** — `sync.py:308` parses it out of the card *description* and `sync.py:164` re-pushes the mirror bar. The "control that disappeared" was a line in a Trello description, and it has been drifting out of sight as the crew moves to the Timeline. So this is: a scheduler-gated edit on the release hub / Timeline card → write `num_guys` → recompute `comp_eta` → `ReleaseEvents` row (Change Log) + undo → outbound description write so Trello stays consistent until T4. Sub users never see the control [§4.1 "No unauthorized exposure"]. **Default conflict, not decided — see Open question 5:** the package restates the baseline as **3 installers = 24 labor-hrs/day** (as did fieldops §5), but the code default is **2** in both halves (`DEFAULT_NUM_GUYS = 2`, `scheduling.js:25`, which says *"change both together"*; `num_guys or 2` server-side). Changing it moves every unset release's `comp_eta`. **Also collides with an open BUG-11 note:** a Timeline edge-compress writes `comp_eta` directly (2026-09-02), so "does a crew edit recompute over a compressed `comp_eta`?" now has to be answered to ship this | `app/brain/job_log/routes.py` (new PATCH beside the start-install one), `_comp_eta_effective` (`:488`); `frontend/src/utils/scheduling.js`, `JobDetailsBody.jsx:629`, `GanttChart.jsx`; Trello `set_num_guys_in_description` (`api.py:1789`) for the outbound write | **high — client P0** |
+| BUG-25 | **BUILT 2026-09-15 behind a one-line switch (`MIRROR_DUE_ONLY`) — AWAITING date confirmation from Bill, expected 2026-09-16 (is the mirror card Due-only too, or exempt as a range bar?).** **Brain → Trello dates: Start Install goes to the Trello Due Date only, never Start** [thisweek-2026-09-14#§4.2]. **Found in code: the primary card is already right; the mirror card is the offender.** The primary-card writers (`start_install/command.py:133`, `routes.py:3083`) push `new_due_date=start_install` and nothing else. But the **mirror-card range** push — `update_card_date_range(short_link, start_date, due_date)` (`api.py:2162`), called from `api.py:1619`, `api.py:2463` and `sync.py:209` — writes `start = start_install` **and** `due = comp_eta`. So Trello's Due on the mirror is the *completion* day, and the install day lands in Start — the exact inversion Bill describes. **Design tension to settle before the one-line fix:** the mirror card is a range bar *by design* (`project_mirror_cards_timeline`); "Due Date only" makes it a point on the install day and loses the duration in Trello. Read the rule as applying to every Brain-originated card write unless Bill says the mirror is exempt. **Calendar-day check:** `mountain_due_datetime` (`utils.py:213`) is documented as 6 pm but builds `time(6, 0)` = **6 am** Mountain — still the same calendar day in any US zone, so not the bug, but fix the docstring or the time while in there. **"No silent mismatch"** [§4.2] is net-new: a failed/mismatched push must be visible to an authorized user, not only logged — `TrelloOutbox` exhaustion already logs ERROR; it needs a surface. Leave inbound Trello behavior alone [§4.2 "Current inbound behavior"]. Dies with T4 — do not gold-plate | `app/trello/api.py` (`update_card_date_range` + its three callers), `app/trello/utils.py:213`; tests `tests/test_trello_stage_sync.py` neighborhood | **high — client P0, two schedules disagree** |
+| BUG-26 | **BUILT 2026-09-15, all four asks.** **Weekends on the Timeline — dark, never auto-picked, manually allowed, bridged** [thisweek-2026-09-14#§4.3]. Today: weekend columns carry `bg-gray-200/40` (`GanttChart.jsx:1369`) — present but too faint to read as "dark". **Four asks:** (1) visibly darker weekend columns; (2) scheduling/duration math never *auto*-places a start on Sat/Sun; (3) an authorized scheduler **can** deliberately drop onto Sat/Sun; (4) a multi-day installer bar **bridges** the weekend as one continuous bar. Plus a guard: rendering never moves a hard date, projected date, ship date or capacity [§4.3 "No date corruption"]. **Absorbs T1's open 2026-09-02 defect** — *"install hours don't compute on a weekend drop"* [bill-2026-09-02#L471] — which is ask (3) failing today. Watch the N4 two-calendar split (business days vs calendar days) — a weekend drop must not get snapped forward by the business-day helpers | `frontend/src/components/GanttChart.jsx` (column build `:997`, column render `:1369`, bar packing), `frontend/src/utils/timelineDrop`, `utils/scheduling.js` (`installCompleteDate`) | **high — client P0** |
+| BUG-27 | **COMPLETE 2026-09-15 — ASAP is kept through Ship Complete** (the drop rule moved to `Install Start` or later the same day; red now holds on both ship lanes). **ASAP red on Shipping Planning cards** [thisweek-2026-09-14#§4.4]. **Found in code:** the red/amber/green border (`TRAY_BORDER` / `trayDateState`, `GanttChart.jsx:371–400`) is applied **only in the Unassigned tray** — *"Dropped onto a lane it takes that lane's installer colour"* (`:376`). The ship lanes' only ASAP awareness is sort order (`:213–218`). So a rush release pulled into Shipping Planning loses its red the moment it arrives. Fix: ship-lane cards wear the ASAP treatment (red over the real hard date, per BUG-20 semantics), surviving drag, vertical reorder (T12), refresh and filters until the flag clears. ~~Rule interactions already settled and unchanged: ASAP drops at `Ship Complete` (`asap_drop.py`), so the red naturally disappears on the second ship lane~~ **Superseded 2026-09-15 (Daniel): ASAP persists through Ship Complete; `asap_drop.py` now fires at `Install Start` or later (stage change or Install Prog entry)** | `frontend/src/components/GanttChart.jsx` (ship-lane card render; reuse `classifyInstallDate`) | **high — client P0** |
 | BUG-23 | **Stage-cascade debt, found by the 2026-09-04 audit of BUG-22 — not yet built.** Three findings, one shape. (1) **The inbound Trello list move skips N5's `apply_shipping_stage_date_discipline`** — it can set `Ship Planning` and `Ship Complete` (`list_mapper.py:118`), both `SHIPPING_STAGES`, so a formula-dated release dragged to "Shipping planning" keeps stale estimated dates that a Brain stage change would have blanked and locked. **This is the fourth instance of the bug class, on the very path BUG-20 just patched.** (2) **`update_invoiced` skips the ASAP drop** — `invoiced='X'` on a formula-dated ASAP row leaves the flag set, because that path gets its clear only as a side effect of the neutralize cascade, which no-ops without a hard date. The same asymmetry the job-comp `X` branch just had fixed, 50 lines away. (3) **`start_install_asap` is now cleared in three modules under three rules with three audit shapes** (`asap_drop.py`, `neutralize_install_date_cascade.py:113`, `shipping_stage_date_discipline.py:96`) — BUG-20 consolidated the *callers* but added a fourth *clearer*. Recommended shape: an `apply_stage_cascades(record, new_stage, ...)` owning the four stage-keyed cascades (ASAP drop, colour dump, fab re-tier, N5 discipline) that all four writers call, with the two writer-specific ones (job_comp complete-zone sync, Trello outbox push) deliberately excluded; then strip the flag write out of the other two clearers so `update_invoiced` closes by itself. **(4) The lookahead classifier has the install-schedule bug too** — `lookahead/pipeline.py:classify_install_date` returns `KIND_ASAP` off the flag alone, before the hard-date test, and `schedule_builder._install_source` maps `KIND_ASAP` to `SOURCE_HARD` — so an ASAP flag on a *projected* date reports an estimate as a commitment in the lookahead schedule. Fixed in `install_schedule/service.py` on the ASAP branch (where the same shape was newly introduced and affects live crew-conflict output); the lookahead half was **deliberately pulled back out of that PR 2026-09-04** (Daniel) — it is pre-existing behaviour in a module unrelated to ASAP, it affects zero prod rows today (all 5 live ASAP rows carry hard dates), and its existing test encodes the opposite contract, so it belongs with the rest of the classifier work rather than riding a merge-ready branch. **A SQLAlchemy attribute hook was considered and rejected** — three of four writers pass a `parent_event_id` only the caller knows, and it would fire on the eight ops/migration scripts that deliberately want raw writes. The risk is the test surface, not the code: five test files pin per-call-site behavior. Its own branch and review, not a rider | `app/trello/sync.py` (add the N5 call), `routes.py:1742` (`update_invoiced`), `features/stage/` (the orchestrator; the three rule modules also want moving there out of `features/start_install/`) | **medium — known debt, no live prod row yet** |
 | BUG-22 | ~~A Trello card drag never drops the ASAP flag; nor does an Install Prog percentage~~ **both halves built — Trello 2026-09-03, Install Prog 2026-09-04.** Found by a read-only prod audit of the 5 live ASAP rows: `640-121` and `190-188` were both sitting at `Ship Complete` still flagged red. Cause — `asap_dropped_on_ship_complete` lived **inside** `UpdateStageCommand`, and that command is not the only writer that advances a stage. An inbound Trello list move writes the stage itself (`sync.py:604`) and emits its own `update_stage` event, so it skipped the drop entirely; since the shop advances work by dragging cards, that is the common path, and a finished release kept its red until someone cleared it in Brain by hand. Exactly the shape BUG-9 already patched here for `fab_order` and BUG-16 for the drafting status — so the fix is theirs too: the rule moved out to `features/start_install/asap_drop.py` and **both writers now call the one function**. Scoped deliberately to the ASAP drop: inbound lands on the **floor** of a list's zone (`list_mapper.py:282`), so "Shipping completed" floors at `Ship Complete` and no drag can reach `Install Start` or later — the colour dump is unreachable from this path and wiring it would be dead code. An integrity test asserts that disjointness, so a mapping change that opens the door fails the build instead of silently reopening the hole. **Third writer closed 2026-09-04:** the Install-Prog **percentage** branch of `update_job_comp` moved the stage to `Install Start` itself and ran neither cascade, while the `X` branch right below it had always called the colour one — the *later* state cleaned up and the *earlier* one did not. Backwards from BUG-11's own reasoning, too: a percentage typed into Install Prog is the most explicit "work began" statement in the system, and it was the one path that kept the row red (live prod row `190-917`, moved 08-31, i.e. after BUG-11 shipped). Both cascades now run there, guarded on the percentage rather than on whether the stage moved, so a release that reached `Install Start` by any other route is cleaned up the next time someone reports progress on it. **The `X` branch gained the flag-only drop as well:** its neutralize cascade clears ASAP only on a row that has a hard date and no-ops entirely on a formula-dated one, so a formula-dated rush row could reach `Install Complete` still red. Rare under BUG-19 (every ASAP row now has a hand-set date) but it is the asymmetry that breeds the next bug | `features/start_install/asap_drop.py` (new), `features/stage/command.py`, `app/trello/sync.py`, `routes.py` (both Install Prog branches); tests `tests/test_trello_stage_sync.py::TestInboundAsapDrop` + the Install Prog block in `tests/brain/test_install_start_color_dump.py` | **high — silent data drift** |
 | BUG-21 | ~~**Timeline zoom loses your place.** Zooming in or out dumps the scroll position and lands at the **left end of the chart** — reported as "snaps to July 3rd", which is just wherever the leftmost column sits; nothing anchors to that date. **Mechanism:** the re-anchor at `GanttChart.jsx:853–866` derives the left-edge date from `el.scrollLeft / prevPx` inside a `useLayoutEffect` — which runs *after* React has already committed the new column width. On zoom-out the chart narrows, so the browser **clamps `scrollLeft` to the new smaller max before the effect reads it**, and the anchor math then runs on an already-corrupted value. Capturing pixels after the re-render cannot work. **Fix direction:** capture the anchor as a **date before the state change** — in `zoomIn`/`zoomOut` (~line 1038) or from a scroll-tracked ref — then restore `scrollLeft` from that date after render. **Scoped to zoom** (Daniel, 2026-09-04): restoring `viewStart`/`zoomIdx` across navigation is deliberately *not* in scope, though note neither persists today — only lane- and tray-collapse reach `localStorage`. **Worth a glance while in there:** `chartRange.firstDay` is documented as `mondayOf(...)` *"so week columns align"* (line 807), but the leftmost column read as a **Friday**; if the origin is not landing on a Monday, week alignment is independently wrong. Related to T1, which is active work on this surface~~ **built 2026-09-04** on `fix/timeline-zoom-anchor` — the anchor date is now captured in the zoom handler, before the state change, and the effect restores it; the px math stays as the fallback for width changes that are not zooms. The Monday question resolved as a non-issue: `mondayOf` is correct and `chartRange.firstDay` is a Monday — the Friday on screen was just where the corrupted scroll landed | `frontend/src/components/GanttChart.jsx` — zoom anchor `useLayoutEffect` (~853), `zoomIn`/`zoomOut` (~1038); test `GanttChart.zoom.test.jsx` | med |
@@ -218,6 +250,31 @@ reconciliation threads (cover-email items, the "A.1" label) remain Owed.
 **Mobile target for the whole package: iPad first, phone gets "some function"**
 [bill-2026-08-21#L155].
 
+**The 2026-09-14 weekly request package took the front of this lane**
+(`thisweek-2026-09-14`, Manus-prepared, *"Requested for the current weekly update
+cycle"*). Daniel: *"probably these elevate to highest urgency."* It is a
+narrower, sharper cut of the 8/20 field-ops spec, with its own build order:
+**P0** Issue & Error Register (→ **T11**) and schedule integrity (→ **BUG-24…27**);
+**P1** Paint Complete queue, Drop Ship Only, shipping load order (→ **T12**) and
+the two-stage Photo Evidence Gate (→ **T13**); **P2** card splicing (→ **T9**,
+elevated); **P3** iPad/PC parity (→ **T14**). Three rules it states that govern
+everything below:
+
+- **"A timeline card is a release-aware operating record, not a visual sticky
+  note"** [§1] — every change writes the authoritative Job Log record, keeps the
+  release link, respects capacity, and lands in the Change Log.
+- **No parallel scheduler, no separate card database** [§9] — every result is a
+  view or a *controlled child* of the project/release/assignment record. That
+  sentence is what licenses T9's child records and T13's shipment events while
+  forbidding a Trello-style copy.
+- **Procore-replacement stays paused** [§1] — explicitly no Submittal Manager or
+  Scope Breakdown work this cycle. Consistent with the 2026-08-15 W1 deferral;
+  nothing to change.
+
+**Definition of done is a demo, then a live check** [§8]: each request shown on a
+real non-production test release, then verified on the live workflow by MHMW. Its
+§8 acceptance table is carried into each item below.
+
 ### T1 · Timeline assignment — drag, assign, unassigned lane
 *W5 · in_progress · class build · due — · deps — · owner daniel · src bill-2026-08-15#L75 · upd 2026-09-04*
 
@@ -282,6 +339,7 @@ view-local arrangement. That is the point of the feature, not a side effect.
 - 2026-09-02 · transcript · src bill-2026-09-02#L471–L510 — three defects found live in the demo: install hours don't compute on a **weekend** drop [#L471]; a **duplicate-event bug** blocks moving a card back to a position it held [#L509]; a card appeared to **stretch/jump ~3 days** on an early drag, not reproduced on retry [#L478]
 - 2026-09-02 · decision · src — — endorsed: *"you got the right concept right in place here"* [bill-2026-09-02#L890]. T1 stays `queue.now` with its design no longer open
 - 2026-09-04 · status · src — — **not-started → in_progress.** PR #361 shipped the core on `main`: drag rebuilt on `@dnd-kit` (MouseSensor 8px + TouchSensor 220ms press-and-hold, per the 2026-08-29 decision), the pinned **Unassigned tray** with membership in `utils/unassignedLane` matching the agreed rule, drag-to-assign both directions, and drag/modal tests (`GanttChart.drag.test.jsx`, `shipLaneDrop.test.js`). Follow-up 1956607 added the tray's start-install date, border color and ordering. **Not `built`** — the 2026-09-02 session added scope that has not landed: the per-installer **tower** for unscheduled-but-assigned work, the three defects found live in the demo (weekend drop, duplicate-event block, the ~3-day stretch), the sidebar hiding on scroll, and business days for start install. Physical-iPad drag is still unproven
+- 2026-09-14 · spec · src thisweek-2026-09-14 — the weekly package lands almost entirely on this item's surface and goes ahead of it in the queue: weekend behavior (**BUG-26 absorbs the weekend-drop defect**), installer count on the card (BUG-24), ASAP red on ship-lane cards (BUG-27), a Paint Complete queue beside the Unassigned tray, Drop Ship Only lane and load order (T12), open-issue count on the card (T11). T1 keeps its remaining own scope (tower, duplicate-event block, stretch, sidebar-on-scroll). Note the Paint Complete queue double-books the tray's 2026-08-29 intake rule (Open question 7)
 
 ### T2 · Admin member management — permissions + onboarding, consolidated
 *W5 · in_progress · class build · due — · deps — · owner daniel · src bill-2026-08-15#L83 · upd 2026-09-02*
@@ -455,6 +513,7 @@ across every view; **only a human leader clears it**, with resolution recorded
 **Trail**
 - 2026-08-20 · spec · src fieldops-2026-08-20#§8–9 — punch lifecycle, field-issue categories + routing, universal safety issue + Safety Hold written; absorbs parked A3
 - 2026-08-21 · decision · src bill-2026-08-21#L45 — **punch and field issues anchor to the RELEASE**, not the project ("any of that stuff should be to a release") — tightens the spec's "project required; release when applicable" for MHMW's actual use. Punch work on a finished release spawns a spliced work ticket — see T9
+- 2026-09-14 · decision · src thisweek-2026-09-14#§3 — **field issues leave this item** as T11 (Release Issue & Error Register, package P0), release-anchored with department + cost. T6 keeps **punch** and **Safety Hold**. T11 v1 points at a Safety Hold that does not exist yet, which is a reason to pull Safety Hold's minimal form forward if the register lands first. T9's punch mirror card (package §6.1c) is the first punch artifact and will arrive before this item's lifecycle
 
 ### T7 · Subcontractor compliance profiles
 *W5 · not-started · class build · due — · deps T2 · owner daniel · src fieldops-2026-08-20#§3.3 · upd 2026-08-20*
@@ -503,7 +562,46 @@ than duplicate, the same way N2b must.
 - 2026-08-21 · transcript · src bill-2026-08-21#L51 — the remaining-value mechanic: at 90% progress the system offers "allocate remaining 10% of budget for this installation" against the spliced work ticket (T9), tying residual invoiceable value to whoever finishes the work
 
 ### T9 · Release splicing — fractional work tickets for the field
-*W5 · in-progress · class build · due — · deps T5,T6 · owner daniel · src bill-2026-08-21#L45 · upd 2026-09-15*
+*W5 · in-progress · class build · due — · deps — (was T5,T6 — cut 2026-09-14) · owner daniel · src bill-2026-08-21#L45 · upd 2026-09-15*
+
+> **Elevated 2026-09-14 — package P2** [thisweek-2026-09-14#§6], third in
+> `queue.next`. This reverses Bill's own 2026-09-02 "don't raise it" (trail below);
+> the written package is the later word. The package pins a **Splice / Split Work
+> action inside the release/assignment modal** with three outcomes:
+> **(a) split existing hours** — move some of the original install hours to a new
+> linked assignment; original + child totals equal the original budget;
+> **(b) add additional hours** — a linked additional-install assignment carrying
+> added hours separately, never silently reducing the original;
+> **(c) create punch work** — a linked **punch mirror card**: the primary install
+> can be marked Installed / Invoice-Eligible when accepted while the punch mirror
+> stays under the responsible installer/sub until Final Complete / Closeout.
+> Shared rules [§6.2]: each child stays linked to the same project + release with
+> visible parent/child history; each child has its own crew/company, date,
+> installer count, status, photos, **issues (T11)** and notes; moved/added hours
+> update the right crew's Timeline capacity; **never a separate release** and never
+> loses drawings/history (so no AUD2 collision — the child is not a release
+> number); original / added / punch stay distinct for billing; Change Log records
+> who spliced, when, hours moved or added, outcome, notes.
+> **Deps cut:** T5's assignment records and T6's punch lifecycle are not built, and
+> the package asks for this now — so the child is a **minimal controlled child of
+> `Releases`** (the §9 boundary licenses exactly that) that T5 later generalizes,
+> not a wait on T5. (a)/(b) match Bill's 9/2 "both directions" [bill-2026-09-02#L33];
+> (c) is the first concrete punch artifact and pre-empts part of T6 — Open question
+> 4 (does open punch block final complete / how is holdback computed) now bites
+> here first.
+> **Acceptance** [§8]: a card splits into existing hours, added hours, or a punch
+> mirror, each preserving release lineage and correct capacity.
+
+> **Tension to resolve with Bill (opened 2026-09-15):** the package above says the
+> child is *never a separate release* and *not a release number*; the 2026-09-15
+> decision and first build number it **`340.1`, `340.2`** as real job-log rows
+> (Bill's own idea after `340.1` slipped in as a verbal release). The build
+> delivers outcome **(a) split existing hours** only — pool-capped, lineage via
+> `parent_release_id`, zero Trello. Outcomes **(b) add hours** and **(c) punch
+> mirror** are not built and would need the pool rule relaxed (b) and T6's punch
+> lifecycle (c). Whether the child stays a numbered release or becomes the
+> package's non-release assignment child is the open call; the data model
+> (`parent_release_id` on `Releases`) serves either.
 
 Effort M–L. Bill's concept, volunteered when punch anchoring came up: a punch
 or remaining-work item *"produce[s] effectively a **fractional or splice of a
@@ -527,9 +625,12 @@ which stays parked but shares the apportionment shape.
 - 2026-08-21 · transcript · src bill-2026-08-21#L51 — residual-value allocation ("allocate remaining 10% of budget") tied to the sub invoice-paid surface
 - 2026-09-02 · transcript · src bill-2026-09-02#L2–L46 — named **"fractional install"** and shaped as a **mirror card**, numbered *"2 of 2", "3 of 2"* and onward. Install hours must split **both directions** — pull out of or add to the total — because which applies depends on whether it's a change order or billed against the original [#L33]. The **description is editable** so the fraction can be scoped (*"wall handrails only of this thing"*). Visible to the sub and on the sub tracking tab for invoicing, **not on the job log** — *"I don't think it needs to pop on the job log particularly"* [#L20]
 - 2026-09-02 · decision · src bill-2026-09-02#L4 — **priority explicitly NOT raised.** Asked directly whether to bump it, Bill declined: it rides along with the sub/Trello backend work. `deps T5,T6` stand
+- 2026-09-14 · spec · src thisweek-2026-09-14#§6 — **elevated by the weekly package (P2)**, superseding the 9/2 "not raised": Splice / Split Work action with three outcomes (split existing hours · add hours · punch mirror card), shared lineage/capacity/billing-distinct/Change Log rules
+- 2026-09-14 · decision · src — — `deps T5,T6` cut: build the child as a minimal controlled child of `Releases` now, generalize under T5 later. Open question 4 now gates outcome (c)'s completion semantics
 - 2026-09-15 · incident · src daniel-2026-09-15 — Bill created a **verbal release numbered `340.1`** in prod. Audit: not a validation slip — Release # is free-text by design (`String(16)`, the `V###` verbal convention; the paste validator only requires non-empty), so the dotted number was accepted as an opaque string with no link to 340. It then sat in the FABRICATION queue with no fab hours and its install hours were additive to 340's
 - 2026-09-15 · decision · src daniel-2026-09-15 — **`340.X` dotted numbering supersedes the 9/2 mirror-card "2 of 2" shape; splices ARE on the job log.** Rules: the original carries fabrication and the TOTAL install-hour pool; each splice draws from that pool (sum never exceeds it, enforced on create and on every install-hours edit, both sides); a splice carries no fab hours; parent must exist — splices are created only from the original's modal (**+ Splice**, number derived server-side, description editable, install hours blank-to-fill); **no more `V` numbers expected**; start stage `Released` for now (likely `Install Start`, unconfirmed); **zero Trello interaction** (no card, no mirror, scanner skips them); prod `340.1` stays and is backfilled to its parent by the migration
 - 2026-09-15 · built · branch audit/splice-behavior — `releases.parent_release_id` FK + `app/brain/job_log/features/splice/` (CreateSpliceCommand, pool math, PATCH guards), `POST/GET /brain/job-log/release/<id>/splice(s)`, paste path rejects free-typed dotted numbers, `SpliceReleaseModal` + Splices panel in the hub modal, `migrations/add_parent_release_id_to_releases.py` (idempotent, backfills dotted rows) — **migration not yet run**. Open: whether the parent's `comp_eta` should size on remaining rather than total hours (today the parent still schedules on the full pool), and what completing every splice means for the parent
+- 2026-09-15 · open · src daniel-2026-09-15 — **conflicts with the 9/14 package's "never a separate release" rule** (see the banner). Built shape = numbered release child; package shape = non-release assignment child with three outcomes. Needs Bill's call before (b)/(c) are built; `parent_release_id` survives either answer
 
 ### T10 · Job-log photos → Trello bridge *(interim)*
 *W5 · not-started · class fix · due — · deps — · owner daniel · src bill-2026-08-21#L171 · upd 2026-08-21*
@@ -548,6 +649,249 @@ throwaway** — dies with T4; do not gold-plate.
 **Trail**
 - 2026-08-21 · transcript · src bill-2026-08-21#L171 — Doug's ask; "in the meantime" framing; Daniel to check feasibility and get back
 - 2026-08-21 · transcript · src bill-2026-08-21#L175 — per-photo button acceptable; paint-complete/ship photos are the ones that matter; shipping-guy adoption is the motive
+- 2026-09-14 · note · src thisweek-2026-09-14#§5.4 — the photos this bridge was for (paint-complete and ship) become **gated, captured evidence** under T13. If T10 is ever built, it should push T13's evidence sets, not arbitrary job-log photos — and the case for building it at all weakens once the shipping guy's photos live on the Timeline card
+
+### T11 · Release Issue & Error Register
+*W5 · in-progress · class build · due — · deps — · owner daniel · src thisweek-2026-09-14#§3 · upd 2026-09-15*
+
+Effort L. **Package P0**, `queue.now`. An **Issues tab on the release hub** so
+errors, field problems, quality failures, missing items, damage and rework are
+recorded while still actionable — *"a usable record of errors before they become
+hidden cost, rework, or blame without ownership"* [§2]. **Core rule: each issue
+is its own linked record** — never one bulk note, one attachment pile, or one
+cost total with no traceable cause [§3.1].
+
+**Pulled forward out of T6.** T6 carried "field issues" (ten categories, routing
+per type) behind T5; this is that idea, release-anchored (already decided
+2026-08-21, [bill-2026-08-21#L45]), with cost and department ownership added, and
+**no dependency on T5's assignment records**. Safety Hold and punch stay in T6.
+
+**Record** [§3.3]: system ID tied to the 3-digit project + 6-digit release ·
+title · **responsible department** (required; one primary + involved others;
+drives notification and reporting) · accountable person (optional at create,
+**required before In Progress**) · description (required) · **estimated cost**
+(currency, with *Unknown/TBD* allowed, value history retained) · category
+(Quality/Rework, Fabrication, Paint, Shipping/Delivery, Missing Product/Hardware,
+Installation/Field, Drawing/Engineering, Material/Vendor, Customer/GC,
+Subcontractor, Damage, Other) · priority Low/Normal/High/Critical · status
+Open → Under Review → In Progress → Waiting on Others → Resolved → Closed
+(Closed = final verified closure) · photos + PDFs **attached to the issue, not the
+release** · created-by/at.
+
+**Lifecycle** [§3.4]: timestamped comments with attachments and **@mentions** (the
+board/PDF/DWL mention stack already feeds one bell — reuse it, BUG-17's PR #369
+note); edits log who/when/prior value for cost, department, owner, priority,
+status; original description retained; department routing lands in a
+department/person work queue; design must leave room for a later **actual-cost**
+field without a duplicate record.
+
+**Visibility** [§3.2]: open-issue count + total known estimated cost on the hub
+and on the **Timeline card**; a leadership/PM filter for releases with open issues
+and total impact. Field/sub users may create issues only on releases they can see,
+cost visibility follows the permission model — **that model is T2/T3's and is not
+built**, so ship internal-only first and gate the sub path on T3.
+
+**Guardrails** [§3.5]: does **not** block production or invoicing in v1; a PM /
+Super / designated leader can decide an issue moves a release to Blocked / Safety
+Hold. Carmen may summarize (by project, release, department, category, aging,
+impact) and draft follow-ups, but never assigns blame, closes an issue, edits cost,
+or declares a release safe.
+
+**Three things to settle at build time:**
+1. **"Department" is not a concept in the codebase.** `User` has role flags, not a
+   department; there is no accountability chart in the DB. A fixed department list
+   is the minimal answer — confirm the list with Bill.
+2. **Safety escalation points at a workflow that does not exist.** The acceptance
+   test wants the form to *direct the user to create the immediate Safety Hold* —
+   Safety Hold is T6, not started. v1 can only direct to a phone call / named
+   person; say so rather than fake a button.
+3. **Storage.** Issue attachments are per-issue files — they want the same object
+   storage decision as photos (K3), not a new local-disk root (see
+   `project_backup_infrastructure`: two ephemeral roots already bit once).
+
+**Acceptance** [§3.6]: two issues on one release stay fully separate; cannot save
+without title + department + description, and saving notifies the department;
+attachments on Issue A appear only on A; a cost edit keeps prior amount/user/time;
+comments + tag + Open → In Progress → Resolved keep a full timeline; hub and
+Timeline card show the right open count and the PM filter returns total open
+impact; an unsafe condition routes to Safety Hold without losing the issue.
+
+**Trail**
+- 2026-09-14 · spec · src thisweek-2026-09-14#§3 — package P0: per-release issue register with department routing, estimated cost + history, per-issue evidence, comments/mentions, open-count on hub and Timeline card; no auto-blocking in v1; Carmen read/summarize only
+- 2026-09-14 · decision · src — — filed as its own item rather than as T6 scope: the package ranks it P0 and it needs none of T5's assignment records. T6 keeps punch + Safety Hold
+- 2026-09-14 · note · src — — found: no department model and no Safety Hold exist; sub-side create depends on the unbuilt T3 walls — ship internal-first
+- 2026-09-15 · decision · src — — build-time answers (Daniel): **departments = fixed list Drafting / Paint / Fab / Ship/Install**, a required label only — no routing, no department notifications, no assignment yet (`accountable_user_id` column carried, unused); **Safety Hold escalation deferred** pending more workflow information; **attachments on the persistent disk** beside photos (`RELEASE_ISSUE_STORAGE_ROOT`, derived sibling `release_issues/`), moving with K3; **admin-only**; mentions are the only notification path
+- 2026-09-15 · build · src — — first slice built on `feature/issues-registry`: `ReleaseIssue` / `ReleaseIssueComment` / `ReleaseIssueChange` / `ReleaseIssueAttachment` + two `notifications` columns; admin routes in `app/brain/release_issues/`; Issues tab on the release hub (list with open count + open est. cost, create form, detail with editable fields, per-issue evidence, merged comment + change timeline, @mentions → bell → hub deep link). Change history covers title, description, department, category, priority, status, cost; original description kept. **Not in this slice:** Timeline card count + PM filter, Safety Hold, assignment/department routing, Carmen, sub access. No tests written (by instruction). Migration `migrations/add_release_issues.py` written, **not yet run**
+- 2026-09-15 · build · src — — issue actions now land on the release's event stream (`create_issue`, `update_issue`, `add_issue_attachment` ReleaseEvents rows) so Change Log and the Activity rail show them; comments stay on the issue timeline. Timezone checked: Change Log + Activity were already Mountain (server pre-formats `/brain/events`; verified the string parses as MT in Safari's JavaScriptCore); the new Issues pane was showing naive UTC and now renders America/Denver. Side fix: the Activity rail's sentence fallback (photos, drawings) was appending " cleared"
+- 2026-09-15 · tests · src — — coverage written on request: `tests/release_issues/` (60 — service validation/numbering/history/mentions/summary/release events; routes admin gate, 400/404s, attachment isolation, file types, soft delete; storage-root derivation) + 4 vitest files (18 — issue event sentences, rail sentence kind, Mountain-time parsing, issue notification routing). Existing hub/rail/feed/notification suites re-run green. The hub's two test files had `utils/auth` mocks missing the new `readCachedRoleFlags` import; first pass worked around it by dropping the cached-role first paint, Daniel reversed that — the optimistic paint (AppShell's pattern) is restored, the mocks completed, and five admin-gate tests added (cached admin paints immediately, uncached waits for checkAuth, non-admin never sees it, no releaseId drops it, pane mounts + tab count)
+
+### T12 · Release flow on the Timeline — Paint Complete queue, Drop Ship Only, load order
+*W5 · not-started · class build · due — · deps — · owner daniel · src thisweek-2026-09-14#§5.1 · upd 2026-09-14*
+
+Effort M–L. **Package P1**, head of `queue.next`. Three asks that stop releases
+sitting in the wrong queue and let shipping plan a day in order. All three build on
+T1's shipped surface (`GanttChart.jsx`, the Unassigned tray, `shipLaneDrop`).
+
+**① Paint Complete queue** [§5.1] — a left-side vertical column *"similar to the
+existing Unassigned tray"* holding releases at **`Paint Complete`** eligible for
+shipping planning; drag into Shipping Planning **updates the stage** (logged); a
+live view of the same record, never a copy; ASAP cards prioritized inside it.
+**Overlap to resolve first:** the Unassigned tray's membership already includes
+`Paint Complete` (`READY_TO_SHIP_STAGES`, `utils/unassignedLane.js:33` — the
+2026-08-29 rule), so a Paint Complete release with no installer would show in
+**both** columns. Either the Unassigned tray drops `Paint Complete` from its intake
+(narrowing Bill's own 2026-08-29 rule) or the two are one tray with sections.
+Also check the drop against N5's intercept: **`Paint Complete` + a hard date
+already auto-rolls to `Ship Planning`** (`stage/command.py`), so hard-dated
+releases may never sit in this queue at all. **See Open question 7.**
+
+**② Drop Ship Only** [§5.2] — an assignment choice for releases fabricated and
+shipped with **no MHMW install**: its own Timeline lane/destination, consumes no
+installer capacity, leaves the Unassigned queue, stays fully linked (drawings,
+photos, shipping, billing), and progresses through shipping and closeout **without
+being falsely marked installed/complete**. Change-logged. **Net-new field** — there
+is no install-type or product-type attribute on `Releases` today
+(`project_tee_time_scheduling`), so this is a column + migration. The closeout path
+is the hard part: `COLOR_DUMP_STAGES`, `job_comp` cascades and the archive rule
+(`stage='Complete' AND job_comp='X' AND invoiced='X'`, PR #344) all assume an
+install happened — decide what "complete" means for a release that never installs
+before touching those rules.
+
+**③ Shipping load order** [§5.3] — vertical reorder of Shipping Planning cards
+within a day, persisted as an explicit **load number for that date**, displayed as
+**Load 1 / Load 2 / Load 3**, carried into any dispatch view or export; reordering
+never changes ship date, install date, stage or capacity. Net-new column (e.g. a
+per-date sequence on `Releases`) + migration; today's in-cell order is computed
+(`GanttChart.jsx:213`, ASAP first then job/release #). A date change must decide
+what happens to the load number (clear, or append to the new day).
+
+**Acceptance** [§8]: a Paint Complete release appears in the left queue and drags
+into Shipping Planning without a duplicate; a no-install release moves Unassigned →
+Drop Ship Only, consumes no crew capacity, still ships and closes out; five
+same-day shipping cards keep a manual Load 1–5 order after refresh with no date
+change.
+
+**Trail**
+- 2026-09-14 · spec · src thisweek-2026-09-14#§5.1–5.3 — package P1: Paint Complete queue, Drop Ship Only assignment + lane, persisted shipping load order
+- 2026-09-14 · note · src — — found: Unassigned tray already takes `Paint Complete` (double membership); N5's hard-date intercept moves Paint Complete rows to Ship Planning automatically; no install-type field exists; in-cell order is computed, not stored — two migrations expected (drop-ship flag, load sequence)
+
+### T13 · Two-stage Photo Evidence Gate + partial shipments
+*W5 · not-started · class build · due — · deps — · owner daniel · src thisweek-2026-09-14#§5.4 · upd 2026-09-14*
+
+Effort L. **Package P1.** A **controlled status gate**, not a reminder: moving a
+release to **`Paint Complete`** or to **`Ship Complete` / Shipped** cannot finish
+until there is a photo set **or** a documented Photo Exception [§5.4.1]. **Shipping
+Planning is deliberately ungated** — it stays a flexible planning stage.
+
+- **Paint Complete Evidence modal** — ≥1 photo of the finished painted product,
+  current shop/staging **location**, attestation that the pictured product is this
+  release.
+- **Shipment Completion Evidence modal** — ≥1 photo of loaded/dropped/delivered
+  product, actual location, **Full Release or Partial Shipment** (+ short
+  description when partial), attestation the photos cover what left MHMW.
+- **Photo Exception** — written reason + current location; visible on the
+  card/release, logged with user + time + stage, lands in a **photo-exceptions
+  queue**. A status change must *never* silently bypass the gate.
+- **Evidence fields** [§5.4.2]: multi-photo (mobile/tablet/desktop); location type
+  (Shop/Staging, Truck/Trailer, Job Site, Vendor/Pickup, Other) + free text (bay,
+  trailer, building, level, unit, gridline, laydown); auto date/time/user, manual
+  edits need an auditable reason; everything linked to project + release.
+- **Partial shipments** [§5.4.3] — each movement is its own **Shipment Event**
+  (*Shipment 1 of 3*, *2 of 3*, *Final Shipment*), never overwriting the first set;
+  the release reads **Partially Shipped** (or stays in shipping planning) until the
+  final event moves it to Ship Complete; events tie to the ship date and T12's load
+  sequence; the card shows a shipment-history count + link.
+- **Visibility** [§5.4.4]: hub + shipping card show photo-evidence count, current
+  location, shipment scope/status, latest Paint Complete evidence, active
+  exception; installers/subs opening the work package see location + shipment
+  photos. Carmen surfaces open exceptions, missing evidence, and releases Partially
+  Shipped past a configurable period — never invents a location or clears an
+  exception.
+
+**Absorbs J1** (photos at paint complete as an invoicing gate) — this *is* that
+gate, built as a stage gate. **Delivers N9's deferred "stage-change gate"** — the
+2026-08-21 answer to the photo-before-stage race was "ship it, then see; a gate is
+the future fix" [bill-2026-08-21#L81], and the gate is now the ask. N9 (the stamp)
+stays its own item but must render off these evidence photos: build the capture
+path once. Photo storage already exists (`ReleasePhoto`, `app/models.py:1193`;
+PR #349 client-side compression, which strips EXIF — N9's note applies here too).
+
+**A v0 of this gate already exists, switched off.** `adb0937` (2026-06-07) added a
+stage photo gate on **`Welded QC` and `Paint Complete`** — server-side in
+`UpdateStageCommand` (`STAGE_PHOTO_GATES`, raises `StagePhotoRequiredError` →
+`422 photo_required`, checks a `ReleasePhoto` tagged with that stage, skipped on
+undo, evaluated *before* the N5 intercept so a rerouted Paint Complete still needs
+its photo) with a matching frontend upload-modal flow in `JobsTableRow.jsx:35–40,
+481, 539`. **`d63146d` disabled it the same day** behind
+`STAGE_PHOTO_GATE_ENABLED = False` on both sides, *"keep all photo infra"*. So T13
+is an **extension of a parked mechanism, not a greenfield gate**: flip the flag,
+swap `Welded QC` for `Ship Complete` (the package gates only Paint Complete and
+Ship Complete — confirm Welded QC is really dropped), add location + attestation
++ the exception path, and add the shipment-event model. **Find out why it was
+turned off on 2026-06-07 before turning it back on** — the commit message gives
+no reason, and whatever made it unworkable then (probably the same crew friction
+the exception path is now designed to absorb) is the first risk now.
+
+**The hard part is the writers, not the modal.** A gate that lives in one command
+is a gate the other writers skip — the BUG-22 lesson, three for three. Today's
+stage writers: `UpdateStageCommand`, the **inbound Trello list move**
+(`sync.py`), and the Install Prog branches. **Trello can move a card to "Shipping
+completed" with no modal and no photos**, and inbound lands `Ship Complete`
+(`list_mapper.py`). While Trello lives, the gate is unenforceable on the path the
+shop actually uses — so decide: refuse and bounce the Trello move, accept it and
+auto-raise a Photo Exception ("moved in Trello, no evidence"), or accept that T13
+only fully closes at T4. **See Open question 6.** Same check for N5's
+`Paint Complete` hard-date auto-roll to Ship Planning, and for undo of a gated
+transition. **"Partially Shipped" is a new state** — decide whether it is a stage
+value (touches the Trello list mapper, stage order and `COLOR_DUMP_STAGES`
+integrity test) or a derived flag over `Ship Planning`; the flag is cheaper and
+keeps every existing stage rule intact. Two new tables expected (evidence
+set/shipment event, photo exception) + migration.
+
+**Acceptance** [§5.4.5]: Paint Complete cannot finish without photos + location or
+an exception; same for Ship Complete; an exception shows reason/location/user/
+time/stage and sits in the exceptions queue; a partial shipment creates Event 1,
+keeps the release Partially Shipped, allows Event 2 without overwriting; the final
+event moves to Ship Complete keeping all prior events; an installer/sub sees
+location + shipment photos in the work package.
+
+**Trail**
+- 2026-09-14 · spec · src thisweek-2026-09-14#§5.4 — package P1: gates at Paint Complete and Ship Complete (photos + location, or a logged exception), Shipping Planning ungated, per-movement shipment events, exceptions queue, Carmen follow-up
+- 2026-09-14 · decision · src — — J1 dissolves into this item; N9's deferred stage-change gate is delivered here; N9's stamp renders off these photos rather than a second capture path
+- 2026-09-14 · note · src adb0937 — found: a stage photo gate on Welded QC + Paint Complete was built 2026-06-07 and disabled the same day (`d63146d`, `STAGE_PHOTO_GATE_ENABLED = False` FE+BE), infra kept. T13 extends it; the reason it was switched off is unrecorded and is the first thing to recover
+- 2026-09-14 · note · src — — found: the inbound Trello list move writes `Ship Complete` with no Brain UI, so the gate cannot be enforced there while Trello lives (Open question 6); "Partially Shipped" has no home in the stage model yet
+
+### T14 · iPad / PC parity
+*W5 · not-started · class build · due — · deps — · owner daniel · src thisweek-2026-09-14#§7 · upd 2026-09-14*
+
+Effort M. **Package P3.** *"The iPad must be a dependable field operating view, not
+a stripped-down version of the PC screen"* [§7]. Five asks: the **same blue
+collapsible left-side menu** as PC; the **same top filters, primary buttons and
+actions** on Job Log and Timeline; usable in **landscape and portrait** without
+hiding critical filters; **rotation/responsive changes never close an active
+modal, discard unsaved work, or lose scroll/filter context**; a user can finish
+normal Job Log, release-hub, photo, date and Timeline tasks without going back to
+a PC.
+
+**What's in the way, from the record:** the left icon rail only mounts at
+**≥1440 px** (Job Log redesign, `project_job_log_redesign`) — every iPad is below
+that in both orientations, so the "blue collapsible menu" is absent by design and
+the fix is a collapsible rail at tablet widths, not a style tweak. The rotation
+half is **BUG-14, whose re-check trigger has now fired** (dropped 2026-09-04 *"unless
+we hear otherwise"* — this is hearing otherwise): the build is on `main`, the
+physical-iPad verification is what's owed, and it extends to unsaved form state,
+not just the open hub and scroll. PR #376 (2026-09-14, *"much improved mobile view
+for timeline"*) just moved this surface — start from it. The ~10 native-HTML5-drag
+components in `docs/tablet-tuning.md` are the parity backlog behind "Timeline
+tasks from the iPad". **Needs the physical iPad on the desk** — same device gate as
+T1's drag proof and BUG-14.
+
+**Acceptance** [§8]: blue collapsible menu, top filters and main Job Log/Timeline
+actions usable on a current iPad in landscape and portrait.
+
+**Trail**
+- 2026-09-14 · spec · src thisweek-2026-09-14#§7 — package P3: menu, filters and actions at parity; orientation-proof state; full task completion on iPad
+- 2026-09-14 · note · src — — BUG-14's re-check trigger fired (rotation must not close a modal or lose context); rail is ≥1440 px only today, so tablet widths need a collapsible rail; physical-iPad gate shared with T1/BUG-14
 
 ---
 
@@ -955,7 +1299,7 @@ ships the Change Order tag ahead of CO records. In `queue.awaiting`.
 - 2026-08-06 · decision · src — — collapse ⑤: A2 is a dependency, not a gate — N1 ships the CO tag first
 
 ### J1 · Photos at paint complete as an invoicing gate
-*W2 · not-started · due — · deps N9 · owner daniel · src bill-2026-07-22#notes · upd 2026-08-06*
+*W2 · dissolved into T13 (2026-09-14) · due — · deps N9 · owner daniel · src bill-2026-07-22#notes · upd 2026-09-14*
 
 Effort S. **Un-dropped 2026-08-06.** Cut on 7/22 as "irrelevant basically" —
 but paint invoicing requires photographs, which makes this a gate, not a
@@ -966,6 +1310,7 @@ where it's at"* — a stamped photo is self-describing.
 **Trail**
 - 2026-07-22 · transcript · src bill-2026-07-22#notes — dropped as "irrelevant basically"
 - 2026-08-06 · decision · src bill-2026-08-06#L613 — supersedes the 7/22 drop: paint invoicing requires photographs; J1 is the gate, N9 makes it work
+- 2026-09-14 · dissolved · src thisweek-2026-09-14#§5.4 — **into T13**: the Paint Complete Evidence gate is this item, built as a stage gate and paired with a Ship Complete gate. The invoicing read of that evidence (Katie's side) rides T13's visibility section and N2b
 
 ### I4 · Installer invoicing — Subs → Invoice Paid
 *W2 · built · due — · deps — · owner daniel · src bill-2026-07-22#notes · upd 2026-08-10*
@@ -1593,6 +1938,7 @@ every phone shot (3–12 MB). Consequences for N9:
 - 2026-08-29 · decision · src — — Open question 3 answered: **individual Brain logins on shared tablets**, not a capture-time picker. Stamp reads the logged-in user; correctness over friction, because the photos are customer-facing invoicing evidence. Carries an account-rollout prerequisite onto T2 — ship the accounts with the stamp, or every tablet photo prints the same generic name
 - 2026-08-29 · note · src pr#349 — client-side JPEG re-encode now strips EXIF from every job-log photo over 600 KB; browser geolocation becomes the sole location source and capture date must come from `file.lastModified` or a pre-compression EXIF read. Supersedes the "EXIF opportunistic / capture DateTime preferred" half of the 2026-08-06 capture standard
 - 2026-09-02 · transcript · src bill-2026-09-02#L60 — **Bill re-elevated it unprompted**: the photo watermark/text stamp is *"something I need to push into the higher priority"*. Consistent with its existing position at #2 in `queue.next`; no reorder needed
+- 2026-09-14 · decision · src thisweek-2026-09-14#§5.4 — the stage-change photo gate this item deferred ("ship it, then see" [bill-2026-08-21#L81]) is now asked for as **T13**, which also adds a location field. N9 sits behind T13 in `queue.next` on purpose: the gate is the capture path, the stamp renders onto what it captures — one upload path, not two. Not a demotion of Bill's 9/2 re-elevation; the package does not mention the stamp at all
 
 ### H1 · Polish sweep
 *W3 · not-started · due — · deps N7 · owner daniel · src — · upd 2026-08-06*
@@ -1994,6 +2340,9 @@ External dependencies, all Bill's unless noted.
 
 | Owed | Blocks | Since |
 |---|---|---|
+| **The weekly package's two missing references** — it cites `Field_Operations_Decisions_Log.md` (*"confirmed decisions for capacity, mirror-card punch workflow, field access, and invoicing"*) and `pasted_content_4.txt` (*"Bill's current Timeline, Trello sync, shipping, and iPad notes for Daniel"*) [thisweek-2026-09-14#References]. **Neither has been received.** The decisions log may already answer Open questions 4, 5 and 7; Bill's raw notes are the primary source the P0 schedule-integrity items were distilled from | Open questions 4/5/7 — and the confidence of BUG-24…27 | 2026-09-14 |
+| **Why the stage photo gate was switched off on 2026-06-07** *(Daniel's own history)* — built and disabled the same day (`adb0937` → `d63146d`) with no reason recorded | T13's first risk | 2026-09-14 |
+| ~~**Department list for the Issue Register** — no department model exists~~ **answered 2026-09-15 by Daniel: Drafting / Paint / Fab / Ship/Install, label only for now** — confirm with Bill before routing is built | T11's routing | 2026-09-14 |
 | **Field-ops spec reconciliation** — two threads remain: ① the cover email promises items the doc doesn't contain (mandatory hardware sign-off, safety plan in the work package, shipping photos, "concurrent vouch approval," system-generated MHMW invoice PDF — partly confirmed by Bill's subs-invoice-inside-the-Brain intent [bill-2026-08-21#L57], "Quick Work Authorizations" by name — §11.1's lightweight authorization is the closest match); ② is phase **"A.1"** (sub financial workflow where E should be) a typo or a deliberate elevation behind Phase A? ~~③ Phase-A-first vs T1-first~~ **resolved 2026-08-21: T1 first** [bill-2026-08-21#L169] | T5/T8 shape — not T1's start | 2026-08-20 |
 | **Katie's invoicing-tab feedback** *(from Katie, not Bill)* — she's *"trying to brainstorm what to do with the invoicing tab"* [bill-2026-08-21#§13] | N2b/N12 shape when they start | 2026-08-21 |
 | **Daniel's own notes on the 8/21 items** — to follow, layer onto the digest | Nothing — additive | 2026-08-21 |
@@ -2030,8 +2379,8 @@ Open question 4, and the reconciliation row above.
 
 ## Open questions
 
-Nine were asked 2026-08-06; eight are resolved (see Resolved log). These
-remain — #2 is half-answered and no longer gates anything. **Numbers are stable
+Nine were asked 2026-08-06; eight are resolved (see Resolved log). #5–#7 were
+opened 2026-09-14 by the weekly request package. These remain — #2 is half-answered and no longer gates anything. **Numbers are stable
 identifiers:** #3 (shared-tablet attribution) was resolved 2026-08-29 and the gap
 is deliberate — the Resolved log and several trails cite these by number, so they
 are never reused or shifted up.
@@ -2069,7 +2418,42 @@ are never reused or shifted up.
    [§7.2], and how the **punch-work holdback** on a sub invoice is computed and
    released when installation isn't 100% [§11.2]. Both are policy, not build
    calls. **Answers: Bill.** Rides the field-ops reconciliation conversation
-   (Owed).
+   (Owed). **Sharpened 2026-09-14:** the weekly package's punch mirror card says
+   the primary install *"can be marked Installed / Invoice-Eligible when
+   accepted"* while punch stays open [thisweek-2026-09-14#§6.1] — that reads as
+   **punch does not block the primary's completion**, which answers the first half
+   for T9 (c). Confirm it rather than infer it; the holdback half is untouched.
+5. ~~**Default installer count: 2 or 3?**~~ **ANSWERED 2026-09-15 — 3.** Bill: the client
+   document specifies 3 installers and 24 hours of work with those 3, so `DEFAULT_NUM_GUYS`
+   is 3 and `HOURS_PER_INSTALLER_DAY` stays 8 (3 x 8 = 24). Shipped the same day; the
+   documents were the rule, not a drafting error. Unblocked **BUG-24**. Original text kept
+   for the trail: *(opened 2026-09-14)* Gates **BUG-24**.
+   The weekly package [thisweek-2026-09-14#§4.1] and the 8/20 spec [§5] both state
+   the baseline as **3 installers = 24 labor-hrs/day per crew**; the code default
+   is **2** on both sides (`DEFAULT_NUM_GUYS`, `scheduling.js:25`; `num_guys or 2`
+   server-side), and `comp_eta = start + ceil(install_hrs / (num_guys × 8))` has
+   been unified on it (`project_asap_install_team_flow`). Moving to 3 shortens every
+   unset release's install bar by a third, the day it deploys, on the Timeline, the
+   install schedule and the mirror cards. Either the documents are the new rule and
+   the change is announced, or 2 was the deliberate shop number and the documents
+   are wrong. **Answers: Bill.**
+6. **Can a Trello card move bypass the photo gate?** *(opened 2026-09-14)* Gates
+   **T13**'s Ship Complete half. The package says a status change *"must never
+   silently bypass the gate"* [§5.4.1], but the inbound Trello list move writes
+   `Ship Complete` with no Brain UI to show a modal in. Options: bounce the Trello
+   move back; accept it and auto-raise a Photo Exception ("moved in Trello, no
+   evidence") that lands in the exceptions queue; or treat the gate as fully closed
+   only at T4. Recommended: **auto-raise the exception** — it is honest, visible,
+   needs no Trello-side behavior, and uses the queue the package already asks for.
+   **Answers: Daniel, then tell Bill.**
+7. **Paint Complete queue vs the Unassigned tray** *(opened 2026-09-14)* Gates
+   **T12 ①**. The tray's 2026-08-29 intake already includes `Paint Complete`, so an
+   unassigned Paint Complete release would sit in both columns; and N5's intercept
+   auto-rolls any hard-dated Paint Complete to `Ship Planning`, so only
+   formula-dated releases would ever wait in the new queue. Also: does dragging from
+   the queue into Shipping Planning set the stage to `Ship Planning` *and* a ship
+   date from the drop column? **Answers: Bill** for the intent, Daniel for the
+   mechanics.
 
 ---
 
@@ -2147,12 +2531,20 @@ Append-only log — never edited, never pruned.
 - 2026-09-04 · **BUG-13, BUG-14** · **dropped** — Daniel: drop both *"unless we hear otherwise"*. Neither is a build problem. BUG-13 has two sightings and no repro since 8/21, and instrumenting a phantom keystroke bug nobody can trigger is not worth a queue slot; BUG-14's code is on `main` and what is left is a **verification** pass that cannot happen without the physical iPad. Both are `deferred` with a stated re-check trigger rather than deleted — a fresh sighting re-opens BUG-13, and BUG-14 rides along the next time the iPad is on the desk, which is the same device gate T1's drag is already waiting on. src daniel-2026-09-04
 - 2026-09-04 · **BUG-23** · **re-checked, still open** — read as possibly closed by the day's ASAP work; it is not, and by construction cannot be: BUG-23 was filed *by* the audit **of** that work, as the list of what it left undone. All four findings verified against `main` @ 7d42436: (1) `apply_shipping_stage_date_discipline` is still called from `features/stage/command.py` **only** — `app/trello/sync.py` does not call it, so an inbound list move to Shipping planning still keeps stale formula dates; (2) `update_invoiced` (`routes.py:1708`) still calls `neutralize_install_date_cascade` and **not** `drop_asap_on_completion`; (3) `start_install_asap = False` is still written in **three** modules (`asap_drop.py:47`, `neutralize_install_date_cascade.py:115`, `shipping_stage_date_discipline.py:96`); (4) `classify_install_date` still returns `KIND_ASAP` off the flag alone **before** the `formula_tf is False` test (`lookahead/pipeline.py:76`) and `_install_source` still maps it to `SOURCE_HARD` (`schedule_builder.py:220`) — this is the half that was deliberately pulled out of PR #364 in `e10feee`, so it was never going to close with it. Live impact is still zero rows (BUG-20 means every ASAP row carries a hand-set date), which is why it stays **med** and keeps its own branch. src daniel-2026-09-04
 
+- 2026-09-14 · **weekly request package** · ingested — Bill's *"The Brain — This Week: Timeline and Field Workflow Updates"* (Manus-prepared, 19 pp., P0–P3 with acceptance tests) folded in and **given the front of the queue** (Daniel: *"probably these elevate to highest urgency"*). **Filed:** BUG-24 installer count, BUG-25 Trello Due-only, BUG-26 weekends, BUG-27 ASAP red on ship lanes (P0 schedule integrity, `queue.now`); **T11** Release Issue & Error Register (P0, `queue.now`); **T12** Paint Complete queue + Drop Ship Only + load order and **T13** two-stage Photo Evidence Gate + partial shipments (P1); **T9** elevated with its deps cut (P2); **T14** iPad/PC parity (P3). **Moved:** AUD2 `now` → `next`; J1 dissolves into T13; field issues leave T6 for T11; N9's deferred stage gate delivered by T13. **Measured against `main` @ 1c3d09a before filing, and four findings changed the shape of the asks:** the Brain has **no `num_guys` write path** (only Trello description parsing) so "restore" is net-new; the Trello date inversion is on the **mirror-card range push** (`update_card_date_range` writes Start = install), primary cards are already Due-only; ASAP red is **tray-only** by design; and a **stage photo gate on Welded QC + Paint Complete already exists, disabled** since 2026-06-07. Opened Open questions 5 (default crew 2 vs 3), 6 (Trello move vs photo gate), 7 (Paint Complete queue vs Unassigned tray). Owed: the package's two cited references were not delivered. src thisweek-2026-09-14
+
+- 2026-09-15 · **BUG-24, BUG-25, BUG-26, BUG-27** · **built, no tests yet** — the P0 schedule-integrity four, code only; test writing and local-dev verification are a deliberate follow-up, not an omission. Existing suite 1480 green, frontend builds. **BUG-27** (smallest): `ShipCard` now reads the release's ASAP state on every render and overrides the lane colour with the tray's red (`ASAP_BORDER_COLOR`, one constant shared with `TRAY_BORDER.asap`), so the rush survives the pull out of the tray and clears itself when `asap_drop` fires at Ship Complete. Installer lanes deliberately untouched — there the lane colour answers whose work it is. **BUG-26**, all four asks: weekend columns darkened (`bg-gray-400/45`) **and** painted into the lane bodies, which had no weekend shading at all — the only cue was a faint header tint, which is how installs kept getting planned across Sat/Sun unnoticed; a new `next_business_day()` snaps `calculate_install_start_date`'s output onto the FIELD calendar so no AUTO-projection places a start on a weekend; a deliberate drop still writes the day it was dropped on (`timelineDrop` was already correct); and T1's open *"install hours don't compute on a weekend drop"* defect [bill-2026-09-02#L471] closed — the drop's optimistic patch wrote `Start install` but left `comp_eta_effective` stale, so the bar kept its old length until the next poll, which reads worst across a weekend. It now recomputes client-side with the same math the server will, and the bar bridges the weekend as one bar because it always did once the end was right. **One over-reach caught by the suite and reverted:** the same weekend snap was first applied to `calculate_projected_fab_complete_date` too, which broke `test_fab_projection_uses_shop_calendar` — fab completing "today" is a statement about the work and today can legitimately be a Friday the shop is shut. The ask is about *starts*; the snap now only covers starts. **BUG-25**: the mirror push is Due-only behind `MIRROR_DUE_ONLY` in `app/trello/api.py` — due = the install day, `start` explicitly cleared with a JSON null (leaving it out would strand the stale Start, the exact field Bill is misreading). **The literal rule could not ship alone and this is the part to look at**: outbound due=start_install fires a due webhook, and `_handle_mirror_writeback` reads a mirror due as `comp_eta`, so every Brain push would have come straight back in as "comp_eta = start_install" and flattened the bar. §4.2's *"leave inbound alone"* is therefore violated by exactly one guard — a mirror carrying **no** `start` has its due read as `start_install`, legacy range cards unchanged. That guard is the price of the rule; if Bill exempts the mirror, flip the constant and delete the guard. `mountain_due_datetime`'s 6pm/6am contradiction resolved in favour of the **code** (6 AM, same calendar day everywhere in the US); moving it to 18:00 would rewrite the due time on every card ever pushed for no stated need, so the docstring was what changed. *"No silent mismatch"* got its backend half: `GET /brain/sync-failures` (admin) names the failed outbound pushes — job, release, action, error — rather than only counting them like `/sync-health`; the UI is T11's. **BUG-24** is net-new as filed, and **shipped on two calls that are not mine to make** — both are live and both are one line to change. (1) **`DEFAULT_NUM_GUYS` stays 2.** Open question 5 is unanswered and moving it to 3 shortens every unset release's bar by a third the day it deploys; the new control lets a scheduler set 3 per release today without that blast radius. (2) **A crew edit recomputes `comp_eta`, overwriting a hand-compressed one** — the package's own wording for BUG-24, and the only rule under which the typed number means anything, but it does lose a Timeline edge-compress. That is BUG-11's open 2026-09-02 question answered by fiat to unblock the build; the recompute site carries the note. Shape as specified otherwise: `UpdateNumGuysCommand` (`features/num_guys/`) writes `num_guys`, recomputes `comp_eta`, emits an undoable `update_num_guys` event and pushes the count into **both** card descriptions via the existing `sync_num_guys_on_card`; `PATCH /brain/update-num-guys/<job>/<release>` is `@admin_required` — the Timeline's own scheduler gate, so subs never see it [§4.1]; the hub's read-only "crew of N" footnote is now the control, rendered only for admins. Outbound is synchronous best-effort with ERROR-on-failure, matching `UpdateStartInstallCommand`'s due push rather than the outbox — an outbox action for it is the obvious follow-up. src —
+
+- 2026-09-15 · **Open question 5** · **answered — 3, and shipped** — Bill: the client document specifies **3 installers and 24 hours of work with those 3**, so the documents were the rule and the code was wrong. `SchedulingConfig.DEFAULT_NUM_GUYS` 2 → 3 with `HOURS_PER_INSTALLER_DAY` unchanged at 8 (3 × 8 = 24 labor-hrs/day per crew, matching fieldops-2026-08-20#§5 and thisweek-2026-09-14#§4.1); the legacy `INSTALL_HOURS_PER_DAY` reference value moves 16 → 24 to stay equal to the product it documents. **The blast radius is the stated one and it is live:** every release with no recorded `num_guys` just had its projected install window shorten by a third, on the Timeline, the install schedule and the mirror cards — that is the change, not a side effect, and it wants announcing to the crews rather than discovering. **The number now lives in exactly one place.** It had been hardcoded as a literal `2` in six sites that could silently disagree — `calculate_installation_duration`'s signature default, the inline seed in the card-description builder, `update_num_guys_in_description`'s `default_num_guys`, the `num_guys or 2` in the outbox mirror push, the `CardSpec` dataclass default, and the frontend constant. All five backend sites now read `SchedulingConfig.DEFAULT_NUM_GUYS` (a leaf module importing only `typing`, so no cycles); the frontend keeps its own mirror by necessity, marked as such on both sides. This retires the first of **BUG-24's two shipped-under-protest calls**; the second (a crew edit recomputing over a hand-compressed `comp_eta`, which answers BUG-11's open 2026-09-02 question by fiat) is still open and still wants a ruling. Backend 1480 green, frontend 341 green. **One stale frontend expectation fixed, and it was mine from earlier the same day:** `GanttChart.drag.test.jsx` pinned the drop-rollback object exactly, and BUG-26's optimistic `comp_eta_effective` patch had added a key to it — caught only because the frontend suite had not been run alongside the backend one. src —
+- 2026-09-15 · **BUG-24, BUG-25, BUG-27 + Timeline/hub follow-ups** · **BUG-27 complete; BUG-24 and BUG-25 awaiting rulings** — Daniel's pass on `fix/bug-fix-audit-bill-notes`, code only (tests deliberately deferred to the end). **BUG-27 closed on a rule change:** ASAP is **kept through Ship Complete** — `asap_drop.py` now fires at `Install Start` or later (UpdateStageCommand + Install Prog %/X); the inbound Trello drop call was removed (no list can reach `Install Start`), and the N5 formula-date blanking at Ship Planning/Complete no longer clears the flag. Three existing tests still encode the old Ship Complete drop and fail until the test pass. **BUG-25 awaiting date confirmation from Bill, expected 2026-09-16** (mirror Due-only vs exempt range bar). **BUG-24 awaiting the hand-shortened bars ruling** (crew edit recomputing over an edge-compressed `comp_eta`); its crew control moved to its own "Crew (num guys)" row in the hub — it had only rendered inside the install-hours footnote, so a release with no hours had no control. The last literal `2` seed (`trello/sync.py`, missing "Number of Guys" line → parsed back into the row; also `trello_cleanup.py`) now reads `DEFAULT_NUM_GUYS`. **No backfill (Daniel):** 276 active sandbox releases still store `num_guys = 2` from the old default and stay that way; only edits and new cards get 3. **Also fixed:** Timeline drag card drifted ~one column from the drop highlight (overlay anchored to the grab offset; now pinned to the pointer, lane chosen by `pointerWithin`); ticking ASAP in the hub wiped the Start Install date (`JobDetailsBody` dropped the date arg → dateless save cleared it) and the ASAP checkbox now toggles off as well as on; hub edits on Timeline/Archive refetch silently instead of redrawing the page; Install Prog is editable in the hub with the Job Log cell's stage rules. src —
+
 ---
 
 ## Sources
 
 | Slug | Path | Role |
 |---|---|---|
+| thisweek-2026-09-14 | `~/Downloads/MHMW_Brain_This_Week_Timeline_and_Field_Updates_September_2026.pdf` | Bill's weekly developer request package, *"The Brain — This Week: Timeline and Field Workflow Updates"* (Manus-prepared, September 2026, 19 pp.) — P0 Issue & Error Register + schedule integrity, P1 release flow + Photo Evidence Gate, P2 splicing, P3 iPad parity, each with acceptance criteria. `#§N` anchors are its section numbers. **Lives in Downloads — fragile; move beside the transcripts.** Cites two references not in hand (`Field_Operations_Decisions_Log.md`, `pasted_content_4.txt`) — see Owed |
 | bill-2026-09-02 | `~/Desktop/Transcripts/MHMW/Bill-9-2-2026.txt` | Tuesday working session (Bill), post-Alaska — a live **Timeline demo that closed T1's design** plus a full **sub-access permission matrix** (T3). `#LNNN` anchors are line numbers in the **raw** transcript: it is continuous prose and directly citable, so there is no `-clean.md` companion. Findings: `processed/Bill-9-2-2026.md`, which also folds in **Daniel's own page-by-page notes** and a **reconciliation section** recording where those notes supersede the audio (ASAP display, CarMid, drag-writes-dates-only, Ship Complete freeze). Note the first transcription pass hit a Whisper repetition loop that destroyed the back half; it was re-run clean the same day and the broken output is kept as `Bill-9-2-2026.BROKEN.txt` |
 | bill-2026-08-21 | `~/Desktop/Transcripts/MHMW/Bill-8-21-2026-clean.md` | Thursday standup (Bill), pre-Alaska — T1-first confirmed, punch→release + splicing, N9 elevated + spec'd, N5 color rule reversed, prompt library, iPad-first. `#LNNN` anchors are line numbers in the **cleaned** transcript (raw `Bill-8-21-2026.txt` is too interleaved to cite). Findings: `processed/Bill-8-21-2026.md`. Daniel's own notes to follow |
 | fieldops-2026-08-20 | `~/Downloads/MHMW_Brain_Trello_Replacement_Subcontractor_Field_Operations_Build_Package.md` | The delivered Trello-replacement / subcontractor field-ops functional spec (Manus-prepared, Aug 2026) — the Owed W5 written scope. `#§N` anchors are its section numbers. **Lives in Downloads — fragile; move beside the transcripts if it's to be a durable citation source.** Its own cited sources (`BRAIN_KNOWLEDGE_BASE.md`, `07_TM_Module.md`, …) are the Procore-replacement package, also outside this repo |

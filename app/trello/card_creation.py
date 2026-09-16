@@ -54,7 +54,7 @@ def build_card_description(
     pm: Optional[str] = None,
     by: Optional[str] = None,
     released: Optional[Any] = None,
-    num_guys: float = 2
+    num_guys: float = 3           # SchedulingConfig.DEFAULT_NUM_GUYS — keep in step
 ) -> str:
     """
     Build a standardized Trello card description.
@@ -66,7 +66,7 @@ def build_card_description(
         pm: Project manager
         by: Buyer
         released: Released date
-        num_guys: Number of guys (default: 2)
+        num_guys: Number of guys (default: 3, the shop crew — SchedulingConfig.DEFAULT_NUM_GUYS)
     
     Returns:
         Formatted card description
@@ -161,6 +161,18 @@ def create_trello_card_core(
                     error=str(scan_err),
                     error_type=type(scan_err).__name__,
                 )
+
+        from app.trello.api import _mock_write
+        if _mock_write("create_card", list_id=list_id, name=card_title):
+            # A synthetic id, the same shape set_mirror_date_range mocks with, so the caller
+            # persists something and the rest of the flow behaves identically in local dev.
+            mock_id = f"mock-card-{list_id}-{card_title[:24]}"
+            return {
+                "success": True,
+                "card_data": {"id": mock_id, "name": card_title, "desc": card_description},
+                "card_id": mock_id,
+                "adopted": False,
+            }
 
         url = "https://api.trello.com/1/cards"
         payload = {

@@ -3,7 +3,7 @@
 // shell, the initialTab entry points, the dossier content, and the click-out
 // margin that dismisses it.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { ReleaseHubModal } from './ReleaseHubModal.jsx';
 import { jobsApi } from '../services/jobsApi';
 
@@ -83,10 +83,26 @@ vi.mock('../services/jobsApi', () => ({
 vi.mock('../services/notificationApi', () => ({
     fetchMentionableUsers: vi.fn(() => Promise.resolve([])),
 }));
+// Role gate for the Issues tab: the cached flag drives the first paint (same optimistic
+// pattern as AppShell's rail), then checkAuth's answer wins. Tests flip these per case.
+const authState = vi.hoisted(() => ({ cachedAdmin: false, meIsAdmin: true }));
 vi.mock('../utils/auth', () => ({
     // /api/auth/me shape — admin/drafter flags at top level.
-    checkAuth: vi.fn(() => Promise.resolve({ is_admin: true, is_drafter: true })),
+    checkAuth: vi.fn(() => Promise.resolve({ is_admin: authState.meIsAdmin, is_drafter: true })),
+    readCachedRoleFlags: vi.fn(() => ({
+        isAdmin: authState.cachedAdmin, canSeeReport: false, canUseBBChat: false,
+    })),
 }));
+// The Issues pane has its own suite; here it only needs to prove it mounted and report a count.
+vi.mock('./releaseIssues/ReleaseIssuesPane', async () => {
+    const React = await import('react');
+    return {
+        ReleaseIssuesPane: ({ releaseId, onSummary }) => {
+            React.useEffect(() => { onSummary?.({ open_count: 3, open_estimated_cost: 0 }); }, []);
+            return <div data-testid="issues-pane">issues for {releaseId}</div>;
+        },
+    };
+});
 
 // Shaped like a real Job Log row (app/brain/job_log/routes.py) — display keys
 // for the table columns, raw keys for everything else.
@@ -136,6 +152,52 @@ afterEach(() => {
 const renderHub = (props = {}) => render(
     <ReleaseHubModal isOpen onClose={() => {}} job={JOB} releaseId={JOB.id} {...props} />
 );
+
+describe('ReleaseHubModal Issues tab (admin gate)', () => {
+    afterEach(() => {
+        authState.cachedAdmin = false;
+        authState.meIsAdmin = true;
+    });
+
+    it('paints the Issues tab immediately when the cached role is admin', () => {
+        authState.cachedAdmin = true;
+        renderHub();
+        expect(screen.getByRole('tab', { name: 'Issues' })).toBeInTheDocument();
+    });
+
+    it('holds the Issues tab until checkAuth confirms admin when nothing is cached', async () => {
+        renderHub();
+        expect(screen.queryByRole('tab', { name: 'Issues' })).not.toBeInTheDocument();
+        await waitFor(() => {
+            expect(screen.getByRole('tab', { name: 'Issues' })).toBeInTheDocument();
+        });
+    });
+
+    it('never offers the Issues tab to a non-admin, even after checkAuth answers', async () => {
+        authState.meIsAdmin = false;
+        renderHub();
+        await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+        expect(screen.queryByRole('tab', { name: 'Issues' })).not.toBeInTheDocument();
+    });
+
+    it('drops the Issues tab when there is no releaseId to fetch with', () => {
+        authState.cachedAdmin = true;
+        renderHub({ releaseId: null });
+        expect(screen.queryByRole('tab', { name: 'Issues' })).not.toBeInTheDocument();
+    });
+
+    it('mounts the Issues pane on click, keeps it mounted, and shows the open count on the tab', async () => {
+        authState.cachedAdmin = true;
+        renderHub();
+        fireEvent.click(screen.getByRole('tab', { name: /Issues/ }));
+        expect(screen.getByTestId('issues-pane')).toHaveTextContent('issues for 42');
+        await waitFor(() => {
+            expect(screen.getByLabelText('3 open issues')).toHaveTextContent('3');
+        });
+        fireEvent.click(screen.getByRole('tab', { name: 'Details' }));
+        expect(screen.getByTestId('issues-pane')).toBeInTheDocument();
+    });
+});
 
 describe('ReleaseHubModal', () => {
     it('renders nothing when closed', () => {
@@ -269,7 +331,7 @@ describe('ReleaseHubModal', () => {
         expect(screen.getByRole('button', { name: '+ Note' })).toBeInTheDocument();
     });
 
-    it('renders the release fields the Job Log row carries', () => {
+    it('renders the release fields the Job Log row carries', async () => {
         renderHub();
         const dialog = screen.getByRole('dialog');
         // Commitments keep the full date; derived rows carry the weekday.
@@ -277,8 +339,10 @@ describe('ReleaseHubModal', () => {
         expect(within(dialog).getByText('Sat, Aug 1')).toBeInTheDocument();      // Comp. ETA
         // PM and By share one row now.
         expect(within(dialog).getByText('Doug · Rich')).toBeInTheDocument();
-        // Crew · Install Hrs likewise.
-        expect(within(dialog).getByText('3 · 24')).toBeInTheDocument();
+        // Install Hrs has its own row; crew size is its own control (admin) so a release with
+        // no install hours can still set it.
+        expect(within(within(dialog).getByText('Install Hrs').parentElement).getByText('24')).toBeInTheDocument();
+        expect(await within(dialog).findByLabelText('Crew size')).toHaveValue(3);
         expect(within(dialog).getByText('14')).toBeInTheDocument();              // Fab Order
         expect(within(dialog).getByText('Black')).toBeInTheDocument();           // Paint color
     });
@@ -286,15 +350,19 @@ describe('ReleaseHubModal', () => {
     it('shows an em dash for empty fields rather than dropping the row', () => {
         renderHub();
         const dialog = screen.getByRole('dialog');
-        // Job Comp / Install Prog and Invoiced are null on this release.
-        expect(within(dialog).getAllByText('—').length).toBeGreaterThanOrEqual(2);
+        // Invoiced is null on this release and still reads as an em dash.
+        expect(within(dialog).getAllByText('—').length).toBeGreaterThanOrEqual(1);
+        // Install Prog is an editable field now: empty, with the em dash as its placeholder.
+        const prog = within(dialog).getByLabelText('Install progress');
+        expect(prog).toHaveValue('');
+        expect(prog).toHaveAttribute('placeholder', '—');
     });
 
-    it('appends % to whole-number Install Prog', () => {
+    it('shows Install Prog in an editable field', () => {
         renderHub({ job: { ...JOB, 'Job Comp': 75 } });
         const dialog = screen.getByRole('dialog');
-        // One place now: the Schedule column's Install Prog row.
-        expect(within(dialog).getByText('75%')).toBeInTheDocument();
+        // The field carries the raw value the Job Log cell edits (75, 50%, X), not a formatted label.
+        expect(within(dialog).getByLabelText('Install progress')).toHaveValue('75');
     });
 
     it('flags an ASAP install with the mini-flag beside the date', () => {

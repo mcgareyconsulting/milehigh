@@ -4,7 +4,7 @@ schema_version: 1
 purpose: Processes inbound Trello webhooks by reconciling card changes (moves, edits, due-date updates) with the DB and creating JobEvents for the audit trail.
 exports:
   sync_from_trello: Main webhook handler that fetches card data, updates the Job record, and emits JobEvents.
-imports_from: [app.trello.api, app.trello.utils, app.trello.operations, app.trello.context, app.trello.logging, app.trello.list_mapper, app.models, app.services.job_event_service, app.brain.job_log.features.fab_order.tier, app.brain.job_log.features.start_install.asap_drop, app.config]
+imports_from: [app.trello.api, app.trello.utils, app.trello.operations, app.trello.context, app.trello.logging, app.trello.list_mapper, app.models, app.services.job_event_service, app.brain.job_log.features.fab_order.tier, app.config]
 imported_by: [app/trello/__init__.py]
 invariants:
   - Echo webhooks from Brain's own outbox calls are detected and skipped (90-second window, content-matched).
@@ -37,6 +37,7 @@ from app.trello.api import (
     update_card_custom_field_number,
     update_card_date_range,
     sync_num_guys_on_card,
+    MIRROR_DUE_ONLY,
     set_num_guys_in_description,
 )
 from app.models import Releases, SyncOperation, SyncLog, SyncStatus, ReleaseEvents, TrelloOutbox, db
@@ -48,7 +49,6 @@ from app.brain.job_log.features.fab_order.tier import apply_fab_order_for_stage
 from app.brain.job_log.features.start_install.neutralize_install_date_cascade import (
     COLOR_DUMP_STAGES,
 )
-from app.brain.job_log.features.start_install.asap_drop import drop_asap_on_completion
 import uuid
 import re
 from app.config import Config as cfg
@@ -202,8 +202,9 @@ def _apply_num_guys_change(rec, new_num_guys, *, source, trello_user_id=None):
                 },
                 external_user_id=trello_user_id,
             )
-            # Push the new bar end straight to the already-persisted (board-verified) mirror
+            # Push the install window straight to the already-persisted (board-verified) mirror
             # card — no attachment walk needed. Best-effort; the due webhook is a no-op echo.
+            # Under MIRROR_DUE_ONLY what lands on the card is the install day, not the bar end.
             if rec.mirror_trello_card_id:
                 try:
                     update_card_date_range(
@@ -245,6 +246,16 @@ def _handle_mirror_writeback(card_id, card_data, event_info, sync_op):
 
         new_start_date = _card_date("start")
         new_due_date = _card_date("due")
+
+        # BUG-25: outbound now pushes the mirror as a POINT — due = the install day, start
+        # cleared — so on such a card the install day lives in `due` and a due slide is a
+        # start_install move, not a comp_eta move. Reading it the old way would take the
+        # Brain's own push straight back in as "comp_eta = start_install" and flatten the bar
+        # on every single write. A card that still carries a `start` is a legacy range bar and
+        # keeps the original reading, untouched.
+        if MIRROR_DUE_ONLY and new_start_date is None and new_due_date is not None:
+            new_start_date = new_due_date
+            new_due_date = None
 
         cur_start = mirror_rec.start_install
         cur_due = mirror_rec.comp_eta
@@ -637,27 +648,10 @@ def sync_from_trello(event_info):
                         reason=fab_plan.reason,
                     )
 
-                # ASAP drop: the shop advances work by dragging the card, and this
-                # path writes the stage itself instead of going through
-                # UpdateStageCommand — so while the drop lived inside that command, a
-                # card dragged to "Shipping completed" kept its red forever (two such
-                # rows found in production 2026-09-03). Same shared rule the command
-                # calls, keyed on rec.stage — what apply_trello_list_to_db actually
-                # set — not the raw Trello list name.
-                if drop_asap_on_completion(
-                    rec,
-                    new_stage=rec.stage,
-                    parent_event_id=event.id if event else None,
-                    source=trello_source,
-                ):
-                    safe_log_sync_event(
-                        sync_op.operation_id,
-                        "INFO",
-                        "Dropped ASAP flag on inbound completion",
-                        job=rec.job,
-                        release=rec.release,
-                        new_stage=rec.stage,
-                    )
+                # No ASAP drop here: the flag now comes off only at `Install Start` or
+                # later, and inbound lands on the floor of a list's zone — "Shipping
+                # completed" floors at `Ship Complete` — so no Trello drag can reach it.
+                # An ASAP card dragged to Shipping completed keeps its red on purpose.
 
                 if event:
                     created_events.append(event)
@@ -727,7 +721,10 @@ def sync_from_trello(event_info):
             # Ensure the Number of Guys field exists, seeded from the DB (the source of truth)
             # so we never clobber a value set on the other card with a default.
             if rec.install_hrs and "Number of Guys:" not in new_description:
-                seed = int(rec.num_guys) if rec.num_guys else 2
+                # Fallback is the shop default (BUG-24: 3), never a literal — a hardcoded 2 here
+                # got parsed straight back off the card and persisted as the release's crew.
+                from app.brain.job_log.scheduling.config import SchedulingConfig
+                seed = int(rec.num_guys) if rec.num_guys else int(SchedulingConfig.DEFAULT_NUM_GUYS)
                 updated_description = set_num_guys_in_description(new_description, seed)
                 if updated_description != new_description:
                     update_trello_card_description(card_id, updated_description)

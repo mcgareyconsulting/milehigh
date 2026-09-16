@@ -212,16 +212,15 @@ class UpdateStageCommand:
 
         extras: dict = {}
 
-        # ASAP drop on completion: once an ASAP release reaches Ship Complete or any
-        # later stage it is no longer a rush, so the flag comes off. The dates set while
+        # ASAP drop once install begins: when an ASAP release reaches Install Start or any
+        # later stage it is no longer a rush, so the flag comes off. Ship Planning / Ship
+        # Complete keep it — the ASAP must persist in the ship lanes. The dates set while
         # it was a rush are LEFT intact — the PM owns the install date from then on.
         #
         # The rule lives in its own module rather than inline here because this command
-        # is NOT the only writer that advances a stage: the inbound Trello list move
-        # writes the stage itself (app/trello/sync.py), and while the rule lived in this
-        # function that path silently skipped it — cards dragged to Shipping completed
-        # kept their red indefinitely. Same shape as BUG-9's fab_order and BUG-16's
-        # drafting-status drop: one rule, every writer calls it.
+        # is NOT the only writer that advances a stage (the Install Prog route calls it
+        # too). Same shape as BUG-9's fab_order and BUG-16's drafting-status drop: one
+        # rule, every writer calls it.
         if drop_asap_on_completion(
             job_record,
             new_stage=self.stage,

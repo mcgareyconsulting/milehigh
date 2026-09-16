@@ -10,8 +10,9 @@
  *   - Any non-empty date submitted via Save is persisted as a hard date (is_hard_date=true).
  *   - ASAP REQUIRES a Start Install date: the toggle leaves the date fields enabled and Save is
  *     refused until a date is entered. ASAP sets no date of its own.
- *   - The toggle only ever turns ASAP ON — it is disabled once the flag is set, because Save
- *     has no clear path; Clear ASAP owns that.
+ *   - The toggle turns ASAP on AND off (flag only). Unticking on an ASAP row + Save clears the
+ *     flag; the Start Install date is never dropped either way. An unchanged hard date is not
+ *     re-sent on toggle (dateNeedsSave), so a dateless/redundant save can't wipe or dedup it.
  *   - The confirm button reads "Set ASAP" only when turning ASAP on (off->on); otherwise "Save".
  *     Saving an already-ASAP row edits its date/installer exactly like any other row.
  *   - Clear Hard Date button is shown whenever the row has a hard date (startInstallFormulaTF === false && currentDate), ASAP rows included — an ASAP row's date is hand-set like any other and must be clearable without losing the flag.
@@ -119,22 +120,23 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
     };
 
     const handleAsapToggle = (e) => {
-        // Flag only — the date fields stay live and stay filled. ASAP marks the row a rush;
-        // the date is still the user's to set, and Save below refuses without one.
-        //
-        // Only ever turns ASAP ON: the box is disabled once the flag is set (see the
-        // checkbox below), because Save has no path that clears it — that is Clear ASAP's
-        // job. Leaving it un-checkable silently was a dead control: the box read
-        // unchecked, Save wrote the date, and the row stayed red with no explanation.
+        // Flag only — the date fields stay live and stay filled, both ways. Ticking marks the
+        // row a rush; unticking clears the flag on Save. Neither touches the Start Install date.
         setAsapToggle(e.target.checked);
         setError('');
     };
 
     const installerChanged = installer !== initialInstaller;
     const shipChanged = (shipDateInput || null) !== (initialShipYmd || null);
-    // Turning ASAP on (off -> on) sets the flag and then saves the date in one action.
-    // When ASAP is already set the toggle stays on and the row edits normally.
+    // Turning ASAP on (off -> on) sets the flag and saves the date in one action; turning it
+    // off (on -> off) clears the flag only. Either way the date stays put.
     const turningAsapOn = asapToggle && !isAsap;
+    const turningAsapOff = !asapToggle && !!isAsap;
+    // Only re-send the install date when it needs writing: it was edited, or the row isn't
+    // hard-dated yet. Re-sending an unchanged hard date is a redundant write that can trip
+    // the event dedup and roll the whole ASAP toggle back.
+    const dateNeedsSave = !!dateInput
+        && (dateInput !== toYmd(currentDate) || startInstallFormulaTF !== false);
 
     const handleSave = () => {
         // Validate BEFORE writing anything. The ship date used to be persisted up front,
@@ -154,7 +156,15 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
             onSaveShipDate(shipDateInput || null);
         }
         if (turningAsapOn) {
-            onSetAsap(installerChanged ? installer : undefined, dateInput);
+            onSetAsap(installerChanged ? installer : undefined, dateNeedsSave ? dateInput : undefined);
+            return;
+        }
+        if (turningAsapOff) {
+            onClearAsap();
+            // Clearing is flag-only; still honour any date/installer edit made alongside it.
+            if (dateNeedsSave || installerChanged) {
+                onSave(dateNeedsSave ? dateInput : null, installerChanged ? installer : undefined);
+            }
             return;
         }
         if (!dateInput && !installerChanged) {
@@ -180,7 +190,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
 
     const confirmLabel = turningAsapOn ? 'Set ASAP' : 'Save';
     // ASAP cannot be saved without a date, so it does not enable the button on its own.
-    const confirmEnabled = !!dateInput || installerChanged || shipChanged;
+    const confirmEnabled = !!dateInput || installerChanged || shipChanged || turningAsapOff;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -215,7 +225,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
                             type="checkbox"
                             checked={asapToggle}
                             onChange={handleAsapToggle}
-                            disabled={asapLocked || isAsap}
+                            disabled={asapLocked}
                             className="mt-1 h-4 w-4 accent-red-600"
                         />
                         <span>
@@ -224,7 +234,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
                                 {asapLocked
                                     ? 'Unavailable once install has started.'
                                     : isAsap
-                                        ? 'This release is flagged a rush. Use Clear ASAP below to remove it; the date stays.'
+                                        ? 'This release is flagged a rush. Untick and Save to remove it; the date stays.'
                                         : 'Marks the release a rush (red) and rips to Shipping Planning at Paint Complete. Set the Start Install date below — ASAP will not pick one for you.'}
                             </span>
                         </span>

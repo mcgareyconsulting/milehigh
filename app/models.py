@@ -991,6 +991,10 @@ class Notification(db.Model):
     checklist_item_id = db.Column(db.Integer, db.ForeignKey('checklist_items.id', ondelete='CASCADE'), nullable=True, index=True)
     drawing_version_comment_id = db.Column(db.Integer, db.ForeignKey('drawing_version_comments.id', ondelete='CASCADE'), nullable=True, index=True)
     carmen_drawing_review_id = db.Column(db.Integer, db.ForeignKey('carmen_drawing_reviews.id', ondelete='CASCADE'), nullable=True, index=True)
+    # Release Issue Register mentions: the issue always; the comment when the
+    # mention was in a comment (a mention in the issue description has none).
+    release_issue_id = db.Column(db.Integer, db.ForeignKey('release_issues.id', ondelete='CASCADE'), nullable=True, index=True)
+    release_issue_comment_id = db.Column(db.Integer, db.ForeignKey('release_issue_comments.id', ondelete='CASCADE'), nullable=True)
     is_read = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -1001,17 +1005,22 @@ class Notification(db.Model):
     checklist_item = db.relationship('ChecklistItem', lazy='select')
     drawing_version_comment = db.relationship('DrawingVersionComment', lazy='select')
     carmen_drawing_review = db.relationship('CarmenDrawingReview', lazy='select')
+    release_issue = db.relationship('ReleaseIssue', lazy='select')
+    release_issue_comment = db.relationship('ReleaseIssueComment', lazy='select')
 
     def to_dict(self):
         comment = self.drawing_version_comment
         version = comment.drawing_version if comment else None
-        release = comment.release if comment else None
+        issue = self.release_issue
+        release = (comment.release if comment else None) or (issue.release if issue else None)
         review = self.carmen_drawing_review
         # What the mentioner actually wrote. The bell only ever showed "X mentioned
         # you"; the To-Dos mentions column shows the sentence, so surface the source
-        # comment body (board comment or drawing comment) and its author.
-        source = self.board_activity or comment
+        # comment body (board, drawing or issue comment) and its author.
+        source = self.board_activity or comment or self.release_issue_comment
         excerpt = (getattr(source, 'body', None) or '').strip() or None
+        if excerpt is None and issue is not None:
+            excerpt = (issue.description or '').strip() or None
         if excerpt and len(excerpt) > _EXCERPT_MAX:
             excerpt = excerpt[:_EXCERPT_MAX].rstrip() + '…'
         author_name = getattr(source, 'author_name', None)
@@ -1039,8 +1048,13 @@ class Notification(db.Model):
             'submittal_project_number': self.submittal.project_number if self.submittal else None,
             # A bb_review notification deep-links to the release report; fall back to the
             # comment's release when this is a drawing-comment mention.
+            'release_issue_id': self.release_issue_id,
+            'release_issue_comment_id': self.release_issue_comment_id,
+            'release_issue_display_id': issue.display_id if issue else None,
+            'release_issue_title': issue.title if issue else None,
             'release_id': (comment.release_id if comment else None)
-                          or (review.release_id if review else None),
+                          or (review.release_id if review else None)
+                          or (issue.release_id if issue else None),
             'drawing_version_id': (comment.drawing_version_id if comment else None)
                           or (review.drawing_version_id if review else None),
             'drawing_version_number': version.version_number if version else None,
@@ -1260,6 +1274,195 @@ class ReleasePhoto(db.Model):
                 'name': self._display_name(self.last_edited_by),
             } if self.last_edited_by_user_id else None,
             'last_edited_at': _dt(self.last_edited_at),
+        }
+
+
+class ReleaseIssue(db.Model):
+    """One error / field problem / rework item on a release (roadmap T11).
+
+    Each issue is its own record — never a bulk note on the release — with its own
+    comments, attachments and change history. Allowed values for department,
+    category, priority and status live in app/brain/release_issues/constants.py.
+    `seq` numbers issues per release so the display id reads "<job>-<release>-I<seq>".
+    `accountable_user_id` is carried for the later assignment slice; nothing sets it yet.
+    """
+    __tablename__ = 'release_issues'
+    __table_args__ = (
+        db.UniqueConstraint('release_id', 'seq', name='uq_release_issues_release_seq'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=False, index=True)
+    seq = db.Column(db.Integer, nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    # The description as first written — kept even after edits (spec §3.4).
+    original_description = db.Column(db.Text, nullable=False)
+    department = db.Column(db.String(32), nullable=False)
+    category = db.Column(db.String(40), nullable=False)
+    priority = db.Column(db.String(16), nullable=False, default='normal')
+    status = db.Column(db.String(24), nullable=False, default='open', index=True)
+    # NULL = Unknown/TBD. Actual cost gets its own column later, not a second record.
+    estimated_cost = db.Column(db.Numeric(12, 2), nullable=True)
+    accountable_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_by_name = db.Column(db.String(160), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    release = db.relationship('Releases', backref=db.backref('issues', lazy='dynamic'))
+    accountable_user = db.relationship('User', foreign_keys=[accountable_user_id])
+
+    @property
+    def display_id(self):
+        release = self.release
+        if release is None:
+            return f"I{self.seq}"
+        return f"{release.job}-{release.release}-I{self.seq}"
+
+    def to_dict(self):
+        release = self.release
+        return {
+            'id': self.id,
+            'display_id': self.display_id,
+            'release_id': self.release_id,
+            'job': release.job if release else None,
+            'release': release.release if release else None,
+            'seq': self.seq,
+            'title': self.title,
+            'description': self.description,
+            'original_description': self.original_description,
+            'department': self.department,
+            'category': self.category,
+            'priority': self.priority,
+            'status': self.status,
+            'estimated_cost': float(self.estimated_cost) if self.estimated_cost is not None else None,
+            'accountable_user_id': self.accountable_user_id,
+            'accountable_user_name': user_display_name(self.accountable_user),
+            'created_by_user_id': self.created_by_user_id,
+            'created_by_name': self.created_by_name,
+            'created_at': _dt(self.created_at),
+            'updated_at': _dt(self.updated_at),
+        }
+
+
+class ReleaseIssueComment(db.Model):
+    """A timestamped comment on a release issue; `@FirstName` mentions notify.
+
+    `release_id` is denormalized so the notification bell can click through to the
+    release hub without a second join (same as DrawingVersionComment).
+    """
+    __tablename__ = 'release_issue_comments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    issue_id = db.Column(
+        db.Integer, db.ForeignKey('release_issues.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    author_name = db.Column(db.String(160), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    issue = db.relationship(
+        'ReleaseIssue',
+        backref=db.backref('comments', lazy='dynamic', cascade='all, delete-orphan'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'issue_id': self.issue_id,
+            'release_id': self.release_id,
+            'body': self.body,
+            'author_id': self.author_id,
+            'author_name': self.author_name,
+            'created_at': _dt(self.created_at),
+        }
+
+
+class ReleaseIssueChange(db.Model):
+    """Field-level edit history for a release issue: who, when, old → new.
+
+    Values are stored as text so one table covers every tracked field (cost,
+    department, priority, status, title, description, accountable person).
+    """
+    __tablename__ = 'release_issue_changes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    issue_id = db.Column(
+        db.Integer, db.ForeignKey('release_issues.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    field = db.Column(db.String(32), nullable=False)
+    old_value = db.Column(db.Text, nullable=True)
+    new_value = db.Column(db.Text, nullable=True)
+    changed_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    changed_by_name = db.Column(db.String(160), nullable=True)
+    changed_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    issue = db.relationship(
+        'ReleaseIssue',
+        backref=db.backref('changes', lazy='dynamic', cascade='all, delete-orphan'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'issue_id': self.issue_id,
+            'field': self.field,
+            'old_value': self.old_value,
+            'new_value': self.new_value,
+            'changed_by_user_id': self.changed_by_user_id,
+            'changed_by_name': self.changed_by_name,
+            'changed_at': _dt(self.changed_at),
+        }
+
+
+class ReleaseIssueAttachment(db.Model):
+    """A photo or PDF attached to one release issue (optionally to one of its comments).
+
+    Files belong to the issue, never the release, so Issue A's evidence cannot
+    appear on Issue B. Stored under RELEASE_ISSUE_STORAGE_ROOT; soft-deleted.
+    """
+    __tablename__ = 'release_issue_attachments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    issue_id = db.Column(
+        db.Integer, db.ForeignKey('release_issues.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    comment_id = db.Column(
+        db.Integer, db.ForeignKey('release_issue_comments.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+    storage_key = db.Column(db.String(512), nullable=False)
+    original_filename = db.Column(db.String(256), nullable=True)
+    mime_type = db.Column(db.String(64), nullable=False)
+    file_size_bytes = db.Column(db.BigInteger, nullable=False)
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    uploaded_by_name = db.Column(db.String(160), nullable=True)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+
+    issue = db.relationship(
+        'ReleaseIssue',
+        backref=db.backref('attachments', lazy='dynamic', cascade='all, delete-orphan'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'issue_id': self.issue_id,
+            'comment_id': self.comment_id,
+            'original_filename': self.original_filename,
+            'mime_type': self.mime_type,
+            'file_size_bytes': self.file_size_bytes,
+            'is_pdf': self.mime_type == 'application/pdf',
+            'uploaded_by_user_id': self.uploaded_by_user_id,
+            'uploaded_by_name': self.uploaded_by_name,
+            'uploaded_at': _dt(self.uploaded_at),
         }
 
 
