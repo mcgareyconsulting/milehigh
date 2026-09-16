@@ -562,7 +562,7 @@ than duplicate, the same way N2b must.
 - 2026-08-21 · transcript · src bill-2026-08-21#L51 — the remaining-value mechanic: at 90% progress the system offers "allocate remaining 10% of budget for this installation" against the spliced work ticket (T9), tying residual invoiceable value to whoever finishes the work
 
 ### T9 · Release splicing — fractional work tickets for the field
-*W5 · not-started · class build · due — · deps — (was T5,T6 — cut 2026-09-14) · owner daniel · src bill-2026-08-21#L45 · upd 2026-09-14*
+*W5 · in-progress · class build · due — · deps — (was T5,T6 — cut 2026-09-14) · owner daniel · src bill-2026-08-21#L45 · upd 2026-09-15*
 
 > **Elevated 2026-09-14 — package P2** [thisweek-2026-09-14#§6], third in
 > `queue.next`. This reverses Bill's own 2026-09-02 "don't raise it" (trail below);
@@ -592,6 +592,17 @@ than duplicate, the same way N2b must.
 > **Acceptance** [§8]: a card splits into existing hours, added hours, or a punch
 > mirror, each preserving release lineage and correct capacity.
 
+> **Tension to resolve with Bill (opened 2026-09-15):** the package above says the
+> child is *never a separate release* and *not a release number*; the 2026-09-15
+> decision and first build number it **`340.1`, `340.2`** as real job-log rows
+> (Bill's own idea after `340.1` slipped in as a verbal release). The build
+> delivers outcome **(a) split existing hours** only — pool-capped, lineage via
+> `parent_release_id`, zero Trello. Outcomes **(b) add hours** and **(c) punch
+> mirror** are not built and would need the pool rule relaxed (b) and T6's punch
+> lifecycle (c). Whether the child stays a numbered release or becomes the
+> package's non-release assignment child is the open call; the data model
+> (`parent_release_id` on `Releases`) serves either.
+
 Effort M–L. Bill's concept, volunteered when punch anchoring came up: a punch
 or remaining-work item *"produce[s] effectively a **fractional or splice of a
 release**"* [#L45] — an additional work ticket on the timeline carrying the
@@ -616,6 +627,10 @@ which stays parked but shares the apportionment shape.
 - 2026-09-02 · decision · src bill-2026-09-02#L4 — **priority explicitly NOT raised.** Asked directly whether to bump it, Bill declined: it rides along with the sub/Trello backend work. `deps T5,T6` stand
 - 2026-09-14 · spec · src thisweek-2026-09-14#§6 — **elevated by the weekly package (P2)**, superseding the 9/2 "not raised": Splice / Split Work action with three outcomes (split existing hours · add hours · punch mirror card), shared lineage/capacity/billing-distinct/Change Log rules
 - 2026-09-14 · decision · src — — `deps T5,T6` cut: build the child as a minimal controlled child of `Releases` now, generalize under T5 later. Open question 4 now gates outcome (c)'s completion semantics
+- 2026-09-15 · incident · src daniel-2026-09-15 — Bill created a **verbal release numbered `340.1`** in prod. Audit: not a validation slip — Release # is free-text by design (`String(16)`, the `V###` verbal convention; the paste validator only requires non-empty), so the dotted number was accepted as an opaque string with no link to 340. It then sat in the FABRICATION queue with no fab hours and its install hours were additive to 340's
+- 2026-09-15 · decision · src daniel-2026-09-15 — **`340.X` dotted numbering supersedes the 9/2 mirror-card "2 of 2" shape; splices ARE on the job log.** Rules: the original carries fabrication and the TOTAL install-hour pool; each splice draws from that pool (sum never exceeds it, enforced on create and on every install-hours edit, both sides); a splice carries no fab hours; parent must exist — splices are created only from the original's modal (**+ Splice**, number derived server-side, description editable, install hours blank-to-fill); **no more `V` numbers expected**; start stage `Released` for now (likely `Install Start`, unconfirmed); **zero Trello interaction** (no card, no mirror, scanner skips them); prod `340.1` stays and is backfilled to its parent by the migration
+- 2026-09-15 · built · branch audit/splice-behavior — `releases.parent_release_id` FK + `app/brain/job_log/features/splice/` (CreateSpliceCommand, pool math, PATCH guards), `POST/GET /brain/job-log/release/<id>/splice(s)`, paste path rejects free-typed dotted numbers, `SpliceReleaseModal` + Splices panel in the hub modal, `migrations/add_parent_release_id_to_releases.py` (idempotent, backfills dotted rows) — **migration not yet run**. Open: whether the parent's `comp_eta` should size on remaining rather than total hours (today the parent still schedules on the full pool), and what completing every splice means for the parent
+- 2026-09-15 · open · src daniel-2026-09-15 — **conflicts with the 9/14 package's "never a separate release" rule** (see the banner). Built shape = numbered release child; package shape = non-release assignment child with three outcomes. Needs Bill's call before (b)/(c) are built; `parent_release_id` survives either answer
 
 ### T10 · Job-log photos → Trello bridge *(interim)*
 *W5 · not-started · class fix · due — · deps — · owner daniel · src bill-2026-08-21#L171 · upd 2026-08-21*

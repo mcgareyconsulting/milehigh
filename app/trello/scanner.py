@@ -684,7 +684,11 @@ def scan_and_create_cards_for_all_jobs(dry_run: bool = False, limit: Optional[in
     
     try:
         # Query all jobs that don't have Trello cards
-        query = Releases.query.filter(Releases.trello_card_id.is_(None))
+        # Splices (parent_release_id set) never get a Trello card — skip them.
+        query = Releases.query.filter(
+            Releases.trello_card_id.is_(None),
+            Releases.parent_release_id.is_(None),
+        )
         
         if limit:
             query = query.limit(limit)

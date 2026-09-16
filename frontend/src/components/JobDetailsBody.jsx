@@ -42,6 +42,7 @@ import { setAsapAndAssign } from '../utils/asap';
 import { checkAuth } from '../utils/auth';
 import { compressImage } from '../utils/imageCompress';
 import { StartInstallDateModal } from './StartInstallDateModal';
+import { SpliceReleaseModal } from './SpliceReleaseModal';
 import { ConfirmDialog } from './shared/ConfirmDialog';
 
 const labelFor = (key) => HEADER_OVERRIDES[key] || key;
@@ -258,6 +259,11 @@ export function JobDetailsBody({
     const [todos, setTodos] = useState([]);
     const [todosLoading, setTodosLoading] = useState(false);
 
+    // Splice group (T9): pool + children from GET /splices. Loaded for every row;
+    // the server answers for the parent whether this row is the original or a splice.
+    const [splicePool, setSplicePool] = useState(null);
+    const [spliceOpen, setSpliceOpen] = useState(false);
+
     // Note editor for the photo currently in the hero (not the release's Notes,
     // which live on the Activity rail).
     const [noteEditing, setNoteEditing] = useState(false);
@@ -275,6 +281,16 @@ export function JobDetailsBody({
     const jobId = job ? (job['Job #'] || job.job) : null;
     const relId = job ? (job['Release #'] || job.release) : null;
     const relPk = releaseId ?? job?.id ?? null;
+
+    const loadSplices = useCallback(async () => {
+        if (relPk == null) { setSplicePool(null); return; }
+        try {
+            setSplicePool(await jobsApi.getSplices(relPk));
+        } catch {
+            setSplicePool(null);
+        }
+    }, [relPk]);
+    useEffect(() => { loadSplices(); }, [loadSplices]);
 
     // Display key first, raw key second — Job Log rows carry the former, some
     // Timeline/API paths only the latter.
@@ -714,6 +730,8 @@ export function JobDetailsBody({
 
     const tint = stageTint(localStage);
     const installHrs = pick('Install HRS', 'install_hrs');
+    const isSplice = job.parent_release_id != null;
+    const canSplice = !isSplice && installHrs != null && installHrs !== '' && Number(installHrs) > 0;
     const numGuys = localNumGuys ?? job.num_guys;
     const workDays = installHrs ? installDays(installHrs, numGuys) : null;
     // The crew size half of this line is now a control (BUG-24), so the sentence is split: the
@@ -1118,6 +1136,58 @@ export function JobDetailsBody({
                         </p>
                     )}
 
+                    {/* ── Splices (T9) — 340.1, 340.2 carry install hours drawn from
+                        this row's pool. A splice row shows its parent instead. ── */}
+                    <SectionLabel
+                        style={{ marginTop: 18 }}
+                        action={(!isSplice && relPk != null) ? (
+                            <button
+                                type="button"
+                                onClick={() => setSpliceOpen(true)}
+                                disabled={!canSplice}
+                                title={canSplice
+                                    ? 'Create a splice that draws install hours from this release'
+                                    : 'Set install hours on this release first — a splice draws from that pool'}
+                                className="text-jl-2 font-semibold text-accent-700 hover:underline disabled:opacity-40 disabled:no-underline"
+                            >
+                                + Splice
+                            </button>
+                        ) : null}
+                    >
+                        Splices
+                    </SectionLabel>
+                    {isSplice ? (
+                        <>
+                            <Row
+                                label="Splice of"
+                                value={splicePool ? `${splicePool.job}-${splicePool.release}` : '…'}
+                            />
+                            {splicePool && (
+                                <p className="text-ink-3" style={{ fontSize: 11.5, marginTop: 6 }}>
+                                    {`${splicePool.allocated_install_hrs} of ${splicePool.total_install_hrs ?? '—'} hrs spliced · ${splicePool.remaining_install_hrs ?? '—'} remaining on the original`}
+                                </p>
+                            )}
+                        </>
+                    ) : (
+                        <>
+                            {splicePool && splicePool.splices.length > 0 ? splicePool.splices.map((sp) => (
+                                <Row
+                                    key={sp.id}
+                                    label={`${sp.job}-${sp.release}`}
+                                    value={`${sp.install_hrs ?? 0} hrs · ${sp.stage || 'Released'}`}
+                                    title={sp.description || undefined}
+                                />
+                            )) : (
+                                <p className="text-jl-2 text-ink-3 italic" style={{ padding: '6px 2px' }}>No splices.</p>
+                            )}
+                            {splicePool && splicePool.total_install_hrs != null && (
+                                <p className="text-ink-3" style={{ fontSize: 11.5, marginTop: 6 }}>
+                                    {`${splicePool.allocated_install_hrs} of ${splicePool.total_install_hrs} hrs spliced · ${splicePool.remaining_install_hrs} remaining`}
+                                </p>
+                            )}
+                        </>
+                    )}
+
                     <SectionLabel style={{ marginTop: 18 }}>Details</SectionLabel>
                     <Row
                         label="PM / By"
@@ -1308,6 +1378,20 @@ export function JobDetailsBody({
                 Portaled out: it positions itself `fixed`, and the hub's blurred
                 backdrop makes that fixed box resolve against the panel, so left
                 in place it would be clipped by the pane's overflow. */}
+            {spliceOpen && createPortal(
+                <SpliceReleaseModal
+                    isOpen={spliceOpen}
+                    onClose={() => setSpliceOpen(false)}
+                    parentId={relPk}
+                    jobNumber={jobId}
+                    releaseNumber={relId}
+                    jobName={pick('Job', 'job_name')}
+                    description={pick('Description', 'description')}
+                    pool={splicePool}
+                    onCreated={() => { loadSplices(); onJobUpdate?.(); }}
+                />,
+                document.body,
+            )}
             {startInstallOpen && createPortal(
                 <StartInstallDateModal
                     isOpen={startInstallOpen}

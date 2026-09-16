@@ -579,6 +579,15 @@ class Releases(db.Model):
     # Nullable so existing rows stay valid; required only on create (API/UI).
     # Not shown on the job-log row — release hub Details only. See RELEASE_TAGS.
     release_tag = db.Column(db.String(32), nullable=True)
+    # Splice link (T9). A splice is a child release numbered "<parent>.<n>" (340.1,
+    # 340.2) that carries install hours only: the parent keeps the fabrication and the
+    # TOTAL install-hour pool, each splice draws from that pool and the sum never
+    # exceeds it. Splices are created only through the parent (+ Splice), never by
+    # free-typing a dotted number, and have zero Trello interaction (no card, no
+    # mirror). See app/brain/job_log/features/splice/.
+    parent_release_id = db.Column(
+        db.Integer, db.ForeignKey("releases.id"), nullable=True, index=True
+    )
 
     # Trello fields
     trello_card_id = db.Column(db.String(64), unique=True, nullable=True)
@@ -673,6 +682,7 @@ class Releases(db.Model):
             "invoiced": self.invoiced,
             "notes": self.notes,
             "release_tag": self.release_tag,
+            "parent_release_id": self.parent_release_id,
             "stage": self.stage,
             "trello_card_id": self.trello_card_id,
             "trello_card_name": self.trello_card_name,

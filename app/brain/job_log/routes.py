@@ -55,6 +55,13 @@ from app.brain.job_log.features.start_install.neutralize_install_date_cascade im
 )
 from app.brain.job_log.features.start_install.asap_drop import drop_asap_on_completion
 from app.brain.job_log.features.ship_date.command import UpdateShipDateCommand
+from app.brain.job_log.features.splice.command import (
+    CreateSpliceCommand,
+    SpliceError,
+    is_splice_number,
+    pool_summary,
+    validate_field_edits as validate_splice_field_edits,
+)
 from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
 from datetime import datetime, timedelta
 from sqlalchemy import or_
@@ -685,6 +692,7 @@ def get_jobs():
                     'cover_photo_id': None,  # patched in batch below
                     'photo_count': 0,        # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
+                    'parent_release_id': serialize_value(job.parent_release_id),
                     'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),
                 }
@@ -1067,6 +1075,7 @@ def get_all_jobs():
                     'cover_photo_id': None,  # patched in batch below
                     'photo_count': 0,        # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
+                    'parent_release_id': serialize_value(job.parent_release_id),
                     'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),
                 }
@@ -2219,6 +2228,69 @@ def _normalize_release_tag(raw) -> str | None:
     return tag if tag in RELEASE_TAGS else None
 
 
+@brain_bp.route("/job-log/release/<int:release_id>/splices", methods=["GET"])
+@login_required
+@handle_errors("load splices", raw_error=True)
+def get_release_splices(release_id):
+    """Install-hour pool and splice list for a release (the modal's Splices panel).
+
+    For a splice, answers for its parent so the panel reads the same from either
+    side. Returns 200 with ``next_splice_number`` and ``remaining_install_hrs``.
+    """
+    record = Releases.query.get(release_id)
+    if record is None:
+        return jsonify({"error": "Release not found"}), 404
+    parent = record
+    if record.parent_release_id is not None:
+        parent = Releases.query.get(record.parent_release_id) or record
+    summary = pool_summary(parent)
+    summary["is_splice"] = record.parent_release_id is not None
+    return jsonify(summary), 200
+
+
+@brain_bp.route("/job-log/release/<int:release_id>/splice", methods=["POST"])
+@login_required
+@handle_errors("create splice", raw_error=True)
+@require_json("install_hrs")
+def create_release_splice(release_id):
+    """Create a splice (340.1, 340.2, …) under release ``release_id``.
+
+    Body: ``{"install_hrs": 15, "description": "...", "released": "YYYY-MM-DD"}``.
+    The number is derived server-side, install hours are drawn from the parent's
+    pool (409 when over-allocated), fab hours are never carried, and nothing is
+    queued to Trello. Same audience as the verbal-release form: any logged-in user.
+    """
+    parent = Releases.query.get(release_id)
+    if parent is None:
+        return jsonify({"error": "Release not found"}), 404
+    data = g.json_data
+    try:
+        splice = CreateSpliceCommand(
+            parent,
+            install_hrs=data.get("install_hrs"),
+            description=data.get("description"),
+            released=data.get("released"),
+            user=get_current_user(),
+        ).execute()
+    except SpliceError as e:
+        return jsonify({"error": str(e), **e.extra}), e.status
+    summary = pool_summary(parent)
+    return jsonify({
+        "success": True,
+        "splice": {
+            "id": splice.id,
+            "job": splice.job,
+            "release": splice.release,
+            "job_name": splice.job_name,
+            "description": splice.description,
+            "install_hrs": splice.install_hrs,
+            "released": splice.released.isoformat() if splice.released else None,
+            "parent_release_id": splice.parent_release_id,
+        },
+        "pool": summary,
+    }), 201
+
+
 @brain_bp.route("/job-log/release", methods=["POST"])
 @login_required
 def release_job_data():
@@ -2315,6 +2387,22 @@ def release_job_data():
                 job_number = int(row_values['job'])
                 release_number = str(row_values['release']).strip()
                 job_name_value = str(row_values['job_name']).strip()
+
+                # Dotted numbers (340.1) are splices and exist only under a parent.
+                # They are created from the parent's modal (+ Splice), which derives
+                # the number and draws the install hours from the parent's pool —
+                # never by free-typing one here (that is how 340.1 first slipped in).
+                if is_splice_number(release_number):
+                    base = release_number.split('.')[0]
+                    errors.append({
+                        'row': row_idx,
+                        'error': (
+                            f'Release # {release_number} is a splice number. Open release '
+                            f'{job_number}-{base} and use + Splice instead.'
+                        ),
+                        'data': row,
+                    })
+                    continue
 
                 # Hard uniqueness: (job #, release #, project name). Job numbers
                 # wrap; same digits on a different project name is allowed
@@ -3862,6 +3950,13 @@ def update_job_fields(job, release):
         except (ValueError, TypeError) as e:
             return jsonify({"error": f"Invalid value for field '{field}': {str(e)}"}), 400
         coerced[field] = (db_field, converted_value)
+
+    # Splice group invariants: derived numbers stay derived, a splice never carries
+    # fab hours, and install hours never leave the parent's pool over-allocated.
+    try:
+        validate_splice_field_edits(job_record, coerced)
+    except SpliceError as e:
+        return jsonify({"error": str(e), **e.extra}), e.status
 
     payload = {}
     for field, (db_field, converted_value) in coerced.items():
