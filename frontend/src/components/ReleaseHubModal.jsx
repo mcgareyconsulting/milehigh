@@ -222,7 +222,10 @@ export function ReleaseHubModal({
                                 )}
                             </div>
                         </div>
-                        <div className="hidden sm:block flex-1" />
+                        {/* order-1 so it sorts AFTER the title block (sm:order-1, later in DOM)
+                            and before the link cluster (order-2). At order 0 it sorted first
+                            and pushed the whole title block to the right. */}
+                        <div className="hidden sm:block flex-1 sm:order-1" />
                         {/* Never shrink-0 on a phone: at ~330px this cluster starved the title block
                             and pushed the close button off the panel. */}
                         <div className="flex items-center gap-1.5 ml-auto shrink-0 order-1 sm:order-2">

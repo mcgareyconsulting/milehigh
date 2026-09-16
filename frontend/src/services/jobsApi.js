@@ -453,6 +453,39 @@ class JobsApi {
         }
     }
 
+    /**
+     * Install-hour pool + splice list for a release (parent or child — the server
+     * answers for the parent either way). Used by the modal's Splices panel.
+     */
+    async getSplices(releaseId) {
+        try {
+            const response = await axios.get(
+                `${API_BASE_URL}/brain/job-log/release/${releaseId}/splices`
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to load splices');
+        }
+    }
+
+    /**
+     * Create a splice (340.1, 340.2, …) under a parent release. The number is
+     * derived server-side; install hours come out of the parent's pool.
+     * @param {number} releaseId - parent row id
+     * @param {{install_hrs: number, description?: string, released?: string}} payload
+     */
+    async createSplice(releaseId, payload) {
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}/brain/job-log/release/${releaseId}/splice`,
+                payload
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to create splice');
+        }
+    }
+
     async updateJobFields(job, release, fields) {
         try {
             const response = await axios.patch(
