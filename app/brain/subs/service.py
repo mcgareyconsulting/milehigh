@@ -12,6 +12,8 @@ imported_by: [app/brain/subs/routes.py]
 invariants:
   - Live assigned releases appear; archived assigned releases stay until invoiced complete.
   - Oscar is MHMW staff (still in INSTALLER_TEAMS for scheduling) — hidden from this tab.
+  - Every row carries `company` (the sub company that owns the crew) derived from
+    `installer` via SUB_COMPANY_CREWS; the installer name itself is the crew.
   - installer_invoice_* fields are independent of Releases.invoiced (customer billing).
   - Rows carry the raw job-log fields the release hub modal reads, so the tab can
     open the same modal the Job Log opens (archived rows never reach /brain/jobs).
@@ -31,6 +33,33 @@ logger = get_logger(__name__)
 # Installer crews that are not subcontractors. Still valid on INSTALLER_TEAMS /
 # the job log for assignment, but never shown on Subs → Invoice Paid.
 _SUBS_EXCLUDED_INSTALLERS = frozenset({"oscar"})
+
+
+# Subcontractor company -> the crew-name stems it employs. A crew is the
+# installer team name on the release ("Saul 3"); it belongs to a company when
+# the name equals a stem or is the stem plus a crew number ("Saul" -> Saul 1-4).
+SUB_COMPANY_CREWS = (
+    ("A&N Denver Welding Services, LLC", ("Saul",)),
+    ("S&S Construction, LLC", ("Eduardo",)),
+    ("ACDLC Welding, LLC", ("Osbaldo",)),
+    ("Apogee Pipeline Services", ("CA$H", "Cash")),
+    # In-house crews, not subs. Oscar is still hidden from the tab (see
+    # _SUBS_EXCLUDED_INSTALLERS); mapped here so the company is never blank.
+    ("MHMW", ("Octavio", "Oscar")),
+)
+
+
+def company_for_installer(name: Optional[str]) -> Optional[str]:
+    """Sub company for a crew name, or None when the crew isn't mapped."""
+    crew = (name or "").strip().casefold()
+    if not crew:
+        return None
+    for company, stems in SUB_COMPANY_CREWS:
+        for stem in stems:
+            stem = stem.casefold()
+            if crew == stem or crew.startswith(stem + " "):
+                return company
+    return None
 
 
 def _is_subs_excluded_installer(name: Optional[str]) -> bool:
@@ -60,6 +89,7 @@ def _serialize_release(rel: Releases, procore_ref: Optional[dict] = None) -> dic
         "job_name": rel.job_name,
         "description": rel.description,
         "installer": rel.installer,
+        "company": company_for_installer(rel.installer),
         "stage": rel.stage,
         "start_install": _iso(rel.start_install),
         "job_comp": rel.job_comp,
@@ -126,37 +156,63 @@ def list_subs_releases(
     *,
     paid: Optional[bool] = None,
     installer: Optional[str] = None,
+    company: Optional[str] = None,
+    job: Optional[int] = None,
     q: Optional[str] = None,
 ) -> dict:
     """Return releases for the Subs Invoice Paid page.
 
     Args:
         paid: If True/False, filter by installer_invoice_paid; None = all.
-        installer: Exact installer team name filter; None = all.
+        installer: Exact installer team (crew) name filter; None = all.
+        company: Exact sub company name (see SUB_COMPANY_CREWS); None = all.
+        job: Project (job number) filter; None = all.
         q: Free-text search (job, release, name, description, installer, invoice #).
 
-    `installers` is always the full distinct set of crews still on this list
-    (ignoring paid/installer/q filters) so filter chips stay stable.
+    `installers`, `companies` and `projects` are always the full distinct sets
+    still on this list (ignoring every filter) so the dropdowns stay stable.
     """
-    # Stable roster for the installer dropdown (ignore paid/installer/search filters).
-    installer_names = {
-        name
-        for (name,) in _subs_list_base_query()
-        .with_entities(Releases.installer)
+    # Stable rosters for the dropdowns (ignore all filters).
+    roster = [
+        (inst, rjob, rname)
+        for (inst, rjob, rname) in _subs_list_base_query()
+        .with_entities(Releases.installer, Releases.job, Releases.job_name)
         .distinct()
         .all()
-        if name and not _is_subs_excluded_installer(name)
+        if inst and not _is_subs_excluded_installer(inst)
+    ]
+    installer_names = {inst for (inst, _, _) in roster}
+    company_names = {
+        c for c in (company_for_installer(inst) for inst in installer_names) if c
     }
+    project_names = {}
+    for (_, rjob, rname) in roster:
+        if rjob is not None and not project_names.get(rjob):
+            project_names[rjob] = rname or ""
+    projects = [
+        {"job": j, "job_name": project_names[j]} for j in sorted(project_names)
+    ]
+
+    def _rosters(releases):
+        return {
+            "releases": releases,
+            "installers": sorted(installer_names),
+            "companies": sorted(company_names),
+            "projects": projects,
+        }
 
     query = _subs_list_base_query()
 
     if paid is not None:
         query = query.filter(Releases.installer_invoice_paid.is_(paid))
 
+    if job is not None:
+        query = query.filter(Releases.job == job)
+
     if installer:
         # Don't let a filter resurrect an excluded (non-sub) crew.
         if _is_subs_excluded_installer(installer):
-            return {"releases": [], "installers": sorted(installer_names)}
+            return _rosters([])
         query = query.filter(Releases.installer == installer)
 
     term = (q or "").strip()
@@ -180,6 +236,8 @@ def list_subs_releases(
     ).all()
 
     shown = [r for r in rows if not _is_subs_excluded_installer(r.installer)]
+    if company:
+        shown = [r for r in shown if company_for_installer(r.installer) == company]
 
     # Procore deep-link IDs for the hub header, batched the same way the Job Log
     # feed does it (pure regex over viewer_url — no extra query).
@@ -192,9 +250,7 @@ def list_subs_releases(
         procore_refs = {}
 
     releases = [_serialize_release(r, procore_refs.get(r.id)) for r in shown]
-    installers = sorted(installer_names)
-
-    return {"releases": releases, "installers": installers}
+    return _rosters(releases)
 
 
 def set_installer_invoice_paid(
