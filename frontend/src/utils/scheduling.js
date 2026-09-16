@@ -14,7 +14,7 @@
  * imported_by: [components/JobDetailsBody.jsx, utils/scheduling.test.js]
  * invariants:
  *   - Must stay in lockstep with the backend SchedulingConfig: HOURS_PER_INSTALLER_DAY = 8,
- *     DEFAULT_NUM_GUYS = 3 (3 installers x 8 hrs = the client's 24 labor-hrs/day per crew).
+ *     DEFAULT_NUM_GUYS = 2 (2 installers x 8 hrs = 16 labor-hrs/day per crew).
  *     Change both together.
  *   - install_hrs <= 0 (or missing) means "no duration": comp_eta == start (a same-day install).
  *   - Weekends (Sat/Sun) are skipped; all offsets are business days.
@@ -23,9 +23,9 @@ import { toYmd, addBusinessDays, subtractBusinessDays } from './formatters';
 
 // Keep in sync with backend SchedulingConfig.
 export const HOURS_PER_INSTALLER_DAY = 8;
-// 3 installers x 8 hrs = 24 labor-hrs/day per crew — the client's stated baseline, confirmed
-// 2026-09-15 (Open question 5). Was 2. The backend twin is SchedulingConfig.DEFAULT_NUM_GUYS.
-export const DEFAULT_NUM_GUYS = 3;
+// 2 installers x 8 hrs = 16 labor-hrs/day per crew. Briefly 3 (2026-09-15); Bill reverted it
+// 2026-09-16. The backend twin is SchedulingConfig.DEFAULT_NUM_GUYS.
+export const DEFAULT_NUM_GUYS = 2;
 
 /**
  * Work days an install spans. Daily capacity = num_guys * 8 hrs; days = ceil(hrs / capacity),
