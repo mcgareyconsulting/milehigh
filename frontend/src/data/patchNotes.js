@@ -17,6 +17,70 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.380',
+    date: 'September 15, 2026',
+    summary:
+      'A release can be split into 340.1 and 340.2, each drawing install hours from the original. Admins get an Issues tab on every release and a crew-size control in the Brain. On the Timeline a rush stays red through Ship Complete, weekends are dark and never auto-picked, and the default crew is three.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Splice a release: 340.1, 340.2',
+        detail:
+          'When the field wanted part of a release installed early, the only move was a verbal release with a made-up number — which is how a "340.1" landed in production with no link to 340 and its install hours counted on top of 340\'s. Now open the original in the hub and press + Splice: the number is derived for you, you write the scope, and you give it install hours drawn from the original\'s pool. Splices can never add up to more than that pool, on create or on any later edit. A splice carries no fab hours, starts in Released, and never gets a Trello card. The hub shows the pool and each splice on the original; a splice shows which release it belongs to. Typing a dotted number into the Job Log is rejected, so the link always exists.',
+      },
+      {
+        type: 'new',
+        adminOnly: true,
+        title: 'An Issues tab on every release',
+        detail:
+          'Problems on a release used to live in a text thread or somebody\'s memory. The release hub now has an Issues tab, admins only, with the open count and open estimated cost in the header. An issue has a title, description, department (Drafting, Paint, Fab, Ship/Install — a label only, no routing yet), category, priority, status, and an estimated cost you can leave as Unknown/TBD. Each has its own photos and PDFs and a timeline that merges comments with every field change. @mentions ring the bell and click through to the issue, and issue activity also lands on the release\'s Change Log. Not yet: counts on Timeline cards, Safety Hold, sub access.',
+      },
+      {
+        type: 'new',
+        adminOnly: true,
+        title: 'Crew size is a Brain control, and the default crew is three',
+        detail:
+          'Crew size drives the projected completion but could only be set from a line in the Trello card description. The hub now has a Crew (num guys) row for admins: change it and the Comp. ETA recomputes, the change is in the Change Log with Undo, and the count is written back to both Trello cards. A crew edit overwrites a bar you had hand-shortened on the Timeline. The default crew is now three (24 labor-hours a day) per the client documents, so releases with no recorded crew show a window about a third shorter; releases already stored at two keep it until edited.',
+      },
+      {
+        type: 'improved',
+        title: 'A rush stays red through Ship Complete',
+        detail:
+          'Pulling an ASAP release into Shipping Planning turned it the lane\'s colour, so the rush vanished the moment it was scheduled. Ship-lane cards now wear the red, and the flag holds until the release reaches Install Start or later instead of dropping at Ship Complete. Installer lanes are unchanged.',
+      },
+      {
+        type: 'improved',
+        title: 'Weekends on the Timeline are dark, never auto-picked, and bridged',
+        detail:
+          'Weekend shading was too faint to notice, which is how installs kept getting planned across a Saturday. Weekends are now clearly dark down through the lanes, a projected start never lands on one, and a deliberate weekend drop keeps the day you chose. A weekend drop also resizes the bar immediately instead of waiting for the next refresh, and the bar runs across the weekend as one piece.',
+      },
+      {
+        type: 'improved',
+        title: 'Start Install goes to the Trello Due Date, and only the Due Date',
+        detail:
+          'The mirror card was pushed as a range with Start on the install day and Due on the completion day, so Trello\'s Due read as the wrong date. It is now pushed with Due on the install day and Start cleared. Older cards keep their range until next touched.',
+      },
+      {
+        type: 'fixed',
+        title: 'Timeline drag lands where the highlight says',
+        detail:
+          'The dragged card drifted about a column from the drop highlight. It now follows the pointer and drops into the lane under it.',
+      },
+      {
+        type: 'fixed',
+        title: 'Ticking ASAP in the hub no longer wipes the date',
+        detail:
+          'Checking ASAP in the hub saved without the date and cleared the Start Install you had just set. The date rides along now, and the box toggles off as well as on.',
+      },
+      {
+        type: 'improved',
+        title: 'Install Prog in the hub, and quieter edits',
+        detail:
+          'Install Prog is editable in the hub with the Job Log cell\'s rules — a percentage starts install, X completes it. Hub edits from the Timeline or Archive refetch quietly instead of redrawing the page, and the Activity rail no longer tacks " cleared" onto photo and drawing entries.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.373',
     date: 'September 7, 2026',
     summary:
