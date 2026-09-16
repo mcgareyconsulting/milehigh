@@ -7,7 +7,7 @@
  * exports:
  *   ReleaseIssuesPane: Issues tab body for one release
  * imports_from: [react, ../../services/releaseIssuesApi, ../../services/notificationApi,
- *   ../shared/MentionInput, ../../hooks/useBreakpoint]
+ *   ../shared/MentionInput, ../../hooks/useBreakpoint, ../../utils/serverTime]
  * imported_by: [frontend/src/components/ReleaseHubModal.jsx]
  * invariants:
  *   - Admin-only: the hub only renders this tab for admins, and every route is admin-gated.
@@ -36,6 +36,7 @@ import {
 import { fetchMentionableUsers } from '../../services/notificationApi';
 import MentionInput from '../shared/MentionInput';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { formatMountain, parseServerTime } from '../../utils/serverTime';
 
 const ERROR_COLOR = 'var(--fl-red-bg)';
 
@@ -78,21 +79,7 @@ const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' 
 
 const formatCost = (value) => (value == null || value === '' ? 'Unknown/TBD' : usd.format(Number(value)));
 
-/** Parse a server timestamp; a naive ISO string (no Z / offset) is UTC. */
-const parseServerTime = (iso) => {
-    if (!iso) return null;
-    const s = String(iso);
-    const d = new Date(/(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(s) ? s : `${s}Z`);
-    return isNaN(d) ? null : d;
-};
-
-const formatWhen = (iso) => {
-    const d = parseServerTime(iso);
-    if (!d) return '';
-    return d.toLocaleString('en-US', {
-        timeZone: 'America/Denver', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-    });
-};
+const formatWhen = formatMountain;
 
 const errorText = (err, fallback) => err?.response?.data?.error || err?.message || fallback;
 
