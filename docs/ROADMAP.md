@@ -1,7 +1,7 @@
 ---
 project: MHMW
 updated: 2026-09-16
-verified: origin/main @ 1c3d09a (PR #376 timeline mobile view)
+verified: origin/main @ e6719b1 (PR #383 splice modal v2)
 config:                       # inputs to derived math — store inputs, never results
   horizon:
     - 2027-10 Procore absolute dead date (renewed 2026-08-15)
@@ -35,6 +35,8 @@ queue:                        # agent-maintained, set by agreement in session
                         # scope unlanded. First time since 2026-08-15 that W5 is not queue.now —
                         # a deliberate pause on the front lane, not a re-ranking of it.
   next: [T12, T13, T9, N19, T14, AUD2, T1, N9, T2, AUD1]
+                        # 2026-09-16 (late): T9 keeps its slot — the 9/16 splice modal spec shipped
+                        # (PR #383), but outcome (c) punch mirror is still unbuilt.
                         # 2026-09-16: N19 home page added (un-parks D2) — Daniel: "elevating home
                         # page behavior". Placed behind the three items the 9/16 session re-specified
                         # (T12 Ready-to-Ship column, T13 QC gate, T9 splice modal), ahead of T14.
@@ -586,6 +588,19 @@ than duplicate, the same way N2b must.
 ### T9 · Release splicing — fractional work tickets for the field
 *W5 · in-progress · class build · due — · deps — (was T5,T6 — cut 2026-09-14) · owner daniel · src bill-2026-08-21#L45 · upd 2026-09-16*
 
+> **Status 2026-09-16 — outcomes (a) and (b) shipped as numbered splices.**
+> PR #380 (merged 2026-09-15) built `340.X` splices drawn from the original's
+> install-hour pool; PR #383 (merged 2026-09-16) shipped Bill's 9/16 splice modal:
+> Splices tab in the release hub with in-place navigation, required description ≠
+> original + installer, stage and start install on create, **Budget Install Hours**
+> from the pool and **additional install hours outside the pool with a required
+> reason** (editable afterward). **Both migrations still to run:**
+> `add_parent_release_id_to_releases.py` then `add_splice_additional_install_hrs.py`.
+> **Left:** (c) punch mirror (T6 lifecycle / Open question 4), parent `comp_eta` on
+> total vs remaining hours, what completing every splice means for the parent.
+> **Test coverage was cut:** the pool-cap / splice-of-splice / number-reuse /
+> PATCH-guard tests were deleted in #383 and have no replacement yet.
+
 > **Elevated 2026-09-14 — package P2** [thisweek-2026-09-14#§6], third in
 > `queue.next`. This reverses Bill's own 2026-09-02 "don't raise it" (trail below);
 > the written package is the later word. The package pins a **Splice / Split Work
@@ -656,6 +671,8 @@ which stays parked but shares the apportionment shape.
 - 2026-09-16 · transcript · src bill-2026-09-16#L384–L417, L519–L567 — Bill demoed the numbered splice live (`640.1`, drawn from the parent's 51-hr pool) and asked only to extend it; the office (Andrea) found and adopted it unprompted. **Read as settling the banner tension toward numbered splices** — confirm with Bill before (c) punch
 - 2026-09-16 · notes · src bill-2026-09-16 — **splice modal spec** (supersedes the audio's "install modal" discussion — it is the same modal): **own tab** at the top of the release hub [#L1581]; **original job-release / name / description read-only**; **new description required** and must differ [#L409]; **stage dropdown**; **optional start install date**; **required installer**; **additional-hours flag** — hours flagged additional come from **outside** the parent's budget pool (relaxes the pool cap for flagged hours only = outcome (b)) with a **required note** explaining why [#L494–L501]; install hours relabel **"Budget Install Hours"**
 - 2026-09-16 · transcript · src bill-2026-09-16#L718–L737 — clicking a linked splice opens its modal **mirror-card style**, navigating back and forth; the buried Splices panel moves to the tab
+- 2026-09-16 · merged · src pr#380 — the 2026-09-15 `audit/splice-behavior` build confirmed on `main` (merged 2026-09-15 21:53 MT, patch notes v2.0.380). Migration `add_parent_release_id_to_releases.py` **not yet run**
+- 2026-09-16 · built · src pr#383 — **splice modal v2 shipped to `main`** (`feature/splice-modal`, patch notes v2.0.383), every item of the 9/16 spec: Splices tab (`SplicesPane.jsx`, count badge) replaces the Details panel; the hub swaps to a clicked group member in place with a header back button (frame stack in `ReleaseHubModal`, single row via `GET /brain/get-all-jobs?release_id=`); `CreateSpliceCommand` requires a description that differs from the parent's (case/whitespace-insensitive) and an installer, takes stage (fab_order tiered as a stage move) and a hard `start_install` (comp_eta computed). **Outcome (b) model:** a splice's `install_hrs` stays its total; new `additional_install_hrs` / `additional_install_note` hold the part outside the pool, and the pool counts `install_hrs − additional_install_hrs`. Additional hours are editable afterward (`PATCH /brain/job-log/release/<id>/splice/additional-hours` — budget fixed, total follows, recorded reason kept; Daniel: *"reason can stay the same"*). Migration `add_splice_additional_install_hrs.py` **not yet run**. 13 splice tests broken by the required fields plus 1 made hollow were **deleted at Daniel's call**, leaving 5; backend 1547 / frontend 369 green
 
 ### T10 · Job-log photos → Trello bridge *(interim)*
 *W5 · not-started · class fix · due — · deps — · owner daniel · src bill-2026-08-21#L171 · upd 2026-08-21*
@@ -1350,7 +1367,7 @@ where it's at"* — a stamped photo is self-describing.
 - 2026-09-14 · dissolved · src thisweek-2026-09-14#§5.4 — **into T13**: the Paint Complete Evidence gate is this item, built as a stage gate and paired with a Ship Complete gate. The invoicing read of that evidence (Katie's side) rides T13's visibility section and N2b
 
 ### I4 · Installer invoicing — Subs → Invoice Paid
-*W2 · built · due — · deps — · owner daniel · src bill-2026-07-22#notes · upd 2026-08-10*
+*W2 · built · due — · deps — · owner daniel · src bill-2026-07-22#notes · upd 2026-09-16*
 
 Effort S–M. **Un-parked and shipped 2026-08-10** (PR #339), migration run the
 same day. The admin Subs page gained a fillable
@@ -1372,6 +1389,7 @@ assumed.
 - 2026-07-22 · decision · src bill-2026-07-22#notes — deferred behind I3; confirmed deferred even with I3 elevated
 - 2026-08-10 · build · src pr#339 — shipped from `fix/sub-invoicing`: progress % + invoice numbers on `Releases`, reworked Subs invoice table, Oscar removed from the invoicing tab; `add_installer_invoice_progress_and_numbers.py` run
 - 2026-08-10 · note · src — — shipped without I3/N2b clearing; N2b inherits a surface it did not design
+- 2026-09-16 · built · src pr#382 — Invoice Paid tab: Paid / Company / Project / Crew dropdown filters + search + clear-all, and **CSV / PDF export of exactly the filtered rows** with Company + Crew columns. Company is derived from the crew name via `SUB_COMPANY_CREWS` in `app/brain/subs/service.py` (a hardcoded map — a new sub crew needs a line there or it exports with a blank company). Patch notes v2.0.383
 
 ---
 
@@ -2630,6 +2648,7 @@ Append-only log — never edited, never pruned.
 - 2026-09-15 · **BUG-24, BUG-25, BUG-27 + Timeline/hub follow-ups** · **BUG-27 complete; BUG-24 and BUG-25 awaiting rulings** — Daniel's pass on `fix/bug-fix-audit-bill-notes`, code only (tests deliberately deferred to the end). **BUG-27 closed on a rule change:** ASAP is **kept through Ship Complete** — `asap_drop.py` now fires at `Install Start` or later (UpdateStageCommand + Install Prog %/X); the inbound Trello drop call was removed (no list can reach `Install Start`), and the N5 formula-date blanking at Ship Planning/Complete no longer clears the flag. Three existing tests still encode the old Ship Complete drop and fail until the test pass. **BUG-25 awaiting date confirmation from Bill, expected 2026-09-16** (mirror Due-only vs exempt range bar). **BUG-24 awaiting the hand-shortened bars ruling** (crew edit recomputing over an edge-compressed `comp_eta`); its crew control moved to its own "Crew (num guys)" row in the hub — it had only rendered inside the install-hours footnote, so a release with no hours had no control. The last literal `2` seed (`trello/sync.py`, missing "Number of Guys" line → parsed back into the row; also `trello_cleanup.py`) now reads `DEFAULT_NUM_GUYS`. **No backfill (Daniel):** 276 active sandbox releases still store `num_guys = 2` from the old default and stay that way; only edits and new cards get 3. **Also fixed:** Timeline drag card drifted ~one column from the drop highlight (overlay anchored to the grab offset; now pinned to the pointer, lane chosen by `pointerWithin`); ticking ASAP in the hub wiped the Start Install date (`JobDetailsBody` dropped the date arg → dateless save cleared it) and the ASAP checkbox now toggles off as well as on; hub edits on Timeline/Archive refetch silently instead of redrawing the page; Install Prog is editable in the hub with the Job Log cell's stage rules. src —
 
 - 2026-09-16 · **9/16 shop session** · ingested — Bill + Louie, 1:33 (bill-2026-09-16), walked against Daniel's notes. **Rulings:** BUG-24 hand-adjusted bars (start fixed, `comp_eta` moves, no recompute, listable + hatched); BUG-25 mirror card exempt from Due-only; **Open question 5 reversed to 2** (PR #381, no backfill). **Re-specified:** T13 QC gate (Welded QC + Paint QC, photo req / note opt / no-photo comment), T12 Ready-to-Ship column + `Paint Complete` → `Paint QC`, T9 splice modal. **Filed:** BUG-28–31, N19 home page (un-parks D2, `queue.next`), N20 Dencol cross-check, Open question 8. **Deferred:** FC-error report, Carmen Review overhaul, project photo directory. src bill-2026-09-16
+- 2026-09-16 · **merged to `main`** · PRs #381–#383, patch notes v2.0.383 — **#381** default crew back to 2 + BUG-25 mirror keeps start + due; **#382** Invoice Paid export + filters (I4); **#383** T9 splice modal v2 (Splices tab, required scope + installer, additional hours outside the pool). **Migrations owed before the splice UI works:** `add_parent_release_id_to_releases.py` → `add_splice_additional_install_hrs.py`. src pr#381, pr#382, pr#383
 
 ---
 
