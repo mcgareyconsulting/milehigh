@@ -486,10 +486,31 @@ class JobsApi {
     }
 
     /**
+     * One release row by primary key, in the same shape as the Job Log list
+     * (/brain/get-all-jobs). The release hub uses it to open a linked splice.
+     * Resolves null when the row doesn't exist.
+     */
+    async getRelease(releaseId) {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/brain/get-all-jobs`, {
+                params: { release_id: releaseId },
+            });
+            let data = response.data;
+            if (typeof data === 'string') data = JSON.parse(data);
+            return data?.jobs?.[0] ?? null;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to load release');
+        }
+    }
+
+    /**
      * Create a splice (340.1, 340.2, …) under a parent release. The number is
-     * derived server-side; install hours come out of the parent's pool.
+     * derived server-side; budget install hours come out of the parent's pool,
+     * additional install hours sit outside it and need a note.
      * @param {number} releaseId - parent row id
-     * @param {{install_hrs: number, description?: string, released?: string}} payload
+     * @param {{description: string, installer: string, install_hrs?: number, stage?: string,
+     *   start_install?: string, released?: string, additional_install_hrs?: number,
+     *   additional_install_note?: string}} payload
      */
     async createSplice(releaseId, payload) {
         try {
@@ -500,6 +521,24 @@ class JobsApi {
             return response.data;
         } catch (error) {
             throw this._handleError(error, 'Failed to create splice');
+        }
+    }
+
+    /**
+     * Change a splice's additional install hours (outside the original's pool). The
+     * note is only used when the splice has no reason recorded yet; 0 clears the hours.
+     * @param {number} spliceId - splice row id
+     * @param {{additional_install_hrs: number, additional_install_note?: string}} payload
+     */
+    async updateSpliceAdditionalHours(spliceId, payload) {
+        try {
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/job-log/release/${spliceId}/splice/additional-hours`,
+                payload
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update additional hours');
         }
     }
 

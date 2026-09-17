@@ -58,6 +58,7 @@ from app.brain.job_log.features.ship_date.command import UpdateShipDateCommand
 from app.brain.job_log.features.splice.command import (
     CreateSpliceCommand,
     SpliceError,
+    UpdateSpliceAdditionalHoursCommand,
     is_splice_number,
     pool_summary,
     validate_field_edits as validate_splice_field_edits,
@@ -693,6 +694,8 @@ def get_jobs():
                     'photo_count': 0,        # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
                     'parent_release_id': serialize_value(job.parent_release_id),
+                    'additional_install_hrs': serialize_value(job.additional_install_hrs),
+                    'additional_install_note': serialize_value(job.additional_install_note),
                     'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),
                 }
@@ -1006,16 +1009,22 @@ def get_all_jobs():
         # Base query - order by id for consistent pagination
         query = Releases.query
 
-        # Apply archive filter
-        if archived:
-            query = query.filter(Releases.is_archived == True)
-            logger.info("archive_filter_applied", archived=True)
+        # ?release_id=<pk> answers with that one row in the same shape as the list
+        # (the release hub opens a linked splice with it), whatever its archive state.
+        release_id = request.args.get('release_id', type=int)
+        if release_id is not None:
+            query = query.filter(Releases.id == release_id)
         else:
-            query = query.filter(db.or_(Releases.is_archived == False, Releases.is_archived == None))
-            logger.info("archive_filter_applied", archived=False)
+            # Apply archive filter
+            if archived:
+                query = query.filter(Releases.is_archived == True)
+                logger.info("archive_filter_applied", archived=True)
+            else:
+                query = query.filter(db.or_(Releases.is_archived == False, Releases.is_archived == None))
+                logger.info("archive_filter_applied", archived=False)
 
-        # Exclude soft-deleted rows
-        query = query.filter(db.or_(Releases.is_active == True, Releases.is_active == None))
+            # Exclude soft-deleted rows
+            query = query.filter(db.or_(Releases.is_active == True, Releases.is_active == None))
 
         query = query.order_by(Releases.id.asc())
 
@@ -1076,6 +1085,8 @@ def get_all_jobs():
                     'photo_count': 0,        # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
                     'parent_release_id': serialize_value(job.parent_release_id),
+                    'additional_install_hrs': serialize_value(job.additional_install_hrs),
+                    'additional_install_note': serialize_value(job.additional_install_note),
                     'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),
                 }
@@ -2251,13 +2262,17 @@ def get_release_splices(release_id):
 @brain_bp.route("/job-log/release/<int:release_id>/splice", methods=["POST"])
 @login_required
 @handle_errors("create splice", raw_error=True)
-@require_json("install_hrs")
+@require_json()
 def create_release_splice(release_id):
     """Create a splice (340.1, 340.2, …) under release ``release_id``.
 
-    Body: ``{"install_hrs": 15, "description": "...", "released": "YYYY-MM-DD"}``.
-    The number is derived server-side, install hours are drawn from the parent's
-    pool (409 when over-allocated), fab hours are never carried, and nothing is
+    Body: ``{"install_hrs": 15, "description": "...", "installer": "Saul 1",
+    "stage": "Released", "start_install": "YYYY-MM-DD", "released": "YYYY-MM-DD",
+    "additional_install_hrs": 5, "additional_install_note": "..."}``.
+    ``install_hrs`` is the BUDGET hours drawn from the parent's pool (409 when
+    over-allocated); additional hours sit outside the pool and need a note.
+    Description (different from the parent's) and installer are required. The
+    number is derived server-side, fab hours are never carried, and nothing is
     queued to Trello. Same audience as the verbal-release form: any logged-in user.
     """
     parent = Releases.query.get(release_id)
@@ -2271,6 +2286,11 @@ def create_release_splice(release_id):
             description=data.get("description"),
             released=data.get("released"),
             user=get_current_user(),
+            stage=data.get("stage"),
+            installer=data.get("installer"),
+            start_install=data.get("start_install"),
+            additional_install_hrs=data.get("additional_install_hrs"),
+            additional_install_note=data.get("additional_install_note"),
         ).execute()
     except SpliceError as e:
         return jsonify({"error": str(e), **e.extra}), e.status
@@ -2284,11 +2304,55 @@ def create_release_splice(release_id):
             "job_name": splice.job_name,
             "description": splice.description,
             "install_hrs": splice.install_hrs,
+            "additional_install_hrs": splice.additional_install_hrs,
+            "additional_install_note": splice.additional_install_note,
+            "stage": splice.stage,
+            "installer": splice.installer,
+            "start_install": splice.start_install.isoformat() if splice.start_install else None,
             "released": splice.released.isoformat() if splice.released else None,
             "parent_release_id": splice.parent_release_id,
         },
         "pool": summary,
     }), 201
+
+
+@brain_bp.route("/job-log/release/<int:release_id>/splice/additional-hours", methods=["PATCH"])
+@login_required
+@handle_errors("update splice additional hours", raw_error=True)
+@require_json("additional_install_hrs")
+def update_splice_additional_hours(release_id):
+    """Change a splice's additional install hours (outside the parent's pool).
+
+    Body: ``{"additional_install_hrs": 8, "additional_install_note": "..."}``. The note is
+    only read when the splice has no reason recorded yet (then it is required); an
+    existing reason stays. Budget hours are unchanged, so the total moves by the
+    difference. Same audience as + Splice: any logged-in user.
+    """
+    splice = Releases.query.get(release_id)
+    if splice is None:
+        return jsonify({"error": "Release not found"}), 404
+    data = g.json_data
+    try:
+        UpdateSpliceAdditionalHoursCommand(
+            splice,
+            additional_install_hrs=data.get("additional_install_hrs"),
+            additional_install_note=data.get("additional_install_note"),
+            user=get_current_user(),
+        ).execute()
+    except SpliceError as e:
+        return jsonify({"error": str(e), **e.extra}), e.status
+    parent = Releases.query.get(splice.parent_release_id)
+    return jsonify({
+        "success": True,
+        "splice": {
+            "id": splice.id,
+            "install_hrs": splice.install_hrs,
+            "additional_install_hrs": splice.additional_install_hrs,
+            "additional_install_note": splice.additional_install_note,
+            "comp_eta": splice.comp_eta.isoformat() if splice.comp_eta else None,
+        },
+        "pool": pool_summary(parent) if parent else None,
+    }), 200
 
 
 @brain_bp.route("/job-log/release", methods=["POST"])
