@@ -1203,7 +1203,7 @@ history is what this rescues.)
 - 2026-08-06 · decision · src — — week-1 read-only delta inventory sizes the pull; effort unknowable until it runs; verified-complete-before-lapse is the acceptance bar
 
 ### C3 · Universal PDF tool — absorbs the revision stack (P9)
-*W1 · not-started · due — · deps — · owner daniel · src bill-2026-07-22#notes · upd 2026-09-16*
+*W1 · not-started · due — · deps — · owner daniel · src bill-2026-07-22#notes · upd 2026-09-03*
 
 Effort L. **Promoted from Tier 2 onto the critical path** (collapse ②): the
 as-built path already lives in the job log markup stack, so the submittal
