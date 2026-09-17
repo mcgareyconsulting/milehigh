@@ -6,15 +6,22 @@
  *   selector over the shared releases dataset; no fetching, no writes.
  * exports:
  *   READY_TO_SHIP_STAGES: The three shop states that make a release stageable (Bill's intake, verbatim)
- *   isUnassigned: Predicate — no installer AND in a ready-to-ship stage
+ *   SHIP_PLANNING_STAGE: The DB Stage value the Shipping Planning lane owns
+ *   isUnassigned: Predicate — no installer, ready-to-ship stage, AND already carrying a date/lane
  *   trayDateKey: A release's Start install day string ('YYYY-MM-DD') or null — the tray's sort key
  *   selectUnassigned: Filter + deterministic sort of the whole dataset into staging-column order
- * imports_from: []
- * imported_by: [../components/GanttChart.jsx, ../hooks/useJobsFilters.js]
+ * imports_from: [./shipLaneDrop]
+ * imported_by: [../components/GanttChart.jsx, ../hooks/useJobsFilters.js, ./readyToShipColumn.js]
  * invariants:
  *   - Membership is "no installer assigned AND (ready to ship OR stored at Mile High OR past paint
  *     complete)". Deliberately NOT "any release with no installer": that pulls in every drafting and
  *     fabrication row and the column stops being a work surface.
+ *   - The two staging columns are DISJOINT. A Store-at-MHMW / Paint-Complete release with no hard
+ *     Start install date belongs to the Ready-to-Ship column (./readyToShipColumn), not here, so no
+ *     card is ever shown twice. The pipeline reads left to right: Ready to Ship (no date yet) →
+ *     dropped on Shipping Planning, which stamps the date → Unassigned (dated, needs a crew) →
+ *     dropped on a crew lane. Ship Planning rows stay here unconditionally: N5 date discipline can
+ *     legitimately leave one undated, and it is already past the Ready-to-Ship column's exit.
  *   - READY_TO_SHIP_STAGES is the SAME set the Job Log's "Ready to Ship" quick filter uses. Both
  *     import it from here so the two surfaces can never drift apart.
  *   - Sort is ASAP first, then Start install date ascending, then job # / release # asc. The date
@@ -27,10 +34,16 @@
  *     anything due sooner.
  */
 
+import { hasHardInstall } from './shipLaneDrop';
+
 // The three shop states Bill named as the staging intake: "see what's ready to ship, see what's
 // stored at Mile High, grab anything past paint complete." Canonical DB Stage values — see
 // app/api/helpers.py STAGE_PROGRESSION_RANK (11, 12, 13).
 export const READY_TO_SHIP_STAGES = ['Ship Planning', 'Store at MHMW', 'Paint Complete'];
+
+// The lane a dated release belongs in. Named here because both staging columns key off it: it is
+// the Ready-to-Ship column's exit and the Unassigned tray's unconditional member.
+export const SHIP_PLANNING_STAGE = 'Ship Planning';
 
 const READY_TO_SHIP_SET = new Set(READY_TO_SHIP_STAGES);
 
@@ -43,9 +56,15 @@ const installerOf = (job) => String(job?.installer ?? '').trim();
  * True when nobody is assigned to install it AND the shop is done enough with it that it can be
  * scheduled. A release that already has an installer lives in that installer's lane instead, so it
  * must never appear in both places.
+ *
+ * An undated Store-at-MHMW / Paint-Complete release is deliberately NOT here: it has not been
+ * given a day yet, so the question it is waiting on is "when does this ship", not "who installs
+ * it". That one belongs to the Ready-to-Ship column immediately to the left.
  */
 export const isUnassigned = (job) =>
-    !installerOf(job) && READY_TO_SHIP_SET.has(stageOf(job));
+    !installerOf(job)
+    && READY_TO_SHIP_SET.has(stageOf(job))
+    && (stageOf(job) === SHIP_PLANNING_STAGE || hasHardInstall(job));
 
 /**
  * The tray's sort key for a release's Start install date: 'YYYY-MM-DD', or null when there is

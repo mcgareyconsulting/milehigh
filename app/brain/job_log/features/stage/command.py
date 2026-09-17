@@ -16,6 +16,8 @@ invariants:
     the date itself is kept — ASAP rows included, since ASAP no longer stamps a date
   - Deduplicated events raise ValueError (event_exists); caller decides whether to treat as success
   - Scheduling recalculation failure is logged but does not roll back the update
+  - parent_event_id links this stage change to the event that caused it, so the undo endpoint
+    reverts both halves of a single gesture as one bundle (mirrors AssignInstallerCommand)
 """
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -112,6 +114,12 @@ class UpdateStageCommand:
     # audit trail rendering and (b) perturb the dedup hash so undo-the-undo within the
     # 30s bucket doesn't collide with the original event.
     undone_event_id: Optional[int] = None
+    # Set when this stage change is one half of a larger action rather than something the user
+    # asked for directly — today, the Ship Planning roll that follows a first hard Start install
+    # date (features/start_install/ship_planning_roll.py). The undo endpoint collects events
+    # carrying a parent_event_id and reverts the whole bundle, so linking here is what keeps
+    # undoing the date from leaving the release stranded in the stage the date put it in.
+    parent_event_id: Optional[int] = None
 
     def execute(self) -> StageUpdateResult:
         from app.api.helpers import get_stage_group_from_stage
@@ -177,6 +185,8 @@ class UpdateStageCommand:
 
         if self.undone_event_id is not None:
             event_payload['undone_event_id'] = self.undone_event_id
+        if self.parent_event_id is not None:
+            event_payload['parent_event_id'] = self.parent_event_id
 
         event = JobEventService.create(
             job=self.job_id,

@@ -2094,6 +2094,10 @@ def update_start_install(job, release):
         return jsonify({
             'status': 'success',
             'event_id': result.event_id,
+            # The date may have rolled a Ready-to-Ship release into Ship Planning
+            # (features/start_install/ship_planning_roll.py). Reported so a caller can
+            # refresh the row's stage rather than show a lane it has already left.
+            'rolled_to_ship_planning': result.rolled_to_ship_planning,
         }), 200
         
     except Exception as e:

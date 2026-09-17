@@ -771,7 +771,9 @@ impact; an unsafe condition routes to Safety Hold without losing the issue.
 - 2026-09-16 · notes · src bill-2026-09-16 — owner may be **any user, subs eventually** (T3); the weekly **FC-error report** off issues [#L185] is **deferred**; BUG-29 (mention missing from to-dos) and BUG-28 (PDF modal load) filed off this walkthrough
 
 ### T12 · Release flow on the Timeline — Paint Complete queue, Drop Ship Only, load order
-*W5 · not-started · class build · due — · deps — · owner daniel · src thisweek-2026-09-14#§5.1 · upd 2026-09-16*
+*W5 · in-progress · class build · due — · deps — · owner daniel · src thisweek-2026-09-14#§5.1 · upd 2026-09-17*
+
+**① and ② BUILT 2026-09-17; ③ load order not started.**
 
 Effort M–L. **Package P1**, head of `queue.next`. Three asks that stop releases
 sitting in the wrong queue and let shipping plan a day in order. All three build on
@@ -823,6 +825,48 @@ change.
 - 2026-09-16 · transcript · src bill-2026-09-16#L1113–L1358 — ① reshaped as a **Ready-to-Ship column** pulling **Paint QC + Store**; droppable **only onto Shipping Planning or Ship Complete**; a drop on Shipping Planning sets the stage **and `start_install` = next business day** (Ship Complete = same day as install) [#L1336–L1358]. Paint QC → Shipping Planning has **no fixed gap** (a day to three months) [#L1280–L1297]. **ASAPs at any stage** show at the bottom of the column [#L1343]. Bill on the 1-day rule: an unassigned drop lands in Unassigned and dragging onto an installer fixes the date, so one day is right [#L1188–L1222]
 - 2026-09-16 · transcript · src bill-2026-09-16#L1360–L1417 — **symmetry rule:** setting a hard date on a Ready-to-Ship-stage release from the table auto-moves it to Shipping Planning — same result as the drag. N5 already does this for `Paint Complete`; extend to `Store at MHMW`. Partly answers **Open question 7**
 - 2026-09-16 · transcript · src bill-2026-09-16#L1598–L1617 — ② Drop Ship: Bill's read is a **normal installer-style lane at the bottom** of the Timeline (Doug's ask)
+- 2026-09-17 · build · src — — **① Ready-to-Ship column and ② Drop Ship lane built** on `claude/loving-cori-gy8xr1`. ③ load order untouched.
+  **Open question 7 answered by narrowing the tray's DATE test, not its stage set** — the third
+  option neither side of the question offered. `isUnassigned` now also requires a hard Start install
+  (Ship Planning rows excepted, since N5 can legitimately leave one undated), so the tray keeps
+  `Paint Complete` in its 2026-08-29 intake and the two columns are disjoint anyway. The pipeline
+  reads left to right: Ready to Ship (no day yet) → dropped on Shipping Planning, which gives it one
+  → Unassigned (no crew) → dropped on a crew lane. No duplicate, and Bill's own rule survives intact.
+  **The hard-date intercept worry was the right question with the answer inverted:** N5's intercept
+  fires on a STAGE change, so it never pre-empted this queue — a `Paint Complete` release that is
+  dated while already at `Paint Complete` just sat there. The symmetry rule (#L1360–L1417) is now a
+  real cascade, `features/start_install/ship_planning_roll.py`, firing off the DATE for both
+  `Paint Complete` and `Store at MHMW`, on the FIRST hard date only, never on an undo. It emits the
+  stage change as a CHILD event of the date event, so one Undo reverses the whole gesture — which
+  needed `parent_event_id` adding to `UpdateStageCommand` (it already existed on
+  `AssignInstallerCommand`). Every writer of a hard date routes through `UpdateStartInstallCommand`,
+  so the Job Log table, the release hub and the Timeline drag all get it from that one place.
+  **"start_install = next business day" resolved as the lane's own arithmetic, not a fixed offset:**
+  a Shipping Planning card is drawn on its SHIP date (install − 1 business day), so the column the
+  user drops on is a ship day and the install is the business day after it. Writing the column date
+  straight into `start_install` would have rendered the card one column LEFT of where it was let go.
+  **Out-of-department ASAPs included** (#L1343) and tagged with an "in Fab" / "in Paint" chip, sorted
+  below the in-shop holds exactly as the Job Log's `propagatedAsapJobs` block is; `PAINT_STAGES` now
+  has one definition, shared by both surfaces. **Not built, deliberately, as out of today's ask:**
+  the drop restriction (*droppable only onto Shipping Planning or Ship Complete* — a Ready-to-Ship
+  card can still be dropped on a crew lane, which dates and assigns it in one go), the Ship Complete
+  drop writing `start_install` = same day, and the `Paint Complete` → `Paint QC` rename with its
+  sort flip above Store.
+  **② Drop Ship needed no migration** — the 2026-09-16 ruling (a normal lane) supersedes the
+  net-new-field reading, so it is a roster entry: `Config.NON_TRELLO_INSTALLERS` appended last to
+  `INSTALLER_TEAMS` and always present, so an env var that forgets it cannot make it unassignable.
+  It gets its Timeline lane, its install-schedule column and the installer picker for free.
+  `AssignInstallerCommand` skips the mirror-card outbox item for it entirely — delivery resolves the
+  target list BY NAME, so queueing one would guarantee five failed retries and an ERROR per
+  assignment. Hidden from Subs → Invoice Paid beside Oscar (no company, nobody to invoice).
+  **Consequence to be aware of:** the mirror card is left wherever it was, so reassigning a release
+  from a real crew to Drop Ship leaves a stale card in that crew's Trello list until T4. That is the
+  literal reading of "will not communicate to Trello"; the alternative (treat it as Unassigned and
+  move the card there) is one line if the stale card turns out to matter.
+  **Closeout path untouched** — `COLOR_DUMP_STAGES`, the `job_comp` cascade and the archive rule
+  still assume an install happened. A Drop Ship release is not yet exempt from any of them.
+  | `frontend/src/utils/readyToShipColumn.js` (new), `utils/unassignedLane.js`, `utils/shipLaneDrop.js`, `components/GanttChart.jsx`, `hooks/useJobsFilters.js`; `app/brain/job_log/features/start_install/ship_planning_roll.py` (new), `.../start_install/command.py`, `.../start_install/assign_installer.py`, `.../stage/command.py`, `app/config.py`, `app/brain/subs/service.py`
+- 2026-09-17 · note · src — — **existing tests encode the old tray rule and now fail**: `frontend/src/utils/unassignedLane.test.js` and `components/GanttChart.staging.test.jsx` both place undated `Paint Complete` / `Store at MHMW` rows in the Unassigned tray. They are asserting the duplicate-membership behaviour ① exists to remove, so they need rewriting to the new split, not reverting. Not done in the build session (tests explicitly out of scope there)
 
 ### T13 · Two-stage Photo Evidence Gate + partial shipments
 *W5 · not-started · class build · due — · deps — · owner daniel · src thisweek-2026-09-14#§5.4 · upd 2026-09-16*
