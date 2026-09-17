@@ -17,6 +17,39 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.383',
+    date: 'September 16, 2026',
+    summary:
+      'Splices get their own tab on the release, and a splice now carries its own scope, stage, installer, and start date, with additional install hours tracked apart from the budget. The default crew is back to two, and the installer\'s Trello card carries Start and Due again. The Subs Invoice Paid tab filters by company, project, and crew, and exports exactly what is on screen to CSV or PDF.',
+    changes: [
+      {
+        type: 'improved',
+        title: 'Splices have their own tab, and a splice says what it is',
+        detail:
+          'Splices were buried in the Details pane between Schedule and Details. They now have a Splices tab on every release, showing the original, every splice under it with its stage, installer and hours, and how many budget install hours are left. Click any of them and the release window switches to that release; a back button in the header returns you. + Splice opens a new form: the original\'s number, name and description are shown for reference, and the splice needs its own description (it has to differ from the original\'s, so a list of splices never reads the same line twice) and an installer. Stage and a start install date can be set up front. Install hours are now Budget Install Hours, drawn from the original\'s pool. When the work needs more than the budget, tick Additional install hours needed, enter the hours, and say why — those hours sit outside the pool, and the splice is flagged with the reason wherever it is listed. The additional hours can be changed later from the Splices tab; the reason stays as first written.',
+      },
+      {
+        type: 'new',
+        adminOnly: true,
+        title: 'Export the Invoice Paid tab to CSV or PDF, with better filters',
+        detail:
+          'Pulling a sub\'s invoice list meant reading it off the screen. The Invoice Paid tab now has Export CSV and Export PDF buttons, and the export is exactly the rows you are looking at, with Company and Crew columns. The PDF subtitle and the file name say which filters were on. The filters moved into dropdowns: Paid, Company (the sub company that employs the crew — Saul 1–4 are A&N Denver Welding, for example), Project, and Crew, alongside the search box and one button to clear them all. The dropdown lists always show every company, project, and crew on the tab, so picking one filter never empties another.',
+      },
+      {
+        type: 'fixed',
+        title: 'The default crew is two again',
+        detail:
+          'Yesterday\'s change to a default crew of three was the wrong number. Releases with no recorded crew size are back to a two-person, 16 labor-hour install day, so their Timeline bars, install schedule, and Comp. ETA return to the longer window. Releases with a crew size set are unaffected.',
+      },
+      {
+        type: 'fixed',
+        title: 'The installer\'s Trello card shows Start and Due again',
+        detail:
+          'Yesterday\'s Due-only push put the install day in the installer card\'s Due Date and cleared Start, which lost the completion date. The installer card is pushed as a range again — Start on the install day, Due on the projected completion — while the main card keeps just the Due Date. Cards pushed Due-only since yesterday are corrected the next time their release syncs to Trello.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.380',
     date: 'September 15, 2026',
     summary:

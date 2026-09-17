@@ -588,6 +588,11 @@ class Releases(db.Model):
     parent_release_id = db.Column(
         db.Integer, db.ForeignKey("releases.id"), nullable=True, index=True
     )
+    # Splice additional hours (T9, 2026-09-16). install_hrs on a splice stays its TOTAL;
+    # additional_install_hrs is the part of that total drawn from OUTSIDE the parent's
+    # pool, and additional_install_note (required when it is set) says why.
+    additional_install_hrs = db.Column(db.Float, nullable=True)
+    additional_install_note = db.Column(db.Text, nullable=True)
 
     # Trello fields
     trello_card_id = db.Column(db.String(64), unique=True, nullable=True)
@@ -683,6 +688,8 @@ class Releases(db.Model):
             "notes": self.notes,
             "release_tag": self.release_tag,
             "parent_release_id": self.parent_release_id,
+            "additional_install_hrs": self.additional_install_hrs,
+            "additional_install_note": self.additional_install_note,
             "stage": self.stage,
             "trello_card_id": self.trello_card_id,
             "trello_card_name": self.trello_card_name,
