@@ -32,6 +32,7 @@ describe('shipLaneDropOutcome', () => {
         expect(shipLaneDropOutcome(row(), SHIP_COMPLETE_STAGE)).toEqual({
             kind: 'write',
             label: 'Set stage → Ship Complete',
+            writesDate: false,
         });
     });
 
