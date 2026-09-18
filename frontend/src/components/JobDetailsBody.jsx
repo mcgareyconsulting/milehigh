@@ -37,6 +37,7 @@ import { STAGE_OPTIONS } from '../constants/stages';
 import { API_BASE_URL } from '../utils/api';
 import { toYmd, subtractBusinessDays } from '../utils/formatters';
 import { installDays, DEFAULT_NUM_GUYS } from '../utils/scheduling';
+import { hasSplicedHours, installHrsNote, installHrsOwn, installHrsTotal, splicedHrs } from '../utils/installHours';
 import { stageTint } from '../utils/stageTint';
 import { setAsapAndAssign } from '../utils/asap';
 import { checkAuth } from '../utils/auth';
@@ -713,7 +714,12 @@ export function JobDetailsBody({
     const shipEffective = localShipDate || (startYmd ? subtractBusinessDays(startYmd, 1) : null);
 
     const tint = stageTint(localStage);
-    const installHrs = pick('Install HRS', 'install_hrs');
+    // What this release still installs ITSELF. With splices under it the stored hours are
+    // the whole pool they draw from, so the pane (and the work-days line below it) shows
+    // the pool minus what they drew — the splices carry those hours on their own rows.
+    const installHrs = installHrsOwn(job) ?? pick('Install HRS', 'install_hrs');
+    const installHrsPool = installHrsTotal(job);
+    const installHrsSpliced = splicedHrs(job);
     const numGuys = localNumGuys ?? job.num_guys;
     const workDays = installHrs ? installDays(installHrs, numGuys) : null;
     // The crew size half of this line is now a control (BUG-24), so the sentence is split: the
@@ -1174,7 +1180,22 @@ export function JobDetailsBody({
                     ) : (
                         <Row label="Crew" value={numGuys ?? DEFAULT_NUM_GUYS} />
                     )}
-                    <Row label="Install Hrs" value={installHrs} />
+                    {hasSplicedHours(job) ? (
+                        <Row
+                            label="Install Hrs"
+                            title={installHrsNote(job)}
+                            value={
+                                <span>
+                                    {installHrs ?? '—'}
+                                    <span className="text-ink-3" style={{ fontSize: 11.5, marginLeft: 6 }}>
+                                        {`of ${installHrsPool ?? '—'} · ${installHrsSpliced} spliced`}
+                                    </span>
+                                </span>
+                            }
+                        />
+                    ) : (
+                        <Row label="Install Hrs" value={installHrs} />
+                    )}
                     <ControlRow label={labelFor('Stage')}>
                         <select
                             value={localStage || ''}

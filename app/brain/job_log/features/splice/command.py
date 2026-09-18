@@ -6,6 +6,11 @@ Rules (Bill, 2026-09-15 — supersedes the 2026-09-02 mirror-card shape):
   - The parent carries fabrication and the TOTAL install-hour pool. Every splice
     draws from that pool; the sum of active splices' install hours never exceeds it.
   - A splice carries no fab hours.
+  - The parent keeps the WHOLE pool in ``install_hrs``; the hours a splice drew are not
+    subtracted from it, or the pool would shrink every time it was drawn on. So every
+    view that shows a release's install hours shows what it still installs itself —
+    150 total with 50 spliced reads as 100 on the original — via ``install_hours_view``
+    below. ``install_hrs`` stays the total everywhere it is written or edited.
   - A splice is created only from its parent (+ Splice). Free-typing a dotted
     release number through the paste / verbal path is rejected, so a splice can
     never exist without a parent row.
@@ -107,6 +112,46 @@ def install_pool(parent, exclude_id=None):
         allocated += budget_hours(child)
     remaining = None if total is None else round(float(total) - allocated, 4)
     return total, allocated, remaining
+
+
+def splice_allocations(parent_ids=None):
+    """``{parent release id: BUDGET install hours its live splices drew}``.
+
+    One query for a whole page of releases, so a list view never goes N+1 asking each
+    row whether it has splices. Parents with nothing spliced off them are absent, so
+    ``.get(row.id)`` reads as "this row still carries all of its install hours".
+    """
+    query = Releases.query.filter(Releases.parent_release_id.isnot(None))
+    if parent_ids is not None:
+        ids = sorted({i for i in parent_ids if i is not None})
+        if not ids:
+            return {}
+        query = query.filter(Releases.parent_release_id.in_(ids))
+    totals = {}
+    for child in query.all():
+        if not _live(child):
+            continue
+        totals[child.parent_release_id] = totals.get(child.parent_release_id, 0.0) + budget_hours(child)
+    return {pid: round(hrs, 4) for pid, hrs in totals.items() if hrs > 0}
+
+
+def install_hours_view(row, allocated):
+    """``(spliced, remaining)`` install hours for one release row.
+
+    ``spliced`` is what live splices drew out of the row's pool; ``remaining`` is what
+    the row itself still installs (its total minus that). Both are None when nothing was
+    spliced off it — the caller then shows the row's own ``install_hrs`` unchanged.
+
+    This is the one place the "150 total, 50 spliced, 100 left on the original" reading
+    is defined; every view that shows a release's install hours derives from it.
+    """
+    if not allocated:
+        return None, None
+    total = row.install_hrs
+    if total is None:
+        # No pool to draw on (budget hours are refused without one), so nothing to net out.
+        return allocated, None
+    return allocated, max(round(float(total) - allocated, 4), 0.0)
 
 
 def next_splice_number(parent):

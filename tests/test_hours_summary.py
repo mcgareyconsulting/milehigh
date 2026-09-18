@@ -223,3 +223,25 @@ class TestCalculateTotalInstallHrs:
     def test_unknown_stage_excluded(self):
         jobs = [{'Install HRS': 50, 'Stage': 'Some Unknown Stage'}]
         assert calculate_total_install_hrs(jobs) == pytest.approx(0.0)
+
+
+class TestSplicedInstallHoursCountOnce:
+    """A release with splices keeps the whole install-hour pool; its splices are rows in
+    the same list carrying those hours. The KPI counts each hour once (T9)."""
+
+    def test_parent_contributes_only_what_it_still_installs(self):
+        jobs = [
+            # 150-hr pool with 50 spliced off -> the original contributes 100.
+            {'Install HRS': 150, 'remaining_install_hrs': 100, 'spliced_install_hrs': 50,
+             'Stage': 'Welded QC'},
+            {'Install HRS': 50, 'remaining_install_hrs': None, 'Stage': 'Welded QC'},
+        ]
+        assert calculate_total_install_hrs(jobs) == pytest.approx(150.0)
+
+    def test_unspliced_rows_are_unaffected(self):
+        jobs = [{'Install HRS': 50, 'remaining_install_hrs': None, 'Stage': 'Welded QC'}]
+        assert calculate_total_install_hrs(jobs) == pytest.approx(50.0)
+
+    def test_the_stage_modifier_still_applies_to_the_netted_hours(self):
+        jobs = [{'Install HRS': 150, 'remaining_install_hrs': 100, 'Stage': 'Install Start'}]
+        assert calculate_total_install_hrs(jobs) == pytest.approx(50.0)

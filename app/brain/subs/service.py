@@ -15,6 +15,9 @@ invariants:
   - Every row carries `company` (the sub company that owns the crew) derived from
     `installer` via SUB_COMPANY_CREWS; the installer name itself is the crew.
   - installer_invoice_* fields are independent of Releases.invoiced (customer billing).
+  - Install Hrs (and so Budget / Est. Billable) is what the release still installs
+    ITSELF: a release with splices under it shows its pool minus the hours those
+    splices drew, because each splice bills its own hours on its own row.
   - Rows carry the raw job-log fields the release hub modal reads, so the tab can
     open the same modal the Job Log opens (archived rows never reach /brain/jobs).
   - No Trello / outbox / scheduling cascade.
@@ -24,6 +27,7 @@ from typing import Optional
 
 from sqlalchemy import String, and_, cast, or_
 
+from app.brain.job_log.features.splice.command import install_hours_view, splice_allocations
 from app.models import Releases, db
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
@@ -72,7 +76,11 @@ def _iso(value):
     return value.isoformat() if value else None
 
 
-def _serialize_release(rel: Releases, procore_ref: Optional[dict] = None) -> dict:
+def _serialize_release(
+    rel: Releases,
+    procore_ref: Optional[dict] = None,
+    spliced_hrs: Optional[float] = None,
+) -> dict:
     """Row payload for the Invoice Paid table.
 
     Carries the table's own columns plus the raw job-log fields the release hub
@@ -82,6 +90,7 @@ def _serialize_release(rel: Releases, procore_ref: Optional[dict] = None) -> dic
     /brain/jobs feed — so the fields have to travel on this response.
     """
     ref = procore_ref or {}
+    spliced_install_hrs, remaining_install_hrs = install_hours_view(rel, spliced_hrs)
     return {
         "id": rel.id,
         "job": rel.job,
@@ -94,6 +103,10 @@ def _serialize_release(rel: Releases, procore_ref: Optional[dict] = None) -> dic
         "start_install": _iso(rel.start_install),
         "job_comp": rel.job_comp,
         "install_hrs": rel.install_hrs,
+        # The pool stays on install_hrs; these say what live splices drew and what this
+        # release still installs itself. Both None when nothing is spliced off it.
+        "spliced_install_hrs": spliced_install_hrs,
+        "remaining_install_hrs": remaining_install_hrs,
         "is_archived": bool(rel.is_archived),
         "installer_invoice_paid": bool(rel.installer_invoice_paid),
         "installer_invoice_progress": rel.installer_invoice_progress,
@@ -249,7 +262,10 @@ def list_subs_releases(
         logger.warning("subs_procore_refs_failed", exc_info=True)
         procore_refs = {}
 
-    releases = [_serialize_release(r, procore_refs.get(r.id)) for r in shown]
+    splice_hours = splice_allocations([r.id for r in shown])
+    releases = [
+        _serialize_release(r, procore_refs.get(r.id), splice_hours.get(r.id)) for r in shown
+    ]
     return _rosters(releases)
 
 

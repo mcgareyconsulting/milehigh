@@ -16,6 +16,9 @@ invariants:
   - "Hard date" == start_install_formulaTF is False AND not no-color (mirrors StartInstallEditor.jsx).
     An ASAP row is a hard date too — it is labelled `asap` for its colour and sorts ahead of plain hard.
   - Estimated hours come ONLY from the manual install_hrs field; never fabricated. Blank stays blank.
+    A release with splices under it carries the hours it still installs ITSELF (its pool minus what
+    those splices drew) — each splice is its own card with its own crew, so the pool would otherwise
+    be counted twice against crew capacity.
   - Crew grouping is by the installer string; releases with no installer fall into a single UNASSIGNED bucket.
   - Both builders share _card/_classify_date, so the crew view and the day view can never disagree
     about a release. They differ ONLY in grouping, sort and window.
@@ -27,6 +30,7 @@ invariants:
 from datetime import date, timedelta
 
 from app.models import Releases
+from app.brain.job_log.features.splice.command import install_hours_view, splice_allocations
 from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
 from app.brain.job_log.scheduling.config import SchedulingConfig
 from app.logging_config import get_logger
@@ -66,14 +70,20 @@ def _iso(d):
     return d.isoformat() if d is not None else None
 
 
-def _card(rel, today):
-    """Build one Trello-shaped card for a release."""
+def _card(rel, today, spliced_hrs=None):
+    """Build one Trello-shaped card for a release.
+
+    ``spliced_hrs`` is the budget install hours live splices drew off this release (see
+    splice.command.splice_allocations); the card's est_hours is what is left for this
+    crew, since each splice rides on its own card.
+    """
     kind = _classify_date(rel)
     # Prefer the stored comp_eta; fall back to the canonical computation so a card always
     # carries an install window when install_hrs is present.
     comp_eta = rel.comp_eta or calculate_install_complete_date(
         rel.start_install, rel.install_hrs, rel.num_guys
     )
+    spliced, remaining = install_hours_view(rel, spliced_hrs)
     return {
         "release_id": rel.id,
         "code": f"{rel.job}-{rel.release}",
@@ -88,7 +98,10 @@ def _card(rel, today):
         # Both kinds are commitments a person made, so both count as hard for the
         # overlap and capacity math; date_kind is what distinguishes the rush.
         "is_hard": kind in (KIND_HARD, KIND_ASAP),
-        "est_hours": rel.install_hrs,          # manual field; None when not entered
+        # What this crew still installs here: the manual field, less any hours the
+        # release's splices drew (each rides on its own card). None when not entered.
+        "est_hours": rel.install_hrs if remaining is None else remaining,
+        "spliced_hours": spliced,              # drawn off by splices; None when unspliced
         "comp_eta": _iso(comp_eta),
         "stage": rel.stage,
         "notes": rel.notes,
@@ -157,7 +170,8 @@ def build_next_week_schedule(days=7, today=None):
         .all()
     )
 
-    cards = [_card(r, today) for r in rows]
+    splice_hours = splice_allocations([r.id for r in rows])
+    cards = [_card(r, today, splice_hours.get(r.id)) for r in rows]
 
     # Group by crew.
     by_crew = {}
@@ -269,9 +283,11 @@ def build_day_schedule(days=14, past_days=14, today=None, installer=None):
     if installer:
         q = q.filter(Releases.installer == installer)
 
+    day_rows = q.all()
+    splice_hours = splice_allocations([r.id for r in day_rows])
     cards = []
-    for rel in q.all():
-        card = _card(rel, today)
+    for rel in day_rows:
+        card = _card(rel, today, splice_hours.get(rel.id))
         card["span_days"] = _span_days(card)
         cards.append(card)
 

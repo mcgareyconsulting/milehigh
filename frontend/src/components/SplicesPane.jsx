@@ -14,6 +14,8 @@
  *     pane reads the same from either side; + Splice always creates under the original.
  *   - Pool numbers are BUDGET hours. Additional hours sit outside the pool and are flagged per splice
  *     with their reason.
+ *   - The original's line shows what it still installs ITSELF (pool minus spliced), the same number the
+ *     Job Log and Subs → Invoice Paid show for it — its stored install_hrs stays the whole pool.
  *   - The row being viewed is marked, not clickable; every other row calls onOpenRelease(id).
  *   - A splice's additional hours are editable in place (PATCH .../splice/additional-hours). Its
  *     recorded reason stays as it is; a reason is asked for only when the splice has none yet.
@@ -207,6 +209,7 @@ export function SplicesPane({
     };
     const splices = summary.splices || [];
     const total = summary.total_install_hrs;
+    const allocated = Number(summary.allocated_install_hrs) || 0;
 
     return (
         <div className="space-y-4" style={{ maxWidth: 820 }}>
@@ -241,7 +244,14 @@ export function SplicesPane({
                     <div className="text-jl-2 text-ink-3" style={{ marginTop: 4 }}>
                         {[
                             parent.installer ? `Installer ${parent.installer}` : null,
-                            parent.install_hrs != null ? `${fmtHrs(parent.install_hrs)} install hrs` : null,
+                            // The original's install hours are the whole pool; what it still
+                            // installs itself is the pool minus what these splices drew. Read
+                            // the same number here as on the Job Log and Subs — never the gross.
+                            parent.install_hrs != null
+                                ? (allocated > 0
+                                    ? `${fmtHrs(summary.remaining_install_hrs)} install hrs left of ${fmtHrs(parent.install_hrs)}`
+                                    : `${fmtHrs(parent.install_hrs)} install hrs`)
+                                : null,
                             parent.fab_hrs != null ? `${fmtHrs(parent.fab_hrs)} fab hrs` : null,
                         ].filter(Boolean).join(' · ') || '—'}
                     </div>

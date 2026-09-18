@@ -19,7 +19,11 @@
  *     API row carries the raw job-log fields that modal reads.
  *   - "Install Prog" mirrors the Job Log (job_comp) and is READ-ONLY here; the
  *     editable "Progress" column is the separate installer_invoice_progress field.
- *   - "Install Hrs" mirrors the Job Log (install_hrs) and is READ-ONLY here.
+ *   - "Install Hrs" mirrors the Job Log and is READ-ONLY here. It is what the release
+ *     still installs ITSELF: a release with splices under it keeps the whole install-hour
+ *     pool, so the hours its splices drew are netted out here (150 with 50 spliced reads
+ *     100) — each splice bills its own hours on its own row. Budget / Est. Billable
+ *     follow that number, never the gross pool, or a spliced release bills twice.
  *   - Company / Project filters and CSV / PDF export live in the header; exports are
  *     exactly the filtered rows on screen, with Company + Crew columns (see
  *     utils/subsInvoiceExport.js). Crew = installer team; company comes from the API.
@@ -32,6 +36,7 @@ import { checkAuth } from '../utils/auth';
 import { ReleaseHubModal } from '../components/ReleaseHubModal';
 import { formatInstallProg } from '../components/JobDetailsBody';
 import { formatCellValue } from '../utils/formatters';
+import { hasSplicedHours, installHrsNote, installHrsOwn, installHrsTotal, splicedHrs } from '../utils/installHours';
 import Dropdown, { DropdownItem } from '../components/Dropdown';
 import {
     fetchSubsReleases,
@@ -636,7 +641,7 @@ export default function Subs() {
                                     </th>
                                     <th
                                         className="px-2 py-2 text-center font-semibold text-ink-3 align-middle whitespace-nowrap"
-                                        title="Install hours from the Job Log — read-only here"
+                                        title="Install hours from the Job Log, minus any hours spliced off this release — read-only here"
                                     >
                                         Install Hrs
                                     </th>
@@ -687,8 +692,11 @@ export default function Subs() {
                                                 const busyPaid = busyKey === `${key}:paid`;
                                                 const busyProgress = busyKey === `${key}:progress`;
                                                 const busyNumbers = busyKey === `${key}:numbers`;
-                                                const budget = installBudget(r.install_hrs);
-                                                const billable = estimatedBillable(r.job_comp, r.install_hrs);
+                                                // Hours this release still installs itself (see header).
+                                                const ownHrs = installHrsOwn(r);
+                                                const budget = installBudget(ownHrs);
+                                                const billable = estimatedBillable(r.job_comp, ownHrs);
+                                                const spliceNote = installHrsNote(r);
                                                 return (
                                                     <tr
                                                         key={key}
@@ -738,16 +746,25 @@ export default function Subs() {
                                                         </td>
                                                         <td
                                                             className="px-2 py-2 text-center align-middle font-mono tabular-nums text-ink-2 whitespace-nowrap"
-                                                            title="Install hours from the Job Log — read-only here"
+                                                            title={spliceNote || 'Install hours from the Job Log — read-only here'}
                                                         >
-                                                            {formatCellValue(r.install_hrs, 'Install HRS')}
+                                                            {formatCellValue(ownHrs, 'Install HRS')}
+                                                            {hasSplicedHours(r) && (
+                                                                <span className="text-ink-3 ml-1 text-[11px]">
+                                                                    {`of ${installHrsTotal(r) ?? '—'}`}
+                                                                </span>
+                                                            )}
                                                         </td>
                                                         <td
                                                             className="px-2 py-2 text-center align-middle font-mono tabular-nums text-ink whitespace-nowrap"
                                                             title={
                                                                 budget == null
                                                                     ? 'No install hours on this release'
-                                                                    : `${r.install_hrs} hrs × $${INSTALL_RATE_PER_HOUR.toFixed(2)}`
+                                                                    : `${ownHrs} hrs × $${INSTALL_RATE_PER_HOUR.toFixed(2)}${
+                                                                          hasSplicedHours(r)
+                                                                              ? ` (${splicedHrs(r)} of ${installHrsTotal(r)} spliced off)`
+                                                                              : ''
+                                                                      }`
                                                             }
                                                         >
                                                             {fmtUsd(budget)}
