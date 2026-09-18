@@ -24,7 +24,7 @@
  *     splice with their reason; the bar draws them as a separate amber segment after the pool.
  *   - The original's line shows what it still installs ITSELF (pool minus spliced), the same number
  *     the Job Log and Subs → Invoice Paid show for it — its stored install_hrs stays the whole pool.
- *     So the table's Install column sums to pool + additional, never the gross.
+ *     So the table's Budget Hours column sums straight to the pool.
  *   - Clicking a table row opens a side panel on the right with that release's Schedule, Details
  *     and to-dos — JobDetailsBody in `compact` mode, so edits there are the same writes as the
  *     Details tab. The release number still opens the row in the hub (onOpenRelease); the row
@@ -196,7 +196,7 @@ const numCell = { ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' };
 
 /** The group as a table: one row per release, subtotal at the foot, every column adds up. */
 function GroupTable({
-    parent, splices, releaseId, onOpen, pool, own, additional, groupTotal, selectedId, onSelect,
+    parent, splices, releaseId, onOpen, pool, own, additional, selectedId, onSelect,
 }) {
     const parentIsCurrent = parent.id === releaseId;
     const rowProps = (row, isCurrent) => {
@@ -228,9 +228,7 @@ function GroupTable({
                         <th scope="col" className={TH} style={thStyle}>Stage</th>
                         <th scope="col" className={TH} style={thStyle}>Installer</th>
                         <th scope="col" className={TH} style={{ ...thStyle, textAlign: 'right' }}>Budget Hours</th>
-                        <th scope="col" className={TH} style={{ ...thStyle, textAlign: 'right' }}>Additional</th>
-                        <th scope="col" className={TH} style={{ ...thStyle, textAlign: 'right' }}>Install</th>
-                        <th scope="col" className={TH} style={{ ...thStyle, textAlign: 'right' }}>Fab</th>
+                        <th scope="col" className={TH} style={{ ...thStyle, textAlign: 'right' }}>Additional Hours</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -246,13 +244,11 @@ function GroupTable({
                         <td style={tdStyle} className="text-ink-2 whitespace-nowrap">{parent.installer || <span className="italic text-ink-3">None</span>}</td>
                         <td style={numCell} className="text-ink-2">{cellHrs(own)}</td>
                         <td style={numCell} className="text-ink-2">0</td>
-                        <td style={numCell} className="font-bold">{cellHrs(own)}</td>
-                        <td style={numCell} className="text-ink-2">{cellHrs(parent.fab_hrs)}</td>
                     </tr>
 
                     {splices.length === 0 && (
                         <tr>
-                            <td colSpan={8} style={tdStyle} className="text-jl-2 text-ink-3 italic">
+                            <td colSpan={6} style={tdStyle} className="text-jl-2 text-ink-3 italic">
                                 No splices yet. Use + Splice to split install work off {releaseLabel(parent)}.
                             </td>
                         </tr>
@@ -279,8 +275,6 @@ function GroupTable({
                                     <td style={tdStyle} className="text-ink-2 whitespace-nowrap">{sp.installer || <span className="italic text-ink-3">None</span>}</td>
                                     <td style={numCell} className="text-ink-2">{cellHrs(sp.budget_install_hrs ?? sp.install_hrs)}</td>
                                     <td style={numCell} className="text-ink-2">{cellHrs(extra)}</td>
-                                    <td style={numCell} className="font-bold">{cellHrs(sp.install_hrs)}</td>
-                                    <td style={numCell} className="text-ink-2">0</td>
                                 </tr>
                             </React.Fragment>
                         );
@@ -299,8 +293,6 @@ function GroupTable({
                         <td style={{ ...numCell, borderTop: '2px solid var(--border-strong)' }} className="font-bold">
                             {cellHrs(additional)}
                         </td>
-                        <td style={{ ...numCell, borderTop: '2px solid var(--border-strong)', fontSize: 16 }} className="font-bold">{cellHrs(groupTotal)}</td>
-                        <td style={{ ...numCell, borderTop: '2px solid var(--border-strong)' }} className="font-bold">{cellHrs(parent.fab_hrs)}</td>
                     </tr>
                 </tfoot>
             </table>
@@ -487,7 +479,6 @@ export function SplicesPane({
                     pool={pool}
                     own={own}
                     additional={additional}
-                    groupTotal={groupTotal}
                     selectedId={selectedId}
                     onSelect={setSelectedId}
                 />

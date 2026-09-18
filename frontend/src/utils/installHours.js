@@ -12,6 +12,10 @@
  *   splicedHrs: hours live splices drew off it (0 when none / not a splice parent)
  *   hasSplicedHours: true when splices drew hours off this release
  *   installHrsNote: one-line "150 total · 50 spliced to splices" for a tooltip, else null
+ *   isSplice: true when the row is a splice (has a parent release)
+ *   additionalHrs: a splice's hours from OUTSIDE its parent's pool (0 when none)
+ *   budgetHrs: a splice's hours drawn FROM the pool (its total minus additional)
+ *   parentPoolHrs: a splice's group pool — its parent's install_hrs (parent_install_hrs)
  * imports_from: []
  * imported_by: [components/JobsTableRow.jsx, components/JobDetailsBody.jsx,
  *   components/SplicesPane.jsx, pages/Subs.jsx, utils/subsInvoiceExport.js]
@@ -63,4 +67,26 @@ export function installHrsNote(row) {
     const own = installHrsOwn(row);
     const totalPart = total == null ? '' : `${total} total install hrs · `;
     return `${totalPart}${spliced} spliced off to splices · ${own ?? '—'} left on this release`;
+}
+
+/** True when the row is a splice (340.1 …) — it carries its parent's id. */
+export function isSplice(row) {
+    return !!row && row.parent_release_id != null;
+}
+
+/** A splice's hours from outside its parent's pool. Already inside its install_hrs. */
+export function additionalHrs(row) {
+    return row ? (num(row.additional_install_hrs) ?? 0) : 0;
+}
+
+/** A splice's budget hours — what it drew from the pool: its total minus additional. */
+export function budgetHrs(row) {
+    const total = installHrsTotal(row);
+    if (total == null) return null;
+    return Math.max(0, total - additionalHrs(row));
+}
+
+/** A splice's group budget pool — its parent's install_hrs, served as parent_install_hrs. */
+export function parentPoolHrs(row) {
+    return row ? num(row.parent_install_hrs) : null;
 }

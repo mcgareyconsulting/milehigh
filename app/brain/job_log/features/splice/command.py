@@ -135,6 +135,24 @@ def splice_allocations(parent_ids=None):
     return {pid: round(hrs, 4) for pid, hrs in totals.items() if hrs > 0}
 
 
+def parent_pools(rows):
+    """``{splice release id: its parent's install_hrs pool}`` for the splices among ``rows``.
+
+    One query for a page, like ``splice_allocations``. The Job Log / Invoice Paid hours cell
+    shows a splice's group pool on its second line. Non-splices and parents with no pool
+    are absent.
+    """
+    parent_of = {r.id: r.parent_release_id for r in rows if getattr(r, "parent_release_id", None)}
+    if not parent_of:
+        return {}
+    pools = dict(
+        Releases.query.with_entities(Releases.id, Releases.install_hrs)
+        .filter(Releases.id.in_(sorted(set(parent_of.values()))))
+        .all()
+    )
+    return {rid: pools[pid] for rid, pid in parent_of.items() if pools.get(pid) is not None}
+
+
 def install_hours_view(row, allocated):
     """``(spliced, remaining)`` install hours for one release row.
 

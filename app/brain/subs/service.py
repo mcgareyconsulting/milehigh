@@ -27,7 +27,11 @@ from typing import Optional
 
 from sqlalchemy import String, and_, cast, or_
 
-from app.brain.job_log.features.splice.command import install_hours_view, splice_allocations
+from app.brain.job_log.features.splice.command import (
+    install_hours_view,
+    parent_pools,
+    splice_allocations,
+)
 from app.models import Releases, db
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
@@ -80,6 +84,7 @@ def _serialize_release(
     rel: Releases,
     procore_ref: Optional[dict] = None,
     spliced_hrs: Optional[float] = None,
+    parent_pool: Optional[float] = None,
 ) -> dict:
     """Row payload for the Invoice Paid table.
 
@@ -107,6 +112,12 @@ def _serialize_release(
         # release still installs itself. Both None when nothing is spliced off it.
         "spliced_install_hrs": spliced_install_hrs,
         "remaining_install_hrs": remaining_install_hrs,
+        # A splice's hours from OUTSIDE its parent's pool (already inside install_hrs) and
+        # why; with parent_release_id, the Invoice Paid hours cell reads a splice's two lines.
+        "parent_release_id": rel.parent_release_id,
+        "parent_install_hrs": parent_pool,
+        "additional_install_hrs": rel.additional_install_hrs,
+        "additional_install_note": rel.additional_install_note,
         "is_archived": bool(rel.is_archived),
         "installer_invoice_paid": bool(rel.installer_invoice_paid),
         "installer_invoice_progress": rel.installer_invoice_progress,
@@ -263,8 +274,12 @@ def list_subs_releases(
         procore_refs = {}
 
     splice_hours = splice_allocations([r.id for r in shown])
+    splice_pools = parent_pools(shown)
     releases = [
-        _serialize_release(r, procore_refs.get(r.id), splice_hours.get(r.id)) for r in shown
+        _serialize_release(
+            r, procore_refs.get(r.id), splice_hours.get(r.id), splice_pools.get(r.id)
+        )
+        for r in shown
     ]
     return _rosters(releases)
 

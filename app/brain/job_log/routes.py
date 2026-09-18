@@ -63,6 +63,7 @@ from app.brain.job_log.features.splice.command import (
     is_splice_number,
     pool_summary,
     splice_allocations,
+    parent_pools,
     validate_field_edits as validate_splice_field_edits,
 )
 from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
@@ -659,6 +660,8 @@ def get_jobs():
 
         # One query for the whole page: hours live splices drew off each row's pool.
         splice_hours = splice_allocations([j.id for j in jobs])
+        # And each splice's parent pool, for the hours cell's second line.
+        splice_pools = parent_pools(jobs)
 
         job_list = []
         warnings = []
@@ -720,6 +723,7 @@ def get_jobs():
                     # live splices drew and what this row still installs itself; both
                     # None when nothing was spliced off it (see install_hours_view).
                     'spliced_install_hrs': serialize_value(spliced_install_hrs),
+                    'parent_install_hrs': serialize_value(splice_pools.get(job.id)),
                     'remaining_install_hrs': serialize_value(remaining_install_hrs),
                     'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),
@@ -1061,6 +1065,8 @@ def get_all_jobs():
 
         # One query for the whole page: hours live splices drew off each row's pool.
         splice_hours = splice_allocations([j.id for j in jobs])
+        # And each splice's parent pool, for the hours cell's second line.
+        splice_pools = parent_pools(jobs)
 
         job_list = []
         warnings = []
@@ -1122,6 +1128,7 @@ def get_all_jobs():
                     # live splices drew and what this row still installs itself; both
                     # None when nothing was spliced off it (see install_hours_view).
                     'spliced_install_hrs': serialize_value(spliced_install_hrs),
+                    'parent_install_hrs': serialize_value(splice_pools.get(job.id)),
                     'remaining_install_hrs': serialize_value(remaining_install_hrs),
                     'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),

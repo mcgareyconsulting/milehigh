@@ -3,10 +3,14 @@
 // what those splices drew — 150 with 50 spliced reads 100.
 import { describe, it, expect } from 'vitest';
 import {
+    additionalHrs,
+    budgetHrs,
     hasSplicedHours,
     installHrsNote,
     installHrsOwn,
     installHrsTotal,
+    isSplice,
+    parentPoolHrs,
     splicedHrs,
 } from './installHours';
 
@@ -62,5 +66,33 @@ describe('installHours', () => {
         expect(installHrsOwn(null)).toBeNull();
         expect(splicedHrs(undefined)).toBe(0);
         expect(hasSplicedHours(null)).toBe(false);
+    });
+});
+
+describe('installHours — splice rows', () => {
+    const splice = (over = {}) => ({
+        id: 3, 'Install HRS': 14, parent_release_id: 1, parent_install_hrs: 12, additional_install_hrs: 4, ...over,
+    });
+
+    it('knows a splice by its parent id', () => {
+        expect(isSplice(splice())).toBe(true);
+        expect(isSplice(jobLogRow())).toBe(false);
+        expect(isSplice(null)).toBe(false);
+    });
+
+    it('splits a splice into budget and additional hours', () => {
+        expect(additionalHrs(splice())).toBe(4);
+        expect(budgetHrs(splice())).toBe(10);
+        expect(budgetHrs(splice({ additional_install_hrs: null }))).toBe(14);
+        // Never negative, and nothing to split without hours.
+        expect(budgetHrs(splice({ 'Install HRS': 3 }))).toBe(0);
+        expect(budgetHrs(splice({ 'Install HRS': null }))).toBeNull();
+        expect(additionalHrs(null)).toBe(0);
+    });
+
+    it('reads the group pool off parent_install_hrs', () => {
+        expect(parentPoolHrs(splice())).toBe(12);
+        expect(parentPoolHrs(splice({ parent_install_hrs: null }))).toBeNull();
+        expect(parentPoolHrs(null)).toBeNull();
     });
 });

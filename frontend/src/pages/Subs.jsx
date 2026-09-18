@@ -36,7 +36,8 @@ import { checkAuth } from '../utils/auth';
 import { ReleaseHubModal } from '../components/ReleaseHubModal';
 import { formatInstallProg } from '../components/JobDetailsBody';
 import { formatCellValue } from '../utils/formatters';
-import { hasSplicedHours, installHrsNote, installHrsOwn, installHrsTotal, splicedHrs } from '../utils/installHours';
+import { hasSplicedHours, installHrsNote, installHrsOwn, installHrsTotal, isSplice, splicedHrs } from '../utils/installHours';
+import { InstallHrsStack } from '../components/InstallHrsStack';
 import Dropdown, { DropdownItem } from '../components/Dropdown';
 import {
     fetchSubsReleases,
@@ -697,6 +698,8 @@ export default function Subs() {
                                                 const budget = installBudget(ownHrs);
                                                 const billable = estimatedBillable(r.job_comp, ownHrs);
                                                 const spliceNote = installHrsNote(r);
+                                                // A splice's hours from outside the parent's pool (already in its total).
+                                                const extraHrs = Number(r.additional_install_hrs) || 0;
                                                 return (
                                                     <tr
                                                         key={key}
@@ -746,14 +749,18 @@ export default function Subs() {
                                                         </td>
                                                         <td
                                                             className="px-2 py-2 text-center align-middle font-mono tabular-nums text-ink-2 whitespace-nowrap"
-                                                            title={spliceNote || 'Install hours from the Job Log — read-only here'}
+                                                            title={
+                                                                [
+                                                                    spliceNote || 'Install hours from the Job Log — read-only here',
+                                                                    extraHrs > 0
+                                                                        ? `+${extraHrs} additional hrs outside the pool${r.additional_install_note ? `: ${r.additional_install_note}` : ''}`
+                                                                        : null,
+                                                                ].filter(Boolean).join('\n')
+                                                            }
                                                         >
-                                                            {formatCellValue(ownHrs, 'Install HRS')}
-                                                            {hasSplicedHours(r) && (
-                                                                <span className="text-ink-3 ml-1 text-[11px]">
-                                                                    {`of ${installHrsTotal(r) ?? '—'}`}
-                                                                </span>
-                                                            )}
+                                                            {hasSplicedHours(r) || isSplice(r)
+                                                                ? <InstallHrsStack row={r} format={(v) => formatCellValue(v, 'Install HRS')} />
+                                                                : formatCellValue(ownHrs, 'Install HRS')}
                                                         </td>
                                                         <td
                                                             className="px-2 py-2 text-center align-middle font-mono tabular-nums text-ink whitespace-nowrap"

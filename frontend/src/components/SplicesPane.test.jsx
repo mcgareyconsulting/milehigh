@@ -2,20 +2,28 @@
  * The Splices tab after its facelift (Design canvas "Splices Tab Facelift", Option A).
  *
  * What these protect: every hours number on the tab is the server's, read straight off the
- * pool summary, and the three readings agree — the bar's segments, the ledger's lines and the
- * table's subtotal all say the same 12-hour pool, 10 spliced, 2 left, +14 additional, 26 total
- * that the 555-551 screenshot showed. The original's Install cell is what it still installs
- * ITSELF (2), never its gross 12, so the Install column sums to the group total.
+ * pool summary, and the bar and the table agree — the same 12-hour pool, 10 spliced, 2 left,
+ * +14 additional, 26 total that the 555-551 screenshot showed. The table is numbers only
+ * (2026-09-18): Budget Hours for the original is what it still installs ITSELF (2), so the
+ * column sums straight to the pool; 0 or blank reads 0. Clicking a row opens a side panel
+ * with that release's schedule, details and to-dos.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 
 const api = vi.hoisted(() => ({
     getSplices: vi.fn(),
-    updateSpliceAdditionalHours: vi.fn(),
+    getRelease: vi.fn(),
 }));
 vi.mock('../services/jobsApi', () => ({ jobsApi: api }));
 vi.mock('./SpliceReleaseModal', () => ({ SpliceReleaseModal: () => <div data-testid="splice-modal" /> }));
+// The details body is JobDetailsBody's own concern (JobDetailsBody.compact.test.jsx); here we
+// only care which release it gets and that it is the compact variant.
+vi.mock('./JobDetailsBody', () => ({
+    JobDetailsBody: (props) => (
+        <div data-testid="details-body" data-release-id={props.releaseId} data-compact={String(!!props.compact)} />
+    ),
+}));
 
 import { SplicesPane } from './SplicesPane';
 
@@ -51,8 +59,9 @@ const mount = async (props = {}) => {
 
 beforeEach(() => {
     api.getSplices.mockReset();
-    api.updateSpliceAdditionalHours.mockReset();
+    api.getRelease.mockReset();
     api.getSplices.mockResolvedValue(SUMMARY);
+    api.getRelease.mockImplementation((id) => Promise.resolve({ id, Stage: 'Released' }));
 });
 
 describe('SplicesPane hours math', () => {
@@ -77,27 +86,42 @@ describe('SplicesPane hours math', () => {
         expect(addl).toHaveTextContent('+14');
     });
 
-    it('ledger reads pool − splices = left, + additional = total', async () => {
+    it('leaves splices with no budget hours out of the bar legend', async () => {
         await mount();
-        const ledger = within(screen.getByTestId('hours-ledger'));
-        expect(ledger.getByText('− 10')).toBeInTheDocument();
-        expect(ledger.getByText('− 0')).toBeInTheDocument();
-        expect(ledger.getByText('Left on 555-551').nextSibling.nextSibling).toHaveTextContent('2');
-        expect(ledger.getByText('+ 14')).toBeInTheDocument();
-        expect(ledger.getByText('Group total install hrs').parentElement).toHaveTextContent('26');
+        const legend = screen.getByTestId('hours-bar');
+        expect(legend).toHaveTextContent('555-551.1 10');
+        expect(legend).not.toHaveTextContent('555-551.2 0');
+        expect(screen.queryByTestId('hours-ledger')).toBeNull();
     });
 
-    it('table shows the original installing what it still has itself, and the subtotal adds up', async () => {
+    it('table is numbers only: budget sums straight to the pool, additional beside it', async () => {
         await mount();
-        const rows = within(screen.getByTestId('group-table')).getAllByRole('row');
+        const table = within(screen.getByTestId('group-table'));
+        expect(table.getAllByRole('columnheader').map((h) => h.textContent)).toEqual([
+            'Release', 'Description', 'Stage', 'Installer', 'Budget Hours', 'Additional Hours',
+        ]);
+        const rows = table.getAllByRole('row');
         const cells = (row) => within(row).getAllByRole('cell').map((c) => c.textContent.trim());
         // header, original, 551.1, 551.2, subtotal
         expect(rows).toHaveLength(5);
-        expect(cells(rows[1]).slice(4)).toEqual(['2 of 12', '—', '2', '12']);
-        expect(cells(rows[2]).slice(4)).toEqual(['10', '+ Add', '10', '—']);
-        expect(cells(rows[3]).slice(4)).toEqual(['0', '+14Edit', '14', '—']);
-        expect(cells(rows[4]).slice(4)).toEqual(['12', '+14', '26', '12']);
+        expect(cells(rows[1]).slice(4)).toEqual(['2', '0']);
+        expect(cells(rows[2]).slice(4)).toEqual(['10', '0']);
+        expect(cells(rows[3]).slice(4)).toEqual(['0', '14']);
+        expect(cells(rows[4]).slice(4)).toEqual(['12', '14']);
         expect(rows[1]).toHaveAttribute('aria-current', 'true');
+        // No hour controls in the table.
+        expect(table.queryByRole('button', { name: /additional hours/i })).toBeNull();
+    });
+
+    it('reads blank hours as 0, never a dash', async () => {
+        api.getSplices.mockResolvedValue({
+            ...SUMMARY,
+            parent: { ...SUMMARY.parent, fab_hrs: null },
+            splices: [{ ...SUMMARY.splices[0], budget_install_hrs: null, install_hrs: null, additional_install_hrs: null }],
+        });
+        await mount();
+        const rows = within(screen.getByTestId('group-table')).getAllByRole('row');
+        expect(within(rows[2]).getAllByRole('cell').map((c) => c.textContent.trim()).slice(4)).toEqual(['0', '0']);
     });
 
     it('opens another release of the group from its number, never the one being viewed', async () => {
@@ -108,19 +132,55 @@ describe('SplicesPane hours math', () => {
         expect(screen.queryByRole('button', { name: '555-551' })).toBeNull();
     });
 
-    it('edits additional hours in place and refetches', async () => {
-        api.updateSpliceAdditionalHours.mockResolvedValue({});
-        const onChanged = vi.fn();
-        await mount({ onChanged });
-        fireEvent.click(screen.getByRole('button', { name: 'Edit additional hours for 555-551.2' }));
-        const input = screen.getByLabelText('Additional install hours for 555-551.2');
-        fireEvent.change(input, { target: { value: '16' } });
-        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-        await waitFor(() => expect(api.updateSpliceAdditionalHours).toHaveBeenCalledWith(3, {
-            additional_install_hrs: 16, additional_install_note: null,
-        }));
-        await waitFor(() => expect(api.getSplices).toHaveBeenCalledTimes(2));
-        expect(onChanged).toHaveBeenCalled();
+    it('opens a row in the side panel, and closes it again', async () => {
+        await mount();
+        expect(screen.queryByTestId('release-peek')).toBeNull();
+        const rows = within(screen.getByTestId('group-table')).getAllByRole('row');
+        fireEvent.click(rows[3]);                                     // 555-551.2
+        const peek = await screen.findByTestId('release-peek');
+        expect(rows[3]).toHaveAttribute('aria-selected', 'true');
+        expect(within(peek).getByText('555-551.2')).toBeInTheDocument();
+        expect(within(peek).getByText('Extra budget')).toBeInTheDocument();
+        expect(api.getRelease).toHaveBeenCalledWith(3);
+        const body = await within(peek).findByTestId('details-body');
+        expect(body).toHaveAttribute('data-release-id', '3');
+        expect(body).toHaveAttribute('data-compact', 'true');
+
+        fireEvent.click(within(peek).getByRole('button', { name: 'Close details' }));
+        expect(screen.queryByTestId('release-peek')).toBeNull();
+
+        // Clicking the selected row again also closes it.
+        fireEvent.click(rows[2]);
+        await screen.findByTestId('release-peek');
+        fireEvent.click(rows[2]);
+        expect(screen.queryByTestId('release-peek')).toBeNull();
+    });
+
+    it('opens the full release from the panel, and the number never just selects the row', async () => {
+        const onOpenRelease = vi.fn();
+        await mount({ onOpenRelease });
+        fireEvent.click(screen.getByRole('button', { name: '555-551.1' }));
+        expect(onOpenRelease).toHaveBeenCalledWith(2);
+        expect(screen.queryByTestId('release-peek')).toBeNull();
+
+        fireEvent.click(within(screen.getByTestId('group-table')).getAllByRole('row')[3]);
+        const peek = await screen.findByTestId('release-peek');
+        fireEvent.click(within(peek).getByRole('button', { name: 'Open' }));
+        expect(onOpenRelease).toHaveBeenCalledWith(3);
+    });
+
+    it('offers no Open link for the release being viewed', async () => {
+        await mount();
+        fireEvent.click(within(screen.getByTestId('group-table')).getAllByRole('row')[1]);
+        const peek = await screen.findByTestId('release-peek');
+        expect(within(peek).queryByRole('button', { name: 'Open' })).toBeNull();
+    });
+
+    it('says so when the row no longer exists', async () => {
+        api.getRelease.mockResolvedValue(null);
+        await mount();
+        fireEvent.click(within(screen.getByTestId('group-table')).getAllByRole('row')[2]);
+        expect(await screen.findByRole('alert')).toHaveTextContent('That release no longer exists');
     });
 
     it('reports the splice count for the tab badge', async () => {
