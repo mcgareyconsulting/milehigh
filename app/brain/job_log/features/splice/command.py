@@ -182,6 +182,12 @@ def _coerce_hours(value, label, allow_blank=False):
 
 def pool_summary(parent):
     total, allocated, remaining = install_pool(parent)
+    children = splice_children(parent)
+    # Hours outside the pool, and the whole group's install hours (pool + those).
+    # Owned here, not in the client: the Splices tab's bar, ledger and subtotal all
+    # read these, and the tab must never add up a split the server defines.
+    additional = round(sum(float(c.additional_install_hrs or 0) for c in children), 4)
+    group_total = round(float(total or 0) + additional, 4) if (total is not None or additional) else None
     return {
         "parent_id": parent.id,
         "job": parent.job,
@@ -189,6 +195,8 @@ def pool_summary(parent):
         "total_install_hrs": total,
         "allocated_install_hrs": allocated,
         "remaining_install_hrs": remaining,
+        "additional_install_hrs": additional,
+        "group_install_hrs": group_total,
         "next_splice_number": next_splice_number(parent),
         "parent": {
             "id": parent.id,
@@ -217,7 +225,7 @@ def pool_summary(parent):
                 "installer": c.installer,
                 "start_install": c.start_install.isoformat() if c.start_install else None,
             }
-            for c in splice_children(parent)
+            for c in children
         ],
     }
 

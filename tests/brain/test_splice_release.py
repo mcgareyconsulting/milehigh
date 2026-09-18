@@ -141,6 +141,32 @@ class TestSplicedHoursNetOutEverywhere:
         assert rows[parent_id]["spliced_install_hrs"] == 60      # 50 + 10 budget, not the 20 extra
         assert rows[parent_id]["remaining_install_hrs"] == 90
 
+    def test_splices_summary_carries_group_totals(self, app, non_admin_client):
+        """The Splices tab's bar, ledger and subtotal read additional hours and the
+        group total from the server, never by adding the splices up client-side."""
+        parent_id, _ = self._spliced_parent(app, non_admin_client)
+        assert _splice(
+            non_admin_client, parent_id,
+            install_hrs=10, description="Punch list rework", installer="Saul 3",
+            additional_install_hrs=20, additional_install_note="Rework after GC redesign",
+        ).status_code == 201
+        body = json.loads(non_admin_client.get(f"/brain/job-log/release/{parent_id}/splices").data)
+        assert body["total_install_hrs"] == 150
+        assert body["allocated_install_hrs"] == 60
+        assert body["remaining_install_hrs"] == 90
+        assert body["additional_install_hrs"] == 20
+        assert body["group_install_hrs"] == 170            # 150 pool + 20 outside it
+
+    def test_splices_summary_totals_without_a_pool(self, app, non_admin_client):
+        with app.app_context():
+            bare = _parent(job=346, release="346", install_hrs=None)
+            db.session.commit()
+            bare_id = bare.id
+        body = json.loads(non_admin_client.get(f"/brain/job-log/release/{bare_id}/splices").data)
+        assert body["total_install_hrs"] is None
+        assert body["additional_install_hrs"] == 0
+        assert body["group_install_hrs"] is None
+
     def test_subs_invoice_rows_bill_the_netted_hours(self, app, admin_client):
         parent_id, splice_id = self._spliced_parent(app, admin_client, installer="Saul 1")
         rows = {
