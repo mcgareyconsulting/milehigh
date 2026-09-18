@@ -10,7 +10,7 @@
  *   ../constants/releaseTags, ../utils/api, ../utils/formatters, ../utils/scheduling,
  *   ../utils/stageTint, ../utils/asap, ../utils/imageCompress, ./StartInstallDateModal,
  *   ./shared/ConfirmDialog]
- * imported_by: [frontend/src/components/ReleaseHubModal.jsx]
+ * imported_by: [frontend/src/components/ReleaseHubModal.jsx, frontend/src/components/SplicesPane.jsx]
  * invariants:
  *   - Owns its own material-orders, photos and checklist fetches when mounted; photo
  *     upload / note / delete are raw fetches against the photo routes
@@ -25,6 +25,8 @@
  *   - The release's Notes are NOT edited here — that is the Activity rail's job. The note
  *     under the hero belongs to the selected photo (PATCH .../photos/<id>).
  *   - To-dos are read-only here; the checklist's meeting notes are not rendered.
+ *   - `compact` (the Splices tab's side panel) renders Schedule + Details + to-dos only, in one
+ *     column; Photos / Notes / Materials and their fetches are skipped. Same writes, same code.
  * updated_by_agent: 2026-09-03T00:00:00Z
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -234,6 +236,11 @@ export function JobDetailsBody({
     onJobUpdate = null,
     /** Stage changed here — lets the host header pill + banana row follow. */
     onStageChange = null,
+    /**
+     * Side-panel variant (Splices tab): Schedule + Details + to-dos only, stacked in one narrow
+     * column. Photos / Notes / Materials are left out and their fetches skipped.
+     */
+    compact = false,
 }) {
     // BUG-24: the crew size is now writable from here, so it needs a local mirror like the other
     // editable fields (optimistic on save, rolled back if the PATCH is rejected) and an admin flag
@@ -323,7 +330,7 @@ export function JobDetailsBody({
     }, [job?.id, job?.release_tag, jobId, relId]);
 
     useEffect(() => {
-        if (jobId == null) return;
+        if (jobId == null || compact) return;
         let cancelled = false;
         setOrdersLoading(true);
         jobsApi.getMaterialOrders(jobId, relId)
@@ -331,10 +338,10 @@ export function JobDetailsBody({
             .catch(() => { if (!cancelled) setMaterialOrders([]); })
             .finally(() => { if (!cancelled) setOrdersLoading(false); });
         return () => { cancelled = true; };
-    }, [jobId, relId]);
+    }, [jobId, relId, compact]);
 
     const loadPhotos = useCallback(async () => {
-        if (relPk == null) return;
+        if (relPk == null || compact) return;
         setPhotosLoading(true);
         try {
             const list = await jobsApi.getReleasePhotos(relPk);
@@ -345,7 +352,7 @@ export function JobDetailsBody({
         } finally {
             setPhotosLoading(false);
         }
-    }, [relPk]);
+    }, [relPk, compact]);
 
     useEffect(() => {
         setHeroId(null);
@@ -745,9 +752,9 @@ export function JobDetailsBody({
             )}
 
             {/* ── Dossier split: photos/notes/materials | schedule/details ─── */}
-            <div className="jl-dossier-split">
+            <div className={compact ? '' : 'jl-dossier-split'}>
                 {/* LEFT ─────────────────────────────────────────────────── */}
-                <div className="min-w-0">
+                {!compact && <div className="min-w-0">
                     <SectionLabel
                         action={relPk != null ? (
                             <div className="flex items-center gap-1.5 shrink-0">
@@ -1069,7 +1076,7 @@ export function JobDetailsBody({
                             })
                         )}
                     </div>
-                </div>
+                </div>}
 
                 {/* RIGHT ────────────────────────────────────────────────── */}
                 <div className="min-w-0">
@@ -1279,7 +1286,8 @@ export function JobDetailsBody({
                                         className="grid items-center text-ink-3"
                                         style={{
                                             gridColumn: '1 / -1',
-                                            gridTemplateColumns: '158px 140px 120px minmax(0,1fr)',
+                                            gridTemplateColumns: compact ? 'repeat(2, minmax(0,1fr))' : '158px 140px 120px minmax(0,1fr)',
+                                            rowGap: compact ? 4 : undefined,
                                             columnGap: 14,
                                             fontSize: 12.5,
                                         }}
