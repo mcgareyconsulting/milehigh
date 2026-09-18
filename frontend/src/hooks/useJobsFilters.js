@@ -19,6 +19,7 @@
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { computeTotalFabHrs } from '../utils/fabHours';
+import { installHrsOwn } from '../utils/installHours';
 import { DATE_COLUMNS } from '../utils/jobLogColumns';
 import { READY_TO_SHIP_STAGES } from '../utils/unassignedLane';
 
@@ -699,11 +700,14 @@ export function useJobsFilters(jobs = []) {
     // app/api/helpers.py STAGE_HOUR_PERCENTAGES. Job Comp is no longer a
     // factor — it's still used for completion gating and the install-prog
     // review sort, but not for this KPI.
+    // Each row contributes the hours it still installs ITSELF (installHrsOwn): a
+    // release with splices under it keeps the whole pool, and its splices are rows
+    // in this same list carrying those hours, so the gross pool would count twice.
     const totalInstallHrs = useMemo(() =>
         jobs.reduce((sum, job) => {
             const modifier = _getInstallModifier(job['Stage'] || '');
             if (modifier === 0.0) return sum;
-            return sum + (job['Install HRS'] || 0) * modifier;
+            return sum + (installHrsOwn(job) || 0) * modifier;
         }, 0),
     [jobs]);
 

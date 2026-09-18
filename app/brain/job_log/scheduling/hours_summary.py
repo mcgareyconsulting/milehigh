@@ -11,6 +11,8 @@ imported_by: [app/brain/job_log/scheduling/__init__.py]
 invariants:
   - Fab and install hour totals are stage-driven (STAGE_HOUR_PERCENTAGES Banana Code matrix)
   - Job Comp does not affect install hour totals
+  - A release with splices contributes only what it still installs itself
+    (remaining_install_hrs); its splices carry the rest on their own rows
   - Unknown stages default to fab modifier 1.0 (conservative) and install modifier 0.0 (excluded)
 updated_by_agent: 2026-08-06T00:00:00Z
 
@@ -60,16 +62,24 @@ def calculate_total_install_hrs(jobs: list[dict]) -> float:
     factor here — it's used elsewhere for completion gating and the install-prog
     review sort, but the install-hour total is purely stage-based.
 
-    remaining_per_job = Install HRS * get_install_modifier(stage)
+    Each row contributes the hours it still installs ITSELF: a release with splices
+    under it keeps the whole install-hour pool in 'Install HRS', and its splices are
+    rows in this same list carrying those hours, so the gross pool would count twice.
+    'remaining_install_hrs' (serialized alongside 'Install HRS') is that netted number,
+    and is absent/None on every row with nothing spliced off it.
+
+    remaining_per_job = own install hours * get_install_modifier(stage)
     """
     total = 0.0
     for job in jobs:
         modifier = get_install_modifier(job.get('Stage'))
         if modifier == 0.0:
             continue
-        install_hrs = job.get('Install HRS') or 0
+        own_hrs = job.get('remaining_install_hrs')
+        if own_hrs is None:
+            own_hrs = job.get('Install HRS') or 0
         try:
-            total += float(install_hrs) * modifier
+            total += float(own_hrs) * modifier
         except (ValueError, TypeError):
             pass
     return total

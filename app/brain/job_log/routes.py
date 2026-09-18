@@ -59,8 +59,11 @@ from app.brain.job_log.features.splice.command import (
     CreateSpliceCommand,
     SpliceError,
     UpdateSpliceAdditionalHoursCommand,
+    install_hours_view,
     is_splice_number,
     pool_summary,
+    splice_allocations,
+    parent_pools,
     validate_field_edits as validate_splice_field_edits,
 )
 from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
@@ -619,7 +622,19 @@ def get_jobs():
         if since_param:
             try:
                 since_timestamp = datetime.fromisoformat(since_param.replace('Z', '+00:00'))
-                query = query.filter(Releases.last_updated_at > since_timestamp)
+                # A splice draws install hours out of its parent's pool, so creating,
+                # editing or deleting one changes what the PARENT still installs — while
+                # never touching the parent's own row. Carry those parents along or a
+                # delta poll leaves the Job Log showing the gross pool until a full reload.
+                spliced_parent_ids = (
+                    db.session.query(Releases.parent_release_id)
+                    .filter(Releases.parent_release_id.isnot(None))
+                    .filter(Releases.last_updated_at > since_timestamp)
+                )
+                query = query.filter(db.or_(
+                    Releases.last_updated_at > since_timestamp,
+                    Releases.id.in_(spliced_parent_ids),
+                ))
                 logger.debug("cursor_filter_applied", since=str(since_timestamp))
                 # Cursor polls skip the archive filter so soft-deleted rows always propagate
             except (ValueError, TypeError) as e:
@@ -643,11 +658,19 @@ def get_jobs():
         jobs = query.limit(limit).all()
         logger.debug("cursor_query_returned", count=len(jobs), limit=limit)
 
+        # One query for the whole page: hours live splices drew off each row's pool.
+        splice_hours = splice_allocations([j.id for j in jobs])
+        # And each splice's parent pool, for the hours cell's second line.
+        splice_pools = parent_pools(jobs)
+
         job_list = []
         warnings = []
 
         for idx, job in enumerate(jobs):
             try:
+                spliced_install_hrs, remaining_install_hrs = install_hours_view(
+                    job, splice_hours.get(job.id)
+                )
                 # Get stage from database field (default to 'Released' if None)
                 stage = job.stage if job.stage else 'Released'
                 
@@ -696,6 +719,12 @@ def get_jobs():
                     'parent_release_id': serialize_value(job.parent_release_id),
                     'additional_install_hrs': serialize_value(job.additional_install_hrs),
                     'additional_install_note': serialize_value(job.additional_install_note),
+                    # 'Install HRS' stays the whole pool. These two say how much of it
+                    # live splices drew and what this row still installs itself; both
+                    # None when nothing was spliced off it (see install_hours_view).
+                    'spliced_install_hrs': serialize_value(spliced_install_hrs),
+                    'parent_install_hrs': serialize_value(splice_pools.get(job.id)),
+                    'remaining_install_hrs': serialize_value(remaining_install_hrs),
                     'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),
                 }
@@ -1033,12 +1062,20 @@ def get_all_jobs():
         
         # Apply pagination
         jobs = query.limit(limit).offset(offset).all()
-        
+
+        # One query for the whole page: hours live splices drew off each row's pool.
+        splice_hours = splice_allocations([j.id for j in jobs])
+        # And each splice's parent pool, for the hours cell's second line.
+        splice_pools = parent_pools(jobs)
+
         job_list = []
         warnings = []
         
         for idx, job in enumerate(jobs):
             try:
+                spliced_install_hrs, remaining_install_hrs = install_hours_view(
+                    job, splice_hours.get(job.id)
+                )
                 # Get stage from database field (default to 'Released' if None)
                 stage = job.stage if job.stage else 'Released'
                 
@@ -1087,6 +1124,12 @@ def get_all_jobs():
                     'parent_release_id': serialize_value(job.parent_release_id),
                     'additional_install_hrs': serialize_value(job.additional_install_hrs),
                     'additional_install_note': serialize_value(job.additional_install_note),
+                    # 'Install HRS' stays the whole pool. These two say how much of it
+                    # live splices drew and what this row still installs itself; both
+                    # None when nothing was spliced off it (see install_hours_view).
+                    'spliced_install_hrs': serialize_value(spliced_install_hrs),
+                    'parent_install_hrs': serialize_value(splice_pools.get(job.id)),
+                    'remaining_install_hrs': serialize_value(remaining_install_hrs),
                     'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),
                 }
@@ -4060,6 +4103,11 @@ def update_job_fields(job, release):
 
     logger.info("release_fields_updated", job=job, release=release, fields=list(coerced.keys()), count=len(coerced))
 
+    # An edit to install hours moves the total, so the spliced/remaining split the row
+    # is displayed by moves with it — send both back with the row, not just the total.
+    spliced_install_hrs, remaining_install_hrs = install_hours_view(
+        job_record, splice_allocations([job_record.id]).get(job_record.id)
+    )
     job_data = {
         'id': serialize_value(job_record.id),
         'Job #': serialize_value(job_record.job),
@@ -4073,6 +4121,8 @@ def update_job_fields(job, release):
         'BY': serialize_value(job_record.by),
         'Released': serialize_value(job_record.released),
         'release_tag': serialize_value(job_record.release_tag),
+        'spliced_install_hrs': serialize_value(spliced_install_hrs),
+        'remaining_install_hrs': serialize_value(remaining_install_hrs),
     }
 
     return jsonify(job_data), 200

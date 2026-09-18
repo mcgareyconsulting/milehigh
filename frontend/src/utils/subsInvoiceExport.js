@@ -10,18 +10,23 @@
  *   fmtUsd: dollars or an em dash
  *   exportSubsInvoicesCsv: ({ releases, filterLabel }) -> triggers CSV download
  *   exportSubsInvoicesPdf: async ({ releases, filterLabel }) -> triggers PDF download
- * imports_from: [jspdf, jspdf-autotable, ./pdfFonts, ./formatters, ../components/JobDetailsBody]
+ * imports_from: [jspdf, jspdf-autotable, ./pdfFonts, ./formatters, ./installHours,
+ *   ../components/JobDetailsBody]
  * imported_by: [pages/Subs.jsx]
  * invariants:
  *   - Exports are the on-screen rows as-is (the caller passes its filtered list);
  *     the only reshaping is Company + Crew columns in place of the installer grouping.
  *   - Company comes from the API row (`company`); Crew is the installer team name.
  *   - Budget / Est. Billable are derived here exactly as on screen, never stored.
+ *   - Install Hrs is what a release still installs ITSELF (installHrsOwn): a release with
+ *     splices under it keeps the whole pool, and each splice bills its own hours on its
+ *     own exported row, so the gross pool would bill those hours twice.
  */
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ensureTableFonts } from './pdfFonts';
 import { formatCellValue } from './formatters';
+import { installHrsOwn } from './installHours';
 import { formatInstallProg } from '../components/JobDetailsBody';
 
 /** Sub install rate. Budget = Install Hrs x this. */
@@ -109,9 +114,10 @@ function sortForReport(releases) {
  * spreadsheet can sum them, the PDF passes fmtUsd.
  */
 function rowValues(r, { money, invoiceJoin }) {
-    const budget = installBudget(r.install_hrs);
-    const billable = estimatedBillable(r.job_comp, r.install_hrs);
-    const hrs = formatCellValue(r.install_hrs, 'Install HRS');
+    const ownHrs = installHrsOwn(r);
+    const budget = installBudget(ownHrs);
+    const billable = estimatedBillable(r.job_comp, ownHrs);
+    const hrs = formatCellValue(ownHrs, 'Install HRS');
     const numbers = (r.installer_invoice_numbers || '')
         .split(/\r?\n/)
         .map((s) => s.trim())

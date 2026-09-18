@@ -106,6 +106,72 @@ describe('Subs — Invoice Paid columns', () => {
     });
 });
 
+describe('Subs — a release with splices bills what it still installs itself', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        hubProps.current = null;
+    });
+
+    // The original keeps the whole install-hour pool; each splice bills its own hours
+    // on its own row, so billing the gross pool here would bill those hours twice.
+    const spliced = (over = {}) =>
+        row({ install_hrs: 150, spliced_install_hrs: 50, remaining_install_hrs: 100, job_comp: '50', ...over });
+
+    it('shows the actual hours in bold over the full pool, and bills the actual hours', async () => {
+        load([spliced()]);
+        const cells = await cellsOf('Bldg C stairs');
+        expect(cells[8].textContent).toBe('100.00150.00');
+        expect(within(cells[8]).getByText('100.00')).toHaveClass('font-bold');
+        expect(cells[8]).not.toHaveTextContent('of');
+        // 100 hrs x $55 = $5,500 budget; 50% install prog = $2,750.00 billable.
+        expect(cells[9]).toHaveTextContent('$5,500.00');
+        expect(cells[10]).toHaveTextContent('$2,750.00');
+    });
+
+    it('leaves a release with no splices on its own hours', async () => {
+        load([row({ install_hrs: 10, job_comp: '50', spliced_install_hrs: null, remaining_install_hrs: null })]);
+        const cells = await cellsOf('Bldg C stairs');
+        expect(cells[8]).toHaveTextContent('10.00');
+        expect(cells[8]).not.toHaveTextContent('of');
+        expect(cells[9]).toHaveTextContent('$550.00');
+    });
+
+    it('bills a splice row on its own hours — nothing is spliced off it', async () => {
+        load([row({ id: 12, release: '923.1', description: 'Level 3 only', install_hrs: 50, job_comp: '50' })]);
+        const cells = await cellsOf('Level 3 only');
+        expect(cells[8]).toHaveTextContent('50.00');
+        expect(cells[9]).toHaveTextContent('$2,750.00');
+    });
+});
+
+describe('Subs — splice rows read like the Job Log', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        hubProps.current = null;
+    });
+
+    const splice = (over = {}) => row({
+        id: 12, release: '923.1', description: 'Level 3 only', install_hrs: 10, job_comp: '50',
+        parent_release_id: 11, parent_install_hrs: 12, ...over,
+    });
+
+    it('a splice shows its hours in bold over the group pool', async () => {
+        load([splice()]);
+        const cells = await cellsOf('Level 3 only');
+        expect(cells[8].textContent).toBe('10.0012.00');
+        expect(within(cells[8]).getByText('10.00')).toHaveClass('font-bold');
+    });
+
+    it('an additional-only splice reads "extra" under its hours', async () => {
+        load([splice({ install_hrs: 14, additional_install_hrs: 14, additional_install_note: 'GC add' })]);
+        const cells = await cellsOf('Level 3 only');
+        expect(cells[8].textContent).toBe('14.00extra');
+        expect(cells[8].getAttribute('title')).toContain('+14 additional hrs outside the pool: GC add');
+        // Billing is on the splice's whole hours: 14 x $55.
+        expect(cells[9]).toHaveTextContent('$770.00');
+    });
+});
+
 describe('Subs — release hub modal', () => {
     beforeEach(() => {
         vi.clearAllMocks();

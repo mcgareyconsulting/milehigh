@@ -10,7 +10,7 @@
  *   ../constants/releaseTags, ../utils/api, ../utils/formatters, ../utils/scheduling,
  *   ../utils/stageTint, ../utils/asap, ../utils/imageCompress, ./StartInstallDateModal,
  *   ./shared/ConfirmDialog]
- * imported_by: [frontend/src/components/ReleaseHubModal.jsx]
+ * imported_by: [frontend/src/components/ReleaseHubModal.jsx, frontend/src/components/SplicesPane.jsx]
  * invariants:
  *   - Owns its own material-orders, photos and checklist fetches when mounted; photo
  *     upload / note / delete are raw fetches against the photo routes
@@ -25,6 +25,8 @@
  *   - The release's Notes are NOT edited here — that is the Activity rail's job. The note
  *     under the hero belongs to the selected photo (PATCH .../photos/<id>).
  *   - To-dos are read-only here; the checklist's meeting notes are not rendered.
+ *   - `compact` (the Splices tab's side panel) renders Schedule + Details + to-dos only, in one
+ *     column; Photos / Notes / Materials and their fetches are skipped. Same writes, same code.
  * updated_by_agent: 2026-09-03T00:00:00Z
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -37,6 +39,7 @@ import { STAGE_OPTIONS } from '../constants/stages';
 import { API_BASE_URL } from '../utils/api';
 import { toYmd, subtractBusinessDays } from '../utils/formatters';
 import { installDays, DEFAULT_NUM_GUYS } from '../utils/scheduling';
+import { hasSplicedHours, installHrsNote, installHrsOwn, installHrsTotal, splicedHrs } from '../utils/installHours';
 import { stageTint } from '../utils/stageTint';
 import { setAsapAndAssign } from '../utils/asap';
 import { checkAuth } from '../utils/auth';
@@ -233,6 +236,11 @@ export function JobDetailsBody({
     onJobUpdate = null,
     /** Stage changed here — lets the host header pill + banana row follow. */
     onStageChange = null,
+    /**
+     * Side-panel variant (Splices tab): Schedule + Details + to-dos only, stacked in one narrow
+     * column. Photos / Notes / Materials are left out and their fetches skipped.
+     */
+    compact = false,
 }) {
     // BUG-24: the crew size is now writable from here, so it needs a local mirror like the other
     // editable fields (optimistic on save, rolled back if the PATCH is rejected) and an admin flag
@@ -322,7 +330,7 @@ export function JobDetailsBody({
     }, [job?.id, job?.release_tag, jobId, relId]);
 
     useEffect(() => {
-        if (jobId == null) return;
+        if (jobId == null || compact) return;
         let cancelled = false;
         setOrdersLoading(true);
         jobsApi.getMaterialOrders(jobId, relId)
@@ -330,10 +338,10 @@ export function JobDetailsBody({
             .catch(() => { if (!cancelled) setMaterialOrders([]); })
             .finally(() => { if (!cancelled) setOrdersLoading(false); });
         return () => { cancelled = true; };
-    }, [jobId, relId]);
+    }, [jobId, relId, compact]);
 
     const loadPhotos = useCallback(async () => {
-        if (relPk == null) return;
+        if (relPk == null || compact) return;
         setPhotosLoading(true);
         try {
             const list = await jobsApi.getReleasePhotos(relPk);
@@ -344,7 +352,7 @@ export function JobDetailsBody({
         } finally {
             setPhotosLoading(false);
         }
-    }, [relPk]);
+    }, [relPk, compact]);
 
     useEffect(() => {
         setHeroId(null);
@@ -713,7 +721,12 @@ export function JobDetailsBody({
     const shipEffective = localShipDate || (startYmd ? subtractBusinessDays(startYmd, 1) : null);
 
     const tint = stageTint(localStage);
-    const installHrs = pick('Install HRS', 'install_hrs');
+    // What this release still installs ITSELF. With splices under it the stored hours are
+    // the whole pool they draw from, so the pane (and the work-days line below it) shows
+    // the pool minus what they drew — the splices carry those hours on their own rows.
+    const installHrs = installHrsOwn(job) ?? pick('Install HRS', 'install_hrs');
+    const installHrsPool = installHrsTotal(job);
+    const installHrsSpliced = splicedHrs(job);
     const numGuys = localNumGuys ?? job.num_guys;
     const workDays = installHrs ? installDays(installHrs, numGuys) : null;
     // The crew size half of this line is now a control (BUG-24), so the sentence is split: the
@@ -739,9 +752,9 @@ export function JobDetailsBody({
             )}
 
             {/* ── Dossier split: photos/notes/materials | schedule/details ─── */}
-            <div className="jl-dossier-split">
+            <div className={compact ? '' : 'jl-dossier-split'}>
                 {/* LEFT ─────────────────────────────────────────────────── */}
-                <div className="min-w-0">
+                {!compact && <div className="min-w-0">
                     <SectionLabel
                         action={relPk != null ? (
                             <div className="flex items-center gap-1.5 shrink-0">
@@ -1063,7 +1076,7 @@ export function JobDetailsBody({
                             })
                         )}
                     </div>
-                </div>
+                </div>}
 
                 {/* RIGHT ────────────────────────────────────────────────── */}
                 <div className="min-w-0">
@@ -1174,7 +1187,22 @@ export function JobDetailsBody({
                     ) : (
                         <Row label="Crew" value={numGuys ?? DEFAULT_NUM_GUYS} />
                     )}
-                    <Row label="Install Hrs" value={installHrs} />
+                    {hasSplicedHours(job) ? (
+                        <Row
+                            label="Install Hrs"
+                            title={installHrsNote(job)}
+                            value={
+                                <span>
+                                    {installHrs ?? '—'}
+                                    <span className="text-ink-3" style={{ fontSize: 11.5, marginLeft: 6 }}>
+                                        {`of ${installHrsPool ?? '—'} · ${installHrsSpliced} spliced`}
+                                    </span>
+                                </span>
+                            }
+                        />
+                    ) : (
+                        <Row label="Install Hrs" value={installHrs} />
+                    )}
                     <ControlRow label={labelFor('Stage')}>
                         <select
                             value={localStage || ''}
@@ -1258,7 +1286,8 @@ export function JobDetailsBody({
                                         className="grid items-center text-ink-3"
                                         style={{
                                             gridColumn: '1 / -1',
-                                            gridTemplateColumns: '158px 140px 120px minmax(0,1fr)',
+                                            gridTemplateColumns: compact ? 'repeat(2, minmax(0,1fr))' : '158px 140px 120px minmax(0,1fr)',
+                                            rowGap: compact ? 4 : undefined,
                                             columnGap: 14,
                                             fontSize: 12.5,
                                         }}

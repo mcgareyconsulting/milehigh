@@ -16,6 +16,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { setAsapAndAssign } from '../utils/asap';
 import { formatFabOrder } from '../utils/formatters';
+import { hasSplicedHours, installHrsNote, installHrsOwn, isSplice, splicedHrs } from '../utils/installHours';
+import { InstallHrsStack } from './InstallHrsStack';
 import { classifyInstallDate } from '../utils/installDateColor';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import { ReleaseHubModal } from './ReleaseHubModal';
@@ -1442,6 +1444,24 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         );
                     }
 
+                    // Install HRS column on a splice group (InstallHrsStack): actual hours in bold,
+                    // a lighter line below — the original's full pool (it keeps the whole pool in
+                    // 'Install HRS'; 100 over 150 with 50 spliced to 340.1), a splice's budget
+                    // hours, or its "+N additional". The row-edit modal still writes the full pool.
+                    if (column === 'Install HRS' && (hasSplicedHours(row) || isSplice(row))) {
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`${paddingClass} ${cellPy} ${cellText} ${cellMono} align-middle ${rowBgClass} text-center text-ink tabular-nums whitespace-nowrap`}
+                                title={installHrsNote(row)}
+                            >
+                                <span className="block w-full text-center">
+                                    <InstallHrsStack row={row} format={(v) => formatCellValue(v, column)} />
+                                </span>
+                            </td>
+                        );
+                    }
+
                     // Release # column — plain text. The drawing-version hub it used
                     // to open now lives on the release hub's Drawings & Photos tab,
                     // reached from Description along with everything else.
@@ -1638,6 +1658,14 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         onChange={(e) => setFieldValues(prev => ({ ...prev, [col.field]: e.target.value }))}
                                         className="w-full px-3 py-2 border border-gray-400 dark:border-slate-700 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                                     />
+                                    {/* The table cell shows hours net of splices; this field
+                                        is the whole pool they draw from. Say so, or the two
+                                        numbers look like a bug. */}
+                                    {col.field === 'install_hrs' && hasSplicedHours(row) && (
+                                        <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                                            {`Whole pool. ${splicedHrs(row)} hrs are spliced off it, leaving ${installHrsOwn(row) ?? '—'} on this release.`}
+                                        </p>
+                                    )}
                                 </div>
                             ))}
                         </div>

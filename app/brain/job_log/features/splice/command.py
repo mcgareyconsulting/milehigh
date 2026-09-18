@@ -6,6 +6,11 @@ Rules (Bill, 2026-09-15 — supersedes the 2026-09-02 mirror-card shape):
   - The parent carries fabrication and the TOTAL install-hour pool. Every splice
     draws from that pool; the sum of active splices' install hours never exceeds it.
   - A splice carries no fab hours.
+  - The parent keeps the WHOLE pool in ``install_hrs``; the hours a splice drew are not
+    subtracted from it, or the pool would shrink every time it was drawn on. So every
+    view that shows a release's install hours shows what it still installs itself —
+    150 total with 50 spliced reads as 100 on the original — via ``install_hours_view``
+    below. ``install_hrs`` stays the total everywhere it is written or edited.
   - A splice is created only from its parent (+ Splice). Free-typing a dotted
     release number through the paste / verbal path is rejected, so a splice can
     never exist without a parent row.
@@ -109,6 +114,64 @@ def install_pool(parent, exclude_id=None):
     return total, allocated, remaining
 
 
+def splice_allocations(parent_ids=None):
+    """``{parent release id: BUDGET install hours its live splices drew}``.
+
+    One query for a whole page of releases, so a list view never goes N+1 asking each
+    row whether it has splices. Parents with nothing spliced off them are absent, so
+    ``.get(row.id)`` reads as "this row still carries all of its install hours".
+    """
+    query = Releases.query.filter(Releases.parent_release_id.isnot(None))
+    if parent_ids is not None:
+        ids = sorted({i for i in parent_ids if i is not None})
+        if not ids:
+            return {}
+        query = query.filter(Releases.parent_release_id.in_(ids))
+    totals = {}
+    for child in query.all():
+        if not _live(child):
+            continue
+        totals[child.parent_release_id] = totals.get(child.parent_release_id, 0.0) + budget_hours(child)
+    return {pid: round(hrs, 4) for pid, hrs in totals.items() if hrs > 0}
+
+
+def parent_pools(rows):
+    """``{splice release id: its parent's install_hrs pool}`` for the splices among ``rows``.
+
+    One query for a page, like ``splice_allocations``. The Job Log / Invoice Paid hours cell
+    shows a splice's group pool on its second line. Non-splices and parents with no pool
+    are absent.
+    """
+    parent_of = {r.id: r.parent_release_id for r in rows if getattr(r, "parent_release_id", None)}
+    if not parent_of:
+        return {}
+    pools = dict(
+        Releases.query.with_entities(Releases.id, Releases.install_hrs)
+        .filter(Releases.id.in_(sorted(set(parent_of.values()))))
+        .all()
+    )
+    return {rid: pools[pid] for rid, pid in parent_of.items() if pools.get(pid) is not None}
+
+
+def install_hours_view(row, allocated):
+    """``(spliced, remaining)`` install hours for one release row.
+
+    ``spliced`` is what live splices drew out of the row's pool; ``remaining`` is what
+    the row itself still installs (its total minus that). Both are None when nothing was
+    spliced off it — the caller then shows the row's own ``install_hrs`` unchanged.
+
+    This is the one place the "150 total, 50 spliced, 100 left on the original" reading
+    is defined; every view that shows a release's install hours derives from it.
+    """
+    if not allocated:
+        return None, None
+    total = row.install_hrs
+    if total is None:
+        # No pool to draw on (budget hours are refused without one), so nothing to net out.
+        return allocated, None
+    return allocated, max(round(float(total) - allocated, 4), 0.0)
+
+
 def next_splice_number(parent):
     """``<parent.release>.<n>`` where n is one past the highest suffix ever used
     under this parent (dead splices included, so a number is never re-issued)."""
@@ -137,6 +200,12 @@ def _coerce_hours(value, label, allow_blank=False):
 
 def pool_summary(parent):
     total, allocated, remaining = install_pool(parent)
+    children = splice_children(parent)
+    # Hours outside the pool, and the whole group's install hours (pool + those).
+    # Owned here, not in the client: the Splices tab's bar, ledger and subtotal all
+    # read these, and the tab must never add up a split the server defines.
+    additional = round(sum(float(c.additional_install_hrs or 0) for c in children), 4)
+    group_total = round(float(total or 0) + additional, 4) if (total is not None or additional) else None
     return {
         "parent_id": parent.id,
         "job": parent.job,
@@ -144,6 +213,8 @@ def pool_summary(parent):
         "total_install_hrs": total,
         "allocated_install_hrs": allocated,
         "remaining_install_hrs": remaining,
+        "additional_install_hrs": additional,
+        "group_install_hrs": group_total,
         "next_splice_number": next_splice_number(parent),
         "parent": {
             "id": parent.id,
@@ -172,7 +243,7 @@ def pool_summary(parent):
                 "installer": c.installer,
                 "start_install": c.start_install.isoformat() if c.start_install else None,
             }
-            for c in splice_children(parent)
+            for c in children
         ],
     }
 
