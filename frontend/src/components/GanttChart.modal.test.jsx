@@ -42,8 +42,10 @@ const rel = (over = {}) => ({
     'Job': 'Alta Metro',
     'Description': 'Bldg C stair',
     'Stage': 'Paint Complete',
-    'Start install': null,
-    start_install_formulaTF: true,
+    // Hard-dated: since T12 an UNDATED Paint Complete release sits in the Ready-to-Ship column,
+    // and these tests click the Unassigned tray's card.
+    'Start install': '2026-09-10',
+    start_install_formulaTF: false,
     start_install_asap: false,
     installer: null,
     viewer_url: 'https://example.test/viewer',

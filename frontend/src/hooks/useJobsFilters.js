@@ -4,7 +4,7 @@
  * purpose: Centralizes all Job Log filter, subset, and sort logic so JobLog.jsx only handles rendering.
  * exports:
  *   useJobsFilters: Hook returning filter state, stage options/colors, displayJobs, KPI totals, and reset/toggle handlers
- * imports_from: [react, ../utils/fabHours, ../utils/jobLogColumns, ../utils/unassignedLane]
+ * imports_from: [react, ../utils/fabHours, ../utils/jobLogColumns, ../utils/unassignedLane, ../utils/readyToShipColumn]
  * imported_by: [../pages/JobLog.jsx, ../pages/Archive.jsx]
  * invariants:
  *   - selectedProjectNames and selectedSubset are persisted to localStorage across sessions
@@ -22,9 +22,9 @@ import { computeTotalFabHrs } from '../utils/fabHours';
 import { installHrsOwn } from '../utils/installHours';
 import { DATE_COLUMNS } from '../utils/jobLogColumns';
 import { READY_TO_SHIP_STAGES } from '../utils/unassignedLane';
-
-// Stages that make up the Paint department (the `paint` quick-filter set).
-const PAINT_STAGES = ['Welded QC', 'Paint Start'];
+// The Paint department's stages. Shared with the Timeline's Ready-to-Ship column, which surfaces
+// the same out-of-department ASAPs propagatedAsapJobs does — one definition so the two can't drift.
+import { PAINT_STAGES } from '../utils/readyToShipColumn';
 
 // Katie downstream view (the `katie` quick-filter set): the three Ready-to-Ship
 // stages plus the whole COMPLETE band. Maps stage → sort rank, most-complete first.

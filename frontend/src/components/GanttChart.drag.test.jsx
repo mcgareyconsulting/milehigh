@@ -145,6 +145,7 @@ describe('dropping an unassigned card on a crew lane', () => {
             installer: null,
             'Start install': null,
             start_install_formulaTF: true,
+            start_install_no_color: null,   // a Shipping Planning drop now writes it, so it is restored too
             Stage: 'Paint Complete',   // rollback restores the stage too, now that a drop can move it
             // ...and the bar's end (BUG-26): the optimistic patch now recomputes comp_eta so the
             // bar is the right length on the first frame, so a rejected write has to put the old
@@ -227,7 +228,8 @@ describe('drops that must not write', () => {
 describe('non-admins keep the read-only timeline', () => {
     it('renders staging cards without a grab affordance', async () => {
         authUser.current = { is_admin: false };
-        mockJobs.current = [rel()];
+        // Hard-dated, so it lands in the Unassigned tray rather than the Ready-to-Ship column.
+        mockJobs.current = [rel({ 'Start install': '2026-09-10', start_install_formulaTF: false })];
         const { container } = await renderChart();
         const card = container.querySelector('[data-staging-tray] [role="button"]');
         expect(card.className).toContain('cursor-pointer');

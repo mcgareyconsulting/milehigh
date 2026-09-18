@@ -103,6 +103,23 @@ class Config:
         for s in os.environ.get("INSTALLER_TEAMS", "Octavio,Saul 2,Oscar").split(",")
         if s.strip()
     ]
+
+    # Crews that exist in the Brain but NOT on the Trello board. Assigning one is a real
+    # scheduling write — it lands on the release, gets its own Timeline lane and shows in the
+    # install schedule — but it queues NO mirror-card work: there is no list to move the card
+    # into, and asking for one by name would fail delivery and log an ERROR on every assignment
+    # (see features/start_install/assign_installer.py).
+    #
+    # "Drop Ship" is the first of them: material that leaves the shop straight to the customer
+    # with no MHMW crew installing it. It is not a subcontractor and belongs to no company, so it
+    # is also hidden from Subs -> Invoice Paid (app/brain/subs/service.py).
+    NON_TRELLO_INSTALLERS = ("Drop Ship",)
+
+    # The roster the Brain offers, in lane order. The non-Trello crews always come LAST and are
+    # always present: they are not board configuration, so an INSTALLER_TEAMS env var that
+    # doesn't mention them must not make them unassignable. dict.fromkeys dedupes in order, so
+    # an env var that DOES name one keeps its position rather than listing it twice.
+    INSTALLER_TEAMS = list(dict.fromkeys(INSTALLER_TEAMS + list(NON_TRELLO_INSTALLERS)))
     TRELLO_WEBHOOK_URL = os.environ.get("TRELLO_WEBHOOK_URL")
 
     # Mock Trello mode: when '1', outbound `move_card` outbox items are simulated

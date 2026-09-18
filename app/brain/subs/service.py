@@ -12,6 +12,9 @@ imported_by: [app/brain/subs/routes.py]
 invariants:
   - Live assigned releases appear; archived assigned releases stay until invoiced complete.
   - Oscar is MHMW staff (still in INSTALLER_TEAMS for scheduling) — hidden from this tab.
+  - "Drop Ship" is not a crew at all — it marks material that leaves the shop straight to the
+    customer with nobody installing it. It belongs to no company and there is no one to invoice,
+    so it is hidden here for the same reason Oscar is.
   - Every row carries `company` (the sub company that owns the crew) derived from
     `installer` via SUB_COMPANY_CREWS; the installer name itself is the crew.
   - installer_invoice_* fields are independent of Releases.invoiced (customer billing).
@@ -40,7 +43,8 @@ logger = get_logger(__name__)
 
 # Installer crews that are not subcontractors. Still valid on INSTALLER_TEAMS /
 # the job log for assignment, but never shown on Subs → Invoice Paid.
-_SUBS_EXCLUDED_INSTALLERS = frozenset({"oscar"})
+# "drop ship" is the not-a-crew case: no company, no invoice, nobody to pay.
+_SUBS_EXCLUDED_INSTALLERS = frozenset({"oscar", "drop ship"})
 
 
 # Subcontractor company -> the crew-name stems it employs. A crew is the

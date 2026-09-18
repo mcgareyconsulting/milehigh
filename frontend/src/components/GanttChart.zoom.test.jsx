@@ -28,11 +28,11 @@ vi.mock('../context/ReleasesContext', () => ({
 
 import GanttChart from './GanttChart';
 
-// The chart falls back to a 1280px viewport pre-measure; that leaves (1280 - 200 - 192) = 888px of
-// date columns, split into whatever the zoom level asks for. Default is 7 (one day each); one step
-// out is 14.
+// The chart falls back to a 1280px viewport pre-measure; the frozen chrome is the Unassigned tray
+// (200) + the Ready-to-Ship column (200) + the lane sidebar (192), leaving 688px of date columns,
+// split into whatever the zoom level asks for. Default is 7 (one day each); one step out is 14.
 const VIEWPORT_W = 1280;
-const CHART_W = VIEWPORT_W - 200 - 192;
+const CHART_W = VIEWPORT_W - 200 - 200 - 192;
 const COL_PX_DEFAULT = CHART_W / 7;
 const COL_PX_ONE_OUT = CHART_W / 14;
 

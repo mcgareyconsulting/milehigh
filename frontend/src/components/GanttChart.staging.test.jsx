@@ -31,8 +31,9 @@ const rel = (over = {}) => ({
     'Job': 'Alta Metro',
     'Description': 'Bldg C stair',
     'Stage': 'Paint Complete',
-    'Start install': null,
-    start_install_formulaTF: true,
+    // Hard-dated: since T12 the tray takes a Store / Paint Complete release only once it has a day.
+    'Start install': '2026-09-10',
+    start_install_formulaTF: false,
     start_install_asap: false,
     installer: null,
     ...over,
@@ -89,6 +90,14 @@ describe('Unassigned staging column', () => {
         expect(within(cards[0]).getByText('900-rush')).toBeInTheDocument();
         expect(within(cards[0]).getByText('ASAP')).toBeInTheDocument();
         expect(within(cards[1]).getByText('100-normal')).toBeInTheDocument();
+    });
+
+    it('hands an undated release to the Ready-to-Ship column instead — no card is shown twice', async () => {
+        mockJobs.current = [rel({ id: 1, 'Release #': '923', 'Start install': null, start_install_formulaTF: true })];
+        const { container } = await renderChart();
+        expect(screen.getByText('0 ready to schedule')).toBeInTheDocument();
+        expect(within(staging(container)).queryByText('560-923')).not.toBeInTheDocument();
+        expect(within(container.querySelector('[data-ready-to-ship]')).getByText('560-923')).toBeInTheDocument();
     });
 
     it('says so plainly when nothing is waiting', async () => {

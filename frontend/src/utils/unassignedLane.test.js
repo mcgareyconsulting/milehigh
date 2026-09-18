@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { READY_TO_SHIP_STAGES, isUnassigned, selectUnassigned, trayDateKey } from './unassignedLane';
 
+// Defaults to a HARD Start install: since T12 the tray only takes a Store / Paint Complete release
+// once it has a day (an undated one belongs to the Ready-to-Ship column instead).
 const rel = (over = {}) => ({
     'Job #': 560,
     'Release #': '923',
     'Stage': 'Paint Complete',
+    'Start install': '2026-09-09',
+    start_install_formulaTF: false,
     installer: null,
     start_install_asap: false,
     ...over,
@@ -45,6 +49,21 @@ describe('isUnassigned — membership rule', () => {
         expect(isUnassigned(rel({ Stage: '  Ship Planning  ' }))).toBe(true);
     });
 
+    it('leaves an undated Store / Paint Complete release to the Ready-to-Ship column', () => {
+        for (const stage of ['Store at MHMW', 'Paint Complete']) {
+            expect(isUnassigned(rel({ Stage: stage, 'Start install': null }))).toBe(false);
+        }
+    });
+
+    it('treats a projected (formula) date as no date for Store / Paint Complete', () => {
+        expect(isUnassigned(rel({ start_install_formulaTF: true }))).toBe(false);
+    });
+
+    it('keeps Ship Planning regardless of date — it is already past the Ready-to-Ship exit', () => {
+        expect(isUnassigned(rel({ Stage: 'Ship Planning', 'Start install': null }))).toBe(true);
+        expect(isUnassigned(rel({ Stage: 'Ship Planning', start_install_formulaTF: true }))).toBe(true);
+    });
+
     it('survives a missing stage or a null row', () => {
         expect(isUnassigned(rel({ Stage: null }))).toBe(false);
         expect(isUnassigned({})).toBe(false);
@@ -71,16 +90,17 @@ describe('selectUnassigned — staging column order', () => {
     });
 
     it('orders a projected date alongside a hard one — the date is the key, not its type', () => {
+        // Only a Ship Planning row can sit in the tray on a projected date.
         const out = selectUnassigned([
             rel({ 'Release #': 'hard-later', 'Start install': '2026-09-20', start_install_formulaTF: false }),
-            rel({ 'Release #': 'projected-sooner', 'Start install': '2026-09-10', start_install_formulaTF: true }),
+            rel({ 'Release #': 'projected-sooner', Stage: 'Ship Planning', 'Start install': '2026-09-10', start_install_formulaTF: true }),
         ]);
         expect(out.map((r) => r['Release #'])).toEqual(['projected-sooner', 'hard-later']);
     });
 
     it('sinks undated releases below every dated one', () => {
         const out = selectUnassigned([
-            rel({ 'Release #': 'undated' }),
+            rel({ 'Release #': 'undated', Stage: 'Ship Planning', 'Start install': null }),
             rel({ 'Release #': 'dated', 'Start install': '2026-12-31' }),
         ]);
         expect(out.map((r) => r['Release #'])).toEqual(['dated', 'undated']);
@@ -109,6 +129,7 @@ describe('selectUnassigned — staging column order', () => {
             rel({ 'Release #': 'keep' }),
             rel({ 'Release #': 'assigned', installer: 'Crew B' }),
             rel({ 'Release #': 'upstream', Stage: 'Cut Start' }),
+            rel({ 'Release #': 'undated', 'Start install': null }),
         ]);
         expect(out.map((r) => r['Release #'])).toEqual(['keep']);
     });

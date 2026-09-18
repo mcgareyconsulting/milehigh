@@ -9,15 +9,17 @@
  *   INSTALLER lanes are a classic GANTT: each release is a horizontal RANGE bar spanning
  *   start_install → comp_eta, packed into rows so overlapping installs never collide. A release that
  *   is both a shipping stage AND assigned mirrors into both lanes off the same raw row (1:1 data).
- *   Left of everything sits a PINNED UNASSIGNED TRAY: a frozen vertical column of releases the shop
- *   has finished with that nobody is scheduled to install. Dragging a card from the tray onto a
- *   crew's lane assigns that crew and stamps a hard Start install on the day under the pointer.
- *   A client selector over useReleases for reads; installer + Start install are its only writes.
+ *   Left of everything sit TWO PINNED STAGING COLUMNS, frozen side by side: UNASSIGNED (releases the
+ *   shop has finished with that nobody is scheduled to install) and, to its right, READY TO SHIP
+ *   (releases that have no ship day yet). Dragging a card from Unassigned onto a crew's lane assigns
+ *   that crew and stamps a hard Start install on the day under the pointer; dragging one from Ready
+ *   to Ship onto the Shipping Planning lane stamps that day and moves the release into Ship Planning.
+ *   A client selector over useReleases for reads; installer, Start install and Stage are its writes.
  * exports:
  *   GanttChart: Day/week-bucket board with zoom that scales column granularity (day↔week), width,
  *     card size, per-cell cap, and card detail; whole-column zoom snapping, week-snap nav, jump-to-date,
  *     and admin drag-to-assign between the unassigned tray and the installer lanes.
- * imports_from: [react, @dnd-kit/core, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters, ../utils/installDateColor, ../utils/unassignedLane, ../utils/timelineDrop, ../utils/shipLaneDrop, ./ReleaseHubModal, ./PdfMarkupModal]
+ * imports_from: [react, @dnd-kit/core, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters, ../utils/installDateColor, ../utils/unassignedLane, ../utils/readyToShipColumn, ../utils/timelineDrop, ../utils/shipLaneDrop, ./ReleaseHubModal, ./PdfMarkupModal]
  * imported_by: [frontend/src/pages/PMBoardContent.jsx]
  * invariants:
  *   - CLICKING opens ReleaseHubModal — the SAME modal a Job Log row or card opens. One release, one
@@ -33,14 +35,26 @@
  *     applied optimistically via ReleasesContext.patchJob and rolled back if the request fails.
  *   - SHIPPING lanes accept drops too, and their write is the STAGE ONLY (Ship Planning ↔ Ship
  *     Complete, via the same /brain/update-stage the Job Log dropdown uses — cascades into job_comp,
- *     the Trello list, N5 date discipline and the scheduling recalc all included). No date is ever
- *     written from a shipping drop: a shipping lane's X is DERIVED (planning sits on the ship date,
- *     completed on the hard Start install), so honouring the drop column would move an install date
- *     the user never aimed at. Dropping onto the lane a release is already in is a no-op, and a drop
- *     onto Shipping Completed is REFUSED when the release has no hard Start install — the lane is
- *     anchored on that date and the backend blanks estimated dates on the way in, so the card would
- *     silently vanish off the board. Because the write leaves no mark at the drop point, hovering a
- *     shipping lane washes the whole lane and names the stage it will set.
+ *     the Trello list, N5 date discipline and the scheduling recalc all included). No date is
+ *     written from a shipping drop onto a release that ALREADY HAS ONE: a shipping lane's X is
+ *     DERIVED (planning sits on the ship date, completed on the hard Start install), so honouring
+ *     the drop column would move an install date the user never aimed at. Dropping onto the lane a
+ *     release is already in is a no-op, and a drop onto Shipping Completed is REFUSED when the
+ *     release has no hard Start install — the lane is anchored on that date and the backend blanks
+ *     estimated dates on the way in, so the card would silently vanish off the board. Because the
+ *     write leaves no mark at the drop point, hovering a shipping lane washes the whole lane and
+ *     names the stage it will set.
+ *   - The ONE shipping drop that also writes a DATE is Shipping Planning onto an UNDATED release —
+ *     the Ready-to-Ship column's exit. There is no date to protect, and a Ship Planning card with no
+ *     date renders nowhere at all, so the drop supplies one and the hover hint shows the column
+ *     highlight as well as the wash. The column is a SHIP day, not an install day (a planning card
+ *     sits on ship = install − 1 business day), so the hard Start install written is the column plus
+ *     one business day — which is both what makes the card land under the pointer and the rule as
+ *     stated, "start_install = next business day" [bill-2026-09-16#L1336–L1358]. The DATE is written first: the
+ *     backend rolls Store at MHMW / Paint Complete into Ship Planning off the back of it
+ *     (ship_planning_roll.py) and links the two events, so the drop undoes as one bundle. Only a
+ *     card from further upstream (a Fab or Paint ASAP, which gets no roll) needs the stage named
+ *     explicitly afterwards — ROLLS_TO_SHIP_PLANNING is what decides, and it mirrors the server's set.
  *   - Drag is @dnd-kit (MouseSensor 8px + TouchSensor 220ms press-and-hold), NOT native HTML5 drag.
  *     The Phase-5 native-drag interactions were removed 2026-07-12 because native drag is dead on
  *     iPad; iPad is now the stated target, so this is a rebuild on pointer sensors, not a revert.
@@ -54,9 +68,19 @@
  *     (1:1 data). A release with no shipping stage and no installer appears nowhere.
  *   - The UNASSIGNED TRAY holds rows with no installer whose Stage is Paint Complete / Store at MHMW /
  *     Ship Planning (utils/unassignedLane — the same set the Job Log's "Ready to Ship" quick filter
- *     uses, imported from one place so the two surfaces cannot drift). Deliberately not "any release
+ *     uses, imported from one place so the two surfaces cannot drift) AND that already carry a hard
+ *     Start install date (Ship Planning rows always qualify). Deliberately not "any release
  *     with no installer": that pulls in every drafting and fab row and the tray stops being a work
  *     surface. A tray release in Ship Planning ALSO appears in its shipping lane, like the mirror.
+ *   - The READY TO SHIP COLUMN holds the rows the tray's date test excludes — Paint Complete / Store
+ *     at MHMW with NO hard Start install, split into a Paint Complete and a Store at MHMW section, each
+ *     sorted by date — plus a trailing, NON-DRAGGABLE block of ASAPs still in Fab or Paint, tagged
+ *     "in Fab" / "in Paint", for visibility (utils/readyToShipColumn). The two columns are DISJOINT
+ *     by construction, so no
+ *     release is ever drawn in both: the pipeline reads left to right, Ready to Ship (needs a day) →
+ *     dropped on Shipping Planning, which gives it one → Unassigned (needs a crew) → dropped on a
+ *     crew lane. Unlike the tray, this column tests only the DATE, not the installer, and it is NOT
+ *     a drop target: every write it knows about is a drop somewhere else.
  *     Tray cards show job-release, job name, description and the Start install date — hard or
  *     projected, the projection marked with a leading ~ so a guess never reads as a promise. The
  *     qualifying stage is not repeated on the card (it's in the detail modal, and all three stages
@@ -86,9 +110,9 @@
  *     before the state change — reading scrollLeft after the re-render cannot work, because a
  *     narrower chart has already had its scrollLeft clamped by the browser. Week-snap nav anchors
  *     viewStart to a Monday.
- * updated_by_agent: 2026-09-04 (BUG-21: zoom captures the left-edge date before the re-render)
+ * updated_by_agent: 2026-09-17 (Ready-to-Ship staging column + its Shipping Planning date-stamping drop)
  */
-import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, Fragment } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { useReleases } from '../context/ReleasesContext';
 import {
@@ -105,9 +129,10 @@ import {
 import { getEventCoordinates } from '@dnd-kit/utilities';
 import { INSTALLER_PALETTE } from '../constants/installerPalette';
 import { selectUnassigned } from '../utils/unassignedLane';
+import { selectReadyToShip, READY_TO_SHIP_COLUMN_STAGES, READY_TO_SHIP_SECTIONS } from '../utils/readyToShipColumn';
 import { dateAtDropX } from '../utils/timelineDrop';
 import { shipLaneDropOutcome, shipLabelFor } from '../utils/shipLaneDrop';
-import { localTodayStr as todayIso, subtractBusinessDays, formatDateShort } from '../utils/formatters';
+import { localTodayStr as todayIso, subtractBusinessDays, addBusinessDays, formatDateShort } from '../utils/formatters';
 import { classifyInstallDate } from '../utils/installDateColor';
 import { installCompleteDate } from '../utils/scheduling';
 import { API_BASE_URL } from '../utils/api';
@@ -147,6 +172,8 @@ const PAD_DAYS = 14;
 const SIDEBAR_PX = 192;
 const STAGING_PX = 200;   // width of the pinned Unassigned staging column, frozen left of the lane sidebar
 const STAGING_COLLAPSED_PX = 30;   // collapsed rail: wide enough to stay a drop target and click back open
+const READY_PX = 200;     // width of the pinned Ready-to-Ship column, frozen between the tray and the lane sidebar
+const READY_COLLAPSED_PX = 30;     // collapsed rail, same gesture and same width as the tray's
 const LANE_COLLAPSED_PX = 26;      // collapsed lane: the sidebar strip only — name, colour and count survive
 const LABEL_GUTTER_PX = 6;         // gap between the frozen chrome and a scroll-tracked bar label
 const LANES_COLLAPSED_KEY = 'mhmw:timeline-lanes-collapsed';
@@ -160,10 +187,19 @@ const readCollapsedLanes = () => {
     }
 };
 const TRAY_COLLAPSED_KEY = 'mhmw:timeline-tray-collapsed';
+const READY_COLLAPSED_KEY = 'mhmw:timeline-ready-collapsed';
 
 const readTrayCollapsed = () => {
     try {
         return localStorage.getItem(TRAY_COLLAPSED_KEY) === '1';
+    } catch {
+        return false;   // storage disabled — open is the safe default
+    }
+};
+
+const readReadyCollapsed = () => {
+    try {
+        return localStorage.getItem(READY_COLLAPSED_KEY) === '1';
     } catch {
         return false;   // storage disabled — open is the safe default
     }
@@ -210,6 +246,23 @@ const SHIP_LANES = [
     { lane: 'Shipping Completed', stage: 'Ship Complete', color: 'rgb(139 92 246)' },
 ];
 const STAGE_TO_SHIP_LANE = new Map(SHIP_LANES.map((s) => [s.stage, s.lane]));
+// Stages the BACKEND rolls into Ship Planning by itself the moment a hard Start install date lands
+// on them (app/brain/job_log/features/start_install/ship_planning_roll.py). A drop that stamps a
+// date onto one of these needs no second call — and must not make one, or the roll's event and a
+// redundant stage event both land for a single gesture. Anything else (a Fab or Paint ASAP) is
+// named explicitly. Keep this set identical to the server's ROLL_STAGES.
+const ROLLS_TO_SHIP_PLANNING = new Set(READY_TO_SHIP_COLUMN_STAGES);
+
+// The hard Start install a Shipping Planning drop writes, given the column it was dropped on.
+//
+// A Shipping Planning card is positioned on its SHIP date — the explicit hard one, else install
+// minus one business day (`toBars`). So the column the user aimed at is a SHIP day, and writing it
+// straight into start_install would render the card one business day LEFT of where they let go.
+// The install is the business day after the ship, which is also the rule as stated:
+// "a drop on Shipping Planning sets the stage and start_install = next business day"
+// [bill-2026-09-16#L1336–L1358]. Invert the lane's own arithmetic and the card lands under the
+// pointer, which is the only place it can honestly land.
+const installDateForShipColumn = (shipColumnDate) => addBusinessDays(shipColumnDate, 1);
 // Reverse lookup: dropping on a shipping lane sets the release to that lane's stage.
 const LANE_TO_SHIP_STAGE = new Map(SHIP_LANES.map((s) => [s.lane, s.stage]));
 
@@ -389,6 +442,18 @@ const TRAY_BORDER = {
     soft: 'border-gray-300 border-l-4 border-l-gray-300',
 };
 
+// Ready-to-Ship section tints. Only the neutral ('soft') card takes one — an ASAP keeps its red,
+// which is the one signal that must read the same in every column.
+const READY_SECTION_TONE = {
+    paint: 'border-sky-300 border-l-4 border-l-sky-500 bg-sky-50',
+    store: 'border-violet-300 border-l-4 border-l-violet-500 bg-violet-50',
+};
+const READY_SECTION_HEADER = {
+    paint: 'text-sky-800 border-sky-400',
+    store: 'text-violet-800 border-violet-400',
+    upstream: 'text-red-700 border-red-400',
+};
+
 // Which of the four a release falls into, plus how its date should read.
 function trayDateState(job) {
     const { isAsap, isHardDate, isHardDatePast } = classifyInstallDate({
@@ -414,17 +479,26 @@ function trayDateState(job) {
     };
 }
 
-// One release sitting in the pinned staging column: job-release, name, description, the Start
-// install date it is waiting on, and a border keyed to that date. The date is shown BECAUSE the
-// card is unscheduled — it is the projection or hard date the work is wanted against, and dropping
-// the card onto a lane×day cell is what replaces it with the day you chose.
-function StagingCard({ job, draggable, onClick, onMouseMove, onMouseLeave }) {
+// One release sitting in one of the two pinned staging columns: job-release, name, description, the
+// Start install date it is waiting on, and a border keyed to that date. The date is shown BECAUSE
+// the card is unscheduled — it is the projection or hard date the work is wanted against, and
+// dropping the card onto a lane×day cell is what replaces it with the day you chose.
+//
+// `dragIdPrefix` namespaces the draggable id per column. The two columns are disjoint by
+// construction, so ids could not actually collide today — but a shared id would make any future
+// overlap a silent, undebuggable drag bug, and the prefix costs nothing.
+//
+// `tone` tints a neutral card by its Ready-to-Ship section; ASAP / overdue / scheduled cards ignore it.
+// `origin` ('Fab' / 'Paint') is set only on the column's upstream ASAPs: it answers "this is marked
+// rush and it's in my shipping queue — where actually IS it?"
+function StagingCard({ job, draggable, dragIdPrefix = 'staging', tone, onClick, onMouseMove, onMouseLeave }) {
     const jr = `${job['Job #']}-${job['Release #']}`;
     const asap = job['start_install_asap'] === true;
+    const origin = job['_asapOrigin'] || '';
     const date = trayDateState(job);
     // `disabled` keeps the hook order stable for non-admins, who get the same card without a grab.
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-        id: `staging:${job.id}`,
+        id: `${dragIdPrefix}:${job.id}`,
         data: { row: job, fromLane: null },
         disabled: !draggable,
     });
@@ -440,12 +514,24 @@ function StagingCard({ job, draggable, onClick, onMouseMove, onMouseLeave }) {
             {...attributes}
             {...listeners}
             style={{ opacity: isDragging ? 0.35 : 1, touchAction: draggable ? 'manipulation' : undefined }}
-            className={`rounded border bg-white px-2 py-1.5 shadow-sm select-none hover:shadow ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${TRAY_BORDER[date.kind]}`}
+            // bg-white only on a plain card: it would otherwise fight a tint's bg-* and win or lose on
+            // stylesheet order (it beat bg-violet-50 but lost to bg-sky-50).
+            className={`rounded border px-2 py-1.5 shadow-sm select-none hover:shadow ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${date.kind === 'soft' ? (tone || `bg-white ${TRAY_BORDER.soft}`) : TRAY_BORDER[date.kind]}`}
         >
             {asap && (
-                <span className="inline-block mb-1 px-1.5 py-0.5 rounded bg-red-600 text-white text-[10px] font-extrabold tracking-wide leading-none">
-                    ASAP
-                </span>
+                <div className="mb-1 flex items-center gap-1">
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-red-600 text-white text-[10px] font-extrabold tracking-wide leading-none">
+                        ASAP
+                    </span>
+                    {origin && (
+                        <span
+                            className="inline-block px-1.5 py-0.5 rounded bg-gray-700 text-white text-[10px] font-bold tracking-wide leading-none"
+                            title={`Still in ${origin} — ${job['Stage'] || 'unknown stage'}`}
+                        >
+                            {`in ${origin}`}
+                        </span>
+                    )}
+                </div>
             )}
             <div className="text-sm font-bold text-gray-900 truncate leading-tight">{jr}</div>
             {job['Job'] && (
@@ -485,10 +571,13 @@ function StagingTray({ enabled, className, style, children }) {
 // A lane's chart area, doubling as its drop target. One droppable per lane (not per lane×day cell):
 // on an INSTALLER lane the exact DAY comes from where the pointer let go, so 90 columns cost one
 // droppable each instead of hundreds, and `hintLeft` paints the column the drop would land on so
-// the user aims at a date rather than guessing. A SHIPPING lane has no date to aim at — its X is
-// derived, not chosen — so it gets `hintLabel` instead: a whole-lane wash naming the stage the drop
-// will write, because a stage change is invisible at the drop point and must be announced first.
-function LaneDropArea({ lane, enabled, registerRef, hintLeft, hintLabel, colPx, className, style, children }) {
+// the user aims at a date rather than guessing. A SHIPPING lane usually has no date to aim at — its
+// X is derived, not chosen — so it gets `hintLabel` instead: a whole-lane wash naming the stage the
+// drop will write, because a stage change is invisible at the drop point and must be announced
+// first. `hintDate` is the case where it is BOTH: a Shipping Planning drop onto an undated release
+// writes a date off the drop column as well as the stage, so the column highlight comes back
+// alongside the wash — hiding it would leave the user aiming a date they cannot see.
+function LaneDropArea({ lane, enabled, registerRef, hintLeft, hintLabel, hintDate, colPx, className, style, children }) {
     const { setNodeRef, isOver } = useDroppable({
         id: laneDropId(lane),
         data: { lane },
@@ -500,7 +589,7 @@ function LaneDropArea({ lane, enabled, registerRef, hintLeft, hintLabel, colPx, 
             className={`${className} ${isOver ? 'ring-2 ring-inset ring-accent-400' : ''}`}
             style={style}
         >
-            {isOver && !hintLabel && hintLeft != null && (
+            {isOver && (!hintLabel || hintDate) && hintLeft != null && (
                 <div
                     className="absolute top-0 bottom-0 bg-accent-300/40 border-x-2 border-accent-500 pointer-events-none z-10"
                     style={{ left: hintLeft, width: colPx }}
@@ -681,6 +770,7 @@ function GanttChart({ filterComplete = false }) {
     const [dropHint, setDropHint] = useState(null);                 // {lane, date, leftPx} — the day the drop would write
     const [dropError, setDropError] = useState(null);               // message shown when a scheduling write is rejected
     const [trayCollapsed, setTrayCollapsed] = useState(readTrayCollapsed);   // tray folded to a rail, giving the width back to the chart
+    const [readyCollapsed, setReadyCollapsed] = useState(readReadyCollapsed); // Ready-to-Ship column folded to a rail, same deal
     const [collapsedLanes, setCollapsedLanes] = useState(readCollapsedLanes);   // lanes folded to their sidebar strip
     const [containerW, setContainerW] = useState(0);                // measured scroll-viewport width → derives colPx
     const [containerH, setContainerH] = useState(0);                // measured scroll-viewport height → caps the staging tray
@@ -712,11 +802,24 @@ function GanttChart({ filterComplete = false }) {
     // Every frozen-left offset measures off this, so collapsing the tray genuinely hands the
     // pixels to the chart rather than just hiding its contents.
     const stagingPx = trayCollapsed ? STAGING_COLLAPSED_PX : STAGING_PX;
+    const readyPx = readyCollapsed ? READY_COLLAPSED_PX : READY_PX;
+    // Everything frozen to the left of the date columns, as one number. Both staging columns and the
+    // lane sidebar measure their sticky offsets off this, so folding either one genuinely hands the
+    // pixels to the chart rather than just hiding its contents.
+    const chromePx = stagingPx + readyPx + SIDEBAR_PX;
 
     const toggleTray = () => {
         setTrayCollapsed((prev) => {
             const next = !prev;
             try { localStorage.setItem(TRAY_COLLAPSED_KEY, next ? '1' : '0'); } catch { /* preference is best-effort */ }
+            return next;
+        });
+    };
+
+    const toggleReady = () => {
+        setReadyCollapsed((prev) => {
+            const next = !prev;
+            try { localStorage.setItem(READY_COLLAPSED_KEY, next ? '1' : '0'); } catch { /* preference is best-effort */ }
             return next;
         });
     };
@@ -733,7 +836,7 @@ function GanttChart({ filterComplete = false }) {
         });
     };
 
-    const chartViewportW = Math.max((containerW || 1280) - stagingPx - SIDEBAR_PX, 320);
+    const chartViewportW = Math.max((containerW || 1280) - chromePx, 320);
     const colPx = Math.max(chartViewportW / zoom.cols, MIN_COL_PX);
     const fallbackLaneH = minCardH + CELL_PAD_TOP * 2;
     const colGridStyle = {
@@ -805,6 +908,15 @@ function GanttChart({ filterComplete = false }) {
     // with no installer and no shipping stage produces no bars, and one in Ship Planning appears in
     // its shipping lane as well as here (same raw row, like the installer mirror).
     const unassigned = useMemo(() => selectUnassigned(jobs), [jobs]);
+
+    // The second pinned column: releases that still need a SHIP DAY. Membership lives in
+    // utils/readyToShipColumn, which is disjoint from selectUnassigned by construction — the tray
+    // keeps the dated rows, this column the undated ones, so no release is ever shown twice. These
+    // rows are NOT in `releases` either: with no hard date and no shipping stage they produce no
+    // bars, which is exactly why they need a column of their own to be visible at all.
+    const readyToShip = useMemo(() => selectReadyToShip(jobs), [jobs]);
+    // Only the in-shop holds need a ship date; the upstream ASAPs are there to be seen.
+    const readyNeedsDate = useMemo(() => readyToShip.filter((r) => r._rtsSection !== 'upstream').length, [readyToShip]);
 
     // Lane order: the two shipping lanes first, then the configured installer roster,
     // then any off-roster installer present in the data (so no eligible card is silently
@@ -1217,13 +1329,22 @@ function GanttChart({ filterComplete = false }) {
         const date = dropDateFor(lane, activatorEvent, delta);
         const shipStage = LANE_TO_SHIP_STAGE.get(lane);
         if (shipStage) {
-            // The date under the pointer only positions the label — a shipping drop writes no date.
+            // A shipping drop normally writes no date, so the column under the pointer only
+            // positions the label. The one exception is Shipping Planning onto an undated release
+            // (the Ready-to-Ship column's exit): there the column IS the choice, so the hint names
+            // the day and paints the column the way a crew-lane drop does.
             const row = active?.data?.current?.row ?? null;
+            const writesDate = shipLaneDropOutcome(row, shipStage).writesDate && !!date;
+            // The column is the SHIP day (it is where the card will sit); the date WRITTEN is the
+            // install, a business day later. The highlight follows the column so the card lands
+            // under the pointer, and the chip names the install date so the number the user is
+            // committing to is the number they are shown.
+            const installDate = writesDate ? installDateForShipColumn(date) : null;
             setDropHint({
                 lane,
-                date: null,
+                date: installDate,
                 leftPx: date ? xOfDate(date) : 0,
-                label: shipLabelFor(row, shipStage),
+                label: shipLabelFor(row, shipStage, installDate ? `install ${shortDate(installDate)}` : undefined),
             });
             return;
         }
@@ -1251,6 +1372,7 @@ function GanttChart({ filterComplete = false }) {
             installer: row.installer ?? null,
             'Start install': row['Start install'] ?? null,
             start_install_formulaTF: row.start_install_formulaTF,
+            start_install_no_color: row.start_install_no_color ?? null,
             Stage: row['Stage'] ?? null,
             comp_eta_effective: row.comp_eta_effective ?? null,
         };
@@ -1260,17 +1382,54 @@ function GanttChart({ filterComplete = false }) {
         let optimistic;
         let call;
         if (toShipStage) {
-            // A shipping lane writes the STAGE and nothing else. Where the card lands horizontally
-            // is derived (planning → ship date, completed → hard Start install), so honouring the
-            // drop column here would silently move an install date the user never aimed at.
+            // A shipping lane normally writes the STAGE and nothing else. Where the card lands
+            // horizontally is derived (planning → ship date, completed → hard Start install), so
+            // honouring the drop column would silently move an install date the user never aimed at.
             const outcome = shipLaneDropOutcome(row, toShipStage);
             if (outcome.kind === 'noop') return;
             if (outcome.kind === 'blocked') {
                 setDropError(`Can't mark ${job}-${release} ${toShipStage} — ${outcome.reason}.`);
                 return;
             }
-            optimistic = { Stage: toShipStage };
-            call = () => jobsApi.updateStage(job, release, toShipStage);
+            const shipColumn = outcome.writesDate ? dropDateFor(toLane, activatorEvent, delta) : null;
+            if (outcome.writesDate && !shipColumn) return;   // geometry not ready — write nothing
+            const dropDate = shipColumn ? installDateForShipColumn(shipColumn) : null;
+            if (dropDate) {
+                // The Ready-to-Ship column's exit: this release has no hard date to protect, and a
+                // Ship Planning card with no date renders nowhere, so the drop supplies the day it
+                // was aimed at. The DATE goes first on purpose — the backend rolls a Ready-to-Ship
+                // stage into Ship Planning off the back of it (ship_planning_roll.py) and links the
+                // two events, so the whole drop undoes as one. A card from further upstream (a Fab
+                // or Paint ASAP) gets no such roll, so the stage is named explicitly afterwards;
+                // `updateStage` is a no-op there if the roll already landed it.
+                optimistic = {
+                    Stage: toShipStage,
+                    'Start install': dropDate,
+                    start_install_formulaTF: false,
+                    start_install_no_color: false,
+                    comp_eta_effective: installCompleteDate(dropDate, row['Install HRS'], row.num_guys) || dropDate,
+                };
+                call = async () => {
+                    await jobsApi.updateStartInstall(job, release, dropDate);
+                    if (ROLLS_TO_SHIP_PLANNING.has(String(row['Stage'] ?? '').trim())) return;
+                    try {
+                        await jobsApi.updateStage(job, release, toShipStage);
+                    } catch (stageErr) {
+                        // The DATE landed, and it is the write the drop was aimed at. Letting this
+                        // throw would roll the whole drop back optimistically and paint a state the
+                        // database does not have. Keep the date, say plainly what didn't happen, and
+                        // let the 30s poll bring the real stage back.
+                        setDropError(
+                            `Scheduled ${job}-${release} for ${shortDate(dropDate)}, but couldn't `
+                            + `set its stage to ${toShipStage}: ${stageErr?.message || 'the update was rejected'}`
+                        );
+                        console.error('Timeline ship-lane stage write failed:', job, release, stageErr);
+                    }
+                };
+            } else {
+                optimistic = { Stage: toShipStage };
+                call = () => jobsApi.updateStage(job, release, toShipStage);
+            }
         } else if (toTray) {
             if (!before.installer) return;   // already unassigned — nothing to write
             optimistic = { installer: null };
@@ -1331,9 +1490,12 @@ function GanttChart({ filterComplete = false }) {
                 )}
 
                 {!initialLoad && bands.length > 0 && (
-                    <div className="flex flex-col" style={{ width: stagingPx + SIDEBAR_PX + totalPx, minHeight: '100%' }}>
-                        {/* Sticky header */}
-                        <div className="sticky top-0 z-30 bg-gray-100 border-b-2 border-gray-300 flex" style={{ minHeight: HEADER_PX }}>
+                    <div className="flex flex-col" style={{ width: chromePx + totalPx, minHeight: '100%' }}>
+                        {/* Sticky header. z-40, above the staging columns' z-30: a FOLDED column is a
+                            full-height rail with no top offset, so on vertical scroll it slides up
+                            under the header — at an equal z it painted over it (later in the DOM)
+                            and hid the ▶ expand control. */}
+                        <div className="sticky top-0 z-40 bg-gray-100 border-b-2 border-gray-300 flex" style={{ minHeight: HEADER_PX }}>
                             {/* Staging-column header — frozen furthest left, above the tray. */}
                             <div
                                 className="sticky left-0 z-50 flex-shrink-0 border-r-2 border-gray-400 bg-gray-200 flex flex-col justify-center"
@@ -1374,9 +1536,49 @@ function GanttChart({ filterComplete = false }) {
                                     </div>
                                 )}
                             </div>
+                            {/* Ready-to-Ship header — frozen just right of the tray, above its column. */}
+                            <div
+                                className="sticky z-50 flex-shrink-0 border-r-2 border-gray-400 bg-gray-200 flex flex-col justify-center"
+                                style={{ width: readyPx, left: stagingPx }}
+                            >
+                                {readyCollapsed ? (
+                                    <button
+                                        type="button"
+                                        onClick={toggleReady}
+                                        title={`Show ready to ship (${readyNeedsDate} waiting on a ship date)`}
+                                        aria-label="Show ready to ship column"
+                                        aria-expanded={false}
+                                        className="w-full h-full flex flex-col items-center justify-center gap-1 hover:bg-gray-300"
+                                    >
+                                        <span className="text-[11px] leading-none text-gray-700">▶</span>
+                                        {readyNeedsDate > 0 && (
+                                            <span className="text-[10px] font-extrabold text-gray-700 leading-none tabular-nums">
+                                                {readyNeedsDate}
+                                            </span>
+                                        )}
+                                    </button>
+                                ) : (
+                                    <div className="px-2 py-2 flex items-start gap-1">
+                                        <div className="min-w-0 flex-1">
+                                            <span className="block text-[11px] font-extrabold text-gray-800 uppercase tracking-wide">Ready to Ship</span>
+                                            <span className="block text-[10px] text-gray-600">
+                                                {readyNeedsDate} need a ship date
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={toggleReady}
+                                            title="Collapse ready to ship column"
+                                            aria-label="Collapse ready to ship column"
+                                            aria-expanded={true}
+                                            className="shrink-0 px-1 py-0.5 rounded text-[11px] leading-none text-gray-600 hover:bg-gray-300"
+                                        >◀</button>
+                                    </div>
+                                )}
+                            </div>
                             <div
                                 className="sticky z-40 flex-shrink-0 border-r-2 border-gray-300 bg-gray-100 px-2 py-2 flex flex-col justify-center gap-1"
-                                style={{ width: SIDEBAR_PX, left: stagingPx }}
+                                style={{ width: SIDEBAR_PX, left: stagingPx + readyPx }}
                             >
                                 <div className="flex items-center gap-1">
                                     <button
@@ -1498,6 +1700,72 @@ function GanttChart({ filterComplete = false }) {
                                 </div>
                             </StagingTray>
 
+                            {/* Pinned Ready-to-Ship column, frozen immediately right of the tray.
+                                Same shape and same gesture as the tray, one question earlier in the
+                                pipeline: these releases have no ship day yet. Deliberately NOT a
+                                drop target — every write this column knows how to make is a drop
+                                somewhere ELSE (Shipping Planning stamps the date, a crew lane
+                                schedules it), and a card dropped back here would have to mean
+                                "un-set the date", which is a different gesture with a different
+                                blast radius. */}
+                            <div
+                                data-ready-to-ship="1"
+                                className="sticky z-30 flex-shrink-0 border-r-2 border-gray-400 bg-gray-100"
+                                style={readyCollapsed ? {
+                                    // Folded, the column has no content to give it height — without
+                                    // an explicit stretch the rail stops below the header and the
+                                    // lane rows show through the gap.
+                                    width: readyPx,
+                                    left: stagingPx,
+                                    alignSelf: 'stretch',
+                                } : {
+                                    width: readyPx,
+                                    left: stagingPx,
+                                    top: HEADER_PX,
+                                    maxHeight: containerH ? Math.max(containerH - HEADER_PX, 120) : undefined,
+                                    overflowY: 'auto',
+                                }}
+                            >
+                                <div className={readyCollapsed ? 'hidden' : 'p-1.5 space-y-1.5'}>
+                                    {readyToShip.length === 0 ? (
+                                        <p className="text-[10px] text-gray-500 text-center py-6 leading-snug">
+                                            Nothing waiting.<br />Everything ready to ship has a date.
+                                        </p>
+                                    ) : readyToShip.map((row, i) => (
+                                        <Fragment key={row.id}>
+                                        {row._rtsSection !== readyToShip[i - 1]?._rtsSection && (
+                                            <div className={`px-0.5 pt-1 pb-0.5 border-b text-[10px] font-extrabold uppercase tracking-wide flex items-center ${READY_SECTION_HEADER[row._rtsSection] || ''}`}>
+                                                <span className="flex-1 truncate">
+                                                    {READY_TO_SHIP_SECTIONS.find((sec) => sec.key === row._rtsSection)?.label}
+                                                </span>
+                                                <span className="tabular-nums">
+                                                    {readyToShip.filter((r) => r._rtsSection === row._rtsSection).length}
+                                                </span>
+                                            </div>
+                                        )}
+                                        <StagingCard
+                                            job={row}
+                                            draggable={canDrag && row._rtsSection !== 'upstream'}
+                                            dragIdPrefix="ready"
+                                            tone={READY_SECTION_TONE[row._rtsSection]}
+                                            onClick={() => openHub(row)}
+                                            onMouseMove={(e) => handleMouseMove(e, {
+                                                type: 'release',
+                                                job: row['Job #'],
+                                                release: row['Release #'],
+                                                jobName: row['Job'] || '',
+                                                description: row['Description'] || '',
+                                                stage: row['Stage'] || '',
+                                                pm: row['PM'] || '',
+                                                by: row['BY'] || '',
+                                            })}
+                                            onMouseLeave={handleMouseLeave}
+                                        />
+                                        </Fragment>
+                                    ))}
+                                </div>
+                            </div>
+
                             <div className="flex flex-col" style={{ width: SIDEBAR_PX + totalPx }}>
                             {bands.map((band) => {
                                 // Reserve a bottom strip on the Shipping Planning lane for the PU/order overlay.
@@ -1516,7 +1784,7 @@ function GanttChart({ filterComplete = false }) {
                                     >
                                         <div
                                             className={`sticky z-20 flex-shrink-0 border-r-2 border-gray-300 px-2 flex items-center gap-2 ${laneCollapsed ? 'py-0 bg-gray-200' : `py-1 ${band.isShip ? 'bg-gray-100' : 'bg-gray-50'}`}`}
-                                            style={{ width: SIDEBAR_PX, left: stagingPx }}
+                                            style={{ width: SIDEBAR_PX, left: stagingPx + readyPx }}
                                         >
                                             <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: band.color }} />
                                             <span className={`truncate ${laneCollapsed ? 'text-xs' : 'text-sm'} ${band.isShip ? 'font-extrabold text-gray-900' : 'font-bold text-gray-800'}`}>{band.lane}</span>
@@ -1544,6 +1812,7 @@ function GanttChart({ filterComplete = false }) {
                                             registerRef={(el) => { laneChartRefs.current[band.lane] = el; }}
                                             hintLeft={dropHint?.lane === band.lane ? dropHint.leftPx : null}
                                             hintLabel={dropHint?.lane === band.lane ? dropHint.label : null}
+                                            hintDate={dropHint?.lane === band.lane ? !!dropHint.date : false}
                                             colPx={colPx}
                                             className={`relative flex-shrink-0 ${laneCollapsed ? 'bg-gray-200/60' : 'bg-white'}`}
                                             style={{ width: totalPx, height: laneH, ...colGridStyle }}
@@ -1743,9 +2012,15 @@ function GanttChart({ filterComplete = false }) {
             {hoveredItem && (
                 <div
                     className="fixed bg-gray-900 text-white text-xs rounded-lg shadow-xl p-3 z-50 pointer-events-none"
+                    // Flip toward the roomier side of the cursor: a card low in the viewport (the
+                    // bottom of the Ready-to-Ship column) would otherwise open its tooltip off-screen.
                     style={{
-                        left: `${hoverPosition.x + 10}px`,
-                        top: `${hoverPosition.y + 10}px`,
+                        ...(hoverPosition.x > window.innerWidth / 2
+                            ? { right: `${window.innerWidth - hoverPosition.x + 10}px` }
+                            : { left: `${hoverPosition.x + 10}px` }),
+                        ...(hoverPosition.y > window.innerHeight / 2
+                            ? { bottom: `${window.innerHeight - hoverPosition.y + 10}px` }
+                            : { top: `${hoverPosition.y + 10}px` }),
                         maxWidth: '300px'
                     }}
                 >

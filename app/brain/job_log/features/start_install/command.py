@@ -5,13 +5,18 @@ purpose: Encapsulate the hard-date start_install update workflow (DB write, even
 exports:
   UpdateStartInstallCommand: Dataclass command that executes a start_install update with all side effects
   StartInstallUpdateResult: Dataclass result with event_id and start_install
-imports_from: [app.models, app.services.job_event_service, app.trello.api (update_trello_card), app.brain.job_log.features.start_install.neutralize_install_date_cascade]
+imports_from: [app.models, app.services.job_event_service, app.trello.api (update_trello_card), app.brain.job_log.features.start_install.neutralize_install_date_cascade, app.brain.job_log.features.start_install.ship_planning_roll]
 imported_by: [app/brain/job_log/routes.py]
 invariants:
   - Hard date sets start_install_formulaTF=False and clears start_install_formula
   - At `Install Start` or later, a user-set hard date stays neutral (start_install_no_color=True); at the ship stages it is colored (BUG-11)
   - Trello due-date push is synchronous (matches the pre-extraction route behavior)
   - Deduplicated events raise ValueError, matching UpdateStageCommand / UpdateFabOrderCommand
+  - A FIRST hard date on a Ready-to-Ship release rolls it into Ship Planning (ship_planning_roll),
+    as a child event of this one so a single undo reverses both. Every writer of a hard date goes
+    through this command, so the Job Log table, the release hub and the Timeline all get the roll
+    from one place. Runs AFTER the commit and BEFORE the scheduling recalc, so the recalc — which
+    the roll defers — still fires exactly once for the whole gesture.
   - This command does NOT cover the `clear_hard_date` flow — that remains in the route as it
     writes a different action ('clear_hard_date') and is not undoable.
 """
@@ -26,6 +31,10 @@ from app.trello.api import update_trello_card
 from app.brain.job_log.features.start_install.neutralize_install_date_cascade import (
     COLOR_DUMP_STAGES,
 )
+from app.brain.job_log.features.start_install.ship_planning_roll import (
+    has_hard_start_install,
+    roll_to_ship_planning_on_first_hard_date,
+)
 
 logger = get_logger(__name__)
 
@@ -37,6 +46,9 @@ class StartInstallUpdateResult:
     event_id: int
     start_install: Optional[date]
     is_hard_date: bool
+    # True when this date also rolled the release into Ship Planning. Surfaced so a caller can tell
+    # the user their row moved lanes — the stage change is a second write they did not type.
+    rolled_to_ship_planning: bool = False
     status: str = "success"
 
     def to_dict(self) -> dict:
@@ -46,6 +58,7 @@ class StartInstallUpdateResult:
             "event_id": self.event_id,
             "start_install": self.start_install.isoformat() if self.start_install else None,
             "is_hard_date": self.is_hard_date,
+            "rolled_to_ship_planning": self.rolled_to_ship_planning,
             "status": self.status,
         }
 
@@ -77,6 +90,9 @@ class UpdateStartInstallCommand:
             raise ValueError(f"Job {self.job_id}-{self.release} not found")
 
         old_start_install = job_record.start_install
+        # Captured before the write: the Ship Planning roll below fires on the FIRST hard date only,
+        # and once the row is mutated there is no way to tell a plan from a reschedule.
+        had_hard_date = has_hard_start_install(job_record)
 
         event_payload = {
             'from': old_start_install.isoformat() if old_start_install else None,
@@ -157,6 +173,18 @@ class UpdateStartInstallCommand:
         JobEventService.close(event.id)
         db.session.commit()
 
+        # A Ready-to-Ship release that just got its first hard date is, by that fact, planned to
+        # ship — so roll it into Ship Planning. This is a no-op for every other stage, for a
+        # reschedule, and for an undo; it commits its own stage change and defers the scheduling
+        # recalc to the one below.
+        rolled = roll_to_ship_planning_on_first_hard_date(
+            job_record,
+            parent_event_id=event.id,
+            had_hard_date=had_hard_date,
+            is_undo=self.undone_event_id is not None,
+            source=self.source,
+        )
+
         try:
             from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
             recalculate_all_jobs_scheduling(stage_group='FABRICATION')
@@ -178,6 +206,7 @@ class UpdateStartInstallCommand:
             event_id=event.id,
             start_install=self.start_install.isoformat() if self.start_install else None,
             is_hard_date=self.is_hard_date,
+            rolled_to_ship_planning=rolled,
         )
 
         return StartInstallUpdateResult(
@@ -186,4 +215,5 @@ class UpdateStartInstallCommand:
             event_id=event.id,
             start_install=self.start_install,
             is_hard_date=self.is_hard_date,
+            rolled_to_ship_planning=rolled,
         )

@@ -5,10 +5,15 @@ purpose: Encapsulate assigning an installer team to a release (DB write, event, 
 exports:
   AssignInstallerCommand: Dataclass command that sets Releases.installer and queues the mirror-card sync
   AssignInstallerResult: Dataclass result with event_id and installer
-imports_from: [app.models, app.services.job_event_service, app.services.outbox_service, app.brain.job_log.scheduling.calculator]
+imports_from: [app.models, app.services.job_event_service, app.services.outbox_service, app.brain.job_log.scheduling.calculator, app.config]
 imported_by: [app/brain/job_log/routes.py]
 invariants:
   - installer is stored as the Trello list name; empty/None clears it and moves the mirror back to Unassigned
+  - A crew in Config.NON_TRELLO_INSTALLERS ("Drop Ship") has NO list on the board, so assigning one
+    queues no outbox item at all and closes the event immediately. Looking a missing list up by name
+    is not a no-op — it raises, retries five times with backoff and finally logs an ERROR, so the
+    skip has to happen here rather than being left for delivery to discover. The mirror card stays
+    wherever it is: Drop Ship means nobody installs this, which is not a fact the board tracks.
   - The mirror move + date bar are DEFERRED to TrelloOutbox (action 'assign_installer'), never called
     inline. The DB write commits immediately; the event stays open until the outbox delivers it, so a
     failed mirror update is retried with backoff and finally logged as an ERROR rather than swallowed.
@@ -22,6 +27,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
+from app.config import Config
 from app.models import Releases, db
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
@@ -110,7 +116,13 @@ class AssignInstallerCommand:
         # rather than blocking this request on ~5 Trello round-trips that used to be swallowed on
         # failure. The event stays OPEN until OutboxService delivers it and closes it, so a lost
         # mirror update is now a retried, then ERROR-logged, outbox row instead of a silent warning.
-        if job_record.trello_card_id:
+        #
+        # Unless the crew has no list on the board at all. "Drop Ship" is a Brain-only crew — it
+        # means nobody installs this — and delivery resolves its target list BY NAME, so queueing
+        # one would guarantee five failed retries and an ERROR per assignment. Skip the item and
+        # close the event here; there is genuinely nothing to deliver.
+        is_non_trello = new_installer in Config.NON_TRELLO_INSTALLERS
+        if job_record.trello_card_id and not is_non_trello:
             OutboxService.add(
                 destination='trello',
                 action='assign_installer',
@@ -119,9 +131,10 @@ class AssignInstallerCommand:
         else:
             # Nothing to deliver — close the event now.
             logger.debug(
-                "mirror_move_skipped_no_card",
+                "mirror_move_skipped_no_card" if not is_non_trello else "mirror_move_skipped_non_trello_crew",
                 job=self.job_id,
                 release=self.release,
+                installer=new_installer,
             )
             JobEventService.close(event.id)
 
