@@ -73,9 +73,10 @@
  *     with no installer": that pulls in every drafting and fab row and the tray stops being a work
  *     surface. A tray release in Ship Planning ALSO appears in its shipping lane, like the mirror.
  *   - The READY TO SHIP COLUMN holds the rows the tray's date test excludes — Paint Complete / Store
- *     at MHMW with NO hard Start install — plus out-of-department ASAPs still in Paint or Fab, tagged
- *     with an "in Fab" / "in Paint" chip (utils/readyToShipColumn; the same rows the Job Log's
- *     Ready-to-Ship filter lists at its bottom). The two columns are DISJOINT by construction, so no
+ *     at MHMW with NO hard Start install, split into a Paint Complete and a Store at MHMW section, each
+ *     sorted by date — plus a trailing, NON-DRAGGABLE block of ASAPs still in Fab or Paint, tagged
+ *     "in Fab" / "in Paint", for visibility (utils/readyToShipColumn). The two columns are DISJOINT
+ *     by construction, so no
  *     release is ever drawn in both: the pipeline reads left to right, Ready to Ship (needs a day) →
  *     dropped on Shipping Planning, which gives it one → Unassigned (needs a crew) → dropped on a
  *     crew lane. Unlike the tray, this column tests only the DATE, not the installer, and it is NOT
@@ -111,7 +112,7 @@
  *     viewStart to a Monday.
  * updated_by_agent: 2026-09-17 (Ready-to-Ship staging column + its Shipping Planning date-stamping drop)
  */
-import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, Fragment } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { useReleases } from '../context/ReleasesContext';
 import {
@@ -128,7 +129,7 @@ import {
 import { getEventCoordinates } from '@dnd-kit/utilities';
 import { INSTALLER_PALETTE } from '../constants/installerPalette';
 import { selectUnassigned } from '../utils/unassignedLane';
-import { selectReadyToShip, READY_TO_SHIP_COLUMN_STAGES } from '../utils/readyToShipColumn';
+import { selectReadyToShip, READY_TO_SHIP_COLUMN_STAGES, READY_TO_SHIP_SECTIONS } from '../utils/readyToShipColumn';
 import { dateAtDropX } from '../utils/timelineDrop';
 import { shipLaneDropOutcome, shipLabelFor } from '../utils/shipLaneDrop';
 import { localTodayStr as todayIso, subtractBusinessDays, addBusinessDays, formatDateShort } from '../utils/formatters';
@@ -441,6 +442,18 @@ const TRAY_BORDER = {
     soft: 'border-gray-300 border-l-4 border-l-gray-300',
 };
 
+// Ready-to-Ship section tints. Only the neutral ('soft') card takes one — an ASAP keeps its red,
+// which is the one signal that must read the same in every column.
+const READY_SECTION_TONE = {
+    paint: 'border-sky-300 border-l-4 border-l-sky-500 bg-sky-50',
+    store: 'border-violet-300 border-l-4 border-l-violet-500 bg-violet-50',
+};
+const READY_SECTION_HEADER = {
+    paint: 'text-sky-800 border-sky-400',
+    store: 'text-violet-800 border-violet-400',
+    upstream: 'text-red-700 border-red-400',
+};
+
 // Which of the four a release falls into, plus how its date should read.
 function trayDateState(job) {
     const { isAsap, isHardDate, isHardDatePast } = classifyInstallDate({
@@ -475,11 +488,10 @@ function trayDateState(job) {
 // construction, so ids could not actually collide today — but a shared id would make any future
 // overlap a silent, undebuggable drag bug, and the prefix costs nothing.
 //
-// `origin` is set only on the Ready-to-Ship column's out-of-department ASAPs ('Fab' / 'Paint'). It
-// answers the question that card immediately provokes: this is marked rush and it is sitting in my
-// shipping queue — where actually IS it? Without it the card is indistinguishable from one that is
-// painted and waiting on the floor.
-function StagingCard({ job, draggable, dragIdPrefix = 'staging', onClick, onMouseMove, onMouseLeave }) {
+// `tone` tints a neutral card by its Ready-to-Ship section; ASAP / overdue / scheduled cards ignore it.
+// `origin` ('Fab' / 'Paint') is set only on the column's upstream ASAPs: it answers "this is marked
+// rush and it's in my shipping queue — where actually IS it?"
+function StagingCard({ job, draggable, dragIdPrefix = 'staging', tone, onClick, onMouseMove, onMouseLeave }) {
     const jr = `${job['Job #']}-${job['Release #']}`;
     const asap = job['start_install_asap'] === true;
     const origin = job['_asapOrigin'] || '';
@@ -502,15 +514,15 @@ function StagingCard({ job, draggable, dragIdPrefix = 'staging', onClick, onMous
             {...attributes}
             {...listeners}
             style={{ opacity: isDragging ? 0.35 : 1, touchAction: draggable ? 'manipulation' : undefined }}
-            className={`rounded border bg-white px-2 py-1.5 shadow-sm select-none hover:shadow ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${TRAY_BORDER[date.kind]}`}
+            // bg-white only on a plain card: it would otherwise fight a tint's bg-* and win or lose on
+            // stylesheet order (it beat bg-violet-50 but lost to bg-sky-50).
+            className={`rounded border px-2 py-1.5 shadow-sm select-none hover:shadow ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${date.kind === 'soft' ? (tone || `bg-white ${TRAY_BORDER.soft}`) : TRAY_BORDER[date.kind]}`}
         >
-            {(asap || origin) && (
+            {asap && (
                 <div className="mb-1 flex items-center gap-1">
-                    {asap && (
-                        <span className="inline-block px-1.5 py-0.5 rounded bg-red-600 text-white text-[10px] font-extrabold tracking-wide leading-none">
-                            ASAP
-                        </span>
-                    )}
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-red-600 text-white text-[10px] font-extrabold tracking-wide leading-none">
+                        ASAP
+                    </span>
                     {origin && (
                         <span
                             className="inline-block px-1.5 py-0.5 rounded bg-gray-700 text-white text-[10px] font-bold tracking-wide leading-none"
@@ -903,6 +915,8 @@ function GanttChart({ filterComplete = false }) {
     // rows are NOT in `releases` either: with no hard date and no shipping stage they produce no
     // bars, which is exactly why they need a column of their own to be visible at all.
     const readyToShip = useMemo(() => selectReadyToShip(jobs), [jobs]);
+    // Only the in-shop holds need a ship date; the upstream ASAPs are there to be seen.
+    const readyNeedsDate = useMemo(() => readyToShip.filter((r) => r._rtsSection !== 'upstream').length, [readyToShip]);
 
     // Lane order: the two shipping lanes first, then the configured installer roster,
     // then any off-roster installer present in the data (so no eligible card is silently
@@ -1477,8 +1491,11 @@ function GanttChart({ filterComplete = false }) {
 
                 {!initialLoad && bands.length > 0 && (
                     <div className="flex flex-col" style={{ width: chromePx + totalPx, minHeight: '100%' }}>
-                        {/* Sticky header */}
-                        <div className="sticky top-0 z-30 bg-gray-100 border-b-2 border-gray-300 flex" style={{ minHeight: HEADER_PX }}>
+                        {/* Sticky header. z-40, above the staging columns' z-30: a FOLDED column is a
+                            full-height rail with no top offset, so on vertical scroll it slides up
+                            under the header — at an equal z it painted over it (later in the DOM)
+                            and hid the ▶ expand control. */}
+                        <div className="sticky top-0 z-40 bg-gray-100 border-b-2 border-gray-300 flex" style={{ minHeight: HEADER_PX }}>
                             {/* Staging-column header — frozen furthest left, above the tray. */}
                             <div
                                 className="sticky left-0 z-50 flex-shrink-0 border-r-2 border-gray-400 bg-gray-200 flex flex-col justify-center"
@@ -1528,15 +1545,15 @@ function GanttChart({ filterComplete = false }) {
                                     <button
                                         type="button"
                                         onClick={toggleReady}
-                                        title={`Show ready to ship (${readyToShip.length} waiting on a ship date)`}
+                                        title={`Show ready to ship (${readyNeedsDate} waiting on a ship date)`}
                                         aria-label="Show ready to ship column"
                                         aria-expanded={false}
                                         className="w-full h-full flex flex-col items-center justify-center gap-1 hover:bg-gray-300"
                                     >
                                         <span className="text-[11px] leading-none text-gray-700">▶</span>
-                                        {readyToShip.length > 0 && (
+                                        {readyNeedsDate > 0 && (
                                             <span className="text-[10px] font-extrabold text-gray-700 leading-none tabular-nums">
-                                                {readyToShip.length}
+                                                {readyNeedsDate}
                                             </span>
                                         )}
                                     </button>
@@ -1545,7 +1562,7 @@ function GanttChart({ filterComplete = false }) {
                                         <div className="min-w-0 flex-1">
                                             <span className="block text-[11px] font-extrabold text-gray-800 uppercase tracking-wide">Ready to Ship</span>
                                             <span className="block text-[10px] text-gray-600">
-                                                {readyToShip.length} need a ship date
+                                                {readyNeedsDate} need a ship date
                                             </span>
                                         </div>
                                         <button
@@ -1713,12 +1730,23 @@ function GanttChart({ filterComplete = false }) {
                                         <p className="text-[10px] text-gray-500 text-center py-6 leading-snug">
                                             Nothing waiting.<br />Everything ready to ship has a date.
                                         </p>
-                                    ) : readyToShip.map((row) => (
+                                    ) : readyToShip.map((row, i) => (
+                                        <Fragment key={row.id}>
+                                        {row._rtsSection !== readyToShip[i - 1]?._rtsSection && (
+                                            <div className={`px-0.5 pt-1 pb-0.5 border-b text-[10px] font-extrabold uppercase tracking-wide flex items-center ${READY_SECTION_HEADER[row._rtsSection] || ''}`}>
+                                                <span className="flex-1 truncate">
+                                                    {READY_TO_SHIP_SECTIONS.find((sec) => sec.key === row._rtsSection)?.label}
+                                                </span>
+                                                <span className="tabular-nums">
+                                                    {readyToShip.filter((r) => r._rtsSection === row._rtsSection).length}
+                                                </span>
+                                            </div>
+                                        )}
                                         <StagingCard
-                                            key={row.id}
                                             job={row}
-                                            draggable={canDrag}
+                                            draggable={canDrag && row._rtsSection !== 'upstream'}
                                             dragIdPrefix="ready"
+                                            tone={READY_SECTION_TONE[row._rtsSection]}
                                             onClick={() => openHub(row)}
                                             onMouseMove={(e) => handleMouseMove(e, {
                                                 type: 'release',
@@ -1732,6 +1760,7 @@ function GanttChart({ filterComplete = false }) {
                                             })}
                                             onMouseLeave={handleMouseLeave}
                                         />
+                                        </Fragment>
                                     ))}
                                 </div>
                             </div>
@@ -1982,9 +2011,15 @@ function GanttChart({ filterComplete = false }) {
             {hoveredItem && (
                 <div
                     className="fixed bg-gray-900 text-white text-xs rounded-lg shadow-xl p-3 z-50 pointer-events-none"
+                    // Flip toward the roomier side of the cursor: a card low in the viewport (the
+                    // bottom of the Ready-to-Ship column) would otherwise open its tooltip off-screen.
                     style={{
-                        left: `${hoverPosition.x + 10}px`,
-                        top: `${hoverPosition.y + 10}px`,
+                        ...(hoverPosition.x > window.innerWidth / 2
+                            ? { right: `${window.innerWidth - hoverPosition.x + 10}px` }
+                            : { left: `${hoverPosition.x + 10}px` }),
+                        ...(hoverPosition.y > window.innerHeight / 2
+                            ? { bottom: `${window.innerHeight - hoverPosition.y + 10}px` }
+                            : { top: `${hoverPosition.y + 10}px` }),
                         maxWidth: '300px'
                     }}
                 >
