@@ -1709,6 +1709,7 @@ function GanttChart({ filterComplete = false }) {
                                 "un-set the date", which is a different gesture with a different
                                 blast radius. */}
                             <div
+                                data-ready-to-ship="1"
                                 className="sticky z-30 flex-shrink-0 border-r-2 border-gray-400 bg-gray-100"
                                 style={readyCollapsed ? {
                                     // Folded, the column has no content to give it height — without
