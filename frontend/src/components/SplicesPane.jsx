@@ -514,6 +514,7 @@ export function SplicesPane({
                     releaseNumber={parent.release}
                     jobName={parent.job_name}
                     description={parent.description}
+                    releaseTag={parent.release_tag}
                     pool={summary}
                     onCreated={() => { load(); onChanged?.(); }}
                 />,

@@ -2326,6 +2326,15 @@ def create_release_splice(release_id):
     if parent is None:
         return jsonify({"error": "Release not found"}), 404
     data = g.json_data
+    # Billing tag: optional; blank inherits the original's. A given value must normalize
+    # (labels accepted, same as the paste path) or it is a 400, never silently dropped.
+    release_tag = None
+    if str(data.get("release_tag") or "").strip():
+        release_tag = _normalize_release_tag(data.get("release_tag"))
+        if release_tag is None:
+            return jsonify({
+                "error": "release_tag must be one of: " + ", ".join(sorted(RELEASE_TAGS)),
+            }), 400
     try:
         splice = CreateSpliceCommand(
             parent,
@@ -2338,6 +2347,7 @@ def create_release_splice(release_id):
             start_install=data.get("start_install"),
             additional_install_hrs=data.get("additional_install_hrs"),
             additional_install_note=data.get("additional_install_note"),
+            release_tag=release_tag,
         ).execute()
     except SpliceError as e:
         return jsonify({"error": str(e), **e.extra}), e.status
@@ -2357,6 +2367,7 @@ def create_release_splice(release_id):
             "installer": splice.installer,
             "start_install": splice.start_install.isoformat() if splice.start_install else None,
             "released": splice.released.isoformat() if splice.released else None,
+            "release_tag": splice.release_tag,
             "parent_release_id": splice.parent_release_id,
         },
         "pool": summary,

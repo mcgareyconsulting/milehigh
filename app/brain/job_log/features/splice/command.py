@@ -35,6 +35,12 @@ Zero-hour splices (training handout, 2026-09-21 — "Watch for: zero-hour splice
     means "no pool", and a splice must never read that way). Such a splice draws
     nothing from the pool and needs no installer: the installer is required only when
     the splice carries hours to install.
+
+Billing tag (training handout, 2026-09-21, step 8 — "apply the billing tag on the new
+row if needed — not in the splice form yet"):
+  - The splice form takes ``release_tag`` (contracted | change_order | mhmw_cost). Left
+    blank, the splice inherits the original's tag, as before; a value must be one of
+    the canonical slugs (the route normalizes labels first).
 """
 import re
 from datetime import date, datetime
@@ -46,7 +52,7 @@ from app.brain.job_log.features.start_install.neutralize_install_date_cascade im
 )
 from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
 from app.logging_config import get_logger
-from app.models import Releases, ReleaseEvents, db
+from app.models import RELEASE_TAGS, RELEASE_TAG_LABELS, Releases, ReleaseEvents, db
 from app.services.job_event_service import JobEventService
 
 logger = get_logger(__name__)
@@ -232,6 +238,7 @@ def pool_summary(parent):
             "description": parent.description,
             "stage": parent.stage,
             "installer": parent.installer,
+            "release_tag": parent.release_tag,
             "install_hrs": parent.install_hrs,
             "fab_hrs": parent.fab_hrs,
         },
@@ -249,6 +256,7 @@ def pool_summary(parent):
                 "released": c.released.isoformat() if c.released else None,
                 "job_comp": c.job_comp,
                 "installer": c.installer,
+                "release_tag": c.release_tag,
                 "start_install": c.start_install.isoformat() if c.start_install else None,
             }
             for c in children
@@ -272,6 +280,7 @@ class CreateSpliceCommand:
         start_install=None,
         additional_install_hrs=None,
         additional_install_note=None,
+        release_tag=None,
     ):
         self.parent = parent
         self.install_hrs_raw = install_hrs
@@ -283,6 +292,7 @@ class CreateSpliceCommand:
         self.start_install = start_install
         self.additional_install_hrs_raw = additional_install_hrs
         self.additional_install_note = additional_install_note
+        self.release_tag = release_tag
 
     @staticmethod
     def _parse_date(value, label):
@@ -330,6 +340,15 @@ class CreateSpliceCommand:
                 raise SpliceError(f"Unknown stage '{self.stage}'")
 
         start_install = self._parse_date(self.start_install, "Start install")
+
+        # Billing tag: chosen on the form, else the original's.
+        release_tag = str(self.release_tag or "").strip() or None
+        if release_tag is None:
+            release_tag = parent.release_tag
+        elif release_tag not in RELEASE_TAGS:
+            raise SpliceError(
+                "Billing tag must be one of: " + ", ".join(RELEASE_TAG_LABELS[t] for t in sorted(RELEASE_TAGS))
+            )
 
         # Hours: budget from the pool, additional from outside it (with a reason).
         budget_hrs = _coerce_hours(self.install_hrs_raw, "Budget install hours", allow_blank=True)
@@ -384,7 +403,7 @@ class CreateSpliceCommand:
             "Stage": stage,
             "installer": installer,
             "Start install": start_install.isoformat() if start_install else None,
-            "release_tag": parent.release_tag,
+            "release_tag": release_tag,
             "splice": True,
             "parent_release_id": parent.id,
             "parent_release": f"{parent.job}-{parent.release}",
@@ -415,7 +434,7 @@ class CreateSpliceCommand:
             stage=stage,
             stage_group=stage_group,
             installer=installer,
-            release_tag=parent.release_tag,
+            release_tag=release_tag,
             parent_release_id=parent.id,
             last_updated_at=datetime.utcnow(),
             source_of_update="Brain",
@@ -464,6 +483,7 @@ class CreateSpliceCommand:
             additional_install_hrs=additional_hrs,
             stage=stage,
             installer=installer,
+            release_tag=release_tag,
             remaining_install_hrs=None if remaining is None else round(remaining - budget_hrs, 4),
             user_id=self.user.id if self.user else None,
         )
