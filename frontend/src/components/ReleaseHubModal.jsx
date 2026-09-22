@@ -8,7 +8,8 @@
  *   ReleaseHubModal: Portal modal shell for a release
  * imports_from: [react, react-dom, ./JobDetailsBody, ./pdfViewer/PdfViewerPane, ./EventsList,
  *   ./ReleaseNotesRail, ./StageIconRow, ./releaseIssues/ReleaseIssuesPane, ./SplicesPane,
- *   ../services/jobsApi, ../utils/stageTint, ../utils/auth, ../constants/modalSize, ../hooks/useBreakpoint]
+ *   ../services/jobsApi, ../utils/stageTint, ../utils/auth, ../constants/modalSize, ../constants/splices,
+ *   ../hooks/useBreakpoint]
  * imported_by: [frontend/src/components/JobsTableRow.jsx, frontend/src/components/JobLogCardGrid.jsx,
  *   frontend/src/components/GanttChart.jsx]
  * invariants:
@@ -47,6 +48,7 @@ import EventsList from './EventsList';
 import { StageIconRow } from './StageIconRow';
 import { ReleaseIssuesPane } from './releaseIssues/ReleaseIssuesPane';
 import { SplicesPane } from './SplicesPane';
+import { hasManySplices } from '../constants/splices';
 import { jobsApi } from '../services/jobsApi';
 import { stageTint } from '../utils/stageTint';
 import { checkAuth, readCachedRoleFlags } from '../utils/auth';
@@ -470,11 +472,13 @@ export function ReleaseHubModal({
                                                 fontSize: 11.5,
                                                 padding: '1px 6px',
                                                 borderRadius: 999,
-                                                background: 'var(--surface-2)',
-                                                color: 'var(--text-2)',
+                                                // Amber past the many-splices threshold (handout rule:
+                                                // lots of splices on one release is a problem flag).
+                                                background: hasManySplices(spliceCount) ? 'var(--st-amber-bg)' : 'var(--surface-2)',
+                                                color: hasManySplices(spliceCount) ? 'var(--st-amber-fg)' : 'var(--text-2)',
                                                 lineHeight: 1.3,
                                             }}
-                                            aria-label={`${spliceCount} splices`}
+                                            aria-label={hasManySplices(spliceCount) ? `${spliceCount} splices, flagged as many` : `${spliceCount} splices`}
                                         >
                                             {spliceCount}
                                         </span>
