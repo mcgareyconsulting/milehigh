@@ -27,6 +27,14 @@ Splice modal spec (Bill, 2026-09-16):
     from outside it and require a note saying why. ``install_hrs`` on the splice is
     the total (budget + additional) because it drives comp_eta everywhere;
     ``additional_install_hrs`` is the part that never counted against the pool.
+
+Zero-hour splices (training handout, 2026-09-21 — "Watch for: zero-hour splice bug"):
+  - A splice may carry NO install hours: drop-ship work, material-only scope, or a
+    slice whose hours are on the parent's install. Budget 0 and additional 0 is a
+    legal create; ``install_hrs`` is stored as 0.0 (never NULL — NULL on the parent
+    means "no pool", and a splice must never read that way). Such a splice draws
+    nothing from the pool and needs no installer: the installer is required only when
+    the splice carries hours to install.
 """
 import re
 from datetime import date, datetime
@@ -313,9 +321,7 @@ class CreateSpliceCommand:
         if len(description) > 256:
             raise SpliceError("Description must be 256 characters or fewer")
 
-        installer = str(self.installer or "").strip()
-        if not installer:
-            raise SpliceError("Installer is required")
+        installer = str(self.installer or "").strip() or None
 
         stage = "Released"
         if self.stage is not None and str(self.stage).strip():
@@ -335,8 +341,11 @@ class CreateSpliceCommand:
             raise SpliceError("Explain why additional install hours are needed")
         if additional_hrs == 0:
             additional_note = None
-        if budget_hrs <= 0 and additional_hrs <= 0:
-            raise SpliceError("Budget install hours must be greater than 0")
+        # Budget 0 + additional 0 is a zero-hour splice (drop ship, material only):
+        # legal, draws nothing from the pool, and needs no installer.
+        install_hrs = round(budget_hrs + additional_hrs, 4)
+        if install_hrs > 0 and not installer:
+            raise SpliceError("Installer is required when the splice carries install hours")
 
         total, allocated, remaining = install_pool(parent)
         if budget_hrs > 0:
@@ -355,7 +364,6 @@ class CreateSpliceCommand:
                     allocated_install_hrs=allocated,
                     remaining_install_hrs=remaining,
                 )
-        install_hrs = round(budget_hrs + additional_hrs, 4)
 
         release_number = next_splice_number(parent)
         released = self._parse_date(self.released, "Released") or date.today()
@@ -586,8 +594,8 @@ def validate_field_edits(job_record, coerced):
         if "install_hrs" in coerced:
             parent = Releases.query.get(job_record.parent_release_id)
             new_hrs = coerced["install_hrs"][1]
-            if new_hrs is None or float(new_hrs) <= 0:
-                raise SpliceError("A splice must carry install hours greater than 0")
+            if new_hrs is None or float(new_hrs) < 0:
+                raise SpliceError("A splice's install hours cannot be blank or negative (0 is a zero-hour splice)")
             additional = float(job_record.additional_install_hrs or 0)
             if float(new_hrs) + 1e-9 < additional:
                 raise SpliceError(

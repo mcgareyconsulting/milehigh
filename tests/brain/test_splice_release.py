@@ -275,9 +275,15 @@ class TestCreateSpliceRules:
         assert resp.status_code == 400
         assert "differ" in _body(resp)["error"]
 
-    def test_installer_is_required(self, app, non_admin_client):
+    def test_installer_is_required_when_the_splice_carries_hours(self, app, non_admin_client):
         parent_id = _make_parent(app)
         assert _ok_splice(non_admin_client, parent_id, installer="").status_code == 400
+        resp = _ok_splice(
+            non_admin_client, parent_id, installer="",
+            install_hrs=0, additional_install_hrs=4, additional_install_note="Rework",
+        )
+        assert resp.status_code == 400
+        assert "Installer" in _body(resp)["error"]
 
     def test_unknown_stage_is_refused(self, app, non_admin_client):
         parent_id = _make_parent(app)
@@ -314,9 +320,43 @@ class TestCreateSpliceRules:
         assert splice["additional_install_hrs"] == 14
         assert splice["additional_install_note"] == "Extra scope"
 
-    def test_a_splice_needs_some_hours(self, app, non_admin_client):
-        parent_id = _make_parent(app)
-        assert _ok_splice(non_admin_client, parent_id, install_hrs=0).status_code == 400
+    def test_a_zero_hour_splice_is_legal_and_needs_no_installer(self, app, non_admin_client):
+        """Training handout 2026-09-21, "Watch for": a true zero-hour splice (drop ship,
+        material only) was refused, and PMs were typing 0.5 to get past it. Budget 0 +
+        additional 0 creates, stores 0 (never NULL), draws nothing, and needs no installer."""
+        parent_id = _make_parent(app, install_hrs=150)
+        resp = _ok_splice(
+            non_admin_client, parent_id,
+            install_hrs=0, installer="", description="Embeds — drop ship", stage="Released",
+        )
+        assert resp.status_code == 201, resp.data
+        splice = _body(resp)["splice"]
+        assert splice["install_hrs"] == 0
+        assert splice["installer"] is None
+        with app.app_context():
+            row = db.session.get(Releases, splice["id"])
+            assert row.install_hrs == 0
+            assert row.installer is None
+        # Nothing came out of the pool, and the group reads the same 150.
+        summary = _body(non_admin_client.get(f"/brain/job-log/release/{parent_id}/splices"))
+        assert summary["allocated_install_hrs"] == 0
+        assert summary["remaining_install_hrs"] == 150
+        assert summary["group_install_hrs"] == 150
+        assert summary["splices"][0]["budget_install_hrs"] == 0
+        # The hours can be left off the body entirely, and a blank string reads as 0 too.
+        assert _ok_splice(
+            non_admin_client, parent_id, install_hrs=None, installer=None, description="Plates — drop ship",
+        ).status_code == 201
+        assert _ok_splice(
+            non_admin_client, parent_id, install_hrs="", installer="", description="Anchors — drop ship",
+        ).status_code == 201
+
+    def test_a_zero_hour_splice_needs_no_pool_either(self, app, non_admin_client):
+        """Drop-ship scope off a release that has no install hours at all."""
+        parent_id = _make_parent(app, install_hrs=None)
+        resp = _ok_splice(non_admin_client, parent_id, install_hrs=0, installer="", description="Drop ship only")
+        assert resp.status_code == 201, resp.data
+        assert _body(resp)["splice"]["install_hrs"] == 0
 
     def test_a_splice_cannot_be_spliced(self, app, non_admin_client):
         parent_id = _make_parent(app)
@@ -362,6 +402,12 @@ class TestFieldEditGuards:
         self._group(app, admin_client)                                     # 50 of 150 drawn
         assert self._patch(admin_client, "340.1", install_hrs=151).status_code == 409
         assert self._patch(admin_client, "340.1", install_hrs=150).status_code == 200
+
+    def test_a_splices_install_hours_can_be_edited_to_zero_but_not_blank(self, app, admin_client):
+        self._group(app, admin_client)
+        assert self._patch(admin_client, "340.1", install_hrs=0).status_code == 200
+        assert self._patch(admin_client, "340.1", install_hrs=None).status_code == 400
+        assert self._patch(admin_client, "340.1", install_hrs=-1).status_code == 400
 
     def test_a_splices_install_hours_cannot_drop_below_its_additional(self, app, admin_client):
         self._group(
