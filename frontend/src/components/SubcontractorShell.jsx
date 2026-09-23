@@ -47,9 +47,6 @@ function initialsOf(name) {
 }
 
 const ICONS = {
-    todos: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M8 12l3 3 5-6" /></svg>,
-    joblog: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>,
-    tm: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h5" /></svg>,
     menu: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>,
     bell: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>,
     out: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5M21 12H9" /></svg>,
@@ -152,8 +149,9 @@ export default function SubcontractorShell() {
                     <img src="/bananas-svgrepo-com.svg" alt="" width="22" height="22" />
                 </span>
                 <nav className="sub-tabs" aria-label="Sections">
+                    {/* Labels only — no icons — so "To-Dos (n)" fits with the red count inline. */}
                     <NavLink to="/sub/todos" className={tabClass}>
-                        {ICONS.todos}<span>To-Dos</span>
+                        <span>To-Dos</span>
                         {unread.unread_count > 0 && (
                             <span className="sub-tab-badge" aria-label={`${unread.unread_count} unread`}>
                                 {unread.unread_count > 99 ? '99+' : unread.unread_count}
@@ -161,10 +159,10 @@ export default function SubcontractorShell() {
                         )}
                     </NavLink>
                     <NavLink to="/sub/job-log" className={tabClass}>
-                        {ICONS.joblog}<span>Job Log</span>
+                        <span>Job Log</span>
                     </NavLink>
                     <NavLink to="/sub/tickets" className={tabClass}>
-                        {ICONS.tm}<span>T&amp;M</span>
+                        <span>T&amp;M</span>
                     </NavLink>
                 </nav>
                 <button type="button" className="sub-menu-btn" aria-label="Menu" onClick={() => setSheetOpen(true)}>

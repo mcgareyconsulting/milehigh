@@ -85,26 +85,22 @@
   background: transparent;
   position: relative;
 }
-.sub-tab svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2.2; flex-shrink: 0; }
 .sub-tab.active { background: var(--accent); color: #fff; }
-@media (max-width: 360px) { .sub-tab span { display: none; } }
+/* Inline red count after the label: "To-Dos (3)". */
 .sub-tab-badge {
-  position: absolute;
-  top: 2px;
-  right: 6px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
   background: #dc2626;
   color: #fff;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
-  line-height: 16px;
+  line-height: 18px;
   text-align: center;
-  box-shadow: 0 0 0 2px var(--bg);
+  flex-shrink: 0;
 }
-.sub-tab.active .sub-tab-badge { box-shadow: 0 0 0 2px var(--accent); }
+@media (max-width: 360px) { .sub-tab { font-size: 13px; gap: 4px; } }
 .sub-menu-btn {
   width: 40px;
   height: 40px;
