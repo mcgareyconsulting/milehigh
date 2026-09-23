@@ -6,7 +6,12 @@ exports:
   SUB_FIELDS: The exact key set a subcontractor payload may contain
   list_releases_for_subcontractor: Crew-scoped release rows, allowlist-serialized
   serialize_release_for_sub: One row -> sub payload (exported for the allowlist test)
-imports_from: [app.models, app.brain.job_log.utils, app.logging_config]
+  get_release_for_subcontractor: One crew-scoped release (None when off-crew / missing)
+  build_day_schedule_for_subcontractor: The phone timeline envelope, crew-scoped, notes stripped
+  list_todos_for_subcontractor / set_todo_status_for_subcontractor: The sub's own to-dos
+  list_notifications_for_subcontractor / mark_notification_read_for_subcontractor /
+    mark_all_read_for_subcontractor / unread_count_for_subcontractor: The sub's own mentions
+imports_from: [app.models, app.brain.job_log.utils, app.brain.install_schedule.service, app.logging_config]
 imported_by: [app/brain/sub_portal/routes.py]
 invariants:
   - Keys mirror the INTERNAL /brain/jobs serializer exactly, display casing included
@@ -16,9 +21,12 @@ invariants:
     equality, not containment, so a new Releases column cannot leak in silently.
   - A subcontractor with no crew gets [] — never an unscoped query.
 """
+from datetime import datetime
+
+from app.brain.install_schedule.service import build_day_schedule
 from app.brain.job_log.utils import serialize_value
 from app.logging_config import get_logger
-from app.models import Releases, db
+from app.models import ChecklistItem, Notification, Releases, db
 
 logger = get_logger(__name__)
 
@@ -136,3 +144,183 @@ def list_releases_for_subcontractor(subcontractor) -> list:
         .all()
     )
     return [serialize_release_for_sub(r) for r in rows]
+
+
+def _crew(subcontractor):
+    return (subcontractor.installer_team or '').strip()
+
+
+def _crew_release_query(crew):
+    return (
+        Releases.query
+        .filter(Releases.installer == crew)
+        .filter(db.or_(Releases.is_archived == False, Releases.is_archived == None))  # noqa: E712
+        .filter(db.or_(Releases.is_active == True, Releases.is_active == None))       # noqa: E712
+    )
+
+
+def get_release_for_subcontractor(subcontractor, release_id):
+    """One release, only if it sits on the caller's crew. None otherwise — the caller
+    404s, and a sub probing ids off their crew learns nothing (not even "exists")."""
+    crew = _crew(subcontractor)
+    if not crew:
+        return None
+    row = _crew_release_query(crew).filter(Releases.id == release_id).first()
+    return serialize_release_for_sub(row) if row else None
+
+
+# A crew name no release can carry. Used so an UNSCOPED account still gets the
+# day-row envelope shape (empty rows for the window) instead of a shape the phone
+# view would have to special-case — while matching zero rows, never all of them.
+_NO_CREW_SENTINEL = '\x00unscoped'
+
+# Card keys the day-schedule builder emits that a subcontractor must not see.
+# `notes` is the internal notes cell (the sub-facing notes thread is its own,
+# later slice); everything else on the card is already inside SUB_FIELDS' spirit
+# (code, project, crew, dates, install hours, stage).
+_DAY_CARD_STRIP = ('notes',)
+
+
+def build_day_schedule_for_subcontractor(subcontractor, days=14, past_days=14):
+    """The phone Timeline (days as rows) for exactly this crew.
+
+    Reuses the internal builder with the crew pinned server-side, so a sub can never
+    widen the filter by omitting a query param; then strips the internal-only card
+    keys. Same cards as the staff calendar, minus what the sub is not shown.
+    """
+    crew = _crew(subcontractor) or _NO_CREW_SENTINEL
+    envelope = build_day_schedule(days=days, past_days=past_days, installer=crew)
+    for card in envelope['past_due']:
+        for k in _DAY_CARD_STRIP:
+            card.pop(k, None)
+    for row in envelope['days']:
+        for card in row['cards']:
+            for k in _DAY_CARD_STRIP:
+                card.pop(k, None)
+    envelope['window']['installer'] = _crew(subcontractor) or None
+    return envelope
+
+
+# ---------------------------------------------------------------------------
+# To-dos: checklist items whose owner is THIS subcontractor account.
+# ---------------------------------------------------------------------------
+
+TODO_STATUSES = ('accepted', 'done')
+
+
+def serialize_todo_for_sub(item):
+    """Allowlist projection of a ChecklistItem for its subcontractor owner.
+
+    Deliberately absent: meeting id/title and transcript context, proposed-owner and
+    confidence fields, expected_update / brain_update_pending, reviewer. Those are the
+    internal review trail; the sub gets the task, its due date, and the release it is
+    about.
+    """
+    rel = item.release
+    return {
+        'id': item.id,
+        'title': item.title,
+        'detail': item.detail,
+        'item_type': item.item_type,
+        'status': item.status,
+        'due_date': item.due_date.isoformat() if item.due_date else None,
+        'release_id': item.release_id,
+        'release_code': f"{rel.job}-{rel.release}" if rel else None,
+        'release_job_name': rel.job_name if rel else None,
+        'release_description': rel.description if rel else None,
+        'created_at': item.created_at.isoformat() if item.created_at else None,
+    }
+
+
+def list_todos_for_subcontractor(subcontractor, status='open'):
+    """The sub's own to-dos. status = open (default) | done | all."""
+    q = ChecklistItem.query.filter(
+        ChecklistItem.owner_subcontractor_id == subcontractor.id,
+        ChecklistItem.status.in_(TODO_STATUSES),
+    )
+    if status == 'open':
+        q = q.filter(ChecklistItem.status == 'accepted')
+    elif status == 'done':
+        q = q.filter(ChecklistItem.status == 'done')
+    rows = q.order_by(
+        ChecklistItem.due_date.is_(None),
+        ChecklistItem.due_date.asc(),
+        ChecklistItem.id.desc(),
+    ).all()
+    return [serialize_todo_for_sub(it) for it in rows]
+
+
+def set_todo_status_for_subcontractor(subcontractor, item_id, new_status):
+    """Mark one of the sub's own to-dos done, or reopen it. Returns the payload or
+    None when the item is not theirs (the route 404s — ownership is the lookup)."""
+    item = ChecklistItem.query.filter(
+        ChecklistItem.id == item_id,
+        ChecklistItem.owner_subcontractor_id == subcontractor.id,
+        ChecklistItem.status.in_(TODO_STATUSES),
+    ).first()
+    if not item:
+        return None
+    if item.status != new_status:
+        item.status = new_status
+        db.session.commit()
+        logger.info("todo_status_changed", item_id=item.id, status=new_status,
+                    subcontractor_id=subcontractor.id)
+    return serialize_todo_for_sub(item)
+
+
+# ---------------------------------------------------------------------------
+# Notifications: rows addressed to THIS subcontractor account.
+# ---------------------------------------------------------------------------
+
+# Keys of Notification.to_dict() a subcontractor may see. Absent on purpose: user_id,
+# board_* (internal tracker), submittal_* (Procore), carmen_* (BB review), and the
+# drawing_version_comment_id / release_issue_comment_id row pointers that only mean
+# something to the staff deep-link router.
+_SUB_NOTIFICATION_FIELDS = (
+    'id', 'type', 'message', 'is_read', 'created_at', 'excerpt', 'author_name',
+    'checklist_item_id', 'release_id', 'release_job_number', 'release_number',
+    'release_issue_display_id', 'release_issue_title', 'drawing_version_number',
+)
+
+
+def serialize_notification_for_sub(n):
+    d = n.to_dict()
+    out = {k: d.get(k) for k in _SUB_NOTIFICATION_FIELDS}
+    out['release_code'] = (
+        f"{d['release_job_number']}-{d['release_number']}"
+        if d.get('release_job_number') and d.get('release_number') else None
+    )
+    return out
+
+
+def _sub_notifications(subcontractor):
+    return Notification.query.filter(Notification.subcontractor_id == subcontractor.id)
+
+
+def list_notifications_for_subcontractor(subcontractor, limit=50):
+    rows = (_sub_notifications(subcontractor)
+            .order_by(Notification.created_at.desc())
+            .limit(max(1, min(limit, 200)))
+            .all())
+    return [serialize_notification_for_sub(n) for n in rows]
+
+
+def unread_count_for_subcontractor(subcontractor):
+    return _sub_notifications(subcontractor).filter(Notification.is_read.is_(False)).count()
+
+
+def mark_notification_read_for_subcontractor(subcontractor, notification_id):
+    n = _sub_notifications(subcontractor).filter(Notification.id == notification_id).first()
+    if not n:
+        return None
+    if not n.is_read:
+        n.is_read = True
+        db.session.commit()
+    return serialize_notification_for_sub(n)
+
+
+def mark_all_read_for_subcontractor(subcontractor):
+    q = _sub_notifications(subcontractor).filter(Notification.is_read.is_(False))
+    updated = q.update({'is_read': True}, synchronize_session=False)
+    db.session.commit()
+    return updated

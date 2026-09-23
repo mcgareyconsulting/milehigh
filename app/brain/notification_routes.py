@@ -25,7 +25,7 @@ from flask import request, jsonify
 from app.brain import brain_bp
 from app.auth.utils import login_required, get_current_user
 from sqlalchemy.orm import joinedload
-from app.models import db, Notification, User, DrawingVersionComment, user_display_name
+from app.models import db, Notification, Subcontractor, User, DrawingVersionComment, user_display_name
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -52,6 +52,10 @@ def _resolve_owner_scope(user, raw):
     if owner.isdigit():
         target = int(owner)
         return target, target == user.id
+    if owner.startswith('sub:') and owner[4:].isdigit():
+        # A subcontractor account's inbox (the assignable-users dropdown hands out
+        # 'sub:<id>'). Admin-only like every other off-self view; read-only here.
+        return ('sub', int(owner[4:])), False
     return user.id, True
 
 
@@ -79,7 +83,9 @@ def list_notifications():
         joinedload(Notification.drawing_version_comment)
         .joinedload(DrawingVersionComment.release),
     )
-    if owner_id is not None:
+    if isinstance(owner_id, tuple):
+        q = q.filter(Notification.subcontractor_id == owner_id[1])
+    elif owner_id is not None:
         q = q.filter(Notification.user_id == owner_id)
     if not scoped_to_self:
         # Only an off-self view needs the recipient's name, so the bell's own
@@ -99,7 +105,8 @@ def list_notifications():
     for n in notifications:
         d = n.to_dict()
         if not scoped_to_self:
-            d['owner_name'] = user_display_name(n.user)
+            d['owner_name'] = (user_display_name(n.user) if n.user_id
+                               else d.get('subcontractor_name'))
         rows.append(d)
 
     unread_count = sum(1 for n in notifications if not n.is_read)
@@ -158,11 +165,24 @@ def mark_all_notifications_read():
 def list_mentionable_users_all():
     """List active users for @mention autocomplete (available to any logged-in user)."""
     users = User.query.filter_by(is_active=True).order_by(User.first_name).all()
+    # Subcontractor accounts are mentionable on release-linked surfaces (drawing
+    # comments, release issues); the handle is the first word of contact_name, which
+    # is exactly what MentionInput inserts (`@FirstName`). Listed after staff.
+    subs = Subcontractor.query.filter_by(is_active=True).order_by(Subcontractor.contact_name).all()
     return jsonify({'users': [
         {
             'id': u.id,
             'first_name': u.first_name or u.username,
             'last_name': u.last_name or '',
+            'kind': 'user',
         }
         for u in users
+    ] + [
+        {
+            'id': f'sub:{s.id}',
+            'first_name': (s.contact_name or '').strip().split(' ', 1)[0],
+            'last_name': f'{s.company_name} · sub',
+            'kind': 'subcontractor',
+        }
+        for s in subs
     ]})

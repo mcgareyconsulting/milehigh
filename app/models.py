@@ -989,7 +989,14 @@ class Notification(db.Model):
     """In-app notifications for @mentions and other events."""
     __tablename__ = "notifications"
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    # The recipient is EITHER an internal user OR a subcontractor account, never both.
+    # user_id went nullable when subcontractors became mention / to-do targets (T3);
+    # every staff-facing query filters on user_id == <me>, so a sub-targeted row can
+    # never surface in a staff bell, and vice versa (the sub portal filters on
+    # subcontractor_id == <me>). Enforced by the migration's CHECK on Postgres.
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    subcontractor_id = db.Column(db.Integer, db.ForeignKey('subcontractors.id', ondelete='CASCADE'),
+                                 nullable=True, index=True)
     type = db.Column(db.String(50), nullable=False, default='mention')
     message = db.Column(db.Text, nullable=False)
     board_item_id = db.Column(db.Integer, db.ForeignKey('board_items.id', ondelete='CASCADE'), nullable=True)
@@ -1006,6 +1013,7 @@ class Notification(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     user = db.relationship('User', backref='notifications', lazy='select')
+    subcontractor = db.relationship('Subcontractor', lazy='select')
     board_item = db.relationship('BoardItem', lazy='select')
     board_activity = db.relationship('BoardActivity', lazy='select')
     submittal = db.relationship('Submittals', lazy='select')
@@ -1039,6 +1047,8 @@ class Notification(db.Model):
         return {
             'id': self.id,
             'user_id': self.user_id,
+            'subcontractor_id': self.subcontractor_id,
+            'subcontractor_name': (self.subcontractor.contact_name if self.subcontractor else None),
             'type': self.type,
             'message': self.message,
             'board_item_id': self.board_item_id,
@@ -1927,6 +1937,12 @@ class ChecklistItem(db.Model):
 
     # Final, human-curated values (set on accept/edit; owner + date editable)
     owner_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    # A to-do can instead be owned by a SUBCONTRACTOR account (T3): the reviewer picks a
+    # sub from the same owner dropdown. Exactly one of the two owner columns is set;
+    # service.review_item clears the other on every owner write. Sub-owned items live
+    # on the sub's To-Dos page (app/brain/sub_portal), never in a staff user's queue.
+    owner_subcontractor_id = db.Column(db.Integer, db.ForeignKey('subcontractors.id'),
+                                       nullable=True, index=True)
     due_date = db.Column(db.Date, nullable=True)
 
     # Optional links to internal records (expands to the lake reference spine later)
@@ -1960,6 +1976,7 @@ class ChecklistItem(db.Model):
 
     # joined eager-load avoids an N+1 on owner-name lookups when serializing item lists
     owner = db.relationship('User', foreign_keys=[owner_user_id], lazy='joined')
+    owner_subcontractor = db.relationship('Subcontractor', foreign_keys=[owner_subcontractor_id], lazy='joined')
     proposed_owner = db.relationship('User', foreign_keys=[proposed_owner_user_id], lazy='joined')
     reviewer = db.relationship('User', foreign_keys=[reviewed_by])
     # The concrete linked release (when matched/picked) — surfaces its job-release # and
@@ -1973,6 +1990,12 @@ class ChecklistItem(db.Model):
         full = f"{(u.first_name or '').strip()} {(u.last_name or '').strip()}".strip()
         return full or u.username
 
+    @staticmethod
+    def _sub_name(s):
+        if not s:
+            return None
+        return f"{s.contact_name} ({s.company_name})"
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -1985,7 +2008,11 @@ class ChecklistItem(db.Model):
             'proposed_owner_name': self._name(self.proposed_owner),
             'proposed_due_date': _dt(self.proposed_due_date),
             'owner_user_id': self.owner_user_id,
-            'owner_name': self._name(self.owner),
+            'owner_subcontractor_id': self.owner_subcontractor_id,
+            # owner_name resolves to whichever owner is set, so staff views that only
+            # print the name keep working for sub-owned items.
+            'owner_name': (self._name(self.owner) if self.owner_user_id
+                           else self._sub_name(self.owner_subcontractor)),
             'due_date': _dt(self.due_date),
             'release_id': self.release_id,
             'release_job_release': (f"{self.release.job}-{self.release.release}"

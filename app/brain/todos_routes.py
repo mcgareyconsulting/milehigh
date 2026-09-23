@@ -37,14 +37,19 @@ def list_todos():
 
     q = ChecklistItem.query.filter(
         ChecklistItem.status.in_(TODO_STATUSES),
-        ChecklistItem.owner_user_id.isnot(None),
+        db.or_(ChecklistItem.owner_user_id.isnot(None),
+               ChecklistItem.owner_subcontractor_id.isnot(None)),
     )
     if not user.is_admin:
         q = q.filter(ChecklistItem.owner_user_id == user.id)
     else:
-        owner = request.args.get('owner')
-        if owner and owner.isdigit():
+        # ?owner=<user id> or ?owner=sub:<subcontractor id> (the ids the assignable-users
+        # dropdown hands out); anything else means every owner.
+        owner = (request.args.get('owner') or '').strip()
+        if owner.isdigit():
             q = q.filter(ChecklistItem.owner_user_id == int(owner))
+        elif owner.startswith('sub:') and owner[4:].isdigit():
+            q = q.filter(ChecklistItem.owner_subcontractor_id == int(owner[4:]))
 
     if status == 'open':
         q = q.filter(ChecklistItem.status == 'accepted')

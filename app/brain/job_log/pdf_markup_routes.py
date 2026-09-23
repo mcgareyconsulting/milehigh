@@ -30,7 +30,7 @@ from app.models import (
     Notification,
     db,
 )
-from app.brain.mentions import parse_mentions, resolve_mentioned_users, user_display_name
+from app.brain.mentions import mention_targets, parse_mentions, user_display_name
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
 
@@ -246,16 +246,21 @@ def add_drawing_version_comment(release_id, version_id):
     db.session.commit()
 
     # Parse @FirstName mentions and create notifications (mirrors board comments).
-    mentioned_users = resolve_mentioned_users(parse_mentions(body))
-    if mentioned_users:
+    # Subcontractor accounts are targets here too: a drawing comment is release-linked,
+    # so the sub can open the release it points at from their own portal.
+    mentioned_users, mentioned_subs = mention_targets(parse_mentions(body))
+    if mentioned_users or mentioned_subs:
+        message = f'{author_name} mentioned you on drawing v{version.version_number}'
         for mu in mentioned_users:
-            notif = Notification(
-                user_id=mu.id,
-                type='mention',
-                message=f'{author_name} mentioned you on drawing v{version.version_number}',
+            db.session.add(Notification(
+                user_id=mu.id, type='mention', message=message,
                 drawing_version_comment_id=comment.id,
-            )
-            db.session.add(notif)
+            ))
+        for ms in mentioned_subs:
+            db.session.add(Notification(
+                subcontractor_id=ms.id, type='mention', message=message,
+                drawing_version_comment_id=comment.id,
+            ))
         db.session.commit()
 
     return jsonify(comment.to_dict()), 201

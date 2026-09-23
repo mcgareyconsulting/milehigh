@@ -30,7 +30,7 @@ function LoginPrompt({ subcontractor }) {
         </p>
         <button
           type="button"
-          onClick={() => navigate('/sub/tickets')}
+          onClick={() => navigate('/sub/todos')}
           className="px-6 py-3 text-white bg-accent-500 hover:bg-accent-600 rounded-lg font-medium shadow-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2"
         >
           Back to my tickets

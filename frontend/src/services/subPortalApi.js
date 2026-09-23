@@ -1,0 +1,69 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: HTTP calls for the subcontractor portal (T3) — the crew-scoped release feed, the
+ *          phone Timeline envelope, one release's read-only detail, the sub's own to-dos and
+ *          their mentions. Every endpoint is @subcontractor_login_required server-side.
+ * exports:
+ *   getSubReleases, getSubRelease, getSubDaySchedule,
+ *   listSubTodos, setSubTodoStatus,
+ *   listSubNotifications, subUnreadCount, markSubNotificationRead, markAllSubRead
+ * imports_from: [axios, ../utils/api]
+ * imported_by: [pages/SubcontractorJobLog.jsx, pages/SubcontractorTodos.jsx,
+ *               components/SubcontractorShell.jsx, components/sub/SubReleaseSheet.jsx]
+ * invariants:
+ *   - withCredentials sends the subcontractor session cookie; ALL scoping (crew, ownership,
+ *     recipient) is enforced server-side — nothing here takes a crew or owner argument.
+ */
+import axios from 'axios';
+import { API_BASE_URL } from '../utils/api';
+
+axios.defaults.withCredentials = true;
+const BASE = `${API_BASE_URL}/brain/subcontractor`;
+
+export async function getSubReleases() {
+    const { data } = await axios.get(`${BASE}/releases`);
+    return data; // { releases, installer_team }
+}
+
+export async function getSubRelease(id) {
+    const { data } = await axios.get(`${BASE}/releases/${id}`);
+    return data.release;
+}
+
+export async function getSubDaySchedule({ days = 14, pastDays = 14 } = {}) {
+    const { data } = await axios.get(`${BASE}/install-schedule/by-day`, {
+        params: { days, past_days: pastDays },
+    });
+    return data; // { window, summary, past_due, days }
+}
+
+export async function listSubTodos(status = 'open') {
+    const { data } = await axios.get(`${BASE}/todos`, { params: { status } });
+    return data.todos;
+}
+
+export async function setSubTodoStatus(id, status) {
+    const { data } = await axios.patch(`${BASE}/todos/${id}`, { status });
+    return data;
+}
+
+export async function listSubNotifications(limit = 50) {
+    const { data } = await axios.get(`${BASE}/notifications`, { params: { limit } });
+    return data; // { notifications, unread_count }
+}
+
+export async function subUnreadCount() {
+    const { data } = await axios.get(`${BASE}/notifications/unread-count`);
+    return data.unread_count;
+}
+
+export async function markSubNotificationRead(id) {
+    const { data } = await axios.patch(`${BASE}/notifications/${id}/read`);
+    return data;
+}
+
+export async function markAllSubRead() {
+    const { data } = await axios.post(`${BASE}/notifications/read-all`);
+    return data;
+}

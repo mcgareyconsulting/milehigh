@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 
 NOTIFY_LEAD_DAYS = 2       # ping when the due date is within this many days
 _EDITABLE = ("title", "detail", "item_type", "gc_facing", "owner_user_id",
-             "due_date", "release_id", "submittal_id")
+             "owner_subcontractor_id", "due_date", "release_id", "submittal_id")
 
 # The web dyno runs no APScheduler (that's the IS_RENDER_SCHEDULER process), so the
 # multi-minute extraction can't block the request — gunicorn's worker timeout would
@@ -503,8 +503,15 @@ def review_item(item_id, *, action=None, fields=None, reviewer=None):
                     item.last_notified_at = None
             setattr(item, f, val)
 
+    # Exactly one owner column may be set. A write that names one owner kind clears
+    # the other, so a to-do can never be in two queues at once.
+    if fields.get("owner_user_id"):
+        item.owner_subcontractor_id = None
+    elif fields.get("owner_subcontractor_id"):
+        item.owner_user_id = None
+
     if action == "accept":
-        if item.owner_user_id is None:
+        if item.owner_user_id is None and item.owner_subcontractor_id is None:
             item.owner_user_id = item.proposed_owner_user_id
         if item.due_date is None:
             item.due_date = item.proposed_due_date
@@ -521,7 +528,7 @@ def review_item(item_id, *, action=None, fields=None, reviewer=None):
     db.session.commit()
     # On a fresh assignment (first accept with an owner), ping the assignee so the
     # to-do surfaces in their notification bell.
-    if action == "accept" and item.owner_user_id and not was_accepted:
+    if action == "accept" and _owner_target(item) and not was_accepted:
         _notify_assignee(item)
     # When this action retired the LAST un-reviewed item, the checklist is fully worked —
     # synthesize learnings from the yes/no/edit outcomes. Fires exactly once (guarded on
@@ -547,19 +554,33 @@ def _maybe_trigger_learning(meeting_id):
         logger.info("learning_trigger_skipped", meeting_id=meeting_id, error=str(e))
 
 
+def _owner_target(item):
+    """Notification recipient kwargs for the item's owner, or None when unowned.
+
+    One place decides which column a to-do's owner lives in, so the assignment ping
+    and the deadline pings can never disagree about who to tell.
+    """
+    if item.owner_user_id:
+        return {"user_id": item.owner_user_id}
+    if item.owner_subcontractor_id:
+        return {"subcontractor_id": item.owner_subcontractor_id}
+    return None
+
+
 def _notify_assignee(item):
     """Notify the owner of a newly-assigned to-do so it surfaces in their bell.
     Fires even on self-assignment — an assigned to-do is meant to land in the bell as
     the owner's inbox, including when the reviewer assigns it to themselves."""
     due = f" (due {item.due_date.isoformat()})" if item.due_date else ""
     db.session.add(Notification(
-        user_id=item.owner_user_id,
+        **_owner_target(item),
         type="checklist_assigned",
         message=f"New to-do: {item.title[:160]}{due}",
         checklist_item_id=item.id,
     ))
     db.session.commit()
-    logger.info("checklist_assigned", item_id=item.id, owner_id=item.owner_user_id)
+    logger.info("checklist_assigned", item_id=item.id, owner_id=item.owner_user_id,
+                owner_subcontractor_id=item.owner_subcontractor_id)
 
 
 def notify_due_items(today=None):
@@ -574,7 +595,8 @@ def notify_due_items(today=None):
 
     items = ChecklistItem.query.filter(
         ChecklistItem.status == "accepted",
-        ChecklistItem.owner_user_id.isnot(None),
+        db.or_(ChecklistItem.owner_user_id.isnot(None),
+               ChecklistItem.owner_subcontractor_id.isnot(None)),
         ChecklistItem.due_date.isnot(None),
         ChecklistItem.due_date <= cutoff,
     ).all()
@@ -590,7 +612,7 @@ def notify_due_items(today=None):
             continue
         when = "overdue" if state == "overdue" else f"due {item.due_date.isoformat()}"
         db.session.add(Notification(
-            user_id=item.owner_user_id,
+            **_owner_target(item),
             type="checklist_due",
             message=f"To-do {when}: {item.title[:160]}",
             checklist_item_id=item.id,

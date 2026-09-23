@@ -328,7 +328,7 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
           ) : subcontractor ? (
             <button
               type="button"
-              onClick={() => navigate('/sub/tickets')}
+              onClick={() => navigate('/sub/todos')}
               className="hidden min-[1440px]:inline-flex px-4 py-2 text-sm font-medium text-white bg-accent-500 hover:bg-accent-600 rounded-lg shadow-md ring-2 ring-accent-400 ring-offset-2 dark:ring-offset-slate-800 focus:outline-none focus:ring-2 focus:ring-accent-500"
             >
               My tickets
@@ -369,7 +369,7 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
         locationRequesting={locationRequesting}
         onLocationToggle={handleLocationToggle}
         onLogout={handleLogout}
-        onLogin={() => navigate(subcontractor ? '/sub/tickets' : '/login')}
+        onLogin={() => navigate(subcontractor ? '/sub/todos' : '/login')}
       />
 
       <PatchNotesModal isOpen={showPatchNotes} onClose={() => setShowPatchNotes(false)} isAdmin={isAdmin} />

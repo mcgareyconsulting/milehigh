@@ -40,6 +40,8 @@ import SubcontractorShell from './components/SubcontractorShell';
 import SubcontractorAcceptInvite from './pages/SubcontractorAcceptInvite';
 import SubcontractorTicketList from './pages/SubcontractorTicketList';
 import SubcontractorTicketDetail from './pages/SubcontractorTicketDetail';
+import SubcontractorTodos from './pages/SubcontractorTodos';
+import SubcontractorJobLog from './pages/SubcontractorJobLog';
 import Metrics from './pages/Metrics';
 import UserDirectory from './pages/UserDirectory';
 import InstallSchedule from './pages/InstallSchedule';
@@ -63,7 +65,7 @@ function AppContent() {
     setIsAuthenticated(!!user);
     // Only relevant when NOT a staff session — a subcontractor who wanders into
     // the staff area (e.g. an old bookmark, a mistyped URL) gets a tailored
-    // message pointing them back to /sub/tickets instead of a generic "log in".
+    // message pointing them back to /sub/todos instead of a generic "log in".
     if (!user) {
       setSubcontractor(await checkSubcontractorAuth());
     }
@@ -91,6 +93,11 @@ function AppContent() {
         <Route path="/sub/login" element={<Login onLogin={verifyAuth} />} />
         <Route path="/sub/accept-invite/:token" element={<SubcontractorAcceptInvite />} />
         <Route path="/sub" element={<SubcontractorShell />}>
+          {/* Two tabs (SubcontractorShell's bottom bar): To-Dos is home, Job Log is the crew
+              Timeline. T&M tickets stay routable from the shell's overflow menu. */}
+          <Route index element={<Navigate to="todos" replace />} />
+          <Route path="todos" element={<SubcontractorTodos />} />
+          <Route path="job-log" element={<SubcontractorJobLog />} />
           <Route path="tickets" element={<SubcontractorTicketList />} />
           <Route path="tickets/:id" element={<SubcontractorTicketDetail />} />
         </Route>

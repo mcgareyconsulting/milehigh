@@ -12,13 +12,31 @@ invariants:
   - No route in this module serves the changelog. Subs get Activity (slice 4), and the
     changelog is blocked by never having a route that returns it, not by a hidden tab.
 
-GET /brain/subcontractor/releases         crew-scoped releases, allowlist-serialized
-GET /brain/subcontractor/installer-teams  the caller's own crew, as a list
+GET   /brain/subcontractor/releases                  crew-scoped releases, allowlist-serialized
+GET   /brain/subcontractor/releases/<id>             one crew-scoped release (404 off-crew)
+GET   /brain/subcontractor/installer-teams           the caller's own crew, as a list
+GET   /brain/subcontractor/install-schedule/by-day   the phone Timeline envelope, crew pinned
+GET   /brain/subcontractor/todos?status=             the sub's own to-dos
+PATCH /brain/subcontractor/todos/<id>                done <-> accepted on their own to-do
+GET   /brain/subcontractor/notifications             their mentions / to-do pings
+GET   /brain/subcontractor/notifications/unread-count
+PATCH /brain/subcontractor/notifications/<id>/read
+POST  /brain/subcontractor/notifications/read-all
 """
-from flask import jsonify
+from flask import jsonify, request
 
 from app.brain import brain_bp
-from app.brain.sub_portal.service import list_releases_for_subcontractor
+from app.brain.sub_portal.service import (
+    build_day_schedule_for_subcontractor,
+    get_release_for_subcontractor,
+    list_notifications_for_subcontractor,
+    list_releases_for_subcontractor,
+    list_todos_for_subcontractor,
+    mark_all_read_for_subcontractor,
+    mark_notification_read_for_subcontractor,
+    set_todo_status_for_subcontractor,
+    unread_count_for_subcontractor,
+)
 from app.logging_config import get_logger
 from app.subcontractor_auth.utils import get_current_subcontractor, subcontractor_login_required
 
@@ -52,3 +70,88 @@ def list_subcontractor_installer_teams():
     sub = get_current_subcontractor()
     crew = (sub.installer_team or '').strip()
     return jsonify({'installer_teams': [crew] if crew else []}), 200
+
+
+def _int_arg(name, default, lo, hi):
+    try:
+        value = int(request.args.get(name, default))
+    except (TypeError, ValueError):
+        value = default
+    return max(lo, min(value, hi))
+
+
+@brain_bp.route('/subcontractor/releases/<int:release_id>', methods=['GET'])
+@subcontractor_login_required
+def get_subcontractor_release(release_id):
+    """One release on the caller's crew — the read-only detail sheet behind a card tap.
+    Off-crew and unknown ids both 404, so the response never confirms an id exists."""
+    payload = get_release_for_subcontractor(get_current_subcontractor(), release_id)
+    if payload is None:
+        return jsonify({'error': 'Release not found'}), 404
+    return jsonify({'release': payload}), 200
+
+
+@brain_bp.route('/subcontractor/install-schedule/by-day', methods=['GET'])
+@subcontractor_login_required
+def subcontractor_day_schedule():
+    """The phone Timeline. The crew is the session's, never a query param: a sub cannot
+    ask for another crew's days by editing the URL."""
+    sub = get_current_subcontractor()
+    return jsonify(build_day_schedule_for_subcontractor(
+        sub,
+        days=_int_arg('days', 14, 1, 31),
+        past_days=_int_arg('past_days', 14, 0, 31),
+    )), 200
+
+
+@brain_bp.route('/subcontractor/todos', methods=['GET'])
+@subcontractor_login_required
+def list_subcontractor_todos():
+    status = (request.args.get('status') or 'open').lower()
+    if status not in ('open', 'done', 'all'):
+        status = 'open'
+    return jsonify({'todos': list_todos_for_subcontractor(get_current_subcontractor(), status)}), 200
+
+
+@brain_bp.route('/subcontractor/todos/<int:item_id>', methods=['PATCH'])
+@subcontractor_login_required
+def update_subcontractor_todo(item_id):
+    new_status = ((request.get_json(silent=True) or {}).get('status') or '').lower()
+    if new_status not in ('done', 'accepted'):
+        return jsonify({'error': 'status must be done or accepted'}), 400
+    payload = set_todo_status_for_subcontractor(get_current_subcontractor(), item_id, new_status)
+    if payload is None:
+        return jsonify({'error': 'not found'}), 404
+    return jsonify(payload), 200
+
+
+@brain_bp.route('/subcontractor/notifications', methods=['GET'])
+@subcontractor_login_required
+def list_subcontractor_notifications():
+    sub = get_current_subcontractor()
+    rows = list_notifications_for_subcontractor(sub, limit=request.args.get('limit', type=int) or 50)
+    return jsonify({
+        'notifications': rows,
+        'unread_count': sum(1 for r in rows if not r['is_read']),
+    }), 200
+
+
+@brain_bp.route('/subcontractor/notifications/unread-count', methods=['GET'])
+@subcontractor_login_required
+def subcontractor_unread_count():
+    return jsonify({'unread_count': unread_count_for_subcontractor(get_current_subcontractor())}), 200
+
+
+@brain_bp.route('/subcontractor/notifications/<int:notification_id>/read', methods=['PATCH'])
+@subcontractor_login_required
+def mark_subcontractor_notification_read(notification_id):
+    payload = mark_notification_read_for_subcontractor(get_current_subcontractor(), notification_id)
+    if payload is None:
+        return jsonify({'error': 'not found'}), 404
+    return jsonify(payload), 200
+
+
+@brain_bp.route('/subcontractor/notifications/read-all', methods=['POST'])
+@subcontractor_login_required
+def mark_all_subcontractor_notifications_read():
+    return jsonify({'ok': True, 'updated': mark_all_read_for_subcontractor(get_current_subcontractor())}), 200
