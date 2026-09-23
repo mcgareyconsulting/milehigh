@@ -2,12 +2,13 @@
  * @milehigh-header
  * schema_version: 1
  * purpose: The Details tab of the sub release page — the desktop's three columns collapsed to one
- *          scroll in field order (release-mobile-recommendations.md §3): action pair, then
- *          Schedule and Details as 44px key/value rows, then the sub's to-dos on this release.
+ *          scroll in field order (release-mobile-recommendations.md §3): Schedule and Details as
+ *          44px key/value rows, then the sub's to-dos on this release. The spec's action pair is
+ *          NOT here by decision: Add note lives on the Activity tab and photos on Attachments.
  *          Every value is read-only here: the sub payload is an allowlist and stage / installer /
  *          crew edits remain staff actions.
  * exports:
- *   SubReleaseDetails: ({ rel, todos, onAddNote, onSeeAttachments })
+ *   SubReleaseDetails: ({ rel, todos })
  * imports_from: [react, ../installSchedule/DatePill]
  * imported_by: [pages/SubcontractorRelease.jsx]
  * invariants:
@@ -38,20 +39,11 @@ function Row({ k, v, muted }) {
     );
 }
 
-const ICONS = {
-    note: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>,
-    clip: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21.4 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 1 1 5.65 5.66l-9.2 9.19a2 2 0 0 1-2.82-2.83l8.49-8.48" /></svg>,
-};
-
-export default function SubReleaseDetails({ rel, todos = [], onAddNote, onSeeAttachments }) {
+export default function SubReleaseDetails({ rel, todos = [] }) {
     const kind = dateKind(rel);
     const start = fmtDate(rel['Start install']);
     return (
         <div className="flex-1 min-h-0 overflow-y-auto pb-6">
-            <div className="sub-actions">
-                <button type="button" className="sub-btn primary" onClick={onAddNote}>{ICONS.note} Add note</button>
-                <button type="button" className="sub-btn" onClick={onSeeAttachments}>{ICONS.clip} Attachments</button>
-            </div>
 
             <section className="sub-section">
                 <h3 className="sub-section-label">Schedule</h3>

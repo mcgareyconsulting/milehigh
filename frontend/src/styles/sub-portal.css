@@ -391,3 +391,32 @@
 .sub-reader-foot button { flex: 1; height: 48px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .25); background: rgba(255, 255, 255, .08); color: #fff; font-size: 15px; font-weight: 700; }
 .sub-reader-foot button:disabled { opacity: .35; }
 .sub-hint { position: absolute; left: 50%; transform: translateX(-50%); top: 64px; padding: 8px 14px; border-radius: 999px; background: rgba(21, 27, 51, .85); color: #fff; font-size: 13px; font-weight: 700; pointer-events: none; }
+
+/* Stage picker sheet + splice rows + attachments action bar */
+.sub-chip.stage.tappable { padding-right: 8px; gap: 6px; }
+.sub-chip.stage.tappable::after { content: '▾'; font-size: 11px; color: var(--text-3); }
+.sub-stage-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
+  min-height: 52px; padding: 8px 4px; border: 0; border-bottom: 1px solid var(--border); background: none;
+  color: var(--text); font-size: 16px; font-weight: 700; text-align: left;
+}
+.sub-stage-row:last-child { border-bottom: 0; }
+.sub-stage-row .check { width: 24px; height: 24px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; background: var(--accent); flex-shrink: 0; }
+.sub-stage-row .check svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 3; }
+.sub-stage-row:disabled { opacity: .5; }
+.sub-sheet h2 { font-size: 18px; font-weight: 900; margin: 6px 0 4px; }
+.sub-sheet .sub-note { font-size: 13px; color: var(--text-3); margin: 0 0 8px; }
+
+.sub-splice { display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left; padding: 12px 0; border: 0; border-bottom: 1px solid var(--border); background: none; color: var(--text); }
+.sub-splice:last-child { border-bottom: 0; }
+.sub-splice[disabled] { opacity: .55; }
+.sub-splice .code { font-size: 16px; font-weight: 800; color: var(--accent); white-space: nowrap; }
+.sub-splice .desc { font-size: 14px; color: var(--text-2); overflow-wrap: anywhere; }
+.sub-splice .meta { font-size: 13px; color: var(--text-3); margin-top: 2px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+.sub-bottombar {
+  position: sticky; bottom: 0; z-index: 20; display: flex; gap: 10px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: var(--surface); border-top: 1px solid var(--border);
+}
+.sub-bottombar .sub-btn { height: 48px; }

@@ -14,7 +14,10 @@ exports:
   list_activity_for_subcontractor: One crew release's Activity rows (SUB_ACTIVITY_ACTIONS only)
   add_note_for_subcontractor: Post a note to a crew release's thread, attributed "sub:<id>"
   list_attachments_for_subcontractor / resolve_drawing_file_for_subcontractor /
-    resolve_photo_file_for_subcontractor: The read-only attachments reader
+    resolve_photo_file_for_subcontractor: The attachments reader
+  upload_photo_for_subcontractor: Attach a photo to a crew release, uploader = the account
+  SUB_STAGES / set_stage_for_subcontractor: Field-side stage changes through UpdateStageCommand
+  list_family_for_subcontractor: The Splices tab (release family, on-crew rows tappable)
 imports_from: [app.models, app.brain.job_log.utils, app.brain.install_schedule.service,
   app.brain.job_log.features.notes.command, app.brain.job_log.features.splice.command, app.logging_config]
 imported_by: [app/brain/sub_portal/routes.py]
@@ -459,6 +462,9 @@ def add_note_for_subcontractor(subcontractor, release_id, text):
 
 
 def _uploader_name(row):
+    if getattr(row, 'uploaded_by_subcontractor_id', None):
+        s = row.uploaded_by_subcontractor
+        return s.contact_name if s else None
     u = row.uploaded_by
     if not u:
         return None
@@ -539,3 +545,84 @@ def resolve_photo_file_for_subcontractor(subcontractor, release_id, photo_id):
     if not photo or photo.is_deleted or photo.release_id != release.id:
         return None
     return photo
+
+
+def upload_photo_for_subcontractor(subcontractor, release_id, file_bytes, filename, mime_type, note=None):
+    """Attach an image to a crew release with the account as uploader. None when
+    off-crew; ValueError when the bytes are not an image."""
+    from app.brain.job_log.features.photos.command import UploadPhotoCommand
+    from app.brain.job_log.features.photos.payloads import is_probably_image, sniff_image_mime
+    release = _crew_release_row(subcontractor, release_id)
+    if release is None:
+        return None
+    if not is_probably_image(file_bytes, mime_type or '', filename or ''):
+        raise ValueError('File must be an image')
+    resolved = sniff_image_mime(file_bytes) or (mime_type if (mime_type or '').startswith('image/') else 'image/jpeg')
+    photo = UploadPhotoCommand(
+        release_id=release.id, file_bytes=file_bytes, filename=filename or None,
+        mime_type=resolved, uploaded_by_user_id=None, note=(note or '').strip() or None,
+        uploaded_by_subcontractor_id=subcontractor.id,
+    ).execute()
+    logger.info("sub_photo_uploaded", release_id=release.id, photo_id=photo.id,
+                subcontractor_id=subcontractor.id)
+    return {
+        'id': photo.id, 'original_filename': photo.original_filename, 'mime_type': photo.mime_type,
+        'file_size_bytes': photo.file_size_bytes, 'note': photo.note, 'stage': photo.stage,
+        'uploaded_at': photo.uploaded_at.isoformat() if photo.uploaded_at else None,
+        'uploaded_by_name': subcontractor.contact_name,
+    }
+
+
+# Stages a subcontractor may set from the field: the post-shipping / installation
+# stages, in workflow order. Shop stages (fabrication, paint, shipping holds) stay
+# staff-only — a crew reports what happened on site, it does not sequence the shop.
+SUB_STAGES = ('Ship Complete', 'Install Start', 'Install Complete', 'Complete')
+
+
+def set_stage_for_subcontractor(subcontractor, release_id, stage):
+    """Change a crew release's stage through UpdateStageCommand (all cascades: job_comp,
+    fab-order tier, Trello move, scheduling) attributed "sub:<id>". None when
+    off-crew; ValueError for a stage outside SUB_STAGES or a dedup hit."""
+    from app.brain.job_log.features.stage.command import UpdateStageCommand
+    release = _crew_release_row(subcontractor, release_id)
+    if release is None:
+        return None
+    stage = (stage or '').strip()
+    if stage not in SUB_STAGES:
+        raise ValueError(f"'{stage}' is not a stage you can set from the field")
+    result = UpdateStageCommand(
+        job_id=release.job, release=release.release, stage=stage,
+        source='Brain', source_of_update='Brain:sub',
+        external_user_id=f'{SUB_ACTOR_PREFIX}{subcontractor.id}',
+    ).execute()
+    logger.info("sub_stage_changed", release_id=release.id, job=release.job, release=release.release,
+                to_stage=stage, subcontractor_id=subcontractor.id, event_id=result.event_id)
+    return result
+
+
+def list_family_for_subcontractor(subcontractor, release_id):
+    """The release family (original + splices) for the Splices tab. Rows on another
+    crew are listed with their crew and hours but flagged off-crew so the client
+    does not link them; the caller's crew scope is unchanged. None when off-crew."""
+    from app.brain.job_log.features.splice.command import release_family
+    release = _crew_release_row(subcontractor, release_id)
+    if release is None:
+        return None
+    crew = _crew(subcontractor)
+    rows = []
+    for r in release_family(release):
+        if r.is_archived:
+            continue
+        rows.append({
+            'id': r.id,
+            'code': f"{r.job}-{r.release}",
+            'description': r.description,
+            'installer': r.installer,
+            'stage': r.stage or 'Released',
+            'start_install': r.start_install.isoformat() if r.start_install else None,
+            'install_hrs': r.install_hrs,
+            'is_parent': r.parent_release_id is None,
+            'is_this': r.id == release.id,
+            'on_crew': (r.installer or '') == crew,
+        })
+    return rows

@@ -5,8 +5,8 @@
  *          recommendations.md). Route /sub/releases/:id, pushed from a Job Log card or a to-do.
  *          Two-row sticky header (back · number chip · stage chip · ⋯ ; job name / scope · PM),
  *          a sticky horizontal tab strip, and one scrolling tab body. Tabs a sub gets: Details,
- *          Activity (with the note composer), Attachments (a reader). Issues, Splices and the
- *          Change Log are staff-only by decision (ROADMAP T3 2026-09-07) and are not rendered.
+ *          Activity (with the note composer), Attachments (reader + photo upload), Splices. Issues
+ *          and the Change Log are staff-only by decision (ROADMAP T3 2026-09-07) and not rendered.
  * exports:
  *   SubcontractorRelease: Page component, rendered inside SubcontractorShell's Outlet.
  * imports_from: [react, react-router-dom, ../services/subPortalApi, ../components/sub/*]
@@ -14,22 +14,25 @@
  * invariants:
  *   - Every field shown comes from the sub allowlist (GET /brain/subcontractor/releases/:id);
  *     off-crew ids 404 and the page says so rather than guessing.
- *   - The stage chip is DISPLAY ONLY for subs: stage changes stay a staff action (open question
- *     3 in the spec, answered conservatively until Bill says otherwise).
+ *   - The stage chip opens the stage picker; the options come from the server (SUB_STAGES: the
+ *     field-side stages only), and the change runs the full UpdateStageCommand cascade there.
  *   - The ⋯ menu holds Copy link and Close only — Procore/Trello links are internal identities.
  *   - Header and tab strip are fixed-height flex siblings (flex-shrink 0); only the tab body scrolls.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { getSubRelease, listSubTodos } from '../services/subPortalApi';
+import { getSubRelease, listSubTodos, setSubStage } from '../services/subPortalApi';
 import SubReleaseDetails from '../components/sub/SubReleaseDetails';
 import SubReleaseActivity from '../components/sub/SubReleaseActivity';
 import SubReleaseAttachments from '../components/sub/SubReleaseAttachments';
+import SubReleaseSplices from '../components/sub/SubReleaseSplices';
+import SubStageSheet from '../components/sub/SubStageSheet';
 
 const TABS = [
     { key: 'details', label: 'Details' },
     { key: 'activity', label: 'Activity' },
     { key: 'attachments', label: 'Attachments' },
+    { key: 'splices', label: 'Splices' },
 ];
 
 const ICONS = {
@@ -50,12 +53,17 @@ export default function SubcontractorRelease() {
     const [todos, setTodos] = useState([]);
     const [menuOpen, setMenuOpen] = useState(false);
     const [counts, setCounts] = useState({});
+    const [stageOptions, setStageOptions] = useState([]);
+    const [stageOpen, setStageOpen] = useState(false);
+    const [stageBusy, setStageBusy] = useState(false);
+    const [stageError, setStageError] = useState(null);
 
     const load = useCallback(async () => {
         setError(null);
         try {
             const [r, t] = await Promise.all([getSubRelease(releaseId), listSubTodos('all').catch(() => [])]);
-            setRel(r);
+            setRel(r.release);
+            setStageOptions(r.stage_options || []);
             setTodos(t.filter((x) => x.release_id === releaseId));
         } catch (e) {
             setError(e?.response?.status === 404 ? 'This release is not on your crew.' : 'Could not load the release.');
@@ -79,6 +87,20 @@ export default function SubcontractorRelease() {
             .filter(Boolean).join(' · ');
     }, [rel]);
     const reportCount = useCallback((key, n) => setCounts((c) => (c[key] === n ? c : { ...c, [key]: n })), []);
+    const closeStage = useCallback(() => setStageOpen(false), []);
+    const pickStage = async (stage) => {
+        setStageBusy(true);
+        setStageError(null);
+        try {
+            await setSubStage(releaseId, stage);
+            setStageOpen(false);
+            await load();
+        } catch (e) {
+            setStageError(e?.response?.data?.error || 'Could not change the stage');
+        } finally {
+            setStageBusy(false);
+        }
+    };
 
     return (
         <div className="flex-1 min-h-0 flex flex-col">
@@ -86,7 +108,11 @@ export default function SubcontractorRelease() {
                 <div className="sub-rel-row1">
                     <button type="button" className="sub-iconbtn" aria-label="Back" onClick={goBack}>{ICONS.back}</button>
                     {rel && <span className="sub-chip num">{code}</span>}
-                    {rel?.Stage && <span className="sub-chip stage">{rel.Stage}</span>}
+                    {rel?.Stage && (
+                        <button type="button" className="sub-chip stage tappable" onClick={() => setStageOpen(true)} aria-label={`Stage: ${rel.Stage}. Change stage`}>
+                            {rel.Stage}
+                        </button>
+                    )}
                     <span className="flex-1" />
                     <div className="relative">
                         <button type="button" className="sub-iconbtn" aria-label="More" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>{ICONS.more}</button>
@@ -108,6 +134,7 @@ export default function SubcontractorRelease() {
             </header>
 
             {error && <p className="px-4 py-6 text-center text-sm text-red-600">{error}</p>}
+            {stageError && <p className="px-4 py-2 text-sm text-red-600">{stageError}</p>}
 
             {rel && (
                 <>
@@ -120,19 +147,23 @@ export default function SubcontractorRelease() {
                         ))}
                     </nav>
                     <div className="flex-1 min-h-0 flex flex-col">
-                        {tab === 'details' && (
-                            <SubReleaseDetails rel={rel} todos={todos}
-                                onAddNote={() => setTab('activity')}
-                                onSeeAttachments={() => setTab('attachments')} />
-                        )}
+                        {tab === 'details' && <SubReleaseDetails rel={rel} todos={todos} />}
                         {tab === 'activity' && (
                             <SubReleaseActivity releaseId={releaseId} onCount={(n) => reportCount('activity', n)} />
                         )}
                         {tab === 'attachments' && (
                             <SubReleaseAttachments releaseId={releaseId} code={code} onCount={(n) => reportCount('attachments', n)} />
                         )}
+                        {tab === 'splices' && (
+                            <SubReleaseSplices releaseId={releaseId} onCount={(n) => reportCount('splices', n)} />
+                        )}
                     </div>
                 </>
+            )}
+
+            {stageOpen && rel && (
+                <SubStageSheet current={rel.Stage} options={stageOptions} busy={stageBusy}
+                    onPick={pickStage} onClose={closeStage} />
             )}
         </div>
     );

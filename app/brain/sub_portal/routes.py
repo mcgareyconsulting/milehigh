@@ -27,6 +27,9 @@ POST  /brain/subcontractor/releases/<id>/notes             post a note (body: {n
 GET   /brain/subcontractor/releases/<id>/attachments       drawings + photos, allowlisted
 GET   /brain/subcontractor/releases/<id>/drawing/versions/<vid>/file
 GET   /brain/subcontractor/releases/<id>/photos/<pid>/file
+POST  /brain/subcontractor/releases/<id>/photos                multipart image (+ note)
+PATCH /brain/subcontractor/releases/<id>/stage                  {stage} in SUB_STAGES
+GET   /brain/subcontractor/releases/<id>/splices                the release family
 """
 from flask import jsonify, request, send_file
 
@@ -34,7 +37,11 @@ from app.brain import brain_bp
 from app.brain.job_log.features.pdf_markup.storage import absolute_path as drawing_path
 from app.brain.job_log.features.photos.storage import absolute_path as photo_path
 from app.brain.sub_portal.service import (
+    SUB_STAGES,
     add_note_for_subcontractor,
+    list_family_for_subcontractor,
+    set_stage_for_subcontractor,
+    upload_photo_for_subcontractor,
     build_day_schedule_for_subcontractor,
     get_release_for_subcontractor,
     list_activity_for_subcontractor,
@@ -100,7 +107,7 @@ def get_subcontractor_release(release_id):
     payload = get_release_for_subcontractor(get_current_subcontractor(), release_id)
     if payload is None:
         return jsonify({'error': 'Release not found'}), 404
-    return jsonify({'release': payload}), 200
+    return jsonify({'release': payload, 'stage_options': list(SUB_STAGES)}), 200
 
 
 @brain_bp.route('/subcontractor/install-schedule/by-day', methods=['GET'])
@@ -232,3 +239,48 @@ def subcontractor_photo_file(release_id, photo_id):
         return jsonify({'error': 'File missing on disk'}), 410
     return send_file(str(path), mimetype=photo.mime_type or 'image/jpeg',
                      as_attachment=False, conditional=True)
+
+
+@brain_bp.route('/subcontractor/releases/<int:release_id>/photos', methods=['POST'])
+@subcontractor_login_required
+def subcontractor_upload_photo(release_id):
+    file = request.files.get('file')
+    if not file:
+        return jsonify({'error': "Missing 'file' part"}), 400
+    try:
+        payload = upload_photo_for_subcontractor(
+            get_current_subcontractor(), release_id, file.read(), file.filename or '',
+            (file.mimetype or '').lower(), note=request.form.get('note'))
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    if payload is None:
+        return jsonify({'error': 'Release not found'}), 404
+    return jsonify(payload), 201
+
+
+@brain_bp.route('/subcontractor/releases/<int:release_id>/stage', methods=['PATCH'])
+@subcontractor_login_required
+def subcontractor_set_stage(release_id):
+    from app.brain.job_log.features.stage.command import StagePhotoRequiredError
+    stage = (request.get_json(silent=True) or {}).get('stage')
+    try:
+        result = set_stage_for_subcontractor(get_current_subcontractor(), release_id, stage)
+    except StagePhotoRequiredError as exc:
+        return jsonify({'error': str(exc), 'code': 'photo_required', 'stage': exc.stage}), 422
+    except ValueError as exc:
+        msg = str(exc)
+        if 'already exists' in msg.lower():
+            return jsonify({'error': 'That change was just made'}), 400
+        return jsonify({'error': msg}), 400
+    if result is None:
+        return jsonify({'error': 'Release not found'}), 404
+    return jsonify({'status': 'success', 'event_id': result.event_id, 'stage': result.stage}), 200
+
+
+@brain_bp.route('/subcontractor/releases/<int:release_id>/splices', methods=['GET'])
+@subcontractor_login_required
+def subcontractor_release_splices(release_id):
+    rows = list_family_for_subcontractor(get_current_subcontractor(), release_id)
+    if rows is None:
+        return jsonify({'error': 'Release not found'}), 404
+    return jsonify({'family': rows}), 200

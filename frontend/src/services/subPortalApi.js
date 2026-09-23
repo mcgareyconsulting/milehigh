@@ -27,9 +27,10 @@ export async function getSubReleases() {
     return data; // { releases, installer_team }
 }
 
+/** Returns { release, stage_options } — the allowlisted row plus the stages a sub may set. */
 export async function getSubRelease(id) {
     const { data } = await axios.get(`${BASE}/releases/${id}`);
-    return data.release;
+    return data;
 }
 
 export async function getSubDaySchedule({ days = 14, pastDays = 14 } = {}) {
@@ -98,3 +99,24 @@ export const subDrawingFileUrl = (releaseId, versionId) =>
     `${BASE}/releases/${releaseId}/drawing/versions/${versionId}/file`;
 export const subPhotoFileUrl = (releaseId, photoId) =>
     `${BASE}/releases/${releaseId}/photos/${photoId}/file`;
+
+export async function uploadSubPhoto(releaseId, file, note = '') {
+    const form = new FormData();
+    form.append('file', file, file.name || 'photo.jpg');
+    if (note) form.append('note', note);
+    const { data } = await axios.post(`${BASE}/releases/${releaseId}/photos`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data; // the new photo row
+}
+
+/** stage must be one of the release payload's stage_options (SUB_STAGES server-side). */
+export async function setSubStage(releaseId, stage) {
+    const { data } = await axios.patch(`${BASE}/releases/${releaseId}/stage`, { stage });
+    return data; // { status, event_id, stage }
+}
+
+export async function getSubSplices(releaseId) {
+    const { data } = await axios.get(`${BASE}/releases/${releaseId}/splices`);
+    return data.family; // [{ id, code, description, installer, stage, start_install, install_hrs, is_parent, is_this, on_crew }]
+}

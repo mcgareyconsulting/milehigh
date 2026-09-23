@@ -1,12 +1,13 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: The Attachments tab of the sub release page as a READER (release-mobile-
- *          recommendations.md §4a): a Drawings section (one row per version, current flagged,
- *          uploader + date, size) and a Photos section (thumbnail rows with the stage tag). A
- *          drawing opens SubDrawingReader; a photo opens a full-screen image view. No upload, no
- *          markup, no Carmen: uploads need an authorship-model change (uploaded_by_user_id is a
- *          NOT NULL users FK) and the rest is desktop-only by the spec's own "what stays desktop".
+ * purpose: The Attachments tab of the sub release page (release-mobile-recommendations.md §4a):
+ *          a Drawings section (one row per version, current flagged, uploader + date, size) and a
+ *          Photos section (thumbnail rows with the stage tag), plus the spec's sticky bottom bar —
+ *          Take photo (camera) and Upload photo (library) — which post through the sub photo route
+ *          with the account as uploader. A drawing opens SubDrawingReader; a photo opens a
+ *          full-screen image view. No markup authoring, no Carmen, no drawing upload: those are
+ *          desktop-only by the spec's own "what stays desktop" list.
  * exports:
  *   SubReleaseAttachments: ({ releaseId, code, onCount })
  * imports_from: [react, ../../services/subPortalApi, ./SubDrawingReader]
@@ -16,8 +17,8 @@
  *   - Older versions of a drawing are listed under the current one rather than behind a menu,
  *     because a sub has no "⋯" actions to put there yet.
  */
-import { useCallback, useEffect, useState } from 'react';
-import { getSubAttachments, subDrawingFileUrl, subPhotoFileUrl } from '../../services/subPortalApi';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { getSubAttachments, subDrawingFileUrl, subPhotoFileUrl, uploadSubPhoto } from '../../services/subPortalApi';
 import SubDrawingReader from './SubDrawingReader';
 
 const fmtSize = (b) => {
@@ -35,6 +36,8 @@ const fmtDate = (iso) => {
 const ICONS = {
     pdf: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h5" /></svg>,
     back: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>,
+    camera: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>,
+    upload: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M17 8l-5-5-5 5M12 3v12" /></svg>,
 };
 
 function PhotoViewer({ src, title, meta, onClose }) {
@@ -61,6 +64,9 @@ export default function SubReleaseAttachments({ releaseId, code, onCount }) {
     const [error, setError] = useState(null);
     const [openDrawing, setOpenDrawing] = useState(null);
     const [openPhoto, setOpenPhoto] = useState(null);
+    const [uploading, setUploading] = useState(false);
+    const cameraRef = useRef(null);
+    const libraryRef = useRef(null);
 
     const load = useCallback(async () => {
         try {
@@ -77,8 +83,25 @@ export default function SubReleaseAttachments({ releaseId, code, onCount }) {
     const drawings = data?.drawings || [];
     const photos = data?.photos || [];
 
+    const onFiles = async (e) => {
+        const files = Array.from(e.target.files || []);
+        e.target.value = '';
+        if (!files.length) return;
+        setUploading(true);
+        setError(null);
+        try {
+            for (const f of files) await uploadSubPhoto(releaseId, f);
+            await load();
+        } catch (err) {
+            setError(err?.response?.data?.error || 'Could not upload the photo');
+        } finally {
+            setUploading(false);
+        }
+    };
+
     return (
-        <div className="flex-1 min-h-0 overflow-y-auto pb-6">
+        <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-1 min-h-0 overflow-y-auto pb-4">
             {error && <p className="px-4 py-3 text-sm text-red-600">{error}</p>}
             {!data && !error && <p className="px-4 py-3 text-sm text-ink-3">Loading…</p>}
 
@@ -121,6 +144,20 @@ export default function SubReleaseAttachments({ releaseId, code, onCount }) {
                     </section>
                 </>
             )}
+
+        </div>
+
+            {/* Sticky action bar (spec §4a). Camera capture on phones; library picker as the secondary. */}
+            <div className="sub-bottombar">
+                <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFiles} />
+                <input ref={libraryRef} type="file" accept="image/*" multiple className="hidden" onChange={onFiles} />
+                <button type="button" className="sub-btn primary" disabled={uploading} onClick={() => cameraRef.current?.click()}>
+                    {ICONS.camera} {uploading ? 'Uploading…' : 'Take photo'}
+                </button>
+                <button type="button" className="sub-btn" disabled={uploading} onClick={() => libraryRef.current?.click()}>
+                    {ICONS.upload} Upload photo
+                </button>
+            </div>
 
             {openDrawing && (
                 <SubDrawingReader

@@ -1251,7 +1251,11 @@ class ReleasePhoto(db.Model):
     # (e.g. "Welded QC", "Paint Complete") so the stage-change validation can
     # require proof for that specific stage.
     stage = db.Column(db.String(64), nullable=True)
-    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # The uploader is EITHER a staff user OR a subcontractor account (T3 sub portal):
+    # exactly one is set, enforced by the migration's CHECK on Postgres. Written only
+    # by UploadPhotoCommand, which stamps the matching actor on the upload_photo event.
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    uploaded_by_subcontractor_id = db.Column(db.Integer, db.ForeignKey('subcontractors.id'), nullable=True, index=True)
     uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     # Attribution for the most recent note edit. Photos are open to all users, so
     # these track who last changed a photo's note (and when) after upload. Null
@@ -1262,7 +1266,15 @@ class ReleasePhoto(db.Model):
 
     release = db.relationship('Releases', backref=db.backref('photos', lazy='dynamic'))
     uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_user_id])
+    uploaded_by_subcontractor = db.relationship('Subcontractor', foreign_keys=[uploaded_by_subcontractor_id])
     last_edited_by = db.relationship('User', foreign_keys=[last_edited_by_user_id])
+
+    def uploader_name(self):
+        """Display name of whoever uploaded it, staff or subcontractor."""
+        if self.uploaded_by_user_id:
+            return self._display_name(self.uploaded_by)
+        s = self.uploaded_by_subcontractor
+        return f"{s.contact_name} ({s.company_name})" if s else None
 
     @staticmethod
     def _display_name(user):
@@ -1283,7 +1295,8 @@ class ReleasePhoto(db.Model):
             'stage': self.stage,
             'uploaded_by': {
                 'id': self.uploaded_by_user_id,
-                'name': self._display_name(self.uploaded_by),
+                'subcontractor_id': self.uploaded_by_subcontractor_id,
+                'name': self.uploader_name(),
             },
             'uploaded_at': _dt(self.uploaded_at),
             'last_edited_by': {
