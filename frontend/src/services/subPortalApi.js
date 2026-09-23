@@ -10,7 +10,8 @@
  *   listSubNotifications, subUnreadCount, markSubNotificationRead, markAllSubRead
  * imports_from: [axios, ../utils/api]
  * imported_by: [pages/SubcontractorJobLog.jsx, pages/SubcontractorTodos.jsx,
- *               components/SubcontractorShell.jsx, components/sub/SubReleaseSheet.jsx]
+ *               components/SubcontractorShell.jsx, pages/SubcontractorRelease.jsx,
+ *               components/sub/SubReleaseActivity.jsx, components/sub/SubReleaseAttachments.jsx]
  * invariants:
  *   - withCredentials sends the subcontractor session cookie; ALL scoping (crew, ownership,
  *     recipient) is enforced server-side — nothing here takes a crew or owner argument.
@@ -74,3 +75,26 @@ export async function markAllSubRead({ types } = {}) {
     const { data } = await axios.post(`${BASE}/notifications/read-all${qs}`);
     return data;
 }
+
+// ---- Release page: activity, notes, attachments ----
+
+export async function getSubActivity(releaseId, limit = 200) {
+    const { data } = await axios.get(`${BASE}/releases/${releaseId}/activity`, { params: { limit } });
+    return data.events; // rows in the shape buildTimeline() reads
+}
+
+export async function addSubNote(releaseId, notes) {
+    const { data } = await axios.post(`${BASE}/releases/${releaseId}/notes`, { notes });
+    return data; // { status, event_id, notes }
+}
+
+export async function getSubAttachments(releaseId) {
+    const { data } = await axios.get(`${BASE}/releases/${releaseId}/attachments`);
+    return data; // { release_id, drawings, photos }
+}
+
+/** Streams through the sub session cookie; sub-scoped, so no staff route is ever hit. */
+export const subDrawingFileUrl = (releaseId, versionId) =>
+    `${BASE}/releases/${releaseId}/drawing/versions/${versionId}/file`;
+export const subPhotoFileUrl = (releaseId, photoId) =>
+    `${BASE}/releases/${releaseId}/photos/${photoId}/file`;

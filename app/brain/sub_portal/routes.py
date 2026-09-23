@@ -22,13 +22,25 @@ GET   /brain/subcontractor/notifications             their mentions / to-do ping
 GET   /brain/subcontractor/notifications/unread-count
 PATCH /brain/subcontractor/notifications/<id>/read
 POST  /brain/subcontractor/notifications/read-all
+GET   /brain/subcontractor/releases/<id>/activity          Activity rows (SUB_ACTIVITY_ACTIONS)
+POST  /brain/subcontractor/releases/<id>/notes             post a note (body: {notes})
+GET   /brain/subcontractor/releases/<id>/attachments       drawings + photos, allowlisted
+GET   /brain/subcontractor/releases/<id>/drawing/versions/<vid>/file
+GET   /brain/subcontractor/releases/<id>/photos/<pid>/file
 """
-from flask import jsonify, request
+from flask import jsonify, request, send_file
 
 from app.brain import brain_bp
+from app.brain.job_log.features.pdf_markup.storage import absolute_path as drawing_path
+from app.brain.job_log.features.photos.storage import absolute_path as photo_path
 from app.brain.sub_portal.service import (
+    add_note_for_subcontractor,
     build_day_schedule_for_subcontractor,
     get_release_for_subcontractor,
+    list_activity_for_subcontractor,
+    list_attachments_for_subcontractor,
+    resolve_drawing_file_for_subcontractor,
+    resolve_photo_file_for_subcontractor,
     list_notifications_for_subcontractor,
     list_releases_for_subcontractor,
     list_todos_for_subcontractor,
@@ -157,3 +169,66 @@ def mark_all_subcontractor_notifications_read():
     types = [t.strip() for t in (request.args.get('types') or '').split(',') if t.strip()]
     updated = mark_all_read_for_subcontractor(get_current_subcontractor(), types or None)
     return jsonify({'ok': True, 'updated': updated}), 200
+
+
+@brain_bp.route('/subcontractor/releases/<int:release_id>/activity', methods=['GET'])
+@subcontractor_login_required
+def subcontractor_release_activity(release_id):
+    rows = list_activity_for_subcontractor(
+        get_current_subcontractor(), release_id, limit=request.args.get('limit', type=int) or 200)
+    if rows is None:
+        return jsonify({'error': 'Release not found'}), 404
+    return jsonify({'events': rows}), 200
+
+
+@brain_bp.route('/subcontractor/releases/<int:release_id>/notes', methods=['POST'])
+@subcontractor_login_required
+def subcontractor_post_note(release_id):
+    body = request.get_json(silent=True) or {}
+    try:
+        result = add_note_for_subcontractor(get_current_subcontractor(), release_id, body.get('notes'))
+    except ValueError as exc:
+        if str(exc) == 'Event already exists':
+            return jsonify({'error': 'That note was just posted'}), 400
+        return jsonify({'error': str(exc)}), 400
+    if result is None:
+        return jsonify({'error': 'Release not found'}), 404
+    event_id, notes = result
+    return jsonify({'status': 'success', 'event_id': event_id, 'notes': notes}), 201
+
+
+@brain_bp.route('/subcontractor/releases/<int:release_id>/attachments', methods=['GET'])
+@subcontractor_login_required
+def subcontractor_release_attachments(release_id):
+    payload = list_attachments_for_subcontractor(get_current_subcontractor(), release_id)
+    if payload is None:
+        return jsonify({'error': 'Release not found'}), 404
+    return jsonify(payload), 200
+
+
+@brain_bp.route('/subcontractor/releases/<int:release_id>/drawing/versions/<int:version_id>/file', methods=['GET'])
+@subcontractor_login_required
+def subcontractor_drawing_file(release_id, version_id):
+    version = resolve_drawing_file_for_subcontractor(get_current_subcontractor(), release_id, version_id)
+    if version is None:
+        return jsonify({'error': 'Not found'}), 404
+    path = drawing_path(version.storage_key)
+    if not path.exists():
+        logger.error("drawing_file_missing", release_id=release_id, version_id=version_id, exc_info=True)
+        return jsonify({'error': 'File missing on disk'}), 410
+    return send_file(str(path), mimetype=version.mime_type or 'application/pdf',
+                     as_attachment=False, conditional=True)
+
+
+@brain_bp.route('/subcontractor/releases/<int:release_id>/photos/<int:photo_id>/file', methods=['GET'])
+@subcontractor_login_required
+def subcontractor_photo_file(release_id, photo_id):
+    photo = resolve_photo_file_for_subcontractor(get_current_subcontractor(), release_id, photo_id)
+    if photo is None:
+        return jsonify({'error': 'Not found'}), 404
+    path = photo_path(photo.storage_key)
+    if not path.exists():
+        logger.error("photo_file_missing", release_id=release_id, photo_id=photo_id, exc_info=True)
+        return jsonify({'error': 'File missing on disk'}), 410
+    return send_file(str(path), mimetype=photo.mime_type or 'image/jpeg',
+                     as_attachment=False, conditional=True)

@@ -7,7 +7,7 @@
  *          first; tapping marks read and opens the release it points at when there is one).
  * exports:
  *   SubcontractorTodos: Page component, rendered inside SubcontractorShell's Outlet.
- * imports_from: [react, react-router-dom, ../services/subPortalApi, ../components/sub/SubReleaseSheet]
+ * imports_from: [react, react-router-dom, ../services/subPortalApi, ../components/sub/SubEmpty]
  * imported_by: [App.jsx]
  * invariants:
  *   - Everything shown is server-scoped to this account (owner_subcontractor_id / subcontractor_id);
@@ -24,8 +24,7 @@
  *     the neutral colour.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useOutletContext, useSearchParams } from 'react-router-dom';
-import SubReleaseSheet from '../components/sub/SubReleaseSheet';
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import SubEmpty from '../components/sub/SubEmpty';
 import {
     listSubTodos, setSubTodoStatus, listSubNotifications, markSubNotificationRead, markAllSubRead,
@@ -131,6 +130,7 @@ function MentionCard({ n, onTap }) {
 
 export default function SubcontractorTodos() {
     const { refreshUnread, unread } = useOutletContext();
+    const navigate = useNavigate();
     const [params, setParams] = useSearchParams();
     const segment = params.get('seg') === 'mentions' ? 'mentions' : 'todos';
     const setSegment = (k) => setParams(k === 'mentions' ? { seg: 'mentions' } : {}, { replace: true });
@@ -140,7 +140,7 @@ export default function SubcontractorTodos() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [busyId, setBusyId] = useState(null);
-    const [openId, setOpenId] = useState(null);
+    const setOpenId = (id) => navigate(`/sub/releases/${id}`);
 
     const load = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
@@ -278,7 +278,6 @@ export default function SubcontractorTodos() {
                 </div>
             )}
 
-            <SubReleaseSheet releaseId={openId} onClose={() => setOpenId(null)} todos={todos} />
         </div>
     );
 }

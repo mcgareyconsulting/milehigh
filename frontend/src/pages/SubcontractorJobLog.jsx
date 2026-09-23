@@ -5,11 +5,11 @@
  *          day calendar (the same DaySchedule the staff Timeline shows on a phone), fed by the
  *          sub-scoped by-day endpoint with the crew pinned server-side, plus a "not yet scheduled"
  *          list of crew releases that carry no install date (which the day view cannot show).
- *          Tapping any card opens the read-only SubReleaseSheet.
+ *          Tapping any card pushes /sub/releases/:id; back returns here at the same scroll.
  * exports:
  *   SubcontractorJobLog: Page component, rendered inside SubcontractorShell's Outlet.
- * imports_from: [react, react-router-dom, ../services/subPortalApi,
- *                ../components/installSchedule/DaySchedule, ../components/sub/SubReleaseSheet]
+ * imports_from: [react, react-router-dom, ../services/subPortalApi, ../hooks/useScrollRestore,
+ *                ../components/installSchedule/DaySchedule, ../components/sub/SubEmpty]
  * imported_by: [App.jsx]
  * invariants:
  *   - No crew picker: the crew is the account's, chosen by an admin. The header names it so an
@@ -19,11 +19,11 @@
  *   - Polls while visible so a PM's reschedule shows up without a reload.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import DaySchedule from '../components/installSchedule/DaySchedule';
-import SubReleaseSheet from '../components/sub/SubReleaseSheet';
 import SubEmpty from '../components/sub/SubEmpty';
-import { getSubDaySchedule, getSubReleases, listSubTodos } from '../services/subPortalApi';
+import { useScrollRestore } from '../hooks/useScrollRestore';
+import { getSubDaySchedule, getSubReleases } from '../services/subPortalApi';
 
 const POLL_MS = 60000;
 
@@ -44,27 +44,25 @@ function UnscheduledCard({ rel, onOpen }) {
 
 export default function SubcontractorJobLog() {
     const { subcontractor } = useOutletContext();
+    const navigate = useNavigate();
     const crew = subcontractor?.installer_team || null;
     const [data, setData] = useState(null);
     const [releases, setReleases] = useState([]);
-    const [todos, setTodos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [openId, setOpenId] = useState(null);
     const [showUnscheduled, setShowUnscheduled] = useState(false);
+    const scrollRef = useScrollRestore('sub-job-log', !loading && !!data);
 
     const load = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
         setError(null);
         try {
-            const [env, feed, mine] = await Promise.all([
+            const [env, feed] = await Promise.all([
                 getSubDaySchedule({ days: 14, pastDays: 14 }),
                 getSubReleases(),
-                listSubTodos('all').catch(() => []),
             ]);
             setData(env);
             setReleases(feed.releases || []);
-            setTodos(mine);
         } catch (e) {
             setError(e?.response?.data?.error || e.message || 'Failed to load your schedule');
         } finally {
@@ -85,13 +83,13 @@ export default function SubcontractorJobLog() {
         [releases],
     );
     const roster = useMemo(() => (crew ? [crew] : []), [crew]);
-    const openCard = useCallback((card) => setOpenId(card.release_id), []);
-    const closeSheet = useCallback(() => setOpenId(null), []);
+    const openId = useCallback((id) => navigate(`/sub/releases/${id}`), [navigate]);
+    const openCard = useCallback((card) => openId(card.release_id), [openId]);
 
     const nothing = data && !data.past_due.length && data.summary.scheduled === 0;
 
     return (
-        <div className="flex-1 min-h-0 flex flex-col">
+        <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto flex flex-col">
             <div className="sub-page-head">
                 <h1>Job Log</h1>
                 <div className="sub-ctx">{crew ? `${crew} · next 2 weeks` : 'No crew assigned'}</div>
@@ -107,8 +105,11 @@ export default function SubcontractorJobLog() {
             {!loading && !error && crew && nothing && unscheduled.length === 0 && (
                 <SubEmpty icon="calendar" title="Nothing scheduled" body={`No installs for ${crew} in the next two weeks.`} />
             )}
+            {/* Plain block wrapper (not a flex column): DaySchedule's inner overflow div then sizes
+                to its content and THIS page scrolls, so sticky day headers, the unscheduled list and
+                scroll restore all work against one scroll container. */}
             {!loading && !error && data && crew && !nothing && (
-                <div className="px-4 flex-1 min-h-0 flex flex-col">
+                <div className="px-4">
                     <DaySchedule data={data} roster={roster} crewFilter={crew} onOpenRelease={openCard} />
                 </div>
             )}
@@ -122,13 +123,12 @@ export default function SubcontractorJobLog() {
                     </button>
                     {showUnscheduled && (
                         <div className="flex flex-col gap-2.5 pb-4">
-                            {unscheduled.map((r) => <UnscheduledCard key={r.id} rel={r} onOpen={setOpenId} />)}
+                            {unscheduled.map((r) => <UnscheduledCard key={r.id} rel={r} onOpen={openId} />)}
                         </div>
                     )}
                 </section>
             )}
 
-            <SubReleaseSheet releaseId={openId} onClose={closeSheet} todos={todos} />
         </div>
     );
 }

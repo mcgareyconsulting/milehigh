@@ -11,7 +11,12 @@ exports:
   list_todos_for_subcontractor / set_todo_status_for_subcontractor: The sub's own to-dos
   list_notifications_for_subcontractor / mark_notification_read_for_subcontractor /
     mark_all_read_for_subcontractor / unread_count_for_subcontractor: The sub's own mentions
-imports_from: [app.models, app.brain.job_log.utils, app.brain.install_schedule.service, app.logging_config]
+  list_activity_for_subcontractor: One crew release's Activity rows (SUB_ACTIVITY_ACTIONS only)
+  add_note_for_subcontractor: Post a note to a crew release's thread, attributed "sub:<id>"
+  list_attachments_for_subcontractor / resolve_drawing_file_for_subcontractor /
+    resolve_photo_file_for_subcontractor: The read-only attachments reader
+imports_from: [app.models, app.brain.job_log.utils, app.brain.install_schedule.service,
+  app.brain.job_log.features.notes.command, app.brain.job_log.features.splice.command, app.logging_config]
 imported_by: [app/brain/sub_portal/routes.py]
 invariants:
   - Keys mirror the INTERNAL /brain/jobs serializer exactly, display casing included
@@ -26,7 +31,10 @@ from datetime import datetime
 from app.brain.install_schedule.service import build_day_schedule
 from app.brain.job_log.utils import serialize_value
 from app.logging_config import get_logger
-from app.models import ChecklistItem, Notification, Releases, db
+from app.models import (
+    ChecklistItem, Notification, ReleaseDrawingVersion, ReleaseEvents, ReleasePhoto,
+    Releases, Subcontractor, User, db,
+)
 
 logger = get_logger(__name__)
 
@@ -342,3 +350,192 @@ def mark_all_read_for_subcontractor(subcontractor, types=None):
     updated = q.update({'is_read': True}, synchronize_session=False)
     db.session.commit()
     return updated
+
+
+# ---------------------------------------------------------------------------
+# Release page: Activity, notes, attachments (read-only reader).
+# ---------------------------------------------------------------------------
+
+def _crew_release_row(subcontractor, release_id):
+    crew = _crew(subcontractor)
+    if not crew:
+        return None
+    return _crew_release_query(crew).filter(Releases.id == release_id).first()
+
+
+# Event actions a subcontractor's Activity tab may show. The staff rail's
+# ACTIVITY_ACTIONS minus fab-order (shop sequencing) and the issue register
+# (staff-only); plus the notes thread. Blocked by never being served, not by a
+# hidden tab (ROADMAP T3 2026-09-07: Activity yes, Changelog never).
+SUB_ACTIVITY_ACTIONS = (
+    'update_notes', 'update_stage', 'update_ship_date', 'update_start_install',
+    'clear_hard_date', 'update_installer', 'update_num_guys',
+    'upload_photo', 'delete_photo', 'upload_drawing', 'save_drawing_version',
+    'delete_drawing_version',
+)
+
+SUB_ACTOR_PREFIX = 'sub:'
+
+
+def _actor_names(events):
+    """{event.id: (name, kind)} for staff (users) and subcontractor ("sub:<id>") actors."""
+    uids = {e.internal_user_id for e in events if e.internal_user_id}
+    sids = set()
+    for e in events:
+        ext = e.external_user_id or ''
+        if ext.startswith(SUB_ACTOR_PREFIX) and ext[len(SUB_ACTOR_PREFIX):].isdigit():
+            sids.add(int(ext[len(SUB_ACTOR_PREFIX):]))
+    users = {u.id: u for u in User.query.filter(User.id.in_(uids)).all()} if uids else {}
+    subs = {s.id: s for s in Subcontractor.query.filter(Subcontractor.id.in_(sids)).all()} if sids else {}
+    out = {}
+    for e in events:
+        if e.internal_user_id and e.internal_user_id in users:
+            u = users[e.internal_user_id]
+            name = f"{(u.first_name or '').strip()} {(u.last_name or '').strip()}".strip() or u.username
+            out[e.id] = (name, 'staff')
+            continue
+        ext = e.external_user_id or ''
+        if ext.startswith(SUB_ACTOR_PREFIX) and ext[len(SUB_ACTOR_PREFIX):].isdigit():
+            sub = subs.get(int(ext[len(SUB_ACTOR_PREFIX):]))
+            if sub:
+                out[e.id] = (sub.contact_name, 'sub')
+                continue
+        out[e.id] = (None, 'system')
+    return out
+
+
+def list_activity_for_subcontractor(subcontractor, release_id, limit=200):
+    """Activity rows for one crew release, newest first, in the shape the shared
+    buildTimeline() transform reads (action / payload / source / user_name / created_at).
+    None when the release is not on the caller's crew."""
+    from app.datetime_utils import format_datetime_mountain
+    release = _crew_release_row(subcontractor, release_id)
+    if release is None:
+        return None
+    events = (ReleaseEvents.query
+              .filter(ReleaseEvents.job == release.job,
+                      ReleaseEvents.release == release.release,
+                      ReleaseEvents.action.in_(SUB_ACTIVITY_ACTIONS),
+                      ReleaseEvents.is_system_echo.is_(False))
+              .order_by(ReleaseEvents.created_at.desc())
+              .limit(max(1, min(limit, 500)))
+              .all())
+    names = _actor_names(events)
+    rows = []
+    for e in events:
+        name, kind = names[e.id]
+        rows.append({
+            'id': e.id,
+            'action': e.action,
+            'payload': e.payload,
+            'source': e.source,
+            'user_name': name,
+            'actor_kind': kind,
+            'created_at': format_datetime_mountain(e.created_at),
+        })
+    return rows
+
+
+def add_note_for_subcontractor(subcontractor, release_id, text):
+    """Post a note to a crew release's thread via the ONE writer of Releases.notes
+    (UpdateNotesCommand), attributed to the account as external_user_id "sub:<id>".
+    Returns (event_id, notes) or None when off-crew; raises ValueError on an empty
+    body or a dedup hit, exactly like the staff route."""
+    from app.brain.job_log.features.notes.command import UpdateNotesCommand
+    release = _crew_release_row(subcontractor, release_id)
+    if release is None:
+        return None
+    body = (text or '').strip()
+    if not body:
+        raise ValueError('Note is empty')
+    result = UpdateNotesCommand(
+        job_id=release.job, release=release.release, notes=body,
+        source='Brain', source_of_update='Brain:sub',
+        external_user_id=f'{SUB_ACTOR_PREFIX}{subcontractor.id}',
+    ).execute()
+    logger.info("sub_note_posted", release_id=release.id, job=release.job,
+                release=release.release, subcontractor_id=subcontractor.id, event_id=result.event_id)
+    return result.event_id, result.notes
+
+
+def _uploader_name(row):
+    u = row.uploaded_by
+    if not u:
+        return None
+    return f"{(u.first_name or '').strip()} {(u.last_name or '').strip()}".strip() or u.username
+
+
+def list_attachments_for_subcontractor(subcontractor, release_id):
+    """Drawings (the release family's versions, newest first, current flagged) and photos
+    for one crew release. Allowlisted: no storage keys, no markup/comment internals.
+    None when off-crew."""
+    from app.brain.job_log.features.splice.command import release_family
+    release = _crew_release_row(subcontractor, release_id)
+    if release is None:
+        return None
+    members = release_family(release)
+    if release not in members:
+        members.append(release)
+    order = {r.id: i for i, r in enumerate(members)}
+    labels = {r.id: f"{r.job}-{r.release}" for r in members}
+
+    versions = (ReleaseDrawingVersion.query
+                .filter(ReleaseDrawingVersion.release_id.in_(list(order)),
+                        ReleaseDrawingVersion.is_deleted.is_(False))
+                .all())
+    versions.sort(key=lambda v: (order[v.release_id], -v.version_number))
+    latest = {}
+    for v in versions:
+        latest.setdefault(v.release_id, v.version_number)
+    drawings = [{
+        'id': v.id,
+        'release_id': v.release_id,
+        'release_label': labels[v.release_id],
+        'version_number': v.version_number,
+        'is_current': v.version_number == latest[v.release_id],
+        'original_filename': v.original_filename,
+        'file_size_bytes': v.file_size_bytes,
+        'uploaded_at': v.uploaded_at.isoformat() if v.uploaded_at else None,
+        'uploaded_by_name': _uploader_name(v),
+        'note': v.note,
+    } for v in versions]
+
+    photos = (ReleasePhoto.query
+              .filter(ReleasePhoto.release_id == release.id, ReleasePhoto.is_deleted.is_(False))
+              .order_by(ReleasePhoto.uploaded_at.desc(), ReleasePhoto.id.desc())
+              .all())
+    photo_rows = [{
+        'id': p.id,
+        'original_filename': p.original_filename,
+        'mime_type': p.mime_type,
+        'file_size_bytes': p.file_size_bytes,
+        'note': p.note,
+        'stage': p.stage,
+        'uploaded_at': p.uploaded_at.isoformat() if p.uploaded_at else None,
+        'uploaded_by_name': _uploader_name(p),
+    } for p in photos]
+    return {'release_id': release.id, 'drawings': drawings, 'photos': photo_rows}
+
+
+def resolve_drawing_file_for_subcontractor(subcontractor, release_id, version_id):
+    """The ReleaseDrawingVersion row a sub may stream, or None (off-crew, off-family,
+    deleted, unknown — all indistinguishable to the caller)."""
+    from app.brain.job_log.features.splice.command import release_family
+    release = _crew_release_row(subcontractor, release_id)
+    if release is None:
+        return None
+    version = db.session.get(ReleaseDrawingVersion, version_id)
+    if not version or version.is_deleted:
+        return None
+    family_ids = {r.id for r in release_family(release)} | {release.id}
+    return version if version.release_id in family_ids else None
+
+
+def resolve_photo_file_for_subcontractor(subcontractor, release_id, photo_id):
+    release = _crew_release_row(subcontractor, release_id)
+    if release is None:
+        return None
+    photo = db.session.get(ReleasePhoto, photo_id)
+    if not photo or photo.is_deleted or photo.release_id != release.id:
+        return None
+    return photo

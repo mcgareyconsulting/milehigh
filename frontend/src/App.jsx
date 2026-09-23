@@ -42,6 +42,7 @@ import SubcontractorTicketList from './pages/SubcontractorTicketList';
 import SubcontractorTicketDetail from './pages/SubcontractorTicketDetail';
 import SubcontractorTodos from './pages/SubcontractorTodos';
 import SubcontractorJobLog from './pages/SubcontractorJobLog';
+import SubcontractorRelease from './pages/SubcontractorRelease';
 import Metrics from './pages/Metrics';
 import UserDirectory from './pages/UserDirectory';
 import InstallSchedule from './pages/InstallSchedule';
@@ -98,6 +99,8 @@ function AppContent() {
           <Route index element={<Navigate to="todos" replace />} />
           <Route path="todos" element={<SubcontractorTodos />} />
           <Route path="job-log" element={<SubcontractorJobLog />} />
+          {/* A release is a PAGE on the phone, not a modal (docs/design/release-mobile-recommendations.md). */}
+          <Route path="releases/:id" element={<SubcontractorRelease />} />
           <Route path="tickets" element={<SubcontractorTicketList />} />
           <Route path="tickets/:id" element={<SubcontractorTicketDetail />} />
         </Route>
