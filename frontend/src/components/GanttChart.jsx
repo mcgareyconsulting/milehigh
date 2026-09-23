@@ -73,8 +73,8 @@
  *     with no installer": that pulls in every drafting and fab row and the tray stops being a work
  *     surface. A tray release in Ship Planning ALSO appears in its shipping lane, like the mirror.
  *   - The READY TO SHIP COLUMN holds the rows the tray's date test excludes — Paint Complete / Store
- *     at MHMW with NO hard Start install, split into a Paint Complete and a Store at MHMW section, each
- *     sorted by date — plus a trailing, NON-DRAGGABLE block of ASAPs still in Fab or Paint, tagged
+ *     at MHMW with NO hard Start install, grouped Paint Complete then Store at MHMW (by card tint and
+ *     order, no headers — each card names its own stage in its pill), each group sorted by date — plus a trailing, NON-DRAGGABLE block of ASAPs still in Fab or Paint, tagged
  *     "in Fab" / "in Paint", for visibility (utils/readyToShipColumn). The two columns are DISJOINT
  *     by construction, so no
  *     release is ever drawn in both: the pipeline reads left to right, Ready to Ship (needs a day) →
@@ -112,7 +112,7 @@
  *     viewStart to a Monday.
  * updated_by_agent: 2026-09-17 (Ready-to-Ship staging column + its Shipping Planning date-stamping drop)
  */
-import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, Fragment } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { useReleases } from '../context/ReleasesContext';
 import {
@@ -129,7 +129,7 @@ import {
 import { getEventCoordinates } from '@dnd-kit/utilities';
 import { INSTALLER_PALETTE } from '../constants/installerPalette';
 import { selectUnassigned } from '../utils/unassignedLane';
-import { selectReadyToShip, READY_TO_SHIP_COLUMN_STAGES, READY_TO_SHIP_SECTIONS } from '../utils/readyToShipColumn';
+import { selectReadyToShip, READY_TO_SHIP_COLUMN_STAGES } from '../utils/readyToShipColumn';
 import { dateAtDropX } from '../utils/timelineDrop';
 import { shipLaneDropOutcome, shipLabelFor } from '../utils/shipLaneDrop';
 import { localTodayStr as todayIso, subtractBusinessDays, addBusinessDays, formatDateShort } from '../utils/formatters';
@@ -204,7 +204,11 @@ const readReadyCollapsed = () => {
         return false;   // storage disabled — open is the safe default
     }
 };
-const HEADER_PX = 60;     // sticky header height — the staging tray hangs below it
+// Fallback sticky-header height, used only for the first paint and in environments without layout
+// (jsdom). The real height is MEASURED — it grows with the toolbar's wrapping — and a guess that is
+// too small hangs the pinned columns below the viewport, where their last card cannot be scrolled
+// fully into view until the page itself is scrolled down.
+const HEADER_PX = 60;
 const CARD_GUTTER = 5;    // horizontal inset within a column
 const CARD_VGAP = 3;      // vertical gap between stacked cards in a cell
 const CELL_PAD_TOP = 5;   // top padding inside a lane before the first card
@@ -448,11 +452,6 @@ const READY_SECTION_TONE = {
     paint: 'border-sky-300 border-l-4 border-l-sky-500 bg-sky-50',
     store: 'border-violet-300 border-l-4 border-l-violet-500 bg-violet-50',
 };
-const READY_SECTION_HEADER = {
-    paint: 'text-sky-800 border-sky-400',
-    store: 'text-violet-800 border-violet-400',
-    upstream: 'text-red-700 border-red-400',
-};
 
 // Which of the four a release falls into, plus how its date should read.
 function trayDateState(job) {
@@ -488,6 +487,17 @@ function trayDateState(job) {
 // construction, so ids could not actually collide today — but a shared id would make any future
 // overlap a silent, undebuggable drag bug, and the prefix costs nothing.
 //
+// Short stage labels for the card's top-right pill. Only the ones too long for a 200px column are
+// abbreviated; anything unlisted shows verbatim (and truncates if it has to).
+const STAGE_PILL_LABEL = {
+    'Store at MHMW': 'Store',
+    'Paint Complete': 'Paint Comp',
+    'Ship Planning': 'Ship Plan',
+    'Ship Complete': 'Shipped',
+    'Fit Up Complete': 'Fit Up',
+    'Material Ordered': 'Mat Ord',
+};
+
 // `tone` tints a neutral card by its Ready-to-Ship section; ASAP / overdue / scheduled cards ignore it.
 // `origin` ('Fab' / 'Paint') is set only on the column's upstream ASAPs: it answers "this is marked
 // rush and it's in my shipping queue — where actually IS it?"
@@ -495,6 +505,7 @@ function StagingCard({ job, draggable, dragIdPrefix = 'staging', tone, onClick, 
     const jr = `${job['Job #']}-${job['Release #']}`;
     const asap = job['start_install_asap'] === true;
     const origin = job['_asapOrigin'] || '';
+    const stage = String(job['Stage'] ?? '').trim();
     const date = trayDateState(job);
     // `disabled` keeps the hook order stable for non-admins, who get the same card without a grab.
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -518,21 +529,31 @@ function StagingCard({ job, draggable, dragIdPrefix = 'staging', tone, onClick, 
             // stylesheet order (it beat bg-violet-50 but lost to bg-sky-50).
             className={`rounded border px-2 py-1.5 shadow-sm select-none hover:shadow ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${date.kind === 'soft' ? (tone || `bg-white ${TRAY_BORDER.soft}`) : TRAY_BORDER[date.kind]}`}
         >
-            {asap && (
-                <div className="mb-1 flex items-center gap-1">
+            {/* Top row, on EVERY card — the stage pill keeps it occupied when there is no ASAP, so a
+                card is the same height in both columns and the two lists read as one system. */}
+            <div className="mb-1 flex items-center gap-1 min-h-[16px]">
+                {asap && (
                     <span className="inline-block px-1.5 py-0.5 rounded bg-red-600 text-white text-[10px] font-extrabold tracking-wide leading-none">
                         ASAP
                     </span>
-                    {origin && (
-                        <span
-                            className="inline-block px-1.5 py-0.5 rounded bg-gray-700 text-white text-[10px] font-bold tracking-wide leading-none"
-                            title={`Still in ${origin} — ${job['Stage'] || 'unknown stage'}`}
-                        >
-                            {`in ${origin}`}
-                        </span>
-                    )}
-                </div>
-            )}
+                )}
+                {origin && (
+                    <span
+                        className="inline-block px-1.5 py-0.5 rounded bg-gray-700 text-white text-[10px] font-bold tracking-wide leading-none"
+                        title={`Still in ${origin} — ${stage || 'unknown stage'}`}
+                    >
+                        {`in ${origin}`}
+                    </span>
+                )}
+                {stage && (
+                    <span
+                        className="ml-auto shrink-0 max-w-[60%] truncate px-1.5 py-0.5 rounded bg-gray-200 text-gray-700 text-[10px] font-bold tracking-wide leading-none"
+                        title={stage}
+                    >
+                        {STAGE_PILL_LABEL[stage] || stage}
+                    </span>
+                )}
+            </div>
             <div className="text-sm font-bold text-gray-900 truncate leading-tight">{jr}</div>
             {job['Job'] && (
                 <div className="text-xs text-gray-700 truncate leading-snug">{job['Job']}</div>
@@ -774,6 +795,7 @@ function GanttChart({ filterComplete = false }) {
     const [collapsedLanes, setCollapsedLanes] = useState(readCollapsedLanes);   // lanes folded to their sidebar strip
     const [containerW, setContainerW] = useState(0);                // measured scroll-viewport width → derives colPx
     const [containerH, setContainerH] = useState(0);                // measured scroll-viewport height → caps the staging tray
+    const [headerH, setHeaderH] = useState(HEADER_PX);              // measured sticky-header height → where the pinned columns hang from
     const [viewStart, setViewStart] = useState(() => mondayOf(todayIso()));
     const [navNonce, setNavNonce] = useState(0);   // bumps each nav so the scroll fires even when viewStart is unchanged
     const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -781,6 +803,17 @@ function GanttChart({ filterComplete = false }) {
     const [zoomIdx, setZoomIdx] = useState(DEFAULT_ZOOM);
     const [laneHeights, setLaneHeights] = useState({});   // measured px height per lane
     const scrollContainerRef = useRef(null);
+    // Callback ref, not useRef: the header does not exist on the first render (the chart is still
+    // loading), so a plain ref would leave the measure effect nothing to read and the pinned columns
+    // stuck on the HEADER_PX fallback. This measures the moment the header mounts instead.
+    const headerRef = useRef(null);
+    const headerObserverRef = useRef(null);
+    const attachHeader = (el) => {
+        headerRef.current = el;
+        if (!el) return;
+        if (el.offsetHeight) setHeaderH(el.offsetHeight);
+        if (headerObserverRef.current) headerObserverRef.current.observe(el);   // it wraps at narrow widths
+    };
     const bodyRef = useRef(null);
     const laneChartRefs = useRef({});      // lane name → chart-area DOM node, for height measurement
     const prevFirstDayRef = useRef(null);   // last chart origin, for scroll-anchoring on reflow
@@ -881,16 +914,25 @@ function GanttChart({ filterComplete = false }) {
     useLayoutEffect(() => {
         const el = scrollContainerRef.current;
         if (!el) return;
-        const measure = () => { setContainerW(el.clientWidth); setContainerH(el.clientHeight); };
-        measure();
+        const measure = () => {
+            setContainerW(el.clientWidth);
+            setContainerH(el.clientHeight);
+            const h = headerRef.current?.offsetHeight;
+            if (h) setHeaderH(h);
+            headerObserverRef.current = ro ?? null;
+        };
         let ro;
         if (typeof ResizeObserver !== 'undefined') {
             ro = new ResizeObserver(measure);
             ro.observe(el);
+            if (headerRef.current) ro.observe(headerRef.current);   // the header wraps at narrow widths
         }
+        headerObserverRef.current = ro ?? null;
+        measure();
         window.addEventListener('resize', measure);
         return () => {
             if (ro) ro.disconnect();
+            headerObserverRef.current = null;
             window.removeEventListener('resize', measure);
         };
     }, []);
@@ -1495,7 +1537,7 @@ function GanttChart({ filterComplete = false }) {
                             full-height rail with no top offset, so on vertical scroll it slides up
                             under the header — at an equal z it painted over it (later in the DOM)
                             and hid the ▶ expand control. */}
-                        <div className="sticky top-0 z-40 bg-gray-100 border-b-2 border-gray-300 flex" style={{ minHeight: HEADER_PX }}>
+                        <div ref={attachHeader} className="sticky top-0 z-40 bg-gray-100 border-b-2 border-gray-300 flex" style={{ minHeight: HEADER_PX }}>
                             {/* Staging-column header — frozen furthest left, above the tray. */}
                             <div
                                 className="sticky left-0 z-50 flex-shrink-0 border-r-2 border-gray-400 bg-gray-200 flex flex-col justify-center"
@@ -1668,8 +1710,8 @@ function GanttChart({ filterComplete = false }) {
                                     alignSelf: 'stretch',
                                 } : {
                                     width: stagingPx,
-                                    top: HEADER_PX,
-                                    maxHeight: containerH ? Math.max(containerH - HEADER_PX, 120) : undefined,
+                                    top: headerH,
+                                    maxHeight: containerH ? Math.max(containerH - headerH, 120) : undefined,
                                     overflowY: 'auto',
                                 }}
                             >
@@ -1721,8 +1763,8 @@ function GanttChart({ filterComplete = false }) {
                                 } : {
                                     width: readyPx,
                                     left: stagingPx,
-                                    top: HEADER_PX,
-                                    maxHeight: containerH ? Math.max(containerH - HEADER_PX, 120) : undefined,
+                                    top: headerH,
+                                    maxHeight: containerH ? Math.max(containerH - headerH, 120) : undefined,
                                     overflowY: 'auto',
                                 }}
                             >
@@ -1731,19 +1773,9 @@ function GanttChart({ filterComplete = false }) {
                                         <p className="text-[10px] text-gray-500 text-center py-6 leading-snug">
                                             Nothing waiting.<br />Everything ready to ship has a date.
                                         </p>
-                                    ) : readyToShip.map((row, i) => (
-                                        <Fragment key={row.id}>
-                                        {row._rtsSection !== readyToShip[i - 1]?._rtsSection && (
-                                            <div className={`px-0.5 pt-1 pb-0.5 border-b text-[10px] font-extrabold uppercase tracking-wide flex items-center ${READY_SECTION_HEADER[row._rtsSection] || ''}`}>
-                                                <span className="flex-1 truncate">
-                                                    {READY_TO_SHIP_SECTIONS.find((sec) => sec.key === row._rtsSection)?.label}
-                                                </span>
-                                                <span className="tabular-nums">
-                                                    {readyToShip.filter((r) => r._rtsSection === row._rtsSection).length}
-                                                </span>
-                                            </div>
-                                        )}
+                                    ) : readyToShip.map((row) => (
                                         <StagingCard
+                                            key={row.id}
                                             job={row}
                                             draggable={canDrag && row._rtsSection !== 'upstream'}
                                             dragIdPrefix="ready"
@@ -1761,7 +1793,6 @@ function GanttChart({ filterComplete = false }) {
                                             })}
                                             onMouseLeave={handleMouseLeave}
                                         />
-                                        </Fragment>
                                     ))}
                                 </div>
                             </div>

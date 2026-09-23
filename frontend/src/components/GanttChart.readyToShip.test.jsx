@@ -63,23 +63,26 @@ const MIXED = () => [
 ];
 
 describe('Ready-to-Ship column sections', () => {
-    it('renders Paint Complete, Store at MHMW, then the Fab/Paint ASAPs, each with its count', async () => {
+    it('groups Paint Complete, then Store at MHMW, then the Fab/Paint ASAPs, each group by date', async () => {
         mockJobs.current = MIXED();
         const { container } = await renderChart();
-        const col = readyColumn(container);
-        const text = col.textContent;
-
-        const order = ['PAINT COMPLETE', 'Store at MHMW', 'ASAP · in Fab / Paint'].map((label) =>
-            text.toLowerCase().indexOf(label.toLowerCase()));
-        expect(order.every((i) => i >= 0)).toBe(true);
-        expect([...order].sort((a, b) => a - b)).toEqual(order);
-
-        // Paint section soonest first, above the store card.
-        const cards = within(col).getAllByRole('button').map((b) => b.textContent);
+        const cards = within(readyColumn(container)).getAllByRole('button').map((b) => b.textContent);
         const pos = (jr) => cards.findIndex((t) => t.includes(jr));
+
+        // Paint section soonest first, then the store card, then the upstream ASAP.
         expect(pos('560-paint-early')).toBeLessThan(pos('560-paint-late'));
         expect(pos('560-paint-late')).toBeLessThan(pos('560-store'));
         expect(pos('560-store')).toBeLessThan(pos('560-rush'));
+    });
+
+    it('draws no section headers — each card names its own stage in its pill', async () => {
+        mockJobs.current = MIXED();
+        const { container } = await renderChart();
+        const col = readyColumn(container);
+        // Everything in the column is a card; nothing sits between them.
+        expect(col.querySelectorAll('[role="button"]').length).toBe(4);
+        expect(col.textContent).not.toMatch(/ASAP · in Fab/);
+        expect(within(col).getAllByText('Paint Comp').length).toBe(2);
     });
 
     it('counts only the in-shop holds as needing a ship date', async () => {
@@ -117,6 +120,37 @@ describe('Ready-to-Ship column sections', () => {
     });
 });
 
+describe('staging card shape', () => {
+    it('gives every card a stage pill, so a card is the same height in both columns', async () => {
+        mockJobs.current = [
+            ...MIXED(),
+            // A dated Store release — the Unassigned tray's card, the one the heights must match.
+            rel({ id: 9, 'Release #': 'dated', Stage: 'Store at MHMW',
+                'Start install': '2026-09-10', start_install_formulaTF: false }),
+        ];
+        const { container } = await renderChart();
+        const cards = [
+            ...container.querySelectorAll('[data-ready-to-ship] [role="button"]'),
+            ...container.querySelectorAll('[data-staging-tray] [role="button"]'),
+        ];
+        expect(cards.length).toBe(5);
+        // Every card leads with the same one-line badge row, whether or not it has an ASAP in it.
+        for (const card of cards) {
+            const row = card.firstElementChild;
+            expect(row.className).toContain('min-h-[16px]');
+            expect(row.lastElementChild.className).toContain('ml-auto');
+        }
+    });
+
+    it('abbreviates the long stages and keeps the full name in the title', async () => {
+        mockJobs.current = MIXED();
+        const { container } = await renderChart();
+        expect(within(cardFor(container, '560-store')).getByText('Store').title).toBe('Store at MHMW');
+        expect(within(cardFor(container, '560-paint-early')).getByText('Paint Comp').title).toBe('Paint Complete');
+        expect(within(cardFor(container, '560-rush')).getByText('Cut Start')).toBeInTheDocument();
+    });
+});
+
 describe('Timeline chrome', () => {
     it('opens the hover tooltip above the cursor on the lower half of the screen', async () => {
         mockJobs.current = MIXED();
@@ -134,6 +168,24 @@ describe('Timeline chrome', () => {
         const tip = screen.getByText(/^Job 560-store/).parentElement;
         expect(tip.style.top).toBe('50px');
         expect(tip.style.bottom).toBe('');
+    });
+
+    it('hangs the pinned columns off the MEASURED header height, so their last card scrolls fully into view', async () => {
+        // jsdom reports 0 for every offsetHeight, so stub the header's. The bug this guards was a
+        // hard-coded 60px against a real 70px header: the columns hung 10px below the viewport and
+        // the last card's bottom border could not be reached until the page itself was scrolled.
+        const proto = Object.getPrototypeOf(document.createElement('div'));
+        const spy = vi.spyOn(proto, 'offsetHeight', 'get').mockImplementation(function get() {
+            return this.className?.includes?.('sticky top-0') ? 70 : 0;
+        });
+        try {
+            mockJobs.current = MIXED();
+            const { container } = await renderChart();
+            await waitFor(() => expect(container.querySelector('[data-ready-to-ship]').style.top).toBe('70px'));
+            expect(container.querySelector('[data-staging-tray]').style.top).toBe('70px');
+        } finally {
+            spy.mockRestore();
+        }
     });
 
     it('keeps the sticky header above the folded staging rails so the expand controls stay clickable', async () => {
