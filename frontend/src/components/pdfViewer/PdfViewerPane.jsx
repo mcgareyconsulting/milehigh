@@ -6,7 +6,7 @@
  *   Carmen findings, markups, comments and version info. Replaces the old drawings rail.
  * exports:
  *   PdfViewerPane: props { releaseId, label, viewerUrl, initialCommentVersionId,
- *     onOpenVersion, onActionableCount }
+ *     onOpenVersion(versionId, mode, versionReleaseId), onActionableCount }
  * imports_from: [react, ../PdfMarkupModal, ./ViewerDock,
  *   ./ProcorePullDialog, ./format, ../../services/jobsApi,
  *   ../../services/notificationApi, ../../utils/api, ../../utils/auth]
@@ -21,6 +21,11 @@
  *   - Photos are not here; they live on the Details pane and the stage-photo gate
  *   - "Pull from Procore" sits in the top strip for drafters/admins, matching the route —
  *     it is the release-side counterpart to the nightly worker's link-only pass
+ *   - ONE DOCUMENT HUB PER SPLICE FAMILY (T9): versions load with ?family=1, so the original
+ *     and every splice list the same files, grouped by the release each is attached to. A
+ *     version is still owned by its release — its file, comments, review and markup saves
+ *     all go through `version.release_id`, never the open row's id. A new upload attaches
+ *     to the OPEN release; a Procore pull lands on the original (server-side)
  * updated_by_agent: 2026-09-05T00:00:00Z
  */
 import React, { useEffect, useRef, useState } from 'react';
@@ -42,12 +47,17 @@ export function PdfViewerPane({
     viewerUrl = '',
     /** Land on this version's comment thread (notification bell click-through). */
     initialCommentVersionId = null,
-    /** (versionId, mode) => void — hands off to PdfMarkupModal. Hidden when absent. */
+    /** (versionId, mode, versionReleaseId) => void — hands off to PdfMarkupModal. The third
+     *  arg is the release that OWNS the version, which differs from releaseId for a file
+     *  attached to another member of the splice family. Hidden when absent. */
     onOpenVersion = null,
     /** (count:number) => void — actionable Carmen findings, for the hub tab badge. */
     onActionableCount = null,
 }) {
     const [versions, setVersions] = useState([]);
+    // The splice family [{release_id, release_label, is_splice, is_archived}] — one entry
+    // for a release with no splices, which keeps the menu flat.
+    const [family, setFamily] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [uploading, setUploading] = useState(false);
@@ -79,12 +89,13 @@ export function PdfViewerPane({
         setLoading(true);
         setError(null);
         try {
-            const resp = await fetch(`${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions`, {
+            const resp = await fetch(`${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions?family=1`, {
                 credentials: 'include',
             });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
             setVersions(data?.versions ?? []);
+            setFamily(data?.family ?? []);
         } catch (err) {
             setError(err?.message || 'Failed to load versions');
         } finally {
@@ -144,7 +155,7 @@ export function PdfViewerPane({
             const next = {};
             await Promise.all(versions.map(async (v) => {
                 try {
-                    const r = await jobsApi.getBBReview(releaseId, v.id);
+                    const r = await jobsApi.getBBReview(v.release_id ?? releaseId, v.id);
                     next[v.id] = r?.status === 'complete' ? actionableCount(r.findings || []) : 0;
                 } catch {
                     next[v.id] = 0;
@@ -159,8 +170,9 @@ export function PdfViewerPane({
     useEffect(() => {
         if (!releaseId || viewingVersionId == null) return;
         if (commentsByVersion[viewingVersionId] !== undefined) return;
+        const owner = versions.find((v) => v.id === viewingVersionId)?.release_id ?? releaseId;
         let cancelled = false;
-        jobsApi.getVersionComments(releaseId, viewingVersionId)
+        jobsApi.getVersionComments(owner, viewingVersionId)
             .then((comments) => {
                 if (!cancelled) {
                     setCommentsByVersion((prev) => ({ ...prev, [viewingVersionId]: comments }));
@@ -171,7 +183,7 @@ export function PdfViewerPane({
             });
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [releaseId, viewingVersionId]);
+    }, [releaseId, viewingVersionId, versions]);
 
     // Escape closes the title menu only — the host modal owns Escape otherwise, so
     // this runs in the capture phase and stops there when the menu is what's open.
@@ -202,7 +214,8 @@ export function PdfViewerPane({
         try {
             const fd = new FormData();
             fd.append('file', file);
-            const latest = versions[0];
+            // A new upload joins the OPEN release's own chain, not the family's newest file.
+            const latest = versions.find((v) => (v.release_id ?? releaseId) === releaseId);
             if (latest) fd.append('source_version_id', String(latest.id));
             const resp = await fetch(`${API_BASE_URL}/brain/releases/${releaseId}/drawing`, {
                 method: 'POST',
@@ -239,7 +252,8 @@ export function PdfViewerPane({
         if (!versionId || !body || commentBusy[versionId]) return;
         setCommentBusy((prev) => ({ ...prev, [versionId]: true }));
         try {
-            const comment = await jobsApi.addVersionComment(releaseId, versionId, body);
+            const owner = versions.find((v) => v.id === versionId)?.release_id ?? releaseId;
+            const comment = await jobsApi.addVersionComment(owner, versionId, body);
             setCommentsByVersion((prev) => ({
                 ...prev,
                 [versionId]: [...(prev[versionId] || []), comment],
@@ -253,6 +267,15 @@ export function PdfViewerPane({
     };
 
     const viewing = versions.find((v) => v.id === viewingVersionId) || null;
+    const viewingReleaseId = viewing?.release_id ?? releaseId;
+    const isFamily = family.length > 1;
+    const openLabel = family.find((m) => m.release_id === releaseId)?.release_label || label;
+    // Menu sections: one per family member that has files, original first (server order).
+    const sections = isFamily
+        ? family
+            .map((m) => ({ ...m, items: versions.filter((v) => v.release_id === m.release_id) }))
+            .filter((m) => m.items.length > 0)
+        : [{ release_id: releaseId, release_label: null, items: versions }];
     const fileName = viewing
         ? (viewing.original_filename || `Drawing v${viewing.version_number}`)
         : 'No drawing';
@@ -273,7 +296,7 @@ export function PdfViewerPane({
                 color: 'var(--accent)',
             }}
         >
-            {uploading ? 'Uploading…' : '+ Upload PDF'}
+            {uploading ? 'Uploading…' : (isFamily && openLabel ? `+ Upload to ${openLabel}` : '+ Upload PDF')}
         </button>
     );
 
@@ -293,6 +316,9 @@ export function PdfViewerPane({
                         className="inline-flex items-center border border-hairline-strong bg-surface cursor-pointer"
                         style={{ height: 30, padding: '0 10px', borderRadius: 7, gap: 7, maxWidth: 420 }}
                     >
+                        {isFamily && viewing?.release_label && (
+                            <SpliceTag label={viewing.release_label} isSplice={viewing.is_splice} />
+                        )}
                         <span className="font-semibold text-ink truncate" style={{ fontSize: 13 }}>
                             {fileName}
                         </span>
@@ -335,7 +361,7 @@ export function PdfViewerPane({
                                     className="font-bold uppercase text-ink-3"
                                     style={{ fontSize: 12, letterSpacing: '.06em' }}
                                 >
-                                    Drawings
+                                    {isFamily ? 'Release family drawings' : 'Drawings'}
                                 </span>
                                 {uploadPill}
                             </div>
@@ -347,10 +373,27 @@ export function PdfViewerPane({
                                 )}
                                 {!loading && versions.length === 0 && (
                                     <p className="text-ink-3" style={{ padding: '10px 12px', fontSize: 12.5 }}>
-                                        No drawings yet — upload a PDF to create v1.
+                                        {isFamily
+                                            ? 'No drawings on any release in this family yet.'
+                                            : 'No drawings yet — upload a PDF to create v1.'}
                                     </p>
                                 )}
-                                {versions.map((v) => {
+                                {sections.map((section) => (
+                                <React.Fragment key={section.release_id}>
+                                {section.release_label && (
+                                    <div
+                                        className="flex items-center gap-2 border-b border-hairline bg-surface-2"
+                                        style={{ padding: '6px 12px' }}
+                                    >
+                                        <SpliceTag label={section.release_label} isSplice={section.is_splice} />
+                                        <span className="text-ink-3" style={{ fontSize: 11 }}>
+                                            {section.is_splice ? 'Splice' : 'Original'}
+                                            {section.is_archived ? ' · archived' : ''}
+                                            {section.release_id === releaseId ? ' · this release' : ''}
+                                        </span>
+                                    </div>
+                                )}
+                                {section.items.map((v) => {
                                     const active = v.id === viewingVersionId;
                                     const flags = flagsByVersion[v.id] || 0;
                                     return (
@@ -398,6 +441,8 @@ export function PdfViewerPane({
                                         </button>
                                     );
                                 })}
+                                </React.Fragment>
+                                ))}
                             </div>
                         </div>
                     )}
@@ -448,7 +493,7 @@ export function PdfViewerPane({
                 {viewing && onOpenVersion && (
                     <button
                         type="button"
-                        onClick={() => onOpenVersion(viewing.id, 'edit')}
+                        onClick={() => onOpenVersion(viewing.id, 'edit', viewingReleaseId)}
                         className="bg-transparent border-0 cursor-pointer text-ink-3 font-semibold"
                         style={{ fontSize: 12 }}
                         title="Open this version in the full-screen markup window"
@@ -467,7 +512,7 @@ export function PdfViewerPane({
                             inline
                             variant="hybrid"
                             isOpen
-                            releaseId={releaseId}
+                            releaseId={viewingReleaseId}
                             versionId={viewing.id}
                             mode={canReview ? 'edit' : 'view'}
                             title={fileName}
@@ -495,7 +540,7 @@ export function PdfViewerPane({
                     )}
                 </div>
                 <ViewerDock
-                    releaseId={releaseId}
+                    releaseId={viewingReleaseId}
                     version={viewing}
                     versions={versions}
                     numPages={numPages}
@@ -553,6 +598,25 @@ export function PdfViewerPane({
                 }}
             />
         </div>
+    );
+}
+
+/** Which family member a file is attached to — "340-666.1", tinted for a splice. */
+function SpliceTag({ label, isSplice }) {
+    return (
+        <span
+            className="font-bold shrink-0"
+            style={{
+                fontSize: 10.5,
+                padding: '1px 7px',
+                borderRadius: 999,
+                background: isSplice ? 'var(--accent-soft)' : 'var(--surface)',
+                color: isSplice ? 'var(--accent)' : 'var(--text-2)',
+                boxShadow: 'inset 0 0 0 1px var(--border-strong)',
+            }}
+        >
+            {label}
+        </span>
     );
 }
 

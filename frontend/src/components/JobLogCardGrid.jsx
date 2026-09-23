@@ -127,9 +127,9 @@ export default function JobLogCardGrid({
                 viewerUrl={selectedJob?.viewer_url}
                 initialTab={hubTab}
                 onOrdersChanged={onUpdate}
-                onOpenVersion={(vid, mode) => {
+                onOpenVersion={(vid, mode, vReleaseId) => {
                     const payload = {
-                        releaseId: selectedJob?.id,
+                        releaseId: vReleaseId ?? selectedJob?.id,
                         versionId: vid,
                         mode: (isAdmin || isDrafter) ? mode : 'view',
                     };

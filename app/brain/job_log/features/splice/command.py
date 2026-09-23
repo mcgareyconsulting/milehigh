@@ -99,6 +99,28 @@ def splice_children(parent, include_dead=False):
     return [r for r in rows if _live(r)]
 
 
+def splice_origin(release):
+    """The original release of ``release``'s family — itself unless it is a splice."""
+    if release is None or release.parent_release_id is None:
+        return release
+    return db.session.get(Releases, release.parent_release_id) or release
+
+
+def release_family(release):
+    """The original followed by its splices, archived ones included, oldest first.
+
+    Documents belong to the family, not to one row, so a splice that has since been
+    archived still contributes the files attached to it; only a soft-deleted splice
+    (is_active False) drops out. Splices nest one level only (a splice cannot be
+    spliced), so the origin's children are the whole family.
+    """
+    origin = splice_origin(release)
+    if origin is None:
+        return []
+    children = [r for r in splice_children(origin, include_dead=True) if r.is_active is not False]
+    return [origin, *children]
+
+
 def budget_hours(row):
     """Install hours a splice draws from its parent's pool: its total minus the
     additional hours that came from outside the pool (never below zero)."""

@@ -3,6 +3,7 @@
 Endpoints (registered on brain_bp under the /brain prefix):
   POST   /releases/<release_id>/drawing                          — upload v1 or save next version
   GET    /releases/<release_id>/drawing/versions                 — list versions (newest first)
+                                                                   ?family=1 spans the splice family
   GET    /releases/<release_id>/procore-documents                — Final PDF Pack candidates
   POST   /releases/<release_id>/procore-documents/<aid>/pull     — pull one into a version
   GET    /releases/<release_id>/drawing/versions/<vid>/file      — stream the PDF bytes
@@ -47,6 +48,7 @@ from app.brain.job_log.features.pdf_markup.procore_pull import (
     pull_document,
 )
 from app.brain.job_log.features.pdf_markup.storage import absolute_path
+from app.brain.job_log.features.splice.command import release_family
 
 logger = get_logger(__name__)
 
@@ -125,20 +127,49 @@ def upload_release_drawing(release_id):
 @brain_bp.route('/releases/<int:release_id>/drawing/versions', methods=['GET'])
 @login_required
 def list_release_drawing_versions(release_id):
+    """Versions for one release, newest first.
+
+    ?family=1 widens it to the release's splice family (original + every splice): the
+    hub's Attachments tab is one document hub for the family, so a file attached to
+    340.2 is seen from 340, 340.1 and 340.2 alike. Each version still belongs to the
+    release it was attached to — `release_id` / `release_label` say which — and is read,
+    commented on and marked up through that release's own routes.
+    """
     release = db.session.get(Releases, release_id)
     if not release:
         return jsonify({'error': 'Release not found'}), 404
 
-    versions = (ReleaseDrawingVersion.query
-                .filter(ReleaseDrawingVersion.release_id == release_id,
-                        ReleaseDrawingVersion.is_deleted.is_(False))
-                .order_by(ReleaseDrawingVersion.version_number.desc())
-                .all())
+    family_mode = request.args.get('family') in ('1', 'true', 'yes')
+    members = release_family(release) if family_mode else [release]
+    if release not in members:
+        # A soft-deleted splice opened directly still sees its own files.
+        members.append(release)
+    order = {r.id: i for i, r in enumerate(members)}
+    labels = {r.id: f"{r.job}-{r.release}" for r in members}
 
-    return jsonify({
+    versions = (ReleaseDrawingVersion.query
+                .filter(ReleaseDrawingVersion.release_id.in_(list(order)),
+                        ReleaseDrawingVersion.is_deleted.is_(False))
+                .all())
+    # Original first, then splices in creation order; newest version first within each.
+    versions.sort(key=lambda v: (order[v.release_id], -v.version_number))
+
+    payload = {
         'release_id': release_id,
-        'versions': [v.to_dict() for v in versions],
-    })
+        'versions': [
+            dict(v.to_dict(), release_label=labels[v.release_id],
+                 is_splice=members[order[v.release_id]].parent_release_id is not None)
+            for v in versions
+        ],
+    }
+    if family_mode:
+        payload['family'] = [
+            {'release_id': r.id, 'release_label': labels[r.id],
+             'is_splice': r.parent_release_id is not None,
+             'is_archived': bool(r.is_archived)}
+            for r in members
+        ]
+    return jsonify(payload)
 
 
 @brain_bp.route(
