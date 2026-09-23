@@ -146,8 +146,11 @@ export default function SubcontractorShell() {
     return (
         <div className="sub-shell">
             <header className="sub-topbar">
-                {/* The Brain logo, display only. Company / account details live behind the menu. */}
-                <img className="sub-logo" src="/logo.jpg" alt="MHMW Brain" />
+                {/* The Brain's banana mark in its blue tile (same as the staff rail), display only.
+                    Company / account details live behind the menu. */}
+                <span className="sub-logo" role="img" aria-label="MHMW Brain">
+                    <img src="/bananas-svgrepo-com.svg" alt="" width="22" height="22" />
+                </span>
                 <nav className="sub-tabs" aria-label="Sections">
                     <NavLink to="/sub/todos" className={tabClass}>
                         {ICONS.todos}<span>To-Dos</span>

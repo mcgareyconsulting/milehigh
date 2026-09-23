@@ -50,18 +50,16 @@
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
-/* The Brain logo is a wide mark (≈3.5:1), so it is sized by height and keeps its
-   aspect rather than being cropped into the spec's square tile. */
 .sub-logo {
-  height: 30px;
-  width: auto;
-  max-width: 108px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   flex-shrink: 0;
-  object-fit: contain;
-  border-radius: 6px;
-  display: block;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, #3a6ae0, #22409a);
 }
-@media (max-width: 360px) { .sub-logo { max-width: 40px; object-fit: cover; height: 32px; width: 32px; border-radius: 8px; } }
+.sub-logo img { display: block; }
 .sub-tabs {
   flex: 1 1 0;
   min-width: 0;
