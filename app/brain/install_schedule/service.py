@@ -7,9 +7,9 @@ purpose: Assemble the installation schedule payload in two shapes off ONE card b
   calendar behind the phone view, past-due triaged out to its own bucket).
 exports:
   build_next_week_schedule: (days:int=7, today:date|None=None) -> dict envelope {window, summary, crews[]}
-  build_day_schedule: (days:int=14, past_days:int=14, today:date|None=None, installer:str|None=None)
+  build_day_schedule: (days:int=14, past_days:int=14, today:date|None=None, installer:str|None=None, stage:str|None=None)
     -> dict envelope {window, summary, past_due[], days[]}
-  build_month_schedule: (year:int, month:int, today:date|None=None, installer:str|None=None)
+  build_month_schedule: (year:int, month:int, today:date|None=None, installer:str|None=None, stage:str|None=None)
     -> the same envelope for ONE calendar month (every day emitted, no past-due triage)
 imports_from: [app.models, app.brain.job_log.scheduling.calculator, app.brain.job_log.scheduling.config]
 imported_by: [app/brain/install_schedule/routes.py, tests]
@@ -258,7 +258,7 @@ def _hours(cards):
     return round(sum(known), 1) if known else 0.0
 
 
-def build_month_schedule(year, month, today=None, installer=None):
+def build_month_schedule(year, month, today=None, installer=None, stage=None):
     """
     The day-row envelope for ONE calendar month — the phone view's month filter.
 
@@ -282,6 +282,8 @@ def build_month_schedule(year, month, today=None, installer=None):
     )
     if installer:
         q = q.filter(Releases.installer == installer)
+    if stage:
+        q = q.filter(Releases.stage == stage)
     rows = q.all()
     splice_hours = splice_allocations([r.id for r in rows])
     by_day = {}
@@ -314,6 +316,7 @@ def build_month_schedule(year, month, today=None, installer=None):
             "today": today.isoformat(),
             "month": f"{year:04d}-{month:02d}",
             "installer": installer,
+            "stage": stage,
         },
         "summary": {
             "total_releases": len(cards),
@@ -330,7 +333,7 @@ def build_month_schedule(year, month, today=None, installer=None):
     }
 
 
-def build_day_schedule(days=14, past_days=14, today=None, installer=None):
+def build_day_schedule(days=14, past_days=14, today=None, installer=None, stage=None):
     """
     Assemble the installation schedule as DAY ROWS for the vertical calendar.
 
@@ -356,6 +359,10 @@ def build_day_schedule(days=14, past_days=14, today=None, installer=None):
     )
     if installer:
         q = q.filter(Releases.installer == installer)
+    # A stage filter is the phone's "Shipping Planning" lane: every crew's releases
+    # sitting in that stage, keyed on their install date like everything else here.
+    if stage:
+        q = q.filter(Releases.stage == stage)
 
     day_rows = q.all()
     splice_hours = splice_allocations([r.id for r in day_rows])
@@ -426,6 +433,7 @@ def build_day_schedule(days=14, past_days=14, today=None, installer=None):
             "days": days,
             "past_days": past_days,
             "installer": installer,
+            "stage": stage,
         },
         "summary": summary,
         "past_due": past_due,

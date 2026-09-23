@@ -28,6 +28,7 @@ import { ReleasesProvider } from '../context/ReleasesContext';
 import QuickSearch from './QuickSearch';
 import NotificationBell from './NotificationBell';
 import MobileNavDrawer from './MobileNavDrawer';
+import StaffMobileShell from './StaffMobileShell';
 import Rail from './Rail';
 import BBChatWidget, { CarmenButton } from './BBChatWidget';
 import PatchNotesModal from './PatchNotesModal';
@@ -126,6 +127,13 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
       {icon}
     </button>
   );
+
+  // The employee PHONE shell: /m/* swaps the desktop chrome for the Option A top bar
+  // (To-Dos · Job Log · T&M). Same providers above us, so the staff release modal,
+  // releases context and location all keep working inside it.
+  if (isAuthenticated && (location.pathname === '/m' || location.pathname.startsWith('/m/'))) {
+    return <StaffMobileShell />;
+  }
 
   return (
     // `app-shell-topbar` keeps --app-chrome-h reserved whenever the top bar is

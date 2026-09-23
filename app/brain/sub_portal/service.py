@@ -16,8 +16,8 @@ exports:
   list_attachments_for_subcontractor / resolve_drawing_file_for_subcontractor /
     resolve_photo_file_for_subcontractor: The attachments reader
   upload_photo_for_subcontractor: Attach a photo to a crew release, uploader = the account
+  upload_file_for_subcontractor: Attach a PDF as the next drawing version, uploader = the account
   SUB_STAGES / set_stage_for_subcontractor: Field-side stage changes through UpdateStageCommand
-  list_family_for_subcontractor: The Splices tab (release family, on-crew rows tappable)
 imports_from: [app.models, app.brain.job_log.utils, app.brain.install_schedule.service,
   app.brain.job_log.features.notes.command, app.brain.job_log.features.splice.command, app.logging_config]
 imported_by: [app/brain/sub_portal/routes.py]
@@ -605,29 +605,45 @@ def set_stage_for_subcontractor(subcontractor, release_id, stage):
     return result
 
 
-def list_family_for_subcontractor(subcontractor, release_id):
-    """The release family (original + splices) for the Splices tab. Rows on another
-    crew are listed with their crew and hours but flagged off-crew so the client
-    does not link them; the caller's crew scope is unchanged. None when off-crew."""
-    from app.brain.job_log.features.splice.command import release_family
+def upload_file_for_subcontractor(subcontractor, release_id, file_bytes, filename, mime_type, note=None):
+    """Attach a PDF to a crew release as its next drawing version — the same thing the
+    staff hub's Upload does — with the account as uploader. A release with no drawing
+    yet gets v1; otherwise v(N+1) derived from the current latest. None when off-crew;
+    ValueError when the bytes are not a PDF."""
+    from app.brain.job_log.features.pdf_markup.command import (
+        SaveDrawingVersionCommand, UploadInitialDrawingCommand,
+    )
+    from app.brain.job_log.features.pdf_markup.payloads import is_pdf_bytes
     release = _crew_release_row(subcontractor, release_id)
     if release is None:
         return None
-    crew = _crew(subcontractor)
-    rows = []
-    for r in release_family(release):
-        if r.is_archived:
-            continue
-        rows.append({
-            'id': r.id,
-            'code': f"{r.job}-{r.release}",
-            'description': r.description,
-            'installer': r.installer,
-            'stage': r.stage or 'Released',
-            'start_install': r.start_install.isoformat() if r.start_install else None,
-            'install_hrs': r.install_hrs,
-            'is_parent': r.parent_release_id is None,
-            'is_this': r.id == release.id,
-            'on_crew': (r.installer or '') == crew,
-        })
-    return rows
+    if not is_pdf_bytes(file_bytes):
+        raise ValueError('File must be a PDF or an image')
+    latest = (ReleaseDrawingVersion.query
+              .filter(ReleaseDrawingVersion.release_id == release.id)
+              .order_by(ReleaseDrawingVersion.version_number.desc())
+              .first())
+    note = (note or '').strip() or f'Uploaded from the field by {subcontractor.contact_name}'
+    if latest is None:
+        version = UploadInitialDrawingCommand(
+            release_id=release.id, file_bytes=file_bytes, filename=filename or None,
+            mime_type='application/pdf', uploaded_by_user_id=None, note=note,
+            uploaded_by_subcontractor_id=subcontractor.id,
+        ).execute()
+    else:
+        version = SaveDrawingVersionCommand(
+            release_id=release.id, file_bytes=file_bytes, uploaded_by_user_id=None,
+            source_version_id=latest.id, note=note,
+            uploaded_by_subcontractor_id=subcontractor.id,
+        ).execute()
+        if filename and not version.original_filename:
+            version.original_filename = filename
+            db.session.commit()
+    logger.info("sub_file_uploaded", release_id=release.id, version_id=version.id,
+                version=version.version_number, subcontractor_id=subcontractor.id)
+    return {
+        'id': version.id, 'release_id': version.release_id, 'version_number': version.version_number,
+        'original_filename': version.original_filename, 'file_size_bytes': version.file_size_bytes,
+        'uploaded_at': version.uploaded_at.isoformat() if version.uploaded_at else None,
+        'uploaded_by_name': subcontractor.contact_name, 'note': version.note,
+    }

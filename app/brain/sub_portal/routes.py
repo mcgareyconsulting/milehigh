@@ -28,8 +28,8 @@ GET   /brain/subcontractor/releases/<id>/attachments       drawings + photos, al
 GET   /brain/subcontractor/releases/<id>/drawing/versions/<vid>/file
 GET   /brain/subcontractor/releases/<id>/photos/<pid>/file
 POST  /brain/subcontractor/releases/<id>/photos                multipart image (+ note)
+POST  /brain/subcontractor/releases/<id>/files                 multipart PDF -> next drawing version
 PATCH /brain/subcontractor/releases/<id>/stage                  {stage} in SUB_STAGES
-GET   /brain/subcontractor/releases/<id>/splices                the release family
 """
 from flask import jsonify, request, send_file
 
@@ -39,8 +39,8 @@ from app.brain.job_log.features.photos.storage import absolute_path as photo_pat
 from app.brain.sub_portal.service import (
     SUB_STAGES,
     add_note_for_subcontractor,
-    list_family_for_subcontractor,
     set_stage_for_subcontractor,
+    upload_file_for_subcontractor,
     upload_photo_for_subcontractor,
     build_day_schedule_for_subcontractor,
     get_release_for_subcontractor,
@@ -282,10 +282,20 @@ def subcontractor_set_stage(release_id):
     return jsonify({'status': 'success', 'event_id': result.event_id, 'stage': result.stage}), 200
 
 
-@brain_bp.route('/subcontractor/releases/<int:release_id>/splices', methods=['GET'])
+@brain_bp.route('/subcontractor/releases/<int:release_id>/files', methods=['POST'])
 @subcontractor_login_required
-def subcontractor_release_splices(release_id):
-    rows = list_family_for_subcontractor(get_current_subcontractor(), release_id)
-    if rows is None:
+def subcontractor_upload_file(release_id):
+    """A PDF becomes the release's next drawing version (what the staff hub's Upload
+    does); images should go to /photos. One route per kind keeps the two models honest."""
+    file = request.files.get('file')
+    if not file:
+        return jsonify({'error': "Missing 'file' part"}), 400
+    try:
+        payload = upload_file_for_subcontractor(
+            get_current_subcontractor(), release_id, file.read(), file.filename or '',
+            (file.mimetype or '').lower(), note=request.form.get('note'))
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    if payload is None:
         return jsonify({'error': 'Release not found'}), 404
-    return jsonify({'family': rows}), 200
+    return jsonify(payload), 201

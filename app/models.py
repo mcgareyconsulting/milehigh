@@ -1156,7 +1156,10 @@ class ReleaseDrawingVersion(db.Model):
     original_filename = db.Column(db.String(256), nullable=True)
     mime_type = db.Column(db.String(64), nullable=False, default='application/pdf')
     file_size_bytes = db.Column(db.BigInteger, nullable=False)
-    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # The uploader is EITHER a staff user OR a subcontractor account (T3 sub portal
+    # "Upload file"); exactly one is set — CHECK in migrations/add_subcontractor_uploads.py.
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    uploaded_by_subcontractor_id = db.Column(db.Integer, db.ForeignKey('subcontractors.id'), nullable=True, index=True)
     uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     source_version_id = db.Column(
         db.Integer,
@@ -1168,14 +1171,19 @@ class ReleaseDrawingVersion(db.Model):
 
     release = db.relationship('Releases', backref=db.backref('drawing_versions', lazy='dynamic'))
     uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_user_id])
+    uploaded_by_subcontractor = db.relationship('Subcontractor', foreign_keys=[uploaded_by_subcontractor_id])
     source_version = db.relationship('ReleaseDrawingVersion', remote_side=[id])
 
-    def to_dict(self):
-        uploaded_by_name = None
+    def uploader_name(self):
         if self.uploaded_by:
             first = (self.uploaded_by.first_name or '').strip()
             last = (self.uploaded_by.last_name or '').strip()
-            uploaded_by_name = (f"{first} {last}".strip()) or self.uploaded_by.username
+            return (f"{first} {last}".strip()) or self.uploaded_by.username
+        s = self.uploaded_by_subcontractor
+        return f"{s.contact_name} ({s.company_name})" if s else None
+
+    def to_dict(self):
+        uploaded_by_name = self.uploader_name()
         return {
             'id': self.id,
             'release_id': self.release_id,
@@ -1185,6 +1193,7 @@ class ReleaseDrawingVersion(db.Model):
             'file_size_bytes': self.file_size_bytes,
             'uploaded_by': {
                 'id': self.uploaded_by_user_id,
+                'subcontractor_id': self.uploaded_by_subcontractor_id,
                 'name': uploaded_by_name,
             },
             'uploaded_at': _dt(self.uploaded_at),

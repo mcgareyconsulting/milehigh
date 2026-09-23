@@ -43,6 +43,9 @@ import SubcontractorTicketDetail from './pages/SubcontractorTicketDetail';
 import SubcontractorTodos from './pages/SubcontractorTodos';
 import SubcontractorJobLog from './pages/SubcontractorJobLog';
 import SubcontractorRelease from './pages/SubcontractorRelease';
+import StaffMobileTodos from './pages/mobile/StaffMobileTodos';
+import StaffMobileJobLog from './pages/mobile/StaffMobileJobLog';
+import { useBreakpoint } from './hooks/useBreakpoint';
 import Metrics from './pages/Metrics';
 import UserDirectory from './pages/UserDirectory';
 import InstallSchedule from './pages/InstallSchedule';
@@ -51,6 +54,12 @@ import Subs from './pages/Subs';
 import { checkAuth } from './utils/auth';
 import { checkSubcontractorAuth } from './utils/subcontractorAuth';
 import './App.css';
+
+/** Staff landing: a phone opens the mobile shell, everything else the Job Log. */
+function HomeRedirect() {
+  const { isMobile } = useBreakpoint();
+  return <Navigate to={isMobile ? '/m/todos' : '/job-log'} replace />;
+}
 
 function AppContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
@@ -107,7 +116,15 @@ function AppContent() {
         <Route path="/" element={<AppShell isAuthenticated={isAuthenticated} subcontractor={subcontractor} />}>
           {isAuthenticated ? (
             <>
-              <Route index element={<Navigate to="/job-log" replace />} />
+              <Route index element={<HomeRedirect />} />
+              {/* Employee phone shell (AppShell renders StaffMobileShell for /m/*):
+                  To-Dos, the Job Log as the day calendar, and T&M tickets. */}
+              <Route path="m">
+                <Route index element={<Navigate to="todos" replace />} />
+                <Route path="todos" element={<StaffMobileTodos />} />
+                <Route path="job-log" element={<StaffMobileJobLog />} />
+                <Route path="tm-tickets" element={<TMTickets />} />
+              </Route>
               {/* Shared releases shell: the toolbar/header stays mounted across
                   Table ↔ Board ↔ Timeline; only the Outlet content swaps. */}
               <Route element={<ReleasesLayout />}>

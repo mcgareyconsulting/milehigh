@@ -30,11 +30,12 @@
 
   font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
-  /* A FIXED height, not min-height: the shell must be bounded for `.sub-page` and the
-     tab bodies inside it to be the scroll containers. With min-height a tall tab (a
-     photo list, a splice family) grows the shell past the viewport, the document
-     scrolls instead, and the top bar / release header scroll away with it. */
-  height: 100dvh;
+  /* PINNED to the viewport. The shell must be bounded for `.sub-page` and the tab
+     bodies inside it to be the scroll containers; position:fixed also takes the
+     document itself out of play, so iOS Safari has nothing to rubber-band and the
+     top bar / release header can never scroll away. */
+  position: fixed;
+  inset: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;

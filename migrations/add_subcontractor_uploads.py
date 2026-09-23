@@ -1,18 +1,23 @@
 """
-Subcontractor photo uploads (T3 sub portal): let a subcontractor account be the
-uploader of a release photo.
+Subcontractor uploads (T3 sub portal): let a subcontractor account be the uploader
+of a release photo and of a drawing version (the sub portal's "Upload file").
 
-  release_photos.uploaded_by_user_id            NOT NULL -> NULL
-  release_photos.uploaded_by_subcontractor_id   new, nullable FK -> subcontractors(id)
-  CHECK release_photos_one_uploader: exactly one of the two is set
+  release_photos.uploaded_by_user_id                       NOT NULL -> NULL
+  release_photos.uploaded_by_subcontractor_id              new, nullable FK -> subcontractors(id)
+  CHECK release_photos_one_uploader
+  release_drawing_versions.uploaded_by_user_id             NOT NULL -> NULL
+  release_drawing_versions.uploaded_by_subcontractor_id    new, nullable FK -> subcontractors(id)
+  CHECK release_drawing_versions_one_uploader
+
+Supersedes add_subcontractor_photo_uploads.py (same photo steps; safe if that ran).
 
 DROP NOT NULL is instant; the ADD COLUMN is nullable with no default; the FK check
 scans all-NULL rows; the CHECK is added NOT VALID then validated (SHARE UPDATE
 EXCLUSIVE only); the index is built CONCURRENTLY on AUTOCOMMIT.
 
 Usage:
-    python migrations/add_subcontractor_photo_uploads.py
-    python migrations/add_subcontractor_photo_uploads.py --database-url postgresql://...
+    python migrations/add_subcontractor_uploads.py
+    python migrations/add_subcontractor_uploads.py --database-url postgresql://...
 
 Safety properties (Postgres) — see migrations/README.md: idempotent DDL, no schema
 reflection under a lock, one AUTOCOMMIT connection, lock_timeout + retry.
@@ -139,7 +144,7 @@ def _migrate_postgres(engine) -> bool:
         conn.execute(text(f"SET lock_timeout = '{LOCK_TIMEOUT}'"))
         conn.execute(text(f"SET statement_timeout = '{STATEMENT_TIMEOUT}'"))
 
-        for table in ("subcontractors", "release_photos"):
+        for table in ("subcontractors", "release_photos", "release_drawing_versions"):
             if conn.execute(text("SELECT to_regclass(:t)"), {"t": table}).scalar() is None:
                 print(f"FAILED Table '{table}' does not exist. Run the base schema first.")
                 return False
@@ -153,28 +158,33 @@ def _migrate_postgres(engine) -> bool:
             ("CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_release_photos_uploaded_by_subcontractor_id "
              "ON release_photos (uploaded_by_subcontractor_id)",
              "ix_release_photos_uploaded_by_subcontractor_id"),
+            ("ALTER TABLE release_drawing_versions ALTER COLUMN uploaded_by_user_id DROP NOT NULL",
+             "release_drawing_versions.uploaded_by_user_id nullable"),
+            ("ALTER TABLE release_drawing_versions ADD COLUMN IF NOT EXISTS uploaded_by_subcontractor_id INTEGER "
+             "REFERENCES subcontractors(id)",
+             "release_drawing_versions.uploaded_by_subcontractor_id"),
+            ("CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_release_drawing_versions_uploaded_by_subcontractor_id "
+             "ON release_drawing_versions (uploaded_by_subcontractor_id)",
+             "ix_release_drawing_versions_uploaded_by_subcontractor_id"),
         ]
         try:
             for sql, label in steps:
                 _run_with_retry(conn, sql, label)
 
-            exists = conn.execute(text(
-                "SELECT 1 FROM pg_constraint WHERE conname = 'release_photos_one_uploader'"
-            )).scalar()
-            if exists:
-                print("release_photos_one_uploader already exists, skipping")
-            else:
+            for table in ("release_photos", "release_drawing_versions"):
+                conname = f"{table}_one_uploader"
+                exists = conn.execute(text(
+                    "SELECT 1 FROM pg_constraint WHERE conname = :c"), {"c": conname}).scalar()
+                if exists:
+                    print(f"{conname} already exists, skipping")
+                    continue
                 _run_with_retry(
                     conn,
-                    "ALTER TABLE release_photos ADD CONSTRAINT release_photos_one_uploader "
+                    f"ALTER TABLE {table} ADD CONSTRAINT {conname} "
                     "CHECK ((uploaded_by_user_id IS NULL) <> (uploaded_by_subcontractor_id IS NULL)) NOT VALID",
-                    "release_photos_one_uploader (NOT VALID)",
+                    f"{conname} (NOT VALID)",
                 )
-                _run_with_retry(
-                    conn,
-                    "ALTER TABLE release_photos VALIDATE CONSTRAINT release_photos_one_uploader",
-                    "release_photos_one_uploader validated",
-                )
+                _run_with_retry(conn, f"ALTER TABLE {table} VALIDATE CONSTRAINT {conname}", f"{conname} validated")
         except OperationalError as exc:
             if _is_lock_timeout(exc):
                 print(
@@ -195,20 +205,21 @@ def _migrate_sqlite(engine) -> bool:
     # db.create_all() (tests already do). Only the additive column is applied here.
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
-    for table in ("subcontractors", "release_photos"):
+    for table in ("subcontractors", "release_photos", "release_drawing_versions"):
         if table not in tables:
             print(f"FAILED Table '{table}' does not exist. Run the base schema first.")
             return False
-    cols = {c["name"] for c in inspector.get_columns("release_photos")}
     with engine.begin() as conn:
-        if "uploaded_by_subcontractor_id" not in cols:
-            conn.execute(text("ALTER TABLE release_photos ADD COLUMN uploaded_by_subcontractor_id INTEGER "
-                              "REFERENCES subcontractors(id)"))
-            print("OK release_photos.uploaded_by_subcontractor_id")
-        else:
-            print("release_photos.uploaded_by_subcontractor_id already exists, skipping")
-    print("NOTE SQLite: release_photos.uploaded_by_user_id stays NOT NULL here; recreate the local DB "
-          "with db.create_all() if you need sub photo uploads locally.")
+        for table in ("release_photos", "release_drawing_versions"):
+            cols = {c["name"] for c in inspector.get_columns(table)}
+            if "uploaded_by_subcontractor_id" not in cols:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN uploaded_by_subcontractor_id INTEGER "
+                                  "REFERENCES subcontractors(id)"))
+                print(f"OK {table}.uploaded_by_subcontractor_id")
+            else:
+                print(f"{table}.uploaded_by_subcontractor_id already exists, skipping")
+    print("NOTE SQLite: uploaded_by_user_id stays NOT NULL here; recreate the local DB "
+          "with db.create_all() if you need sub uploads locally.")
     return True
 
 
@@ -233,7 +244,7 @@ def migrate(database_url: str = None) -> bool:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Let subcontractor accounts upload release photos."
+        description="Let subcontractor accounts upload release photos and drawing files."
     )
     parser.add_argument(
         "--database-url",

@@ -118,7 +118,13 @@ export async function setSubStage(releaseId, stage) {
     return data; // { status, event_id, stage }
 }
 
-export async function getSubSplices(releaseId) {
-    const { data } = await axios.get(`${BASE}/releases/${releaseId}/splices`);
-    return data.family; // [{ id, code, description, installer, stage, start_install, install_hrs, is_parent, is_this, on_crew }]
+/** A PDF becomes the release's next drawing version; images go through uploadSubPhoto. */
+export async function uploadSubFile(releaseId, file, note = '') {
+    const form = new FormData();
+    form.append('file', file, file.name || 'file.pdf');
+    if (note) form.append('note', note);
+    const { data } = await axios.post(`${BASE}/releases/${releaseId}/files`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data; // the new drawing version row
 }

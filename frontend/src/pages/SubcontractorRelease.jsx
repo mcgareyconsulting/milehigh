@@ -5,8 +5,10 @@
  *          recommendations.md). Route /sub/releases/:id, pushed from a Job Log card or a to-do.
  *          Two-row sticky header (back · number chip · stage chip · ⋯ ; job name / scope · PM),
  *          a sticky horizontal tab strip, and one scrolling tab body. Tabs a sub gets: Details,
- *          Activity (with the note composer), Attachments (reader + photo upload), Splices. Issues
- *          and the Change Log are staff-only by decision (ROADMAP T3 2026-09-07) and not rendered.
+ *          Activity (with the note composer), Attachments (reader + photo / file upload). No
+ *          Splices tab: a sub sees the release they are assigned, and Attachments already carries
+ *          the family's drawings so a sub on a splice sees the original's PDF pack. Issues and
+ *          the Change Log are staff-only by decision (ROADMAP T3 2026-09-07) and not rendered.
  * exports:
  *   SubcontractorRelease: Page component, rendered inside SubcontractorShell's Outlet.
  * imports_from: [react, react-router-dom, ../services/subPortalApi, ../components/sub/*]
@@ -25,14 +27,12 @@ import { getSubRelease, listSubTodos, setSubStage } from '../services/subPortalA
 import SubReleaseDetails from '../components/sub/SubReleaseDetails';
 import SubReleaseActivity from '../components/sub/SubReleaseActivity';
 import SubReleaseAttachments from '../components/sub/SubReleaseAttachments';
-import SubReleaseSplices from '../components/sub/SubReleaseSplices';
 import SubStageSheet from '../components/sub/SubStageSheet';
 
 const TABS = [
     { key: 'details', label: 'Details' },
     { key: 'activity', label: 'Activity' },
     { key: 'attachments', label: 'Attachments' },
-    { key: 'splices', label: 'Splices' },
 ];
 
 const ICONS = {
@@ -153,9 +153,6 @@ export default function SubcontractorRelease() {
                         )}
                         {tab === 'attachments' && (
                             <SubReleaseAttachments releaseId={releaseId} code={code} onCount={(n) => reportCount('attachments', n)} />
-                        )}
-                        {tab === 'splices' && (
-                            <SubReleaseSplices releaseId={releaseId} onCount={(n) => reportCount('splices', n)} />
                         )}
                     </div>
                 </>

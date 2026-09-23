@@ -29,9 +29,10 @@
  *   - The sheet closes on scrim tap and Escape.
  */
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate, Outlet, NavLink } from 'react-router-dom';
+import { useNavigate, Outlet } from 'react-router-dom';
 import { checkSubcontractorAuth, subcontractorLogout } from '../utils/subcontractorAuth';
 import { subUnreadCount } from '../services/subPortalApi';
+import MobileTopBar from './mobile/MobileTopBar';
 import '@fontsource/lato/400.css';
 import '@fontsource/lato/700.css';
 import '@fontsource/lato/900.css';
@@ -47,7 +48,6 @@ function initialsOf(name) {
 }
 
 const ICONS = {
-    menu: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>,
     bell: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>,
     out: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5M21 12H9" /></svg>,
 };
@@ -138,37 +138,16 @@ export default function SubcontractorShell() {
         );
     }
 
-    const tabClass = ({ isActive }) => `sub-tab${isActive ? ' active' : ''}`;
-
     return (
         <div className="sub-shell">
-            <header className="sub-topbar">
-                {/* The Brain's banana mark in its blue tile (same as the staff rail), display only.
-                    Company / account details live behind the menu. */}
-                <span className="sub-logo" role="img" aria-label="MHMW Brain">
-                    <img src="/bananas-svgrepo-com.svg" alt="" width="22" height="22" />
-                </span>
-                <nav className="sub-tabs" aria-label="Sections">
-                    {/* Labels only — no icons — so "To-Dos (n)" fits with the red count inline. */}
-                    <NavLink to="/sub/todos" className={tabClass}>
-                        <span>To-Dos</span>
-                        {unread.unread_count > 0 && (
-                            <span className="sub-tab-badge" aria-label={`${unread.unread_count} unread`}>
-                                {unread.unread_count > 99 ? '99+' : unread.unread_count}
-                            </span>
-                        )}
-                    </NavLink>
-                    <NavLink to="/sub/job-log" className={tabClass}>
-                        <span>Job Log</span>
-                    </NavLink>
-                    <NavLink to="/sub/tickets" className={tabClass}>
-                        <span>T&amp;M</span>
-                    </NavLink>
-                </nav>
-                <button type="button" className="sub-menu-btn" aria-label="Menu" onClick={() => setSheetOpen(true)}>
-                    {ICONS.menu}
-                </button>
-            </header>
+            <MobileTopBar
+                tabs={[
+                    { to: '/sub/todos', label: 'To-Dos', badge: unread.unread_count },
+                    { to: '/sub/job-log', label: 'Job Log' },
+                    { to: '/sub/tickets', label: 'T&M' },
+                ]}
+                onMenu={() => setSheetOpen(true)}
+            />
 
             <main className="sub-page">
                 <Outlet context={{ subcontractor, refreshUnread, unread }} />

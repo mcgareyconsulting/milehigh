@@ -4,10 +4,11 @@
  * purpose: The Attachments tab of the sub release page (release-mobile-recommendations.md §4a):
  *          a Drawings section (one row per version, current flagged, uploader + date, size) and a
  *          Photos section (thumbnail rows with the stage tag), plus the spec's sticky bottom bar —
- *          Take photo (camera) and Upload photo (library) — which post through the sub photo route
- *          with the account as uploader. A drawing opens SubDrawingReader; a photo opens a
- *          full-screen image view. No markup authoring, no Carmen, no drawing upload: those are
- *          desktop-only by the spec's own "what stays desktop" list.
+ *          Take photo (camera) and Upload file (library: images become photos, PDFs become the
+ *          release's next drawing version, exactly what the staff hub's Upload does) — with the
+ *          account as uploader. A drawing opens SubDrawingReader; a photo opens full-screen.
+ *          Drawings are the release FAMILY's, so a sub on a splice sees the original's PDF pack.
+ *          No markup authoring, no Carmen: desktop-only by the spec's own list.
  * exports:
  *   SubReleaseAttachments: ({ releaseId, code, onCount })
  * imports_from: [react, ../../services/subPortalApi, ./SubDrawingReader]
@@ -18,7 +19,7 @@
  *     because a sub has no "⋯" actions to put there yet.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getSubAttachments, subDrawingFileUrl, subPhotoFileUrl, uploadSubPhoto } from '../../services/subPortalApi';
+import { getSubAttachments, subDrawingFileUrl, subPhotoFileUrl, uploadSubFile, uploadSubPhoto } from '../../services/subPortalApi';
 import SubDrawingReader from './SubDrawingReader';
 
 const fmtSize = (b) => {
@@ -90,7 +91,11 @@ export default function SubReleaseAttachments({ releaseId, code, onCount }) {
         setUploading(true);
         setError(null);
         try {
-            for (const f of files) await uploadSubPhoto(releaseId, f);
+            for (const f of files) {
+                const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '');
+                if (isPdf) await uploadSubFile(releaseId, f);
+                else await uploadSubPhoto(releaseId, f);
+            }
             await load();
         } catch (err) {
             setError(err?.response?.data?.error || 'Could not upload the photo');
@@ -150,12 +155,12 @@ export default function SubReleaseAttachments({ releaseId, code, onCount }) {
             {/* Sticky action bar (spec §4a). Camera capture on phones; library picker as the secondary. */}
             <div className="sub-bottombar">
                 <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFiles} />
-                <input ref={libraryRef} type="file" accept="image/*" multiple className="hidden" onChange={onFiles} />
+                <input ref={libraryRef} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={onFiles} />
                 <button type="button" className="sub-btn primary" disabled={uploading} onClick={() => cameraRef.current?.click()}>
                     {ICONS.camera} {uploading ? 'Uploading…' : 'Take photo'}
                 </button>
                 <button type="button" className="sub-btn" disabled={uploading} onClick={() => libraryRef.current?.click()}>
-                    {ICONS.upload} Upload photo
+                    {ICONS.upload} Upload file
                 </button>
             </div>
 

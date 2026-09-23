@@ -45,6 +45,9 @@ export async function fetchNotifications({ types, limit, owner } = {}) {
  */
 export const MENTION_TYPES = ['mention', 'dwl_mention'];
 
+/** Notification types that mean "a to-do landed on you / is due" — the phone To-Dos badge. */
+export const TODO_TYPES = ['checklist_assigned', 'checklist_due'];
+
 export async function fetchUnreadCount() {
     const { data } = await axios.get(`${BASE}/unread-count`);
     return data.unread_count;
