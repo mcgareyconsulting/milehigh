@@ -139,7 +139,7 @@ def list_subcontractor_notifications():
 @brain_bp.route('/subcontractor/notifications/unread-count', methods=['GET'])
 @subcontractor_login_required
 def subcontractor_unread_count():
-    return jsonify({'unread_count': unread_count_for_subcontractor(get_current_subcontractor())}), 200
+    return jsonify(unread_count_for_subcontractor(get_current_subcontractor())), 200
 
 
 @brain_bp.route('/subcontractor/notifications/<int:notification_id>/read', methods=['PATCH'])
@@ -154,4 +154,6 @@ def mark_subcontractor_notification_read(notification_id):
 @brain_bp.route('/subcontractor/notifications/read-all', methods=['POST'])
 @subcontractor_login_required
 def mark_all_subcontractor_notifications_read():
-    return jsonify({'ok': True, 'updated': mark_all_read_for_subcontractor(get_current_subcontractor())}), 200
+    types = [t.strip() for t in (request.args.get('types') or '').split(',') if t.strip()]
+    updated = mark_all_read_for_subcontractor(get_current_subcontractor(), types or None)
+    return jsonify({'ok': True, 'updated': updated}), 200

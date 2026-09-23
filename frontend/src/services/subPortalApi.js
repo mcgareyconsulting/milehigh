@@ -53,17 +53,24 @@ export async function listSubNotifications(limit = 50) {
     return data; // { notifications, unread_count }
 }
 
+/** {unread_count, unread_todos, unread_mentions} — to-dos count while their assignment /
+ *  deadline ping is unread; mentions while their row is. */
 export async function subUnreadCount() {
     const { data } = await axios.get(`${BASE}/notifications/unread-count`);
-    return data.unread_count;
+    return data;
 }
+
+export const TODO_NOTIFICATION_TYPES = ['checklist_assigned', 'checklist_due'];
+export const MENTION_NOTIFICATION_TYPES = ['mention'];
 
 export async function markSubNotificationRead(id) {
     const { data } = await axios.patch(`${BASE}/notifications/${id}/read`);
     return data;
 }
 
-export async function markAllSubRead() {
-    const { data } = await axios.post(`${BASE}/notifications/read-all`);
+/** @param {{ types?: string[] }} [opts] narrows the sweep to those notification types. */
+export async function markAllSubRead({ types } = {}) {
+    const qs = types?.length ? `?types=${encodeURIComponent(types.join(','))}` : '';
+    const { data } = await axios.post(`${BASE}/notifications/read-all${qs}`);
     return data;
 }

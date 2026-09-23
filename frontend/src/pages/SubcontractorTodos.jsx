@@ -17,6 +17,11 @@
  *     PM and a sub talking about "this week" mean the same thing.
  *   - The segment is in the URL (?seg=mentions) so the account sheet's Notifications row and a
  *     tapped push can land directly on Mentions.
+ *   - RED badges mean unread: the To-Dos segment badge is the count of to-dos whose assignment /
+ *     deadline ping is unread, the Mentions badge the unread mentions. Showing the To-Dos segment
+ *     clears the to-do pings (the list itself is the read receipt); a mention clears when tapped
+ *     or via Mark all read. With nothing unread the To-Dos badge falls back to the open count in
+ *     the neutral colour.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
@@ -24,6 +29,7 @@ import SubReleaseSheet from '../components/sub/SubReleaseSheet';
 import SubEmpty from '../components/sub/SubEmpty';
 import {
     listSubTodos, setSubTodoStatus, listSubNotifications, markSubNotificationRead, markAllSubRead,
+    TODO_NOTIFICATION_TYPES, MENTION_NOTIFICATION_TYPES,
 } from '../services/subPortalApi';
 
 const COMPANY_TZ = 'America/Denver';
@@ -124,7 +130,7 @@ function MentionCard({ n, onTap }) {
 }
 
 export default function SubcontractorTodos() {
-    const { refreshUnread } = useOutletContext();
+    const { refreshUnread, unread } = useOutletContext();
     const [params, setParams] = useSearchParams();
     const segment = params.get('seg') === 'mentions' ? 'mentions' : 'todos';
     const setSegment = (k) => setParams(k === 'mentions' ? { seg: 'mentions' } : {}, { replace: true });
@@ -164,7 +170,15 @@ export default function SubcontractorTodos() {
         return g;
     }, [todos, today]);
     const openCount = todos.filter((t) => t.status !== 'done').length;
-    const unreadCount = notifs.filter((n) => !n.is_read).length;
+    const unreadMentions = notifs.filter((n) => !n.is_read && MENTION_NOTIFICATION_TYPES.includes(n.type)).length;
+    const unreadTodos = unread?.unread_todos || 0;
+    const mentionRows = notifs.filter((n) => MENTION_NOTIFICATION_TYPES.includes(n.type));
+
+    // Viewing the To-Dos list is the read receipt for to-do pings: clear them once shown.
+    useEffect(() => {
+        if (loading || segment !== 'todos' || unreadTodos === 0) return;
+        markAllSubRead({ types: TODO_NOTIFICATION_TYPES }).then(refreshUnread).catch(() => {});
+    }, [loading, segment, unreadTodos, refreshUnread]);
 
     const toggle = async (t) => {
         const next = t.status === 'done' ? 'accepted' : 'done';
@@ -190,18 +204,21 @@ export default function SubcontractorTodos() {
     };
 
     const readAll = async () => {
-        setNotifs((prev) => prev.map((x) => ({ ...x, is_read: true })));
-        try { await markAllSubRead(); } finally { refreshUnread(); }
+        setNotifs((prev) => prev.map((x) => (MENTION_NOTIFICATION_TYPES.includes(x.type) ? { ...x, is_read: true } : x)));
+        try { await markAllSubRead({ types: MENTION_NOTIFICATION_TYPES }); } finally { refreshUnread(); }
     };
 
     return (
         <div className="flex-1 min-h-0 flex flex-col">
             <div className="sub-seg" role="tablist" aria-label="To-Dos or Mentions">
                 <button type="button" role="tab" aria-selected={segment === 'todos'} className={segment === 'todos' ? 'active' : ''} onClick={() => setSegment('todos')}>
-                    To-Dos{openCount > 0 && <span className="sub-badge">{openCount}</span>}
+                    To-Dos
+                    {unreadTodos > 0
+                        ? <span className="sub-badge alert" aria-label={`${unreadTodos} new`}>{unreadTodos}</span>
+                        : openCount > 0 && <span className="sub-badge">{openCount}</span>}
                 </button>
                 <button type="button" role="tab" aria-selected={segment === 'mentions'} className={segment === 'mentions' ? 'active' : ''} onClick={() => setSegment('mentions')}>
-                    Mentions{unreadCount > 0 && <span className="sub-badge alert">{unreadCount}</span>}
+                    Mentions{unreadMentions > 0 && <span className="sub-badge alert" aria-label={`${unreadMentions} unread`}>{unreadMentions}</span>}
                 </button>
             </div>
 
@@ -249,15 +266,15 @@ export default function SubcontractorTodos() {
 
             {!loading && segment === 'mentions' && (
                 <div className="flex-1 min-h-0 flex flex-col gap-2.5 px-4 pb-4 pt-2">
-                    {unreadCount > 0 && (
+                    {unreadMentions > 0 && (
                         <button type="button" onClick={readAll} className="self-end px-2 py-1 text-[13px] font-bold text-brand">
                             Mark all read
                         </button>
                     )}
-                    {notifs.length === 0 && (
-                        <SubEmpty icon="bell" title="No mentions yet" body="When someone at MHMW @mentions you or assigns you a to-do, it lands here." />
+                    {mentionRows.length === 0 && (
+                        <SubEmpty icon="bell" title="No mentions yet" body="When someone at MHMW @mentions you, it lands here." />
                     )}
-                    {notifs.map((n) => <MentionCard key={n.id} n={n} onTap={tapMention} />)}
+                    {mentionRows.map((n) => <MentionCard key={n.id} n={n} onTap={tapMention} />)}
                 </div>
             )}
 

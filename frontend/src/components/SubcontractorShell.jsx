@@ -2,10 +2,11 @@
  * @milehigh-header
  * schema_version: 3
  * purpose: The subcontractor app shell, Option A (docs: subs-mobile-option-a.md) — ONE 56px top bar
- *          holding a company tile (opens the account sheet), a pill tab track with the three
- *          sections (To-Dos · Job Log · T&M) and a menu button (same sheet); the routed page
- *          scrolls under it. The account sheet carries what left the header: company, signed-in
- *          contact, the crew the account views as, a Notifications shortcut and Sign out.
+ *          holding the Brain logo (display only), a pill tab track with the three sections
+ *          (To-Dos · Job Log · T&M) and a hamburger menu that opens the account sheet; the routed
+ *          page scrolls under it. The sheet carries the company information that left the header:
+ *          company, signed-in contact, the crew the account views as, a Notifications shortcut
+ *          and Sign out.
  *          Self-contained auth check (unlike AppShell, which relies on App.jsx's staff
  *          isAuthenticated) because /sub is a separate top-level route tree.
  * exports:
@@ -21,8 +22,10 @@
  *   - The tab track and the sheet use the .sub-* classes from styles/sub-portal.css, which also
  *     rewrites the design tokens for this subtree — the portal is Lato + the spec palette in both
  *     themes; the staff app is untouched.
- *   - The unread badge polls the sub-scoped count (never the staff bell endpoint) and is refreshed
- *     eagerly by pages that mark things read, via the outlet context.
+ *   - The red tab badge = unread to-do pings + unread mentions, from the sub-scoped count endpoint
+ *     (never the staff bell), polled while visible and refreshed eagerly by pages that mark things
+ *     read, via the outlet context. `unread` in the context is the {unread_count, unread_todos,
+ *     unread_mentions} object so the To-Dos page can badge its two segments separately.
  *   - The sheet closes on scrim tap and Escape.
  */
 import { useState, useEffect, useCallback } from 'react';
@@ -94,7 +97,7 @@ export default function SubcontractorShell() {
     const [subcontractor, setSubcontractor] = useState(null);
     const [loading, setLoading] = useState(true);
     const [sheetOpen, setSheetOpen] = useState(false);
-    const [unread, setUnread] = useState(0);
+    const [unread, setUnread] = useState({ unread_count: 0, unread_todos: 0, unread_mentions: 0 });
 
     useEffect(() => {
         checkSubcontractorAuth().then(sub => {
@@ -143,13 +146,16 @@ export default function SubcontractorShell() {
     return (
         <div className="sub-shell">
             <header className="sub-topbar">
-                <button type="button" className="sub-logo" aria-label="Open account menu" onClick={() => setSheetOpen(true)}>
-                    {initialsOf(subcontractor?.company_name)}
-                </button>
+                {/* The Brain logo, display only. Company / account details live behind the menu. */}
+                <img className="sub-logo" src="/logo.jpg" alt="MHMW Brain" />
                 <nav className="sub-tabs" aria-label="Sections">
                     <NavLink to="/sub/todos" className={tabClass}>
                         {ICONS.todos}<span>To-Dos</span>
-                        {unread > 0 && <span className="sub-tab-badge" aria-label={`${unread} unread`}>{unread > 99 ? '99+' : unread}</span>}
+                        {unread.unread_count > 0 && (
+                            <span className="sub-tab-badge" aria-label={`${unread.unread_count} unread`}>
+                                {unread.unread_count > 99 ? '99+' : unread.unread_count}
+                            </span>
+                        )}
                     </NavLink>
                     <NavLink to="/sub/job-log" className={tabClass}>
                         {ICONS.joblog}<span>Job Log</span>

@@ -305,8 +305,22 @@ def list_notifications_for_subcontractor(subcontractor, limit=50):
     return [serialize_notification_for_sub(n) for n in rows]
 
 
+# A to-do is "unread" while its assignment / deadline ping is unread; a mention is
+# unread while its row is. The tab badge is the sum; the To-Dos page clears the to-do
+# pings when that segment is shown and mentions one tap at a time.
+TODO_NOTIFICATION_TYPES = ('checklist_assigned', 'checklist_due')
+MENTION_NOTIFICATION_TYPES = ('mention',)
+
+
 def unread_count_for_subcontractor(subcontractor):
-    return _sub_notifications(subcontractor).filter(Notification.is_read.is_(False)).count()
+    """{unread_count, unread_todos, unread_mentions} — one round trip for the badges."""
+    rows = (_sub_notifications(subcontractor)
+            .filter(Notification.is_read.is_(False))
+            .with_entities(Notification.type)
+            .all())
+    todos = sum(1 for (t,) in rows if t in TODO_NOTIFICATION_TYPES)
+    mentions = sum(1 for (t,) in rows if t in MENTION_NOTIFICATION_TYPES)
+    return {'unread_count': len(rows), 'unread_todos': todos, 'unread_mentions': mentions}
 
 
 def mark_notification_read_for_subcontractor(subcontractor, notification_id):
@@ -319,8 +333,12 @@ def mark_notification_read_for_subcontractor(subcontractor, notification_id):
     return serialize_notification_for_sub(n)
 
 
-def mark_all_read_for_subcontractor(subcontractor):
+def mark_all_read_for_subcontractor(subcontractor, types=None):
+    """Mark the sub's unread rows read; `types` narrows the sweep (e.g. just the to-do
+    pings when the To-Dos segment is viewed, leaving mentions unread)."""
     q = _sub_notifications(subcontractor).filter(Notification.is_read.is_(False))
+    if types:
+        q = q.filter(Notification.type.in_(list(types)))
     updated = q.update({'is_read': True}, synchronize_session=False)
     db.session.commit()
     return updated
