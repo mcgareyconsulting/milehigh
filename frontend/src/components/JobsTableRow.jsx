@@ -53,6 +53,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
     const [pdfMarkupOpen, setPdfMarkupOpen] = useState(false);
     const [pdfMarkupVersionId, setPdfMarkupVersionId] = useState(null);
+    // The release that owns that version — a splice-family file may live on a sibling row.
+    const [pdfMarkupReleaseId, setPdfMarkupReleaseId] = useState(null);
     const [pdfMarkupMode, setPdfMarkupMode] = useState('edit');
     const [pdfHistoryOpen, setPdfHistoryOpen] = useState(false);
     // When set, the attachment modal is opened in stage-gate mode for this stage:
@@ -1581,11 +1583,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     setLocalNotes(notes);
                     setNotesInputValue(notes ?? '');
                 }}
-                onOpenVersion={(vid, mode) => {
+                onOpenVersion={(vid, mode, vReleaseId) => {
                     if (onOpenReleaseMarkup) {
                         setIsModalOpen(false);
                         onOpenReleaseMarkup({
-                            releaseId: row.id,
+                            releaseId: vReleaseId ?? row.id,
                             versionId: vid,
                             mode: canMarkup ? mode : 'view',
                         });
@@ -1593,6 +1595,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     }
                     setIsModalOpen(false);
                     setPdfMarkupVersionId(vid);
+                    setPdfMarkupReleaseId(vReleaseId ?? null);
                     setPdfMarkupMode(canMarkup ? mode : 'view');
                     setPdfMarkupOpen(true);
                 }}
@@ -1619,7 +1622,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             />
             <PdfMarkupModal
                 isOpen={pdfMarkupOpen}
-                releaseId={row.id}
+                releaseId={pdfMarkupReleaseId ?? row.id}
                 versionId={pdfMarkupVersionId}
                 mode={pdfMarkupMode}
                 onClose={() => setPdfMarkupOpen(false)}

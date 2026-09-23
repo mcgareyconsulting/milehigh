@@ -9,8 +9,8 @@
  *   across the group.
  * exports:
  *   SplicesPane: Splices tab body for one release (original or splice)
- * imports_from: [react, react-dom, ../services/jobsApi, ../utils/stageTint, ./JobDetailsBody,
- *   ./SpliceReleaseModal]
+ * imports_from: [react, react-dom, ../services/jobsApi, ../utils/stageTint, ../constants/splices,
+ *   ./JobDetailsBody, ./SpliceReleaseModal]
  * imported_by: [frontend/src/components/ReleaseHubModal.jsx]
  * invariants:
  *   - Spec: Bill, 2026-09-16 shop session; facelift 2026-09-18 (Design canvas "Splices Tab
@@ -38,6 +38,7 @@ import { createPortal } from 'react-dom';
 
 import { jobsApi } from '../services/jobsApi';
 import { stageTint } from '../utils/stageTint';
+import { MANY_SPLICES_THRESHOLD, hasManySplices } from '../constants/splices';
 import { JobDetailsBody } from './JobDetailsBody';
 import { SpliceReleaseModal } from './SpliceReleaseModal';
 
@@ -469,6 +470,23 @@ export function SplicesPane({
                         </button>
                     </div>
                     <HoursBar parent={parent} own={own} pool={pool} allocated={allocated} splices={splices} additional={additional} />
+                    {hasManySplices(splices.length) && (
+                        <div
+                            role="note"
+                            data-testid="many-splices-flag"
+                            className="flex items-start gap-2 rounded-md text-jl-2"
+                            style={{ padding: '8px 10px', background: 'var(--st-amber-bg)', color: 'var(--st-amber-fg)' }}
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0" style={{ marginTop: 1 }}>
+                                <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4" /><path d="M12 17h.01" />
+                            </svg>
+                            <span>
+                                <span className="font-bold">{splices.length} splices on {parentLabel}.</span>{' '}
+                                {MANY_SPLICES_THRESHOLD}+ splices on one release is a problem flag: check for cleanup or scope creep,
+                                unless they are clarifying hold-downs by building.
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 <GroupTable
@@ -514,6 +532,7 @@ export function SplicesPane({
                     releaseNumber={parent.release}
                     jobName={parent.job_name}
                     description={parent.description}
+                    releaseTag={parent.release_tag}
                     pool={summary}
                     onCreated={() => { load(); onChanged?.(); }}
                 />,

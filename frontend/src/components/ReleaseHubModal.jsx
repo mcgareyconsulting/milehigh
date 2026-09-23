@@ -8,7 +8,8 @@
  *   ReleaseHubModal: Portal modal shell for a release
  * imports_from: [react, react-dom, ./JobDetailsBody, ./pdfViewer/PdfViewerPane, ./EventsList,
  *   ./ReleaseNotesRail, ./StageIconRow, ./releaseIssues/ReleaseIssuesPane, ./SplicesPane,
- *   ../services/jobsApi, ../utils/stageTint, ../utils/auth, ../constants/modalSize, ../hooks/useBreakpoint]
+ *   ../services/jobsApi, ../utils/stageTint, ../utils/auth, ../constants/modalSize, ../constants/splices,
+ *   ../hooks/useBreakpoint]
  * imported_by: [frontend/src/components/JobsTableRow.jsx, frontend/src/components/JobLogCardGrid.jsx,
  *   frontend/src/components/GanttChart.jsx]
  * invariants:
@@ -30,6 +31,8 @@
  *   - Header identity is ONE line: label, job, description, stage, then PM/detailer
  *   - Issues (Release Issue Register, T11) is ADMIN-ONLY in v1 and needs the release id; the
  *     server gates every issue route regardless, the tab check is presentation only
+ *   - On a splice the header's Procore / Trello links are the ORIGINAL's (a splice has neither
+ *     of its own); the original comes from the host/frame chain or one getRelease fetch
  *   - Splices (T9) is a tab for everyone with a release id. Opening another release of the splice
  *     group swaps the hub to that row IN PLACE (mirror-card style): the host's `job` is the root, the
  *     opened rows are a stack, and the header's back button returns to the previous row on the tab
@@ -47,6 +50,7 @@ import EventsList from './EventsList';
 import { StageIconRow } from './StageIconRow';
 import { ReleaseIssuesPane } from './releaseIssues/ReleaseIssuesPane';
 import { SplicesPane } from './SplicesPane';
+import { hasManySplices } from '../constants/splices';
 import { jobsApi } from '../services/jobsApi';
 import { stageTint } from '../utils/stageTint';
 import { checkAuth, readCachedRoleFlags } from '../utils/auth';
@@ -212,6 +216,26 @@ export function ReleaseHubModal({
         if (topFrame) refreshTopFrame();
     }, [onJobUpdate, topFrame, refreshTopFrame]);
 
+    // A splice has no Procore submittal or Trello card of its own (T9: zero Trello
+    // interaction), so its header links are carbon copies of the original's. The original is
+    // usually already in hand (the host, or a frame under this one); otherwise fetch it.
+    const parentReleaseId = job?.parent_release_id ?? null;
+    const knownParent = parentReleaseId == null ? null
+        : ([hostJob, ...frames.map((f) => f.job)].find((r) => r?.id === parentReleaseId) || null);
+    const [fetchedParent, setFetchedParent] = useState(null);
+    useEffect(() => {
+        if (!isOpen || parentReleaseId == null || knownParent) return undefined;
+        if (fetchedParent?.id === parentReleaseId) return undefined;
+        let cancelled = false;
+        Promise.resolve()
+            .then(() => jobsApi.getRelease(parentReleaseId))
+            .then((row) => { if (!cancelled && row) setFetchedParent(row); })
+            .catch(() => { /* links just stay dead */ });
+        return () => { cancelled = true; };
+    }, [isOpen, parentReleaseId, knownParent, fetchedParent?.id]);
+    const spliceParent = parentReleaseId == null ? null
+        : (knownParent || (fetchedParent?.id === parentReleaseId ? fetchedParent : null));
+
     const handleNotesChanged = (notes) => {
         if (topFrame) {
             setFrames((prev) => prev.map((f, i) => (
@@ -251,10 +275,19 @@ export function ReleaseHubModal({
         setVisited((prev) => ({ ...prev, [key]: true }));
     };
 
-    const procoreUrl = job.procore_project_id && job.procore_submittal_id
-        ? `https://app.procore.com/webclients/host/companies/18521/projects/${job.procore_project_id}/tools/submittals/${job.procore_submittal_id}`
-        : (viewerUrl && viewerUrl.trim() !== '' ? viewerUrl : null);
-    const trelloUrl = job.trello_card_id ? `https://trello.com/c/${job.trello_card_id}` : null;
+    // Header links follow the release on screen — or, for a splice, its original.
+    const linkRow = parentReleaseId != null ? spliceParent : job;
+    // The host's viewerUrl prop only describes the host row; any other row carries its own.
+    const linkViewerUrl = linkRow && linkRow.id === hostJob?.id
+        ? (viewerUrl || linkRow.viewer_url)
+        : linkRow?.viewer_url;
+    const procoreUrl = linkRow?.procore_project_id && linkRow?.procore_submittal_id
+        ? `https://app.procore.com/webclients/host/companies/18521/projects/${linkRow.procore_project_id}/tools/submittals/${linkRow.procore_submittal_id}`
+        : (linkViewerUrl && linkViewerUrl.trim() !== '' ? linkViewerUrl : null);
+    const trelloUrl = linkRow?.trello_card_id ? `https://trello.com/c/${linkRow.trello_card_id}` : null;
+    const linkNote = parentReleaseId != null && spliceParent
+        ? ` — opens the original, ${spliceParent['Job #'] || spliceParent.job}-${spliceParent['Release #'] || spliceParent.release}`
+        : '';
 
     const linkCls = 'inline-flex items-center border border-hairline-strong rounded-[7px] bg-surface text-ink-2 font-semibold hover:bg-surface-2 hover:text-ink transition-colors';
     const linkStyle = { height: 28, padding: '0 11px', fontSize: 13 };
@@ -382,14 +415,14 @@ export function ReleaseHubModal({
                                 </span>
                             )}
                             {procoreUrl ? (
-                                <a href={procoreUrl} target="_blank" rel="noopener noreferrer" className={linkCls} style={linkStyle}>
+                                <a href={procoreUrl} target="_blank" rel="noopener noreferrer" className={linkCls} style={linkStyle} title={linkNote ? `Procore${linkNote}` : undefined}>
                                     Procore
                                 </a>
                             ) : (
                                 <span className={linkCls} style={deadStyle} title="No Procore link on this release">Procore</span>
                             )}
                             {trelloUrl ? (
-                                <a href={trelloUrl} target="_blank" rel="noopener noreferrer" className={linkCls} style={linkStyle}>
+                                <a href={trelloUrl} target="_blank" rel="noopener noreferrer" className={linkCls} style={linkStyle} title={linkNote ? `Trello${linkNote}` : undefined}>
                                     Trello
                                 </a>
                             ) : (
@@ -470,11 +503,13 @@ export function ReleaseHubModal({
                                                 fontSize: 11.5,
                                                 padding: '1px 6px',
                                                 borderRadius: 999,
-                                                background: 'var(--surface-2)',
-                                                color: 'var(--text-2)',
+                                                // Amber past the many-splices threshold (handout rule:
+                                                // lots of splices on one release is a problem flag).
+                                                background: hasManySplices(spliceCount) ? 'var(--st-amber-bg)' : 'var(--surface-2)',
+                                                color: hasManySplices(spliceCount) ? 'var(--st-amber-fg)' : 'var(--text-2)',
                                                 lineHeight: 1.3,
                                             }}
-                                            aria-label={`${spliceCount} splices`}
+                                            aria-label={hasManySplices(spliceCount) ? `${spliceCount} splices, flagged as many` : `${spliceCount} splices`}
                                         >
                                             {spliceCount}
                                         </span>

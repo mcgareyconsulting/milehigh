@@ -11,9 +11,10 @@
  * invariants:
  *   - Read-only until the user presses Pull on a row; nothing is fetched from Procore on open
  *     beyond the candidate listing
- *   - A 409 (nothing linked) is a normal state, not an error: it offers the submittal-id box
- *   - Every listing is traced to the browser console; "Dump raw" adds Procore's own
- *     payloads, and a row's "probe" re-asks Procore about that one attachment's ids
+ *   - A 409 (nothing linked) is a normal state, not an error: the notice says the nightly
+ *     worker has not linked a submittal yet
+ *   - Every listing is traced to the browser console; a row's "probe" re-asks Procore about
+ *     that one attachment's ids
  *   - A row shows only what a reviewer decides on: the Final PDF Pack tag, who returned it,
  *     and whether markups came through. The full evidence trail lives in the console dump
  *   - Roles come from the server's evidence — this file never re-labels from the filename
@@ -40,9 +41,7 @@ const RESOLVED_BY = {
 
 /**
  * Console trace of one listing. Opening the dialog leaves the resolved submittal and every
- * candidate in the console; "Dump raw" re-fetches with ?debug=1 and adds Procore's own
- * objects plus every JSON path that looks like a final-PDF label — which is how you find
- * where a name like "Final PDF Pack" is hiding when a row is labelled wrong.
+ * candidate in the console; a row's "probe" adds what Procore returns for that attachment.
  */
 function logPayload(payload, releaseId) {
     if (typeof console === 'undefined' || !payload) return;
@@ -126,7 +125,6 @@ export function ProcorePullDialog({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [needsSubmittal, setNeedsSubmittal] = useState(false);
-    const [submittalId, setSubmittalId] = useState('');
     const [pulling, setPulling] = useState(null);   // attachment_id being pulled
     const [pulled, setPulled] = useState(null);     // last success, for the confirmation line
 
@@ -145,7 +143,7 @@ export function ProcorePullDialog({
         } catch (err) {
             setData(null);
             setError(err?.message || 'Failed to load Procore documents');
-            // 409 = nothing resolved yet; the submittal-id box is the way through.
+            // 409 = nothing resolved yet — shown as a notice, not an error.
             setNeedsSubmittal(err?.statusCode === 409);
         } finally {
             setLoading(false);
@@ -155,7 +153,6 @@ export function ProcorePullDialog({
     useEffect(() => {
         if (!isOpen || releaseId == null) return;
         setPulled(null);
-        setSubmittalId('');
         load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, releaseId]);
@@ -269,6 +266,13 @@ export function ProcorePullDialog({
                                         </>
                                     )}
                                 </p>
+                                {data.pack_release?.via_splice && (
+                                    <p className="text-ink-2" style={{ fontSize: 11.5, marginTop: 4 }}>
+                                        Splices share the original’s Final PDF Pack — a pull attaches to{' '}
+                                        <span className="font-semibold">{data.pack_release.release_label}</span>{' '}
+                                        and shows on every release in the family.
+                                    </p>
+                                )}
                             </>
                         )}
                     </div>
@@ -406,10 +410,7 @@ export function ProcorePullDialog({
                                     <div className="shrink-0 flex items-center" style={{ gap: 10 }}>
                                         <button
                                             type="button"
-                                            onClick={() => load(
-                                                submittalId.trim() || null,
-                                                { probe: doc.attachment_id },
-                                            )}
+                                            onClick={() => load(null, { probe: doc.attachment_id })}
                                             disabled={loading}
                                             className="bg-transparent border-0 cursor-pointer disabled:opacity-50"
                                             style={{ fontSize: 11.5, color: 'var(--text-3)' }}
@@ -433,46 +434,6 @@ export function ProcorePullDialog({
                     </ul>
                 </div>
 
-                {/* Gap/testing escape hatch: point the pull at any submittal by id. */}
-                <div
-                    className="shrink-0 border-t border-hairline bg-surface-2 flex items-center gap-2 flex-wrap"
-                    style={{ padding: '10px 18px', borderRadius: '0 0 14px 14px' }}
-                >
-                    <label className="text-ink-3" style={{ fontSize: 12 }} htmlFor="pull-submittal-id">
-                        Submittal id
-                    </label>
-                    <input
-                        id="pull-submittal-id"
-                        value={submittalId}
-                        onChange={(e) => setSubmittalId(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter' && submittalId.trim()) load(submittalId.trim()); }}
-                        placeholder={data?.submittal?.submittal_id || 'e.g. 1234567'}
-                        className="border border-hairline-strong bg-surface text-ink"
-                        style={{ height: 28, padding: '0 8px', borderRadius: 7, fontSize: 13, width: 150 }}
-                    />
-                    <button
-                        type="button"
-                        onClick={() => load(submittalId.trim() || null)}
-                        disabled={loading}
-                        className="border border-hairline-strong bg-surface text-ink-2 font-semibold hover:bg-surface disabled:opacity-50"
-                        style={{ height: 28, padding: '0 11px', borderRadius: 7, fontSize: 13 }}
-                    >
-                        {submittalId.trim() ? 'Look up' : 'Refresh'}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => load(submittalId.trim() || null, { debug: true })}
-                        disabled={loading}
-                        className="border border-hairline-strong bg-surface text-ink-3 font-semibold hover:bg-surface disabled:opacity-50"
-                        style={{ height: 28, padding: '0 11px', borderRadius: 7, fontSize: 13 }}
-                        title="Re-fetch with Procore's raw payloads and print them to the browser console"
-                    >
-                        Dump raw → console
-                    </button>
-                    <span className="text-ink-3" style={{ fontSize: 11.5 }}>
-                        Overrides the link when the worker hasn’t found the pack yet.
-                    </span>
-                </div>
             </div>
         </div>,
         document.body,

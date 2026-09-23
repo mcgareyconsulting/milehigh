@@ -17,6 +17,11 @@ Two jobs:
 
 Provenance rides in the version's `note` as a parseable marker (PULL_NOTE_RE), so a
 re-listing can tell which attachments are already attached without a schema change.
+
+Splices (T9) have no Procore submittal of their own — the Final PDF Pack is the
+original's. Every entry point here swaps a splice for its original (`splice_origin`)
+before resolving, a pull lands on the original, and "already attached" is read across the
+whole splice family, so pulling from 340.2 fetches 340's pack once and every member sees it.
 """
 
 from __future__ import annotations
@@ -45,6 +50,7 @@ from app.brain.job_log.features.pdf_markup.command import (
     UploadInitialDrawingCommand,
 )
 from app.brain.job_log.features.pdf_markup.payloads import is_pdf_bytes
+from app.brain.job_log.features.splice.command import release_family, splice_origin
 
 logger = get_logger(__name__)
 
@@ -127,16 +133,21 @@ def resolve_submittal(release, submittal_id_override=None) -> SubmittalRef:
 
     raise SubmittalNotResolved(
         "No Procore submittal is linked to this release yet. The nightly FC worker links "
-        "one once the Final PDF Pack exists in Procore (~24h); until then, pass a submittal "
-        "id to pull by hand."
+        "one once the Final PDF Pack exists in Procore (~24h) — check back then."
     )
 
 
-def attached_attachment_ids(release_id) -> dict:
-    """{attachment_id (str): version dict} for versions this release already pulled."""
+def attached_attachment_ids(release_ids) -> dict:
+    """{attachment_id (str): version dict} for versions these releases already pulled.
+
+    Takes one id or several — the listing passes the whole splice family, since a pack
+    pulled onto any member is attached for all of them.
+    """
+    if isinstance(release_ids, int):
+        release_ids = [release_ids]
     out = {}
     versions = (ReleaseDrawingVersion.query
-                .filter(ReleaseDrawingVersion.release_id == release_id,
+                .filter(ReleaseDrawingVersion.release_id.in_(list(release_ids)),
                         ReleaseDrawingVersion.is_deleted.is_(False))
                 .order_by(ReleaseDrawingVersion.version_number.desc())
                 .all())
@@ -145,6 +156,7 @@ def attached_attachment_ids(release_id) -> dict:
         if match and match.group(1) not in out:
             out[match.group(1)] = {
                 'version_id': v.id,
+                'release_id': v.release_id,
                 'version_number': v.version_number,
                 'uploaded_at': v.uploaded_at.isoformat() if v.uploaded_at else None,
             }
@@ -215,6 +227,7 @@ def probe_candidate(release, attachment_id, submittal_id_override=None) -> dict:
     never mentioned its approver — so the label fell back to item_type. The approver record
     is the next place that name can live.
     """
+    release = splice_origin(release)
     ref = resolve_submittal(release, submittal_id_override)
     refs = find_submittal_drawing_refs(ref.project_id, ref.submittal_id)
     target = next((r for r in refs if str(r.get('attachment_id')) == str(attachment_id)), None)
@@ -274,6 +287,7 @@ def debug_payloads(release, submittal_id_override=None) -> dict:
     the raw attachment objects, the distributed responses, and every JSON path in either
     payload whose key or value looks like a final-PDF label.
     """
+    release = splice_origin(release)
     ref = resolve_submittal(release, submittal_id_override)
     submittal, workflow = raw_submittal_payloads(ref.project_id, ref.submittal_id)
 
@@ -309,16 +323,21 @@ def debug_payloads(release, submittal_id_override=None) -> dict:
 
 
 def list_documents(release, submittal_id_override=None) -> dict:
-    """The pull workspace for one release: which submittal, and what can be pulled from it."""
+    """The pull workspace for one release: which submittal, and what can be pulled from it.
+
+    A splice is listed as its original — same submittal, same pack, same attached state.
+    """
+    asked_for = release
+    release = splice_origin(release)
     ref = resolve_submittal(release, submittal_id_override)
     if not ref.project_id:
         raise SubmittalNotResolved(
             f"Submittal {ref.submittal_id} has no Procore project id on our side — "
-            "open it in Procore once, or pass a submittal id that we have synced."
+            "open it in Procore once so it syncs, then try again."
         )
 
     refs = find_submittal_drawing_refs(ref.project_id, ref.submittal_id)
-    already = attached_attachment_ids(release.id)
+    already = attached_attachment_ids([r.id for r in release_family(release)])
     # The FC pack the worker already linked on this release, by its attachment ids.
     linked_ids = attachment_ids_from_url(release.viewer_url)
 
@@ -366,6 +385,16 @@ def list_documents(release, submittal_id_override=None) -> dict:
     return {
         'submittal': _submittal_payload(ref, release),
         'documents': documents,
+        # Where a pull from here lands — the original, even when asked from a splice.
+        'pack_release': _pack_release_payload(release, asked_for),
+    }
+
+
+def _pack_release_payload(origin, asked_for) -> dict:
+    return {
+        'release_id': origin.id,
+        'release_label': f"{origin.job}-{origin.release}",
+        'via_splice': asked_for.id != origin.id,
     }
 
 
@@ -446,8 +475,12 @@ def _id_alternatives(target, ref):
 def pull_document(release, attachment_id, uploaded_by_user_id, submittal_id_override=None):
     """Download one Procore attachment and attach it as this release's next drawing version.
 
+    From a splice, the pack is resolved and attached on the ORIGINAL release: the splice
+    has no submittal of its own, and the family hub shows the original's files everywhere.
+
     Returns (version, ref). Raises SubmittalNotResolved / ProcorePullError / ValueError.
     """
+    release = splice_origin(release)
     ref = resolve_submittal(release, submittal_id_override)
     if not ref.project_id:
         raise SubmittalNotResolved(

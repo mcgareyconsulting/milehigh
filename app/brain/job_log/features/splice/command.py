@@ -27,6 +27,20 @@ Splice modal spec (Bill, 2026-09-16):
     from outside it and require a note saying why. ``install_hrs`` on the splice is
     the total (budget + additional) because it drives comp_eta everywhere;
     ``additional_install_hrs`` is the part that never counted against the pool.
+
+Zero-hour splices (training handout, 2026-09-21 — "Watch for: zero-hour splice bug"):
+  - A splice may carry NO install hours: drop-ship work, material-only scope, or a
+    slice whose hours are on the parent's install. Budget 0 and additional 0 is a
+    legal create; ``install_hrs`` is stored as 0.0 (never NULL — NULL on the parent
+    means "no pool", and a splice must never read that way). Such a splice draws
+    nothing from the pool and needs no installer: the installer is required only when
+    the splice carries hours to install.
+
+Billing tag (training handout, 2026-09-21, step 8 — "apply the billing tag on the new
+row if needed — not in the splice form yet"):
+  - The splice form takes ``release_tag`` (contracted | change_order | mhmw_cost). Left
+    blank, the splice inherits the original's tag, as before; a value must be one of
+    the canonical slugs (the route normalizes labels first).
 """
 import re
 from datetime import date, datetime
@@ -38,7 +52,7 @@ from app.brain.job_log.features.start_install.neutralize_install_date_cascade im
 )
 from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
 from app.logging_config import get_logger
-from app.models import Releases, ReleaseEvents, db
+from app.models import RELEASE_TAGS, RELEASE_TAG_LABELS, Releases, ReleaseEvents, db
 from app.services.job_event_service import JobEventService
 
 logger = get_logger(__name__)
@@ -83,6 +97,28 @@ def splice_children(parent, include_dead=False):
     if include_dead:
         return rows
     return [r for r in rows if _live(r)]
+
+
+def splice_origin(release):
+    """The original release of ``release``'s family — itself unless it is a splice."""
+    if release is None or release.parent_release_id is None:
+        return release
+    return db.session.get(Releases, release.parent_release_id) or release
+
+
+def release_family(release):
+    """The original followed by its splices, archived ones included, oldest first.
+
+    Documents belong to the family, not to one row, so a splice that has since been
+    archived still contributes the files attached to it; only a soft-deleted splice
+    (is_active False) drops out. Splices nest one level only (a splice cannot be
+    spliced), so the origin's children are the whole family.
+    """
+    origin = splice_origin(release)
+    if origin is None:
+        return []
+    children = [r for r in splice_children(origin, include_dead=True) if r.is_active is not False]
+    return [origin, *children]
 
 
 def budget_hours(row):
@@ -224,6 +260,7 @@ def pool_summary(parent):
             "description": parent.description,
             "stage": parent.stage,
             "installer": parent.installer,
+            "release_tag": parent.release_tag,
             "install_hrs": parent.install_hrs,
             "fab_hrs": parent.fab_hrs,
         },
@@ -241,6 +278,7 @@ def pool_summary(parent):
                 "released": c.released.isoformat() if c.released else None,
                 "job_comp": c.job_comp,
                 "installer": c.installer,
+                "release_tag": c.release_tag,
                 "start_install": c.start_install.isoformat() if c.start_install else None,
             }
             for c in children
@@ -264,6 +302,7 @@ class CreateSpliceCommand:
         start_install=None,
         additional_install_hrs=None,
         additional_install_note=None,
+        release_tag=None,
     ):
         self.parent = parent
         self.install_hrs_raw = install_hrs
@@ -275,6 +314,7 @@ class CreateSpliceCommand:
         self.start_install = start_install
         self.additional_install_hrs_raw = additional_install_hrs
         self.additional_install_note = additional_install_note
+        self.release_tag = release_tag
 
     @staticmethod
     def _parse_date(value, label):
@@ -313,9 +353,7 @@ class CreateSpliceCommand:
         if len(description) > 256:
             raise SpliceError("Description must be 256 characters or fewer")
 
-        installer = str(self.installer or "").strip()
-        if not installer:
-            raise SpliceError("Installer is required")
+        installer = str(self.installer or "").strip() or None
 
         stage = "Released"
         if self.stage is not None and str(self.stage).strip():
@@ -324,6 +362,15 @@ class CreateSpliceCommand:
                 raise SpliceError(f"Unknown stage '{self.stage}'")
 
         start_install = self._parse_date(self.start_install, "Start install")
+
+        # Billing tag: chosen on the form, else the original's.
+        release_tag = str(self.release_tag or "").strip() or None
+        if release_tag is None:
+            release_tag = parent.release_tag
+        elif release_tag not in RELEASE_TAGS:
+            raise SpliceError(
+                "Billing tag must be one of: " + ", ".join(RELEASE_TAG_LABELS[t] for t in sorted(RELEASE_TAGS))
+            )
 
         # Hours: budget from the pool, additional from outside it (with a reason).
         budget_hrs = _coerce_hours(self.install_hrs_raw, "Budget install hours", allow_blank=True)
@@ -335,8 +382,11 @@ class CreateSpliceCommand:
             raise SpliceError("Explain why additional install hours are needed")
         if additional_hrs == 0:
             additional_note = None
-        if budget_hrs <= 0 and additional_hrs <= 0:
-            raise SpliceError("Budget install hours must be greater than 0")
+        # Budget 0 + additional 0 is a zero-hour splice (drop ship, material only):
+        # legal, draws nothing from the pool, and needs no installer.
+        install_hrs = round(budget_hrs + additional_hrs, 4)
+        if install_hrs > 0 and not installer:
+            raise SpliceError("Installer is required when the splice carries install hours")
 
         total, allocated, remaining = install_pool(parent)
         if budget_hrs > 0:
@@ -355,7 +405,6 @@ class CreateSpliceCommand:
                     allocated_install_hrs=allocated,
                     remaining_install_hrs=remaining,
                 )
-        install_hrs = round(budget_hrs + additional_hrs, 4)
 
         release_number = next_splice_number(parent)
         released = self._parse_date(self.released, "Released") or date.today()
@@ -376,7 +425,7 @@ class CreateSpliceCommand:
             "Stage": stage,
             "installer": installer,
             "Start install": start_install.isoformat() if start_install else None,
-            "release_tag": parent.release_tag,
+            "release_tag": release_tag,
             "splice": True,
             "parent_release_id": parent.id,
             "parent_release": f"{parent.job}-{parent.release}",
@@ -407,7 +456,7 @@ class CreateSpliceCommand:
             stage=stage,
             stage_group=stage_group,
             installer=installer,
-            release_tag=parent.release_tag,
+            release_tag=release_tag,
             parent_release_id=parent.id,
             last_updated_at=datetime.utcnow(),
             source_of_update="Brain",
@@ -456,6 +505,7 @@ class CreateSpliceCommand:
             additional_install_hrs=additional_hrs,
             stage=stage,
             installer=installer,
+            release_tag=release_tag,
             remaining_install_hrs=None if remaining is None else round(remaining - budget_hrs, 4),
             user_id=self.user.id if self.user else None,
         )
@@ -586,8 +636,8 @@ def validate_field_edits(job_record, coerced):
         if "install_hrs" in coerced:
             parent = Releases.query.get(job_record.parent_release_id)
             new_hrs = coerced["install_hrs"][1]
-            if new_hrs is None or float(new_hrs) <= 0:
-                raise SpliceError("A splice must carry install hours greater than 0")
+            if new_hrs is None or float(new_hrs) < 0:
+                raise SpliceError("A splice's install hours cannot be blank or negative (0 is a zero-hour splice)")
             additional = float(job_record.additional_install_hrs or 0)
             if float(new_hrs) + 1e-9 < additional:
                 raise SpliceError(

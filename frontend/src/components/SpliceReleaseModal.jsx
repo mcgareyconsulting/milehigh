@@ -3,25 +3,32 @@
  * schema_version: 1
  * purpose: "+ Splice" dialog — creates a 340.1 / 340.2 child release under an original release.
  *   The original's number, name and description are shown read-only; the user writes the splice's
- *   own description, picks stage, installer and an optional start install date, and gives budget
- *   install hours (drawn from the original's pool) and/or additional install hours (outside the
- *   pool, with a required reason). No fab hours, no Trello.
+ *   own description, picks stage, installer, billing tag (defaults to the original's) and an
+ *   optional start install date, and gives budget install hours (drawn from the original's pool)
+ *   and/or additional install hours (outside the pool, with a required reason). No fab hours, no
+ *   Trello.
  * exports:
  *   SpliceReleaseModal: Portal-free dialog (the caller portals it)
- * imports_from: [react, ../services/jobsApi, ../constants/stages]
+ * imports_from: [react, ../services/jobsApi, ../constants/stages, ../constants/releaseTags]
  * imported_by: [frontend/src/components/SplicesPane.jsx]
  * invariants:
  *   - Spec: Bill, 2026-09-16 shop session (roadmap T9).
  *   - Description is required and must differ from the original's (whitespace/case-insensitive);
- *     installer is required. The server enforces both — a 400/409 is surfaced verbatim.
+ *     an installer is required only when the splice carries install hours. The server enforces
+ *     both — a 400/409 is surfaced verbatim.
  *   - Budget install hours are capped at the pool's remaining hours client-side AND server-side.
- *   - Additional install hours need a note; together with budget hours the splice's total must be > 0.
+ *   - Additional install hours need a note. Budget 0 + additional 0 is a ZERO-HOUR splice (drop
+ *     ship, material only — training handout 2026-09-21), legal with no installer; the form says
+ *     so instead of blocking.
+ *   - Billing tag (training handout 2026-09-21, step 8) is on the form, pre-set to the original's
+ *     tag; blank sends null and the server inherits the original's.
  *   - The release number is display-only; it is never sent.
- * updated_by_agent: 2026-09-16T00:00:00Z
+ * updated_by_agent: 2026-09-22T00:00:00Z
  */
 import React, { useEffect, useState } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { STAGE_OPTIONS } from '../constants/stages';
+import { RELEASE_TAGS } from '../constants/releaseTags';
 
 const todayYmd = () => {
     const d = new Date();
@@ -68,6 +75,8 @@ export function SpliceReleaseModal({
     releaseNumber,
     jobName = '',
     description = '',
+    /** The original's billing tag (contracted | change_order | mhmw_cost); the form's default. */
+    releaseTag = null,
     /** Pool snapshot from GET /splices; refreshed on open. */
     pool = null,
     /** Called with the server response after a successful create. */
@@ -78,6 +87,7 @@ export function SpliceReleaseModal({
     const [desc, setDesc] = useState('');
     const [stage, setStage] = useState('Released');
     const [installer, setInstaller] = useState('');
+    const [tag, setTag] = useState(releaseTag || '');
     const [startInstall, setStartInstall] = useState('');
     const [budgetHrs, setBudgetHrs] = useState('');
     const [additionalOn, setAdditionalOn] = useState(false);
@@ -92,6 +102,7 @@ export function SpliceReleaseModal({
         setDesc('');
         setStage('Released');
         setInstaller('');
+        setTag(releaseTag || '');
         setStartInstall('');
         setBudgetHrs('');
         setAdditionalOn(false);
@@ -110,7 +121,7 @@ export function SpliceReleaseModal({
             .then((teams) => { if (!cancelled) setInstallerOptions(teams || []); })
             .catch(() => { if (!cancelled) setInstallerOptions([]); });
         return () => { cancelled = true; };
-    }, [isOpen, parentId, pool]);
+    }, [isOpen, parentId, pool, releaseTag]);
 
     useEffect(() => {
         if (!isOpen) return undefined;
@@ -144,9 +155,13 @@ export function SpliceReleaseModal({
     const extraValid = !additionalOn || (Number.isFinite(extra) && extra > 0);
     const noteValid = !additionalOn || additionalNote.trim() !== '';
     const totalHrs = (budgetValid ? budget : 0) + (additionalOn && Number.isFinite(extra) ? extra : 0);
+    // No hours at all is a zero-hour splice (drop ship, material only): legal, and it needs no
+    // installer since there is nothing to install.
+    const zeroHour = budgetValid && extraValid && totalHrs === 0;
+    const installerOk = installer !== '' || zeroHour;
 
-    const canSubmit = descValid && installer !== '' && budgetValid && !overPool && !budgetNeedsPool
-        && extraValid && noteValid && totalHrs > 0 && !submitting;
+    const canSubmit = descValid && installerOk && budgetValid && !overPool && !budgetNeedsPool
+        && extraValid && noteValid && !submitting;
 
     const submit = async (e) => {
         e?.preventDefault?.();
@@ -156,8 +171,9 @@ export function SpliceReleaseModal({
         try {
             const result = await jobsApi.createSplice(parentId, {
                 description: descTrim,
-                installer,
+                installer: installer || null,
                 stage,
+                release_tag: tag || null,
                 start_install: startInstall || null,
                 install_hrs: budget > 0 ? budget : null,
                 additional_install_hrs: additionalOn ? extra : null,
@@ -252,13 +268,22 @@ export function SpliceReleaseModal({
                             </select>
                         </div>
                         <div>
-                            <FieldLabel htmlFor="splice-installer" required>Installer</FieldLabel>
+                            <FieldLabel htmlFor="splice-installer" required={!zeroHour}>Installer</FieldLabel>
                             <select id="splice-installer" value={installer} onChange={(e) => setInstaller(e.target.value)} className={inputCls} style={border(false)}>
                                 <option value="">Select installer…</option>
                                 {installerOptions.map((t) => {
                                     const name = t.name || t;
                                     return <option key={name} value={name}>{name}</option>;
                                 })}
+                            </select>
+                        </div>
+                        <div>
+                            <FieldLabel htmlFor="splice-release-tag">Billing tag</FieldLabel>
+                            <select id="splice-release-tag" value={tag} onChange={(e) => setTag(e.target.value)} className={inputCls} style={border(false)}>
+                                <option value="">Same as {jobNumber}-{releaseNumber}</option>
+                                {RELEASE_TAGS.map((t) => (
+                                    <option key={t.value} value={t.value}>{t.label}</option>
+                                ))}
                             </select>
                         </div>
                         <div>
@@ -272,7 +297,7 @@ export function SpliceReleaseModal({
                     </div>
 
                     <div>
-                        <FieldLabel htmlFor="splice-budget-hrs" required={!additionalOn}>Budget install hours</FieldLabel>
+                        <FieldLabel htmlFor="splice-budget-hrs">Budget install hours</FieldLabel>
                         <input
                             id="splice-budget-hrs"
                             type="number"
@@ -346,12 +371,17 @@ export function SpliceReleaseModal({
                         )}
                     </div>
 
-                    {totalHrs > 0 && (
+                    {totalHrs > 0 ? (
                         <p className="text-jl-2 text-ink-2">
                             {`Splice total: ${fmtHrs(totalHrs)} install hrs`}
                             {additionalOn && extra > 0 ? ` (${fmtHrs(budget)} budget + ${fmtHrs(extra)} additional)` : ''}
                         </p>
-                    )}
+                    ) : zeroHour ? (
+                        <p className="text-jl-2 text-ink-2" data-testid="zero-hour-note">
+                            Zero-hour splice: no install hours, so no installer is needed. Use this for drop-ship
+                            or material-only work (put “drop ship” in the description).
+                        </p>
+                    ) : null}
 
                     {error && (
                         <p className="text-jl-2" style={{ color: 'var(--fl-red-fg)' }} role="alert">{error}</p>

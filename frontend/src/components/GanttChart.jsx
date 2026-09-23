@@ -2103,9 +2103,9 @@ function GanttChart({ filterComplete = false }) {
                 scrollToMaterials={hubScrollToMaterials}
                 onOrdersChanged={refreshMaterialSummary}
                 onClose={closeHub}
-                onOpenVersion={(vid, mode) => {
+                onOpenVersion={(vid, mode, vReleaseId) => {
                     setMarkup({
-                        releaseId: hubJob?.id,
+                        releaseId: vReleaseId ?? hubJob?.id,
                         versionId: vid,
                         mode: isAdmin ? mode : 'view',
                     });
