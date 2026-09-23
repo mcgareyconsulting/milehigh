@@ -17,7 +17,7 @@
  *   - The stage chip is DISPLAY ONLY for subs: stage changes stay a staff action (open question
  *     3 in the spec, answered conservatively until Bill says otherwise).
  *   - The ⋯ menu holds Copy link and Close only — Procore/Trello links are internal identities.
- *   - Header and tab strip are sticky; only the tab body scrolls.
+ *   - Header and tab strip are fixed-height flex siblings (flex-shrink 0); only the tab body scrolls.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -111,7 +111,7 @@ export default function SubcontractorRelease() {
 
             {rel && (
                 <>
-                    <nav className="sub-tabstrip" aria-label="Release sections" style={{ top: 0 }}>
+                    <nav className="sub-tabstrip" aria-label="Release sections">
                         {TABS.map((t) => (
                             <button key={t.key} type="button" className={tab === t.key ? 'active' : ''} onClick={() => setTab(t.key)}>
                                 {t.label}
