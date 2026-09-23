@@ -30,7 +30,12 @@
 
   font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
-  min-height: 100dvh;
+  /* A FIXED height, not min-height: the shell must be bounded for `.sub-page` and the
+     tab bodies inside it to be the scroll containers. With min-height a tall tab (a
+     photo list, a splice family) grows the shell past the viewport, the document
+     scrolls instead, and the top bar / release header scroll away with it. */
+  height: 100dvh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -420,3 +425,12 @@
   background: var(--surface); border-top: 1px solid var(--border);
 }
 .sub-bottombar .sub-btn { height: 48px; }
+
+/* Month filter chips under the Job Log title */
+.sub-months { display: flex; gap: 6px; padding: 4px 16px 8px; overflow-x: auto; scrollbar-width: none; flex-shrink: 0; }
+.sub-months::-webkit-scrollbar { display: none; }
+.sub-months button {
+  flex: 0 0 auto; height: 34px; padding: 0 14px; border-radius: 17px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-2); font-size: 14px; font-weight: 700; white-space: nowrap;
+}
+.sub-months button.active { background: var(--accent); border-color: var(--accent); color: #fff; }

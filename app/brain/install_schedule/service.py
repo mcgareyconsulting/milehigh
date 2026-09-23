@@ -9,6 +9,8 @@ exports:
   build_next_week_schedule: (days:int=7, today:date|None=None) -> dict envelope {window, summary, crews[]}
   build_day_schedule: (days:int=14, past_days:int=14, today:date|None=None, installer:str|None=None)
     -> dict envelope {window, summary, past_due[], days[]}
+  build_month_schedule: (year:int, month:int, today:date|None=None, installer:str|None=None)
+    -> the same envelope for ONE calendar month (every day emitted, no past-due triage)
 imports_from: [app.models, app.brain.job_log.scheduling.calculator, app.brain.job_log.scheduling.config]
 imported_by: [app/brain/install_schedule/routes.py, tests]
 invariants:
@@ -254,6 +256,78 @@ def _day_row_sort_key(card):
 def _hours(cards):
     known = [c["est_hours"] for c in cards if c["est_hours"] is not None]
     return round(sum(known), 1) if known else 0.0
+
+
+def build_month_schedule(year, month, today=None, installer=None):
+    """
+    The day-row envelope for ONE calendar month — the phone view's month filter.
+
+    Same cards and same row shape as build_day_schedule, but the window is the
+    month (every day emitted, weekends included) and there is NO past-due bucket:
+    browsing last month is looking at history, not triaging misses, so a card sits
+    on the day it was scheduled whether that day has passed or not.
+    """
+    import calendar
+    today = today or date.today()
+    window_start = date(year, month, 1)
+    window_end = date(year, month, calendar.monthrange(year, month)[1])
+
+    q = (
+        Releases.query
+        .filter(Releases.is_active.isnot(False))
+        .filter(Releases.is_archived.is_(False))
+        .filter(Releases.start_install.isnot(None))
+        .filter(Releases.start_install >= window_start)
+        .filter(Releases.start_install <= window_end)
+    )
+    if installer:
+        q = q.filter(Releases.installer == installer)
+    rows = q.all()
+    splice_hours = splice_allocations([r.id for r in rows])
+    by_day = {}
+    for rel in rows:
+        card = _card(rel, today, splice_hours.get(rel.id))
+        card["span_days"] = _span_days(card)
+        by_day.setdefault(card["start_install"], []).append(card)
+
+    day_rows = []
+    d = window_start
+    while d <= window_end:
+        day_cards = sorted(by_day.get(d.isoformat(), []), key=_day_row_sort_key)
+        day_rows.append({
+            "date": d.isoformat(),
+            "weekday": d.strftime("%a"),
+            "is_today": d == today,
+            "is_weekend": d.weekday() >= 5,
+            "card_count": len(day_cards),
+            "known_hours": _hours(day_cards),
+            "unknown_hours_count": sum(1 for c in day_cards if c["est_hours"] is None),
+            "cards": day_cards,
+        })
+        d += timedelta(days=1)
+
+    cards = [c for r in day_rows for c in r["cards"]]
+    return {
+        "window": {
+            "start": window_start.isoformat(),
+            "end": window_end.isoformat(),
+            "today": today.isoformat(),
+            "month": f"{year:04d}-{month:02d}",
+            "installer": installer,
+        },
+        "summary": {
+            "total_releases": len(cards),
+            "scheduled": len(cards),
+            "past_due": 0,
+            "hard_dates": sum(1 for c in cards if c["is_hard"]),
+            "asap_dates": sum(1 for c in cards if c["date_kind"] == KIND_ASAP),
+            "unassigned_releases": sum(1 for c in cards if c["unassigned"]),
+            "releases_missing_hours": sum(1 for c in cards if c["est_hours"] is None),
+            "crews": sorted({c["crew"] for c in cards}),
+        },
+        "past_due": [],
+        "days": day_rows,
+    }
 
 
 def build_day_schedule(days=14, past_days=14, today=None, installer=None):

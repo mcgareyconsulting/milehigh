@@ -37,9 +37,9 @@ const NEUTRAL_CREW_COLOR = 'rgb(148 163 184)';   // slate-400, for a crew with n
 const UNASSIGNED_COLOR = 'rgb(245 158 11)';      // amber-500 — a gap to fill, not a crew
 
 /** "Today" / "Tomorrow" / "Thu, Sep 10" — a relative label beats a date the reader has to compare. */
-function dayLabel(row, index) {
+function dayLabel(row, index, relative = true) {
     if (row.is_today) return 'Today';
-    if (index === 1) return 'Tomorrow';
+    if (relative && index === 1) return 'Tomorrow';
     const d = new Date(`${row.date}T00:00:00`);
     return isNaN(d) ? row.date : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
@@ -136,7 +136,7 @@ function PastDue({ cards, todayIso, colorFor, onOpen }) {
     );
 }
 
-function DayRow({ row, index, colorFor, onOpen }) {
+function DayRow({ row, index, colorFor, onOpen, relativeLabels = true }) {
     const empty = row.card_count === 0;
     // Blank weekends are pure scrolling; blank weekdays carry the shape of the week.
     if (empty && row.is_weekend) return null;
@@ -149,7 +149,7 @@ function DayRow({ row, index, colorFor, onOpen }) {
                 }`}
             >
                 <span className={`text-sm font-bold ${row.is_today ? 'text-accent-600 dark:text-accent-400' : 'text-ink'}`}>
-                    {dayLabel(row, index)}
+                    {dayLabel(row, index, relativeLabels)}
                 </span>
                 <span className="text-[11px] text-ink-3 tabular-nums shrink-0">
                     {empty ? 'nothing scheduled' : (
@@ -173,7 +173,9 @@ function DayRow({ row, index, colorFor, onOpen }) {
     );
 }
 
-export default function DaySchedule({ data, roster = [], crewFilter = null, onOpenRelease = null }) {
+/** `relativeLabels` false = a window that does not start today (the phone's month filter),
+ *  where "Tomorrow" on the second row would be a lie. */
+export default function DaySchedule({ data, roster = [], crewFilter = null, onOpenRelease = null, relativeLabels = true }) {
     // Memoised so the colour map is not rebuilt on every render (a fresh [] literal each pass
     // would invalidate it), which would remount the chip dots on each poll.
     const crews = useMemo(() => data?.summary?.crews || [], [data]);
@@ -192,12 +194,12 @@ export default function DaySchedule({ data, roster = [], crewFilter = null, onOp
 
                 {nothingAtAll ? (
                     <p className="py-8 text-center text-sm text-ink-3">
-                        Nothing scheduled to install in this window
+                        Nothing scheduled to install in this {data.window?.month ? 'month' : 'window'}
                         {crewFilter ? ` for ${crewFilter}` : ''}.
                     </p>
                 ) : (
                     data.days.map((row, i) => (
-                        <DayRow key={row.date} row={row} index={i} colorFor={colorFor} onOpen={onOpenRelease} />
+                        <DayRow key={row.date} row={row} index={i} colorFor={colorFor} onOpen={onOpenRelease} relativeLabels={relativeLabels} />
                     ))
                 )}
             </div>

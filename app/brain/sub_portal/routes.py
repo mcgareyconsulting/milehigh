@@ -116,10 +116,15 @@ def subcontractor_day_schedule():
     """The phone Timeline. The crew is the session's, never a query param: a sub cannot
     ask for another crew's days by editing the URL."""
     sub = get_current_subcontractor()
+    import re
+    month = (request.args.get('month') or '').strip()
+    if month and not re.fullmatch(r'\d{4}-(0[1-9]|1[0-2])', month):
+        return jsonify({'error': 'month must be YYYY-MM'}), 400
     return jsonify(build_day_schedule_for_subcontractor(
         sub,
         days=_int_arg('days', 14, 1, 31),
         past_days=_int_arg('past_days', 14, 0, 31),
+        month=month or None,
     )), 200
 
 

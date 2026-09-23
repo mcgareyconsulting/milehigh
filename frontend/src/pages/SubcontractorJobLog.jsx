@@ -14,6 +14,9 @@
  * invariants:
  *   - No crew picker: the crew is the account's, chosen by an admin. The header names it so an
  *     empty calendar reads as "nothing scheduled for Saul 2" rather than as a broken page.
+ *   - ONE time control: a chip row — "Upcoming" (the rolling ±2-week window with past-due triage)
+ *     and a run of calendar months. A month shows every day of that month; the labels stop being
+ *     relative ("Tomorrow") because the window no longer starts today.
  *   - Reuses DaySchedule unchanged (roster = the one crew) — the sub timeline must not grow its own
  *     lane/day logic, or the staff tower work reworks it (ROADMAP T3, 2026-09-07 note).
  *   - Polls while visible so a PM's reschedule shows up without a reload.
@@ -26,6 +29,19 @@ import { useScrollRestore } from '../hooks/useScrollRestore';
 import { getSubDaySchedule, getSubReleases } from '../services/subPortalApi';
 
 const POLL_MS = 60000;
+
+/** Month chips: last month through four months out, keyed 'YYYY-MM'. */
+function monthOptions(today = new Date()) {
+    const out = [];
+    for (let i = -1; i <= 4; i += 1) {
+        const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const label = d.toLocaleDateString('en-US', i === 0 || d.getFullYear() === today.getFullYear()
+            ? { month: 'short' } : { month: 'short', year: '2-digit' });
+        out.push({ key, label, isCurrent: i === 0 });
+    }
+    return out;
+}
 
 function UnscheduledCard({ rel, onOpen }) {
     const code = `${rel['Job #']}-${rel['Release #']}`;
@@ -51,14 +67,16 @@ export default function SubcontractorJobLog() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [showUnscheduled, setShowUnscheduled] = useState(false);
-    const scrollRef = useScrollRestore('sub-job-log', !loading && !!data);
+    const [month, setMonth] = useState(null); // null = Upcoming
+    const months = useMemo(() => monthOptions(), []);
+    const scrollRef = useScrollRestore(`sub-job-log:${month || 'upcoming'}`, !loading && !!data);
 
     const load = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
         setError(null);
         try {
             const [env, feed] = await Promise.all([
-                getSubDaySchedule({ days: 14, pastDays: 14 }),
+                getSubDaySchedule({ days: 14, pastDays: 14, month }),
                 getSubReleases(),
             ]);
             setData(env);
@@ -68,7 +86,7 @@ export default function SubcontractorJobLog() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [month]);
 
     useEffect(() => { load(); }, [load]);
     useEffect(() => {
@@ -92,8 +110,23 @@ export default function SubcontractorJobLog() {
         <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto flex flex-col">
             <div className="sub-page-head">
                 <h1>Job Log</h1>
-                <div className="sub-ctx">{crew ? `${crew} · next 2 weeks` : 'No crew assigned'}</div>
+                <div className="sub-ctx">
+                    {crew
+                        ? `${crew} · ${month ? months.find((m) => m.key === month)?.label || month : 'next 2 weeks'}`
+                        : 'No crew assigned'}
+                </div>
             </div>
+            {crew && (
+                <div className="sub-months" role="tablist" aria-label="Time window">
+                    <button type="button" role="tab" aria-selected={month === null} className={month === null ? 'active' : ''} onClick={() => setMonth(null)}>Upcoming</button>
+                    {months.map((m) => (
+                        <button key={m.key} type="button" role="tab" aria-selected={month === m.key}
+                            className={month === m.key ? 'active' : ''} onClick={() => setMonth(m.key)}>
+                            {m.label}
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {!crew && (
                 <SubEmpty icon="calendar" title="No crew assigned yet"
@@ -103,14 +136,14 @@ export default function SubcontractorJobLog() {
             {error && <div className="text-red-600 text-sm px-4 py-2">{error}</div>}
 
             {!loading && !error && crew && nothing && unscheduled.length === 0 && (
-                <SubEmpty icon="calendar" title="Nothing scheduled" body={`No installs for ${crew} in the next two weeks.`} />
+                <SubEmpty icon="calendar" title="Nothing scheduled" body={month ? `No installs for ${crew} in ${months.find((m) => m.key === month)?.label || month}.` : `No installs for ${crew} in the next two weeks.`} />
             )}
             {/* Plain block wrapper (not a flex column): DaySchedule's inner overflow div then sizes
                 to its content and THIS page scrolls, so sticky day headers, the unscheduled list and
                 scroll restore all work against one scroll container. */}
             {!loading && !error && data && crew && !nothing && (
                 <div className="px-4">
-                    <DaySchedule data={data} roster={roster} crewFilter={crew} onOpenRelease={openCard} />
+                    <DaySchedule data={data} roster={roster} crewFilter={crew} onOpenRelease={openCard} relativeLabels={!month} />
                 </div>
             )}
 

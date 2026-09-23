@@ -33,10 +33,12 @@ export async function getSubRelease(id) {
     return data;
 }
 
-export async function getSubDaySchedule({ days = 14, pastDays = 14 } = {}) {
-    const { data } = await axios.get(`${BASE}/install-schedule/by-day`, {
-        params: { days, past_days: pastDays },
-    });
+/** month = 'YYYY-MM' switches to that calendar month (every day, no past-due bucket);
+ *  omitted = the rolling window (pastDays back, days forward, past-due triaged). */
+export async function getSubDaySchedule({ days = 14, pastDays = 14, month = null } = {}) {
+    const params = { days, past_days: pastDays };
+    if (month) params.month = month;
+    const { data } = await axios.get(`${BASE}/install-schedule/by-day`, { params });
     return data; // { window, summary, past_due, days }
 }
 

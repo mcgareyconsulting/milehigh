@@ -31,7 +31,7 @@ invariants:
 """
 from datetime import datetime
 
-from app.brain.install_schedule.service import build_day_schedule
+from app.brain.install_schedule.service import build_day_schedule, build_month_schedule
 from app.brain.job_log.utils import serialize_value
 from app.logging_config import get_logger
 from app.models import (
@@ -192,15 +192,20 @@ _NO_CREW_SENTINEL = '\x00unscoped'
 _DAY_CARD_STRIP = ('notes',)
 
 
-def build_day_schedule_for_subcontractor(subcontractor, days=14, past_days=14):
+def build_day_schedule_for_subcontractor(subcontractor, days=14, past_days=14, month=None):
     """The phone Timeline (days as rows) for exactly this crew.
 
     Reuses the internal builder with the crew pinned server-side, so a sub can never
     widen the filter by omitting a query param; then strips the internal-only card
     keys. Same cards as the staff calendar, minus what the sub is not shown.
+    `month` ("YYYY-MM") switches to the one-month window (the phone's month filter).
     """
     crew = _crew(subcontractor) or _NO_CREW_SENTINEL
-    envelope = build_day_schedule(days=days, past_days=past_days, installer=crew)
+    if month:
+        year, mon = (int(p) for p in month.split('-', 1))
+        envelope = build_month_schedule(year, mon, installer=crew)
+    else:
+        envelope = build_day_schedule(days=days, past_days=past_days, installer=crew)
     for card in envelope['past_due']:
         for k in _DAY_CARD_STRIP:
             card.pop(k, None)
