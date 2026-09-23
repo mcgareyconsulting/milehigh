@@ -47,6 +47,9 @@ def non_admin_client(app, mock_non_admin_user):
 _SUBCONTRACTOR_PATCH_TARGETS = (
     'app.subcontractor_auth.utils.get_current_subcontractor',
     'app.brain.tm.subcontractor_view.routes.get_current_subcontractor',
+    # The sub portal (releases) imports the resolver into its own module too, so it
+    # needs its own patch target for the same reason the T&M view does.
+    'app.brain.sub_portal.routes.get_current_subcontractor',
 )
 
 
