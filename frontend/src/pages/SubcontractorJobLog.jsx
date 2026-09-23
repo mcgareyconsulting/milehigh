@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import DaySchedule from '../components/installSchedule/DaySchedule';
 import SubReleaseSheet from '../components/sub/SubReleaseSheet';
+import SubEmpty from '../components/sub/SubEmpty';
 import { getSubDaySchedule, getSubReleases, listSubTodos } from '../services/subPortalApi';
 
 const POLL_MS = 60000;
@@ -30,13 +31,13 @@ function UnscheduledCard({ rel, onOpen }) {
     const code = `${rel['Job #']}-${rel['Release #']}`;
     return (
         <button type="button" onClick={() => onOpen(rel.id)}
-            className="w-full text-left rounded-lg border border-hairline bg-surface shadow-sm p-3 active:scale-[0.995]">
+            className="sub-card w-full text-left p-4 active:scale-[0.995]">
             <div className="flex items-start justify-between gap-2">
-                <span className="font-mono text-sm font-bold text-accent-600 dark:text-accent-400">{code}</span>
-                {rel.Stage && <span className="text-[11px] text-ink-3 truncate max-w-[10rem]">{rel.Stage}</span>}
+                <span className="num font-mono text-brand">{code}</span>
+                {rel.Stage && <span className="sub-pill truncate max-w-[10rem]">{rel.Stage}</span>}
             </div>
-            {rel.Job && <div className="mt-0.5 text-sm font-medium text-ink break-words">{rel.Job}</div>}
-            {rel.Description && <div className="mt-1 text-xs text-ink-2 line-clamp-2 break-words">{rel.Description}</div>}
+            {rel.Job && <div className="mt-1 text-sm font-bold text-ink break-words">{rel.Job}</div>}
+            {rel.Description && <div className="mt-1 text-sm text-ink-3 line-clamp-2 break-words">{rel.Description}</div>}
         </button>
     );
 }
@@ -87,34 +88,40 @@ export default function SubcontractorJobLog() {
     const openCard = useCallback((card) => setOpenId(card.release_id), []);
     const closeSheet = useCallback(() => setOpenId(null), []);
 
+    const nothing = data && !data.past_due.length && data.summary.scheduled === 0;
+
     return (
-        <div className="flex-1 min-h-0 flex flex-col p-3 gap-2">
-            <div className="flex items-baseline justify-between gap-2 px-1">
-                <h1 className="text-base font-bold text-ink">Job Log</h1>
-                <span className="text-xs text-ink-3 truncate">{crew ? `${crew} · next 2 weeks` : 'No crew assigned yet'}</span>
+        <div className="flex-1 min-h-0 flex flex-col">
+            <div className="sub-page-head">
+                <h1>Job Log</h1>
+                <div className="sub-ctx">{crew ? `${crew} · next 2 weeks` : 'No crew assigned'}</div>
             </div>
 
             {!crew && (
-                <p className="rounded-lg border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700 px-3 py-2 text-sm">
-                    Your account is not linked to a crew yet, so there is nothing to show. Ask MHMW to assign your crew.
-                </p>
+                <SubEmpty icon="calendar" title="No crew assigned yet"
+                    body="Your account is not linked to an installer crew, so there is nothing to show. Ask MHMW to assign your crew." />
             )}
-            {loading && <div className="text-ink-3 text-sm px-1">Loading your schedule…</div>}
-            {error && <div className="text-red-600 dark:text-red-400 text-sm px-1">{error}</div>}
+            {loading && <div className="text-ink-3 text-sm px-4 py-2">Loading your schedule…</div>}
+            {error && <div className="text-red-600 text-sm px-4 py-2">{error}</div>}
 
-            {!loading && !error && data && (
-                <DaySchedule data={data} roster={roster} crewFilter={crew} onOpenRelease={openCard} />
+            {!loading && !error && crew && nothing && unscheduled.length === 0 && (
+                <SubEmpty icon="calendar" title="Nothing scheduled" body={`No installs for ${crew} in the next two weeks.`} />
+            )}
+            {!loading && !error && data && crew && !nothing && (
+                <div className="px-4 flex-1 min-h-0 flex flex-col">
+                    <DaySchedule data={data} roster={roster} crewFilter={crew} onOpenRelease={openCard} />
+                </div>
             )}
 
             {!loading && !error && unscheduled.length > 0 && (
-                <section className="mt-1">
+                <section className="mt-1 px-4">
                     <button type="button" onClick={() => setShowUnscheduled((v) => !v)}
-                        className="w-full flex items-center justify-between px-1 py-2 text-xs font-extrabold uppercase tracking-wide text-ink-3">
+                        className="w-full flex items-center justify-between px-0 py-2 text-xs font-extrabold uppercase tracking-wide text-ink-3">
                         <span>Not yet scheduled · {unscheduled.length}</span>
                         <span aria-hidden="true">{showUnscheduled ? '▾' : '▸'}</span>
                     </button>
                     {showUnscheduled && (
-                        <div className="flex flex-col gap-2 pb-3">
+                        <div className="flex flex-col gap-2.5 pb-4">
                             {unscheduled.map((r) => <UnscheduledCard key={r.id} rel={r} onOpen={setOpenId} />)}
                         </div>
                     )}

@@ -1,0 +1,259 @@
+/*
+ * Subcontractor portal — Option A (single top bar). Source: subs-mobile-option-a.md.
+ *
+ * Everything is scoped under .sub-shell so the staff app is untouched. The spec's
+ * palette is written onto the SAME custom properties the Job Log tokens use
+ * (--bg / --surface / --text / --accent …), so the Tailwind token utilities the
+ * portal components already use (bg-surface, text-ink, bg-brand …) re-resolve to
+ * the spec inside the shell with no per-class rework. Custom properties inherit
+ * from the nearest ancestor that sets them, so these win over :root / .dark for
+ * the whole subtree regardless of selector specificity.
+ *
+ * The spec is light-only; the portal renders the spec palette in both themes.
+ */
+.sub-shell {
+  --bg: #eef0f5;
+  --surface: #ffffff;
+  --surface-2: #f4f5f9;
+  --head-bg: #e9edf4;
+  --border: #d9dde8;
+  --border-strong: #c3ccd9;
+  --text: #151b33;
+  --text-2: #3f4763;
+  --text-3: #5b6478;
+  --accent: #2f3f8f;
+  --accent-soft: #e6e9f6;
+  --accent-ink: #ffffff;
+  --input-bg: #ffffff;
+  --sub-danger: #9b2c2c;
+  --sub-shadow-card: 0 1px 2px rgba(21, 27, 51, .06);
+
+  font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ---- Top bar: 56px, logo tile · pill tab track · menu ---- */
+.sub-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: 56px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.sub-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 900;
+  font-size: 15px;
+  letter-spacing: .3px;
+  border: 0;
+}
+.sub-tabs {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg);
+  border-radius: 21px;
+}
+.sub-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 36px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--text-3);
+  background: transparent;
+  position: relative;
+}
+.sub-tab svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2.2; flex-shrink: 0; }
+.sub-tab.active { background: var(--accent); color: #fff; }
+@media (max-width: 360px) { .sub-tab span { display: none; } }
+.sub-tab-badge {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.sub-tab.active .sub-tab-badge { box-shadow: 0 0 0 2px var(--accent); }
+.sub-menu-btn {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: none;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.sub-menu-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2.2; }
+
+/* ---- Page ---- */
+.sub-page {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.sub-page-head {
+  padding: 14px 16px 8px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sub-page-head h1 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -.2px; }
+.sub-ctx { font-size: 13px; font-weight: 600; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- Segmented control (To-Dos / Mentions) ---- */
+.sub-seg { padding: 12px 16px 4px; display: flex; gap: 8px; }
+.sub-seg button {
+  flex: 1;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-3);
+}
+.sub-seg button.active { background: var(--surface); border-color: var(--border); color: var(--text); font-weight: 800; }
+.sub-badge {
+  margin-left: 8px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.sub-badge.alert { background: #dc2626; }
+
+/* ---- Cards ---- */
+.sub-card {
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: var(--sub-shadow-card);
+  color: var(--text);
+  text-decoration: none;
+}
+.sub-card .num { font-size: 17px; font-weight: 800; }
+.sub-pill {
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--bg);
+  border-radius: 999px;
+  padding: 5px 12px;
+  white-space: nowrap;
+}
+
+/* ---- Empty state ---- */
+.sub-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 32px;
+  text-align: center;
+}
+.sub-empty .well {
+  width: 56px;
+  height: 56px;
+  border-radius: 28px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sub-empty .well svg { width: 26px; height: 26px; stroke: currentColor; fill: none; stroke-width: 2; }
+.sub-empty h2 { margin: 0; font-size: 18px; font-weight: 800; }
+.sub-empty p { margin: 0; font-size: 14px; color: var(--text-3); line-height: 1.4; }
+
+/* ---- Account sheet ---- */
+.sub-scrim { position: fixed; inset: 0; z-index: 40; background: rgba(21, 27, 51, .45); }
+.sub-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 20px 20px 0 0;
+  padding: 10px 20px calc(32px + env(safe-area-inset-bottom));
+  box-shadow: 0 -8px 30px rgba(21, 27, 51, .25);
+  max-height: 88dvh;
+  overflow-y: auto;
+}
+.sub-sheet .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--border); margin: 0 auto 10px; }
+.sub-sheet .who { display: flex; align-items: center; gap: 14px; padding: 6px 0 14px; border-bottom: 1px solid var(--border); }
+.sub-sheet .who .tile {
+  width: 48px; height: 48px; border-radius: 12px; flex-shrink: 0;
+  background: var(--accent-soft); color: var(--accent);
+  display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 17px;
+}
+.sub-sheet .who b { display: block; font-size: 18px; font-weight: 900; }
+.sub-sheet .who span { font-size: 14px; color: var(--text-3); }
+.sub-sheet .who .close {
+  margin-left: auto; width: 36px; height: 36px; border: 0; border-radius: 18px;
+  background: var(--bg); color: var(--text); font-size: 22px; line-height: 1;
+}
+.sub-sheet .viewing { display: flex; justify-content: space-between; align-items: center; padding: 14px 4px 10px; border-bottom: 1px solid var(--border); }
+.sub-sheet .viewing small { display: block; font-size: 12px; font-weight: 700; color: var(--text-3); letter-spacing: .6px; text-transform: uppercase; }
+.sub-sheet .viewing b { font-size: 18px; font-weight: 800; }
+.sub-sheet .row {
+  display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+  padding: 14px 4px; border: 0; border-bottom: 1px solid var(--border); background: none;
+  color: var(--text); font-size: 16px; font-weight: 700; text-decoration: none;
+}
+.sub-sheet .row svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; }
+.sub-sheet .row.danger { color: var(--sub-danger); border-bottom: 0; padding-top: 16px; }

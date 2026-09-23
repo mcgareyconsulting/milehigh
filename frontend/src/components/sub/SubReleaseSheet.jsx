@@ -71,10 +71,10 @@ export default function SubReleaseSheet({ releaseId, onClose, todos = [] }) {
     const mine = todos.filter((t) => t.release_id === releaseId);
 
     return (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label="Release details">
-            <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
+        <div className="fixed inset-0 z-[60] flex flex-col justify-end" role="dialog" aria-modal="true" aria-label="Release details">
+            <div className="absolute inset-0 bg-[rgba(21,27,51,.45)]" onClick={onClose} aria-hidden="true" />
             <div
-                className="relative bg-surface rounded-t-2xl shadow-2xl max-h-[88vh] flex flex-col"
+                className="relative bg-surface text-ink rounded-t-[20px] shadow-2xl max-h-[88dvh] flex flex-col"
                 style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
             >
                 <div className="flex items-center justify-between px-4 pt-2 pb-1">
@@ -87,13 +87,13 @@ export default function SubReleaseSheet({ releaseId, onClose, todos = [] }) {
                 </div>
 
                 <div className="overflow-y-auto px-4 pb-4">
-                    {error && <p className="py-6 text-center text-sm text-red-600 dark:text-red-400">{error}</p>}
+                    {error && <p className="py-6 text-center text-sm text-red-600">{error}</p>}
                     {!error && !rel && <p className="py-6 text-center text-sm text-ink-3">Loading…</p>}
                     {rel && (
                         <>
                             <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0">
-                                    <div className="font-mono text-lg font-bold text-accent-600 dark:text-accent-400">{code}</div>
+                                    <div className="font-mono text-lg font-bold text-brand">{code}</div>
                                     <div className="text-sm font-semibold text-ink break-words">{rel.Job}</div>
                                 </div>
                                 {dateKind(rel) && <DatePill kind={dateKind(rel)} />}

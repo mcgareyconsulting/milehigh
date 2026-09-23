@@ -15,10 +15,13 @@
  *   - Marking read refreshes the shell badge through the outlet context so the tab count is honest.
  *   - Due buckets mirror the staff To-Dos page (Overdue / Today / This week / Later / No date) so a
  *     PM and a sub talking about "this week" mean the same thing.
+ *   - The segment is in the URL (?seg=mentions) so the account sheet's Notifications row and a
+ *     tapped push can land directly on Mentions.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import SubReleaseSheet from '../components/sub/SubReleaseSheet';
+import SubEmpty from '../components/sub/SubEmpty';
 import {
     listSubTodos, setSubTodoStatus, listSubNotifications, markSubNotificationRead, markAllSubRead,
 } from '../services/subPortalApi';
@@ -50,7 +53,7 @@ const timeAgo = (dateStr) => {
 
 const BUCKETS = [
     { key: 'overdue', label: 'Overdue', tone: 'text-red-700 dark:text-red-300' },
-    { key: 'today', label: 'Due today', tone: 'text-accent-600 dark:text-accent-400' },
+    { key: 'today', label: 'Due today', tone: 'text-brand' },
     { key: 'week', label: 'This week', tone: 'text-ink-2' },
     { key: 'later', label: 'Later', tone: 'text-ink-3' },
     { key: 'nodate', label: 'No date', tone: 'text-ink-3' },
@@ -70,27 +73,27 @@ const ITEM_TYPE_LABEL = { action: 'Action', needs_gc_update: 'GC update', decisi
 function TodoCard({ t, busy, onToggle, onOpenRelease }) {
     const done = t.status === 'done';
     return (
-        <div className={`flex items-start gap-3 rounded-lg border border-hairline bg-surface shadow-sm p-3 ${done ? 'opacity-70' : ''}`}>
+        <div className={`sub-card flex items-start gap-3 p-4 ${done ? 'opacity-70' : ''}`}>
             <button
                 type="button"
                 aria-label={done ? 'Reopen' : 'Mark done'}
                 disabled={busy}
                 onClick={() => onToggle(t)}
                 className={`mt-0.5 w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center ${
-                    done ? 'bg-accent-600 border-accent-600 text-white' : 'border-hairline-strong text-transparent'
+                    done ? 'bg-brand border-brand text-white' : 'border-hairline-strong text-transparent'
                 } disabled:opacity-50`}
             >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5" /></svg>
             </button>
             <div className="min-w-0 flex-1">
-                <div className={`text-sm font-medium break-words ${done ? 'line-through text-ink-3' : 'text-ink'}`}>{t.title}</div>
+                <div className={`text-[15px] font-bold break-words ${done ? 'line-through text-ink-3' : 'text-ink'}`}>{t.title}</div>
                 {t.detail && <div className="mt-0.5 text-xs text-ink-2 break-words">{t.detail}</div>}
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-3">
                     {t.due_date && <span>due {fmtDue(t.due_date)}</span>}
-                    {t.item_type && t.item_type !== 'action' && <span className="px-1.5 py-0.5 rounded bg-surface-2">{ITEM_TYPE_LABEL[t.item_type] || t.item_type}</span>}
+                    {t.item_type && t.item_type !== 'action' && <span className="sub-pill">{ITEM_TYPE_LABEL[t.item_type] || t.item_type}</span>}
                     {t.release_id && (
                         <button type="button" onClick={() => onOpenRelease(t.release_id)}
-                            className="font-mono font-semibold text-accent-600 dark:text-accent-400">
+                            className="font-mono font-bold text-brand">
                             {t.release_code}
                         </button>
                     )}
@@ -104,17 +107,15 @@ function TodoCard({ t, busy, onToggle, onOpenRelease }) {
 function MentionCard({ n, onTap }) {
     return (
         <button type="button" onClick={() => onTap(n)}
-            className={`w-full text-left rounded-lg border p-3 shadow-sm ${
-                n.is_read ? 'border-hairline bg-surface' : 'border-accent-500/60 bg-accent-50 dark:bg-accent-900/20'
-            }`}>
+            className={`sub-card w-full text-left p-4 ${n.is_read ? '' : 'border-l-4 border-brand'}`}>
             <div className="flex items-start justify-between gap-2">
-                <span className={`text-sm break-words ${n.is_read ? 'text-ink-2' : 'text-ink font-semibold'}`}>{n.message}</span>
-                {!n.is_read && <span className="mt-1.5 w-2 h-2 rounded-full bg-accent-600 shrink-0" aria-label="Unread" />}
+                <span className={`text-[15px] break-words ${n.is_read ? 'text-ink-2' : 'text-ink font-bold'}`}>{n.message}</span>
+                {!n.is_read && <span className="mt-1.5 w-2.5 h-2.5 rounded-full bg-brand shrink-0" aria-label="Unread" />}
             </div>
             {n.excerpt && <p className="mt-1 text-xs text-ink-2 line-clamp-3 break-words">“{n.excerpt}”</p>}
             <div className="mt-1.5 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-3">
                 <span>{timeAgo(n.created_at)}</span>
-                {n.release_code && <span className="font-mono font-semibold text-accent-600 dark:text-accent-400">{n.release_code}</span>}
+                {n.release_code && <span className="font-mono font-bold text-brand">{n.release_code}</span>}
                 {n.release_issue_display_id && <span>issue {n.release_issue_display_id}</span>}
                 {n.drawing_version_number && <span>drawing v{n.drawing_version_number}</span>}
             </div>
@@ -124,7 +125,9 @@ function MentionCard({ n, onTap }) {
 
 export default function SubcontractorTodos() {
     const { refreshUnread } = useOutletContext();
-    const [segment, setSegment] = useState('todos');
+    const [params, setParams] = useSearchParams();
+    const segment = params.get('seg') === 'mentions' ? 'mentions' : 'todos';
+    const setSegment = (k) => setParams(k === 'mentions' ? { seg: 'mentions' } : {}, { replace: true });
     const [todos, setTodos] = useState([]);
     const [showDone, setShowDone] = useState(false);
     const [notifs, setNotifs] = useState([]);
@@ -191,34 +194,34 @@ export default function SubcontractorTodos() {
         try { await markAllSubRead(); } finally { refreshUnread(); }
     };
 
-    const segClass = (k) =>
-        `flex-1 py-2 text-sm font-semibold rounded-lg ${segment === k ? 'bg-surface text-ink shadow-sm' : 'text-ink-3'}`;
-
     return (
-        <div className="flex-1 min-h-0 flex flex-col p-3 gap-2">
-            <div className="flex p-1 rounded-xl bg-surface-2" role="tablist" aria-label="To-Dos or Mentions">
-                <button type="button" role="tab" aria-selected={segment === 'todos'} className={segClass('todos')} onClick={() => setSegment('todos')}>
-                    To-Dos{openCount > 0 && <span className="ml-1.5 text-xs text-ink-3">{openCount}</span>}
+        <div className="flex-1 min-h-0 flex flex-col">
+            <div className="sub-seg" role="tablist" aria-label="To-Dos or Mentions">
+                <button type="button" role="tab" aria-selected={segment === 'todos'} className={segment === 'todos' ? 'active' : ''} onClick={() => setSegment('todos')}>
+                    To-Dos{openCount > 0 && <span className="sub-badge">{openCount}</span>}
                 </button>
-                <button type="button" role="tab" aria-selected={segment === 'mentions'} className={segClass('mentions')} onClick={() => setSegment('mentions')}>
-                    Mentions{unreadCount > 0 && <span className="ml-1.5 px-1.5 rounded-full bg-red-600 text-white text-[10px]">{unreadCount}</span>}
+                <button type="button" role="tab" aria-selected={segment === 'mentions'} className={segment === 'mentions' ? 'active' : ''} onClick={() => setSegment('mentions')}>
+                    Mentions{unreadCount > 0 && <span className="sub-badge alert">{unreadCount}</span>}
                 </button>
             </div>
 
-            {loading && <div className="text-ink-3 text-sm px-1">Loading…</div>}
-            {error && <div className="text-red-600 dark:text-red-400 text-sm px-1">{error}</div>}
+            {loading && <div className="text-ink-3 text-sm px-4 py-3">Loading…</div>}
+            {error && <div className="text-red-600 text-sm px-4 py-3">{error}</div>}
 
             {!loading && segment === 'todos' && (
-                <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-1">
-                    {openCount === 0 && (
-                        <p className="py-8 text-center text-sm text-ink-3">No open to-dos. Nice.</p>
+                <div className="flex-1 min-h-0 flex flex-col gap-1 px-4 pb-4">
+                    {openCount === 0 && grouped.done.length === 0 && (
+                        <SubEmpty icon="check" title="No to-dos yet" body="When MHMW assigns you something, it shows up here." />
+                    )}
+                    {openCount === 0 && grouped.done.length > 0 && (
+                        <SubEmpty icon="check" title="All caught up" body="Nothing open. Finished items are below." />
                     )}
                     {BUCKETS.filter((b) => b.key !== 'done').map((b) => grouped[b.key].length > 0 && (
                         <section key={b.key}>
                             <h2 className={`sticky top-0 z-10 bg-canvas/95 backdrop-blur px-1 py-1.5 text-xs font-extrabold uppercase tracking-wide ${b.tone}`}>
                                 {b.label} · {grouped[b.key].length}
                             </h2>
-                            <div className="flex flex-col gap-2 pt-1 pb-3">
+                            <div className="flex flex-col gap-2.5 pt-2 pb-3">
                                 {grouped[b.key].map((t) => (
                                     <TodoCard key={t.id} t={t} busy={busyId === t.id} onToggle={toggle} onOpenRelease={setOpenId} />
                                 ))}
@@ -245,14 +248,14 @@ export default function SubcontractorTodos() {
             )}
 
             {!loading && segment === 'mentions' && (
-                <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2">
+                <div className="flex-1 min-h-0 flex flex-col gap-2.5 px-4 pb-4 pt-2">
                     {unreadCount > 0 && (
-                        <button type="button" onClick={readAll} className="self-end px-2 py-1 text-xs font-medium text-accent-600 dark:text-accent-400">
+                        <button type="button" onClick={readAll} className="self-end px-2 py-1 text-[13px] font-bold text-brand">
                             Mark all read
                         </button>
                     )}
                     {notifs.length === 0 && (
-                        <p className="py-8 text-center text-sm text-ink-3">No mentions yet. When someone at MHMW @mentions you, it shows up here.</p>
+                        <SubEmpty icon="bell" title="No mentions yet" body="When someone at MHMW @mentions you or assigns you a to-do, it lands here." />
                     )}
                     {notifs.map((n) => <MentionCard key={n.id} n={n} onTap={tapMention} />)}
                 </div>

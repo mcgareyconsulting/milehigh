@@ -1,54 +1,91 @@
 /**
  * @milehigh-header
- * schema_version: 2
- * purpose: The subcontractor app shell — a PHONE-PORTRAIT layout: slim header (company, contact,
- *          overflow menu with logout), the routed page, and a FLOATING PILL tab bar overlaid at the
- *          bottom with the three surfaces a sub works from: To-Dos (their to-dos + @mentions), Job
- *          Log (their crew's Timeline) and T&M (their tickets). Self-contained auth check (unlike
- *          AppShell, which relies on App.jsx's staff isAuthenticated) because /sub is a separate
- *          top-level route tree.
+ * schema_version: 3
+ * purpose: The subcontractor app shell, Option A (docs: subs-mobile-option-a.md) — ONE 56px top bar
+ *          holding a company tile (opens the account sheet), a pill tab track with the three
+ *          sections (To-Dos · Job Log · T&M) and a menu button (same sheet); the routed page
+ *          scrolls under it. The account sheet carries what left the header: company, signed-in
+ *          contact, the crew the account views as, a Notifications shortcut and Sign out.
+ *          Self-contained auth check (unlike AppShell, which relies on App.jsx's staff
+ *          isAuthenticated) because /sub is a separate top-level route tree.
  * exports:
  *   SubcontractorShell: Layout shell; child routes render via Outlet once authenticated and
- *     receive { subcontractor, refreshUnread } through useOutletContext().
- * imports_from: [react, react-router-dom, ../utils/subcontractorAuth, ../services/subPortalApi]
+ *     receive { subcontractor, refreshUnread, unread } through useOutletContext().
+ * imports_from: [react, react-router-dom, ../utils/subcontractorAuth, ../services/subPortalApi,
+ *                ../styles/sub-portal.css, @fontsource/lato]
  * imported_by: [frontend/src/App.jsx]
  * invariants:
  *   - Redirects to /sub/login if checkSubcontractorAuth() returns null — never the staff /login.
- *   - Three tabs. The bar is a detached PILL floating over the content (rounded, shadowed, inset
- *     from the edges) rather than an edge-to-edge strip, so it reads unmistakably as buttons; the
- *     active tab gets its own filled pill inside it.
- *   - The pill is position:fixed above the safe-area inset so it clears the iPhone home indicator;
- *     the content area carries matching bottom padding so the last card is never hidden under it.
+ *   - Fixed chrome is the 56px bar and nothing else: no bottom nav, no second header row. Page
+ *     context (crew, window) lives in each page's title row, not in the bar.
+ *   - The tab track and the sheet use the .sub-* classes from styles/sub-portal.css, which also
+ *     rewrites the design tokens for this subtree — the portal is Lato + the spec palette in both
+ *     themes; the staff app is untouched.
  *   - The unread badge polls the sub-scoped count (never the staff bell endpoint) and is refreshed
  *     eagerly by pages that mark things read, via the outlet context.
- *   - Colors are Job Log tokens (surface / hairline / ink) so the portal follows the app theme.
+ *   - The sheet closes on scrim tap and Escape.
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Outlet, NavLink } from 'react-router-dom';
 import { checkSubcontractorAuth, subcontractorLogout } from '../utils/subcontractorAuth';
 import { subUnreadCount } from '../services/subPortalApi';
+import '@fontsource/lato/400.css';
+import '@fontsource/lato/700.css';
+import '@fontsource/lato/900.css';
+import '../styles/sub-portal.css';
 
 const UNREAD_POLL_MS = 60000;
 
-function TabIcon({ name }) {
-    if (name === 'tm') {
-        return (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h5" />
-            </svg>
-        );
-    }
-    if (name === 'todos') {
-        return (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-            </svg>
-        );
-    }
+/** Two-letter tile for a company with no logo asset ("McGarey Construction" -> "MC"). */
+function initialsOf(name) {
+    const words = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return '?';
+    return (words.length === 1 ? words[0].slice(0, 2) : words[0][0] + words[1][0]).toUpperCase();
+}
+
+const ICONS = {
+    todos: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M8 12l3 3 5-6" /></svg>,
+    joblog: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>,
+    tm: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h5" /></svg>,
+    menu: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>,
+    bell: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>,
+    out: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5M21 12H9" /></svg>,
+};
+
+function AccountSheet({ subcontractor, onClose, onLogout, onNotifications }) {
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [onClose]);
+
     return (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
-        </svg>
+        <>
+            <div className="sub-scrim" onClick={onClose} aria-hidden="true" />
+            <section className="sub-sheet" role="dialog" aria-modal="true" aria-label="Account">
+                <div className="grab" />
+                <div className="who">
+                    <div className="tile" aria-hidden="true">{initialsOf(subcontractor?.company_name)}</div>
+                    <div className="min-w-0">
+                        <b className="truncate">{subcontractor?.company_name}</b>
+                        <span>{subcontractor?.contact_name} · signed in</span>
+                    </div>
+                    <button type="button" className="close" aria-label="Close" onClick={onClose}>×</button>
+                </div>
+                <div className="viewing">
+                    <div>
+                        <small>Viewing as</small>
+                        <b>{subcontractor?.installer_team || 'No crew assigned'}</b>
+                    </div>
+                </div>
+                <button type="button" className="row" onClick={onNotifications}>
+                    {ICONS.bell} Notifications
+                </button>
+                <button type="button" className="row danger" onClick={onLogout}>
+                    {ICONS.out} Sign out
+                </button>
+            </section>
+        </>
     );
 }
 
@@ -56,9 +93,8 @@ export default function SubcontractorShell() {
     const navigate = useNavigate();
     const [subcontractor, setSubcontractor] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [menuOpen, setMenuOpen] = useState(false);
+    const [sheetOpen, setSheetOpen] = useState(false);
     const [unread, setUnread] = useState(0);
-    const menuRef = useRef(null);
 
     useEffect(() => {
         checkSubcontractorAuth().then(sub => {
@@ -84,97 +120,61 @@ export default function SubcontractorShell() {
         return () => clearInterval(t);
     }, [loading, refreshUnread]);
 
-    // Close the overflow menu on outside tap.
-    useEffect(() => {
-        if (!menuOpen) return undefined;
-        const onDown = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
-        document.addEventListener('pointerdown', onDown);
-        return () => document.removeEventListener('pointerdown', onDown);
-    }, [menuOpen]);
-
+    const closeSheet = useCallback(() => setSheetOpen(false), []);
     const handleLogout = async () => {
         await subcontractorLogout();
         navigate('/sub/login', { replace: true });
     };
+    const goNotifications = () => {
+        setSheetOpen(false);
+        navigate('/sub/todos?seg=mentions');
+    };
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-canvas">
+            <div className="sub-shell items-center justify-center">
                 <div className="text-ink-3">Loading…</div>
             </div>
         );
     }
 
-    // Each tab is itself a pill; the active one is filled so the current section is obvious.
-    const tabClass = ({ isActive }) =>
-        `flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-full text-[11px] font-semibold select-none transition-colors ${
-            isActive ? 'bg-accent-500 text-white shadow' : 'text-ink-2 active:bg-surface-2'
-        }`;
+    const tabClass = ({ isActive }) => `sub-tab${isActive ? ' active' : ''}`;
 
     return (
-        <div className="min-h-screen bg-canvas text-ink flex flex-col">
-            <header className="sticky top-0 z-30 flex items-center justify-between gap-3 px-4 py-2.5 border-b border-hairline bg-surface/95 backdrop-blur">
-                <div className="min-w-0">
-                    <div className="text-sm font-bold truncate">{subcontractor?.company_name}</div>
-                    <div className="text-[11px] text-ink-3 truncate">
-                        {subcontractor?.contact_name}
-                        {subcontractor?.installer_team ? ` · ${subcontractor.installer_team}` : ' · no crew assigned'}
-                    </div>
-                </div>
-                <div className="relative shrink-0" ref={menuRef}>
-                    <button
-                        type="button"
-                        aria-label="Menu"
-                        aria-expanded={menuOpen}
-                        onClick={() => setMenuOpen(o => !o)}
-                        className="w-10 h-10 -mr-2 flex items-center justify-center rounded-lg text-ink-2 active:bg-surface-2"
-                    >
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                            <circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" />
-                        </svg>
-                    </button>
-                    {menuOpen && (
-                        <div className="absolute right-0 mt-1 w-40 rounded-xl border border-hairline bg-surface shadow-lg overflow-hidden z-40">
-                            <button type="button" onClick={handleLogout}
-                                className="w-full text-left px-4 py-3 text-sm text-ink active:bg-surface-2">
-                                Log out
-                            </button>
-                        </div>
-                    )}
-                </div>
+        <div className="sub-shell">
+            <header className="sub-topbar">
+                <button type="button" className="sub-logo" aria-label="Open account menu" onClick={() => setSheetOpen(true)}>
+                    {initialsOf(subcontractor?.company_name)}
+                </button>
+                <nav className="sub-tabs" aria-label="Sections">
+                    <NavLink to="/sub/todos" className={tabClass}>
+                        {ICONS.todos}<span>To-Dos</span>
+                        {unread > 0 && <span className="sub-tab-badge" aria-label={`${unread} unread`}>{unread > 99 ? '99+' : unread}</span>}
+                    </NavLink>
+                    <NavLink to="/sub/job-log" className={tabClass}>
+                        {ICONS.joblog}<span>Job Log</span>
+                    </NavLink>
+                    <NavLink to="/sub/tickets" className={tabClass}>
+                        {ICONS.tm}<span>T&amp;M</span>
+                    </NavLink>
+                </nav>
+                <button type="button" className="sub-menu-btn" aria-label="Menu" onClick={() => setSheetOpen(true)}>
+                    {ICONS.menu}
+                </button>
             </header>
 
-            {/* Bottom padding clears the floating pill (~64px tall + 12px float gap) plus the
-                home-indicator inset, so the last card can scroll out from under it. */}
-            <main className="flex-1 min-h-0 flex flex-col" style={{ paddingBottom: 'calc(84px + env(safe-area-inset-bottom))' }}>
+            <main className="sub-page">
                 <Outlet context={{ subcontractor, refreshUnread, unread }} />
             </main>
 
-            <nav
-                aria-label="Sections"
-                className="fixed inset-x-3 z-30 flex gap-1 p-1.5 rounded-full border border-hairline bg-surface/90 backdrop-blur shadow-xl max-w-md mx-auto"
-                style={{ bottom: 'calc(12px + env(safe-area-inset-bottom))' }}
-            >
-                <NavLink to="/sub/todos" className={tabClass}>
-                    <span className="relative">
-                        <TabIcon name="todos" />
-                        {unread > 0 && (
-                            <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-red-600 text-white text-[10px] font-bold leading-4 text-center ring-2 ring-surface">
-                                {unread > 99 ? '99+' : unread}
-                            </span>
-                        )}
-                    </span>
-                    To-Dos
-                </NavLink>
-                <NavLink to="/sub/job-log" className={tabClass}>
-                    <TabIcon name="joblog" />
-                    Job Log
-                </NavLink>
-                <NavLink to="/sub/tickets" className={tabClass}>
-                    <TabIcon name="tm" />
-                    T&amp;M
-                </NavLink>
-            </nav>
+            {sheetOpen && (
+                <AccountSheet
+                    subcontractor={subcontractor}
+                    onClose={closeSheet}
+                    onLogout={handleLogout}
+                    onNotifications={goNotifications}
+                />
+            )}
         </div>
     );
 }
