@@ -212,6 +212,77 @@ def test_patch_empty_note_clears_it(app, storage_root, release_id, plain_user):
     assert resp.get_json()['note'] is None
 
 
+def test_patch_stage_retag(app, storage_root, release_id, plain_user):
+    with _patch_get_current_user(plain_user):
+        client = app.test_client()
+        pid = _post_photo(client, release_id, PNG_MIN, stage="Welded QC").get_json()['id']
+        resp = client.patch(
+            f'/brain/releases/{release_id}/photos/{pid}',
+            json={'stage': 'Paint QC'},
+        )
+
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body['stage'] == 'Paint QC'
+    # Retagging evidence is not a note edit.
+    assert body['last_edited_by'] is None
+
+
+def test_patch_unknown_stage_returns_400(app, storage_root, release_id, plain_user):
+    with _patch_get_current_user(plain_user):
+        client = app.test_client()
+        pid = _post_photo(client, release_id, PNG_MIN, stage="Welded QC").get_json()['id']
+        resp = client.patch(
+            f'/brain/releases/{release_id}/photos/{pid}',
+            json={'stage': 'Not A Stage'},
+        )
+
+    assert resp.status_code == 400
+    from app.models import ReleasePhoto, db
+    assert db.session.get(ReleasePhoto, pid).stage == "Welded QC"
+
+
+def test_patch_null_stage_clears_it(app, storage_root, release_id, plain_user):
+    with _patch_get_current_user(plain_user):
+        client = app.test_client()
+        pid = _post_photo(client, release_id, PNG_MIN, stage="Welded QC").get_json()['id']
+        resp = client.patch(
+            f'/brain/releases/{release_id}/photos/{pid}',
+            json={'stage': None},
+        )
+
+    assert resp.status_code == 200
+    assert resp.get_json()['stage'] is None
+
+
+def test_patch_note_and_stage_together(app, storage_root, release_id, plain_user):
+    with _patch_get_current_user(plain_user):
+        client = app.test_client()
+        pid = _post_photo(client, release_id, PNG_MIN, note="old", stage="Welded QC").get_json()['id']
+        resp = client.patch(
+            f'/brain/releases/{release_id}/photos/{pid}',
+            json={'note': 'north wall', 'stage': 'Paint QC'},
+        )
+
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body['note'] == 'north wall'
+    assert body['stage'] == 'Paint QC'
+    assert body['last_edited_by'] == {'id': plain_user.id, 'name': plain_user.username}
+
+
+def test_patch_with_neither_note_nor_stage_returns_400(app, storage_root, release_id, plain_user):
+    with _patch_get_current_user(plain_user):
+        client = app.test_client()
+        pid = _post_photo(client, release_id, PNG_MIN).get_json()['id']
+        resp = client.patch(
+            f'/brain/releases/{release_id}/photos/{pid}',
+            json={},
+        )
+
+    assert resp.status_code == 400
+
+
 def test_delete_soft_deletes(app, storage_root, release_id, plain_user):
     from app.models import ReleasePhoto, db
 

@@ -4,7 +4,7 @@ Endpoints (registered on brain_bp under the /brain prefix):
   POST   /releases/<release_id>/photos                       — upload an image
   GET    /releases/<release_id>/photos                       — list photos (newest first)
   GET    /releases/<release_id>/photos/<photo_id>/file       — stream the image bytes
-  PATCH  /releases/<release_id>/photos/<photo_id>            — edit a photo's note
+  PATCH  /releases/<release_id>/photos/<photo_id>            — edit a photo's note and/or stage tag
   DELETE /releases/<release_id>/photos/<photo_id>            — soft delete
 
 Any logged-in user may add, view, annotate, or remove photos (unlike drawings,
@@ -136,18 +136,44 @@ def update_release_photo(release_id, photo_id):
         return jsonify({'error': 'Photo not found'}), 404
 
     data = request.get_json(silent=True) or {}
-    if 'note' not in data:
-        return jsonify({'error': "Missing 'note'"}), 400
+    if 'note' not in data and 'stage' not in data:
+        return jsonify({'error': "Provide 'note', 'stage', or both"}), 400
 
-    note = data.get('note')
-    new_note = (note or '').strip() or None
-    # Only stamp edit attribution when the note actually changes, so re-saving an
-    # unchanged note doesn't rewrite who/when it was last edited.
-    if new_note != photo.note:
-        user = get_current_user()
-        photo.note = new_note
-        photo.last_edited_by_user_id = user.id if user else None
-        photo.last_edited_at = datetime.utcnow()
+    # Stage tag is how an existing photo becomes evidence for this department
+    # handoff. Null or a blank string clears it. Validated before any field is
+    # written so a bad stage cannot land alongside a note edit.
+    new_stage = photo.stage
+    if 'stage' in data:
+        raw_stage = data.get('stage')
+        if raw_stage is None or (isinstance(raw_stage, str) and not raw_stage.strip()):
+            new_stage = None
+        elif not isinstance(raw_stage, str):
+            return jsonify({'error': 'stage must be a string or null'}), 400
+        else:
+            new_stage = raw_stage.strip()
+            from app.api.helpers import STAGE_TO_GROUP
+            if new_stage not in STAGE_TO_GROUP:
+                return jsonify({'error': f'Unknown stage: {new_stage}'}), 400
+
+    user = get_current_user()
+    changed = False
+    if new_stage != photo.stage:
+        photo.stage = new_stage
+        changed = True
+
+    if 'note' in data:
+        note = data.get('note')
+        new_note = (note or '').strip() or None
+        # Only stamp edit attribution when the note actually changes, so re-saving an
+        # unchanged note doesn't rewrite who/when it was last edited. A stage-only
+        # retag is not a note edit.
+        if new_note != photo.note:
+            photo.note = new_note
+            photo.last_edited_by_user_id = user.id if user else None
+            photo.last_edited_at = datetime.utcnow()
+            changed = True
+
+    if changed:
         db.session.commit()
 
     return jsonify(photo.to_dict())
