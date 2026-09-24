@@ -175,6 +175,59 @@ def test_photo_upload_lands_with_the_sub_as_uploader(client, sub, mine, storage)
     assert client.get(f'/brain/subcontractor/releases/{mine.id}/photos/{photo.id}/file').status_code == 200
 
 
+def test_sub_retags_a_photo_already_on_the_release_as_gate_evidence(client, sub, mine, storage):
+    """A shop photo already on the release can be reused. The sub does not re-upload it;
+    tagging it with the gate stage is what lets the department change through."""
+    from tests.conftest import make_user
+    bill = make_user('bill@mhmw.com', first_name='Bill', last_name='Shop')
+    photo = ReleasePhoto(
+        release_id=mine.id, storage_key='shop.jpg', original_filename='shop.jpg',
+        mime_type='image/jpeg', file_size_bytes=12, stage='Paint QC',
+        uploaded_by_user_id=bill.id,
+    )
+    db.session.add(photo)
+    db.session.commit()
+
+    listed = client.get(f'/brain/subcontractor/releases/{mine.id}/attachments').get_json()['photos']
+    assert listed[0]['id'] == photo.id and listed[0]['stage'] == 'Paint QC'
+    assert listed[0]['uploaded_by_name'] == 'Bill Shop'
+
+    r = client.patch(f'/brain/subcontractor/releases/{mine.id}/photos/{photo.id}',
+                     json={'stage': 'Ship Complete'})
+    assert r.status_code == 200, r.get_json()
+    assert r.get_json()['stage'] == 'Ship Complete'
+    assert r.get_json()['uploaded_by_name'] == 'Bill Shop'
+    db.session.refresh(photo)
+    assert photo.stage == 'Ship Complete'
+    assert photo.uploaded_by_user_id == bill.id
+
+    moved = client.patch(f'/brain/subcontractor/releases/{mine.id}/stage', json={'stage': 'Install Start'})
+    assert moved.status_code == 200, moved.get_json()
+
+
+def test_retag_rejects_unknown_stage_and_off_crew(client, mine, theirs, storage):
+    from tests.conftest import make_user
+    bill = make_user('bill2@mhmw.com')
+    photo = ReleasePhoto(
+        release_id=mine.id, storage_key='shop.jpg', original_filename='shop.jpg',
+        mime_type='image/jpeg', file_size_bytes=12, stage='Paint QC',
+        uploaded_by_user_id=bill.id,
+    )
+    db.session.add(photo)
+    db.session.commit()
+
+    bad = client.patch(f'/brain/subcontractor/releases/{mine.id}/photos/{photo.id}',
+                       json={'stage': 'Not A Stage'})
+    assert bad.status_code == 400
+    db.session.refresh(photo)
+    assert photo.stage == 'Paint QC'
+
+    assert client.patch(f'/brain/subcontractor/releases/{theirs.id}/photos/{photo.id}',
+                        json={'stage': 'Ship Complete'}).status_code == 404
+    db.session.refresh(photo)
+    assert photo.stage == 'Paint QC'
+
+
 def test_photo_upload_rejects_non_images(client, mine, storage):
     r = client.post(f'/brain/subcontractor/releases/{mine.id}/photos',
                     data={'file': (io.BytesIO(b'not an image'), 'x.txt')}, content_type='multipart/form-data')

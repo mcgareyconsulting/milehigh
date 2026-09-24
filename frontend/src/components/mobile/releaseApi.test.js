@@ -57,6 +57,15 @@ describe('staffReleaseApi', () => {
         expect(out.photos[0]).toMatchObject({ id: 5, uploaded_by_name: 'Sam' });
     });
 
+    it('retags a photo already on the release', async () => {
+        axios.patch.mockResolvedValueOnce({ data: { id: 5, stage: 'Ship Complete' } });
+        await staffReleaseApi.tagPhoto(1, 5, 'Ship Complete');
+        expect(axios.patch).toHaveBeenCalledWith(
+            expect.stringContaining('/brain/releases/1/photos/5'),
+            { stage: 'Ship Complete' },
+        );
+    });
+
     it('tags a gate photo with the stage', async () => {
         axios.post.mockResolvedValueOnce({ data: { id: 5 } });
         await staffReleaseApi.uploadPhoto(1, new File([new Uint8Array([1])], 'h.jpg', { type: 'image/jpeg' }), { stage: 'Ship Complete' });

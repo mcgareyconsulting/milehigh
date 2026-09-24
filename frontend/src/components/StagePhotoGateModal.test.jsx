@@ -1,6 +1,7 @@
 /**
- * The department photo gate dialog (T13): what unlocks Confirm, the "no photo available" exit,
- * and the multi-photo upload strip — cap, one-at-a-time queue, real progress, retry.
+ * The department photo gate dialog (T13): what unlocks Confirm, choosing photos already
+ * on the release, the "no photo available" exit, and the multi-photo upload strip —
+ * cap, one-at-a-time queue, real progress, retry.
  *
  * Uploads go through XMLHttpRequest for byte progress, so a small fake XHR stands in and the
  * tests drive progress / load / error by hand. Everything else (the photo list, notes) is fetch.
@@ -118,6 +119,60 @@ describe('unlocking Confirm', () => {
         renderGate();
         await screen.findByText('Paint QC');   // the photo rendered with its own tag
         expect(confirmBtn()).toBeDisabled();
+        expect(screen.getByRole('checkbox', { name: 'Include with Welded QC' })).not.toBeChecked();
+    });
+
+    it('drops confirm when the included photo is unchecked', async () => {
+        photosRef.current = [photo()];
+        renderGate();
+        const box = await screen.findByRole('checkbox', { name: 'Include with Welded QC' });
+        expect(box).toBeChecked();
+        fireEvent.click(box);
+        expect(confirmBtn()).toBeDisabled();
+        // A tagged photo is still on the release, so the no-photo exit stays shut.
+        expect(screen.queryByLabelText('No photo available')).toBeNull();
+    });
+
+    it('retags an included photo from another stage and then confirms', async () => {
+        photosRef.current = [
+            photo({ id: 1 }),
+            photo({ id: 4, stage: 'Paint QC', original_filename: 'paint.jpg' }),
+        ];
+        const { onConfirmStage } = renderGate();
+        const boxes = await screen.findAllByRole('checkbox', { name: 'Include with Welded QC' });
+        expect(boxes[0]).toBeChecked();
+        expect(boxes[1]).not.toBeChecked();
+
+        fireEvent.click(boxes[1]);
+        expect(screen.getByText(/✓ 2 Welded QC photos attached/)).toBeInTheDocument();
+        fireEvent.click(confirmBtn());
+
+        await waitFor(() => expect(onConfirmStage).toHaveBeenCalledWith(null));
+        const patches = globalThis.fetch.mock.calls.filter(([, opts]) => opts?.method === 'PATCH');
+        expect(patches).toHaveLength(1);
+        expect(patches[0][0]).toBe('http://api.test/brain/releases/7/photos/4');
+        expect(JSON.parse(patches[0][1].body)).toEqual({ stage: 'Welded QC' });
+    });
+
+    it('does not move the stage when retagging fails', async () => {
+        photosRef.current = [photo({ id: 4, stage: 'Paint QC' })];
+        globalThis.fetch = vi.fn((url, opts = {}) => {
+            const method = (opts.method || 'GET').toUpperCase();
+            if (method === 'GET') {
+                return Promise.resolve({ ok: true, json: () => Promise.resolve({ photos: photosRef.current }) });
+            }
+            return Promise.resolve({
+                ok: false,
+                status: 400,
+                text: () => Promise.resolve('nope'),
+                json: () => Promise.resolve({}),
+            });
+        });
+        const { onConfirmStage } = renderGate();
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'Include with Welded QC' }));
+        fireEvent.click(confirmBtn());
+        await waitFor(() => expect(screen.getByText(/Could not tag photo \(400\)/)).toBeInTheDocument());
+        expect(onConfirmStage).not.toHaveBeenCalled();
     });
 });
 

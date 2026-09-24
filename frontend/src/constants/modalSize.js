@@ -7,7 +7,8 @@
  *   dimensions live here rather than being restated per component.
  * exports:
  *   MODAL_PANEL_SIZE: inline style object with width/height for the modal panel
- * imported_by: [components/ReleaseHubModal.jsx, components/SubmittalDetailsModal.jsx]
+ * imported_by: [components/ReleaseHubModal.jsx, components/SubmittalDetailsModal.jsx,
+ *   components/StagePhotoGateModal.jsx]
  * invariants:
  *   - Size only. Each modal keeps its own border, radius, and shadow treatment.
  *   - dvh tracks the visual viewport on iPad rotate; vh alone jumps with Safari chrome

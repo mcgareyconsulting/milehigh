@@ -11,7 +11,8 @@
  *     listTodosForRelease(id) -> [{ id, title, due_date, status, release_id }]
  *     setStage(id, rel, stage, { gateExceptionNote? }) — rejects with a 422 photo_required payload
  *     getActivity(id, rel) -> rows, addNote(id, rel, text)
- *     getAttachments(id) -> { drawings, photos }, uploadPhoto(id, file, { stage? }), uploadFile(id, file)
+ *     getAttachments(id) -> { drawings, photos }, uploadPhoto(id, file, { stage? }),
+ *     tagPhoto(id, photoId, stage), uploadFile(id, file)
  *     drawingFileUrl(releaseId, versionId), photoFileUrl(releaseId, photoId)
  * imports_from: [axios, ../../utils/api, ../../services/subPortalApi, ../../services/jobsApi, ../../constants/stages]
  * imported_by: [pages/SubcontractorRelease.jsx, pages/mobile/StaffMobileRelease.jsx]
@@ -26,7 +27,7 @@ import { jobsApi } from '../../services/jobsApi';
 import { STAGE_OPTIONS } from '../../constants/stages';
 import {
     getSubRelease, listSubTodos, setSubStage, getSubActivity, addSubNote, getSubAttachments,
-    uploadSubPhoto, uploadSubFile, subDrawingFileUrl, subPhotoFileUrl,
+    uploadSubPhoto, tagSubPhoto, uploadSubFile, subDrawingFileUrl, subPhotoFileUrl,
 } from '../../services/subPortalApi';
 
 axios.defaults.withCredentials = true;
@@ -39,6 +40,7 @@ export const subReleaseApi = {
     addNote: (id, _rel, text) => addSubNote(id, text),
     getAttachments: (id) => getSubAttachments(id),
     uploadPhoto: (id, file, opts) => uploadSubPhoto(id, file, opts),
+    tagPhoto: (id, photoId, stage) => tagSubPhoto(id, photoId, stage),
     uploadFile: (id, file) => uploadSubFile(id, file),
     drawingFileUrl: subDrawingFileUrl,
     photoFileUrl: subPhotoFileUrl,
@@ -95,6 +97,10 @@ export const staffReleaseApi = {
         form.append('file', file, file.name || 'photo.jpg');
         if (stage) form.append('stage', stage);
         const { data } = await axios.post(`${BRAIN}/releases/${id}/photos`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+        return data;
+    },
+    async tagPhoto(id, photoId, stage) {
+        const { data } = await axios.patch(`${BRAIN}/releases/${id}/photos/${photoId}`, { stage });
         return data;
     },
     async uploadFile(id, file) {

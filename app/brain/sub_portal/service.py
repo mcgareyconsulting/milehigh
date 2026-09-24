@@ -17,6 +17,7 @@ exports:
   list_attachments_for_subcontractor / resolve_drawing_file_for_subcontractor /
     resolve_photo_file_for_subcontractor: The attachments reader
   upload_photo_for_subcontractor: Attach a photo to a crew release, uploader = the account
+  tag_photo_for_subcontractor: Retag a photo already on a crew release for the department gate
   upload_file_for_subcontractor: Attach a PDF as the next drawing version, uploader = the account
   SUB_STAGES / set_stage_for_subcontractor: Field-side stage changes through UpdateStageCommand
 imports_from: [app.models, app.brain.job_log.utils, app.brain.install_schedule.service,
@@ -575,6 +576,37 @@ def resolve_photo_file_for_subcontractor(subcontractor, release_id, photo_id):
     if not photo or photo.is_deleted or photo.release_id != release.id:
         return None
     return photo
+
+
+def tag_photo_for_subcontractor(subcontractor, release_id, photo_id, stage):
+    """Retag a photo already on a crew release so it can satisfy the department photo gate.
+
+    The photo can be one the crew took or one staff attached earlier. None when the
+    release is off-crew or the photo is not on that release. ValueError when `stage`
+    is missing or not a real stage name. Does not rewrite who uploaded it.
+    """
+    photo = resolve_photo_file_for_subcontractor(subcontractor, release_id, photo_id)
+    if photo is None:
+        return None
+    stage = stage.strip() if isinstance(stage, str) else ''
+    if not stage:
+        raise ValueError('stage is required')
+    from app.api.helpers import STAGE_TO_GROUP
+    if stage not in STAGE_TO_GROUP:
+        raise ValueError(f'Unknown stage: {stage}')
+    if photo.stage != stage:
+        photo.stage = stage
+        db.session.commit()
+    return {
+        'id': photo.id,
+        'original_filename': photo.original_filename,
+        'mime_type': photo.mime_type,
+        'file_size_bytes': photo.file_size_bytes,
+        'note': photo.note,
+        'stage': photo.stage,
+        'uploaded_at': photo.uploaded_at.isoformat() if photo.uploaded_at else None,
+        'uploaded_by_name': _uploader_name(photo),
+    }
 
 
 def upload_photo_for_subcontractor(subcontractor, release_id, file_bytes, filename, mime_type, note=None, stage=None):
