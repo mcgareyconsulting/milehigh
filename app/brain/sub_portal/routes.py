@@ -27,9 +27,9 @@ POST  /brain/subcontractor/releases/<id>/notes             post a note (body: {n
 GET   /brain/subcontractor/releases/<id>/attachments       drawings + photos, allowlisted
 GET   /brain/subcontractor/releases/<id>/drawing/versions/<vid>/file
 GET   /brain/subcontractor/releases/<id>/photos/<pid>/file
-POST  /brain/subcontractor/releases/<id>/photos                multipart image (+ note)
+POST  /brain/subcontractor/releases/<id>/photos                multipart image (+ note, + stage tag for the gate)
 POST  /brain/subcontractor/releases/<id>/files                 multipart PDF -> next drawing version
-PATCH /brain/subcontractor/releases/<id>/stage                  {stage} in SUB_STAGES
+PATCH /brain/subcontractor/releases/<id>/stage                  {stage in SUB_STAGES, gate_exception_note?} — 422 photo_required when the gate is owed
 """
 import re
 
@@ -250,7 +250,8 @@ def subcontractor_upload_photo(release_id):
     try:
         payload = upload_photo_for_subcontractor(
             get_current_subcontractor(), release_id, file.read(), file.filename or '',
-            (file.mimetype or '').lower(), note=request.form.get('note'))
+            (file.mimetype or '').lower(), note=request.form.get('note'),
+            stage=request.form.get('stage'))
     except ValueError as exc:
         return jsonify({'error': str(exc)}), 400
     if payload is None:
@@ -262,11 +263,13 @@ def subcontractor_upload_photo(release_id):
 @subcontractor_login_required
 def subcontractor_set_stage(release_id):
     from app.brain.job_log.features.stage.command import StagePhotoRequiredError
-    stage = (request.get_json(silent=True) or {}).get('stage')
+    body = request.get_json(silent=True) or {}
     try:
-        result = set_stage_for_subcontractor(get_current_subcontractor(), release_id, stage)
+        result = set_stage_for_subcontractor(get_current_subcontractor(), release_id, body.get('stage'),
+                                             gate_exception_note=body.get('gate_exception_note'))
     except StagePhotoRequiredError as exc:
-        return jsonify({'error': str(exc), 'code': 'photo_required', 'stage': exc.stage}), 422
+        return jsonify({'error': str(exc), 'code': 'photo_required', 'stage': exc.stage,
+                        'requested_stage': exc.requested_stage}), 422
     except ValueError as exc:
         msg = str(exc)
         if 'already exists' in msg.lower():

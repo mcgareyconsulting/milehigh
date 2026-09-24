@@ -27,8 +27,12 @@ describe('staffReleaseApi', () => {
     });
 
     it('routes stage and notes through job + release, and tags sub actors in activity', async () => {
+        axios.patch.mockResolvedValueOnce({ data: { status: 'success' } });
         await staffReleaseApi.setStage(1, rel, 'Install Start');
-        expect(jobsApi.updateStage).toHaveBeenCalledWith(560, '923', 'Install Start');
+        expect(axios.patch).toHaveBeenCalledWith(expect.stringContaining('/brain/update-stage/560/923'), { stage: 'Install Start' });
+        axios.patch.mockResolvedValueOnce({ data: { status: 'success' } });
+        await staffReleaseApi.setStage(1, rel, 'Install Start', { gateExceptionNote: 'no truck photo' });
+        expect(axios.patch).toHaveBeenLastCalledWith(expect.anything(), { stage: 'Install Start', gate_exception_note: 'no truck photo' });
         await staffReleaseApi.addNote(1, rel, 'hi');
         expect(jobsApi.updateNotes).toHaveBeenCalledWith(560, '923', 'hi');
         jobsApi.getNotesHistory.mockResolvedValueOnce({ events: [
@@ -51,6 +55,12 @@ describe('staffReleaseApi', () => {
         expect(axios.get).toHaveBeenCalledWith(expect.stringContaining('/brain/releases/1/drawing/versions'), { params: { family: 1 } });
         expect(out.drawings.map((d) => [d.id, d.is_current, d.uploaded_by_name])).toEqual([[10, true, 'Bill'], [9, false, 'Bill'], [20, true, 'Sam Sub']]);
         expect(out.photos[0]).toMatchObject({ id: 5, uploaded_by_name: 'Sam' });
+    });
+
+    it('tags a gate photo with the stage', async () => {
+        axios.post.mockResolvedValueOnce({ data: { id: 5 } });
+        await staffReleaseApi.uploadPhoto(1, new File([new Uint8Array([1])], 'h.jpg', { type: 'image/jpeg' }), { stage: 'Ship Complete' });
+        expect(axios.post.mock.calls[0][1].get('stage')).toBe('Ship Complete');
     });
 
     it('derives a later PDF upload from the release\'s own latest version', async () => {

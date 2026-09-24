@@ -577,9 +577,11 @@ def resolve_photo_file_for_subcontractor(subcontractor, release_id, photo_id):
     return photo
 
 
-def upload_photo_for_subcontractor(subcontractor, release_id, file_bytes, filename, mime_type, note=None):
+def upload_photo_for_subcontractor(subcontractor, release_id, file_bytes, filename, mime_type, note=None, stage=None):
     """Attach an image to a crew release with the account as uploader. None when
-    off-crew; ValueError when the bytes are not an image."""
+    off-crew; ValueError when the bytes are not an image or `stage` is not a real
+    stage. `stage` tags the photo for the department photo gate (T13): a photo tagged
+    with a department's entry stage is what lets the release cross into it."""
     from app.brain.job_log.features.photos.command import UploadPhotoCommand
     from app.brain.job_log.features.photos.payloads import is_probably_image, sniff_image_mime
     release = _crew_release_row(subcontractor, release_id)
@@ -588,10 +590,15 @@ def upload_photo_for_subcontractor(subcontractor, release_id, file_bytes, filena
     if not is_probably_image(file_bytes, mime_type or '', filename or ''):
         raise ValueError('File must be an image')
     resolved = sniff_image_mime(file_bytes) or (mime_type if (mime_type or '').startswith('image/') else 'image/jpeg')
+    stage = (stage or '').strip() or None
+    if stage is not None:
+        from app.api.helpers import STAGE_TO_GROUP
+        if stage not in STAGE_TO_GROUP:
+            raise ValueError(f'Unknown stage: {stage}')
     photo = UploadPhotoCommand(
         release_id=release.id, file_bytes=file_bytes, filename=filename or None,
         mime_type=resolved, uploaded_by_user_id=None, note=(note or '').strip() or None,
-        uploaded_by_subcontractor_id=subcontractor.id,
+        stage=stage, uploaded_by_subcontractor_id=subcontractor.id,
     ).execute()
     logger.info("sub_photo_uploaded", release_id=release.id, photo_id=photo.id,
                 subcontractor_id=subcontractor.id)
@@ -609,10 +616,12 @@ def upload_photo_for_subcontractor(subcontractor, release_id, file_bytes, filena
 SUB_STAGES = ('Ship Complete', 'Install Start', 'Install Complete', 'Complete')
 
 
-def set_stage_for_subcontractor(subcontractor, release_id, stage):
+def set_stage_for_subcontractor(subcontractor, release_id, stage, gate_exception_note=None):
     """Change a crew release's stage through UpdateStageCommand (all cascades: job_comp,
-    fab-order tier, Trello move, scheduling) attributed "sub:<id>". None when
-    off-crew; ValueError for a stage outside SUB_STAGES or a dedup hit."""
+    fab-order tier, Trello move, scheduling, the department photo gate) attributed
+    "sub:<id>". None when off-crew; ValueError for a stage outside SUB_STAGES or a
+    dedup hit; StagePhotoRequiredError propagates when the gate is owed and unmet.
+    `gate_exception_note` is the written reason there is no handoff photo."""
     from app.brain.job_log.features.stage.command import UpdateStageCommand
     release = _crew_release_row(subcontractor, release_id)
     if release is None:
@@ -624,6 +633,7 @@ def set_stage_for_subcontractor(subcontractor, release_id, stage):
         job_id=release.job, release=release.release, stage=stage,
         source='Brain', source_of_update='Brain:sub',
         external_user_id=f'{SUB_ACTOR_PREFIX}{subcontractor.id}',
+        gate_exception_note=(gate_exception_note or '').strip() or None,
     ).execute()
     logger.info("sub_stage_changed", release_id=release.id, job=release.job, release=release.release,
                 to_stage=stage, subcontractor_id=subcontractor.id, event_id=result.event_id)

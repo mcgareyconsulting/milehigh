@@ -108,19 +108,24 @@ export const subDrawingFileUrl = (releaseId, versionId) =>
 export const subPhotoFileUrl = (releaseId, photoId) =>
     `${BASE}/releases/${releaseId}/photos/${photoId}/file`;
 
-export async function uploadSubPhoto(releaseId, file, note = '') {
+/** `stage` tags the photo for the department photo gate (the gate's entry stage). */
+export async function uploadSubPhoto(releaseId, file, { note = '', stage = null } = {}) {
     const form = new FormData();
     form.append('file', file, file.name || 'photo.jpg');
     if (note) form.append('note', note);
+    if (stage) form.append('stage', stage);
     const { data } = await axios.post(`${BASE}/releases/${releaseId}/photos`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
     });
     return data; // the new photo row
 }
 
-/** stage must be one of the release payload's stage_options (SUB_STAGES server-side). */
-export async function setSubStage(releaseId, stage) {
-    const { data } = await axios.patch(`${BASE}/releases/${releaseId}/stage`, { stage });
+/** stage must be one of the release payload's stage_options (SUB_STAGES server-side).
+ *  gateExceptionNote is the written reason there is no handoff photo (T13 gate). */
+export async function setSubStage(releaseId, stage, { gateExceptionNote = null } = {}) {
+    const body = { stage };
+    if (gateExceptionNote) body.gate_exception_note = gateExceptionNote;
+    const { data } = await axios.patch(`${BASE}/releases/${releaseId}/stage`, body);
     return data; // { status, event_id, stage }
 }
 

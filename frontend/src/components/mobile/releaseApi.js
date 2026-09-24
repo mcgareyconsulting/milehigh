@@ -9,8 +9,9 @@
  *   subReleaseApi, staffReleaseApi — each:
  *     getRelease(id) -> { release, stage_options }
  *     listTodosForRelease(id) -> [{ id, title, due_date, status, release_id }]
- *     setStage(id, rel, stage), getActivity(id, rel) -> rows, addNote(id, rel, text)
- *     getAttachments(id) -> { drawings, photos }, uploadPhoto(id, file), uploadFile(id, file)
+ *     setStage(id, rel, stage, { gateExceptionNote? }) — rejects with a 422 photo_required payload
+ *     getActivity(id, rel) -> rows, addNote(id, rel, text)
+ *     getAttachments(id) -> { drawings, photos }, uploadPhoto(id, file, { stage? }), uploadFile(id, file)
  *     drawingFileUrl(releaseId, versionId), photoFileUrl(releaseId, photoId)
  * imports_from: [axios, ../../utils/api, ../../services/subPortalApi, ../../services/jobsApi, ../../constants/stages]
  * imported_by: [pages/SubcontractorRelease.jsx, pages/mobile/StaffMobileRelease.jsx]
@@ -33,11 +34,11 @@ axios.defaults.withCredentials = true;
 export const subReleaseApi = {
     getRelease: (id) => getSubRelease(id),
     listTodosForRelease: (id) => listSubTodos('all').then((t) => t.filter((x) => x.release_id === id)),
-    setStage: (id, _rel, stage) => setSubStage(id, stage),
+    setStage: (id, _rel, stage, opts) => setSubStage(id, stage, opts),
     getActivity: (id) => getSubActivity(id),
     addNote: (id, _rel, text) => addSubNote(id, text),
     getAttachments: (id) => getSubAttachments(id),
-    uploadPhoto: (id, file) => uploadSubPhoto(id, file),
+    uploadPhoto: (id, file, opts) => uploadSubPhoto(id, file, opts),
     uploadFile: (id, file) => uploadSubFile(id, file),
     drawingFileUrl: subDrawingFileUrl,
     photoFileUrl: subPhotoFileUrl,
@@ -56,7 +57,14 @@ export const staffReleaseApi = {
     listTodosForRelease: (id) => jobsApi.getReleaseChecklist(id).then((d) => (d.todos || []).map((t) => ({
         id: t.id, title: t.title, due_date: t.due_date, status: t.status, release_id: t.release_id,
     }))),
-    setStage: (_id, rel, stage) => jobsApi.updateStage(jobOf(rel), relOf(rel), stage),
+    async setStage(_id, rel, stage, { gateExceptionNote = null } = {}) {
+        // Direct call rather than jobsApi.updateStage: the gate's 422 payload has to reach
+        // the caller intact, and the exception note rides in the same body.
+        const body = { stage };
+        if (gateExceptionNote) body.gate_exception_note = gateExceptionNote;
+        const { data } = await axios.patch(`${BRAIN}/update-stage/${jobOf(rel)}/${relOf(rel)}`, body);
+        return data;
+    },
     getActivity: (_id, rel) => jobsApi.getNotesHistory(jobOf(rel), relOf(rel), 200).then((d) => (d.events || []).map((e) => ({
         ...e,
         actor_kind: String(e.external_user_id || '').startsWith('sub:') ? 'sub' : (e.user_name ? 'staff' : 'system'),
@@ -82,9 +90,10 @@ export const staffReleaseApi = {
             })),
         };
     },
-    async uploadPhoto(id, file) {
+    async uploadPhoto(id, file, { stage = null } = {}) {
         const form = new FormData();
         form.append('file', file, file.name || 'photo.jpg');
+        if (stage) form.append('stage', stage);
         const { data } = await axios.post(`${BRAIN}/releases/${id}/photos`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
         return data;
     },

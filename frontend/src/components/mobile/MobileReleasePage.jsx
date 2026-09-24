@@ -14,6 +14,9 @@
  * invariants:
  *   - The stage chip opens the picker; the options come from the adapter (server SUB_STAGES for a
  *     sub, the full progression for staff) and the change runs UpdateStageCommand server-side.
+ *   - The department photo gate (T13) is honoured: a 422 photo_required answer opens the gate
+ *     sheet, which either uploads a photo tagged with the gate stage or sends a written reason,
+ *     and the same stage change is retried.
  *   - The ⋯ menu holds Copy link and Close only.
  *   - Header and tab strip are fixed-height flex siblings (flex-shrink 0); only the tab body scrolls.
  */
@@ -23,6 +26,7 @@ import SubReleaseDetails from '../sub/SubReleaseDetails';
 import SubReleaseActivity from '../sub/SubReleaseActivity';
 import SubReleaseAttachments from '../sub/SubReleaseAttachments';
 import SubStageSheet from '../sub/SubStageSheet';
+import SubStageGateSheet from '../sub/SubStageGateSheet';
 
 const TABS = [
     { key: 'details', label: 'Details' },
@@ -52,6 +56,7 @@ export default function MobileReleasePage({ api, homePath }) {
     const [stageOpen, setStageOpen] = useState(false);
     const [stageBusy, setStageBusy] = useState(false);
     const [stageError, setStageError] = useState(null);
+    const [gate, setGate] = useState(null); // { gateStage, requestedStage } while the photo gate is owed
 
     const load = useCallback(async () => {
         setError(null);
@@ -85,19 +90,28 @@ export default function MobileReleasePage({ api, homePath }) {
     }, [rel]);
     const reportCount = useCallback((key, n) => setCounts((c) => (c[key] === n ? c : { ...c, [key]: n })), []);
     const closeStage = useCallback(() => setStageOpen(false), []);
-    const pickStage = async (stage) => {
+    const pickStage = async (stage, opts = {}) => {
         setStageBusy(true);
         setStageError(null);
         try {
-            await api.setStage(releaseId, rel, stage);
+            await api.setStage(releaseId, rel, stage, opts);
             setStageOpen(false);
+            setGate(null);
             await load();
         } catch (e) {
-            setStageError(e?.response?.data?.error || 'Could not change the stage');
+            const data = e?.response?.data;
+            if (e?.response?.status === 422 && data?.code === 'photo_required') {
+                setStageOpen(false);
+                setGate({ gateStage: data.stage, requestedStage: data.requested_stage || stage });
+            } else {
+                setStageError(data?.error || 'Could not change the stage');
+                throw e;
+            }
         } finally {
             setStageBusy(false);
         }
     };
+    const closeGate = useCallback(() => setGate(null), []);
 
     return (
         <div className="flex-1 min-h-0 flex flex-col">
@@ -157,7 +171,17 @@ export default function MobileReleasePage({ api, homePath }) {
 
             {stageOpen && rel && (
                 <SubStageSheet current={rel.Stage} options={stageOptions} busy={stageBusy}
-                    onPick={pickStage} onClose={closeStage} />
+                    onPick={(stage) => pickStage(stage).catch(() => {})} onClose={closeStage} />
+            )}
+            {gate && (
+                <SubStageGateSheet
+                    gateStage={gate.gateStage}
+                    requestedStage={gate.requestedStage}
+                    releaseId={releaseId}
+                    api={api}
+                    onSatisfied={({ gateExceptionNote } = {}) => pickStage(gate.requestedStage, { gateExceptionNote })}
+                    onClose={closeGate}
+                />
             )}
         </div>
     );

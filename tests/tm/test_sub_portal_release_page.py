@@ -113,13 +113,42 @@ def test_note_rejects_empty_and_off_crew(client, mine, theirs):
 
 # ---- stage ------------------------------------------------------------------------
 
-def test_stage_change_runs_the_command_and_is_attributed(client, sub, mine):
+def test_stage_change_owes_the_department_gate_then_runs_attributed(client, sub, mine, storage):
+    """Ship Planning -> Install Start crosses READY_TO_SHIP -> COMPLETE, so the department
+    photo gate (T13) owes a photo tagged 'Ship Complete'. The sub can satisfy it with a
+    tagged photo through their own upload route, or with a written reason."""
+    r = client.patch(f'/brain/subcontractor/releases/{mine.id}/stage', json={'stage': 'Install Start'})
+    assert r.status_code == 422
+    assert r.get_json()['code'] == 'photo_required'
+    assert r.get_json()['stage'] == 'Ship Complete' and r.get_json()['requested_stage'] == 'Install Start'
+    db.session.refresh(mine)
+    assert mine.stage == 'Ship Planning'
+
+    up = client.post(f'/brain/subcontractor/releases/{mine.id}/photos',
+                     data={'file': (io.BytesIO(PNG), 'handoff.png'), 'stage': 'Ship Complete'},
+                     content_type='multipart/form-data')
+    assert up.status_code == 201 and up.get_json()['stage'] == 'Ship Complete'
     r = client.patch(f'/brain/subcontractor/releases/{mine.id}/stage', json={'stage': 'Install Start'})
     assert r.status_code == 200, r.get_json()
     db.session.refresh(mine)
     assert mine.stage == 'Install Start'
     ev = ReleaseEvents.query.filter_by(action='update_stage').one()
     assert ev.external_user_id == f'sub:{sub.id}'
+
+
+def test_stage_change_accepts_a_written_gate_exception(client, sub, mine):
+    r = client.patch(f'/brain/subcontractor/releases/{mine.id}/stage',
+                     json={'stage': 'Install Start', 'gate_exception_note': 'Truck left before photos'})
+    assert r.status_code == 200, r.get_json()
+    ev = ReleaseEvents.query.filter_by(action='update_stage').one()
+    assert ev.payload.get('gate_exception') == 'Truck left before photos'
+    assert ev.external_user_id == f'sub:{sub.id}'
+
+
+def test_photo_upload_rejects_an_unknown_stage_tag(client, mine, storage):
+    r = client.post(f'/brain/subcontractor/releases/{mine.id}/photos',
+                    data={'file': (io.BytesIO(PNG), 'x.png'), 'stage': 'Not A Stage'}, content_type='multipart/form-data')
+    assert r.status_code == 400
 
 
 def test_stage_refuses_shop_stages_and_off_crew(client, mine, theirs):
