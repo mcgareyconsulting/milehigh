@@ -66,8 +66,8 @@ export function monthOptions(today = new Date()) {
     for (let i = -1; i <= 4; i += 1) {
         const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const label = d.toLocaleDateString('en-US', d.getFullYear() === today.getFullYear()
-            ? { month: 'short' } : { month: 'short', year: '2-digit' });
+        const mon = d.toLocaleDateString('en-US', { month: 'short' });
+        const label = d.getFullYear() === today.getFullYear() ? mon : `${mon} '${String(d.getFullYear()).slice(-2)}`;
         out.push({ key, label, isCurrent: i === 0 });
     }
     return out;
