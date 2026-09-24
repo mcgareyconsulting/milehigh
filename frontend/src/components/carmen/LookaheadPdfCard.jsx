@@ -24,7 +24,7 @@ const PATH_RE = /\/brain\/lookahead\/artifacts\/([A-Za-z0-9_-]+)\.pdf/g;
  */
 export function extractLookaheadArtifacts(content, structured) {
     if (Array.isArray(structured) && structured.length > 0) {
-        return structured.filter((a) => a && a.download_path);
+        return structured.filter((a) => a && a.download_path && a.kind !== 'release_report');
     }
     const found = [];
     const seen = new Set();

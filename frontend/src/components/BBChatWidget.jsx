@@ -20,6 +20,7 @@ import { useState, useRef, useEffect, useCallback, forwardRef } from 'react';
 import { createPortal } from 'react-dom';
 import { sendMessage, listAccessUsers, setUserAccess } from '../services/bbChatApi';
 import LookaheadPdfCard, { extractLookaheadArtifacts } from './carmen/LookaheadPdfCard';
+import ReleaseReportCard, { extractReportArtifacts } from './carmen/ReleaseReportCard';
 
 const DEFAULT_W = 420;
 const MIN_W = 320;
@@ -394,7 +395,10 @@ export default function BBChatWidget({ enabled, isAdmin, open = false, onClose, 
             const res = await sendMessage(text, conversationId);
             setConversationId(res.conversation_id);
             const a = res.assistant_message;
-            const artifacts = extractLookaheadArtifacts(a.content, a.artifacts);
+            const artifacts = [
+                ...extractLookaheadArtifacts(a.content, a.artifacts),
+                ...extractReportArtifacts(a.content, a.artifacts),
+            ];
             setMessages((prev) => [...prev, {
                 role: 'assistant',
                 content: a.content,
@@ -480,7 +484,7 @@ export default function BBChatWidget({ enabled, isAdmin, open = false, onClose, 
                                 {messages.length === 0 && (
                                     <div className="text-center text-sm text-gray-400 dark:text-slate-500 mt-8 px-4">
                                         <p className="mb-2 text-2xl">📋</p>
-                                        <p>Name a release, submittal, or project — lifecycle summaries, look-aheads, and print-ready PDFs.</p>
+                                        <p>Name a release, submittal, or project — lifecycle summaries, look-aheads, and release reports.</p>
                                         <p className="mt-2 text-xs">e.g. &quot;summarize 290-153&quot; or &quot;3-week look-ahead PDF for Novel Flatiron&quot;</p>
                                     </div>
                                 )}
@@ -491,7 +495,9 @@ export default function BBChatWidget({ enabled, isAdmin, open = false, onClose, 
                                             : 'bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-slate-100 rounded-bl-sm'}`}>
                                             {m.role === 'assistant' ? <Markdown text={m.content} /> : m.content}
                                             {m.role === 'assistant' && (m.artifacts || []).map((art, j) => (
-                                                <LookaheadPdfCard key={art.artifact_id || art.download_path || j} artifact={art} />
+                                                art.kind === 'release_report'
+                                                    ? <ReleaseReportCard key={art.artifact_id || art.download_path || j} artifact={art} />
+                                                    : <LookaheadPdfCard key={art.artifact_id || art.download_path || j} artifact={art} />
                                             ))}
                                             {m.role === 'assistant' && <Metrics m={m.metrics} />}
                                         </div>

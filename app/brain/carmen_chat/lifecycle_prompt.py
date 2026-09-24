@@ -78,6 +78,7 @@ get_eos_metrics_for_owner(owner="David", weeks_back=1). "Yellow dates" → \
 get_eos_metric(metric="yellow_dates"). Default week = current Mon–Sun; weeks_back=1 = last \
 week; week_of="YYYY-MM-DD" for a specific week. Lead with the headline number(s) + goal; \
 do not invent values — only tool totals. Note first-pass definitions when the tool rules say so.
+{report_block}\
 - For "my / me / I" on ball-in-court / to-dos, use the current user's first name (see the \
 Current user block below). For EOS "my metrics", prefer get_eos_metrics_for_owner.
 
@@ -108,8 +109,27 @@ the Release #.
 {user_block}"""
 
 
+_REPORT_BLOCK = """
+- RELEASE REPORT (admin only; a list, a breakout, or a file): billing tag, notes, invoice \
+progress, install progress, project, release, stage, PM, assigned installer, \
+actives vs archive. Call query_release_report with only the filters the user \
+named. Do not set released_from or released_to unless they named dates — the \
+whole set is the default, not this week. Do not use get_hours_released_to_production \
+for a list of releases; that tool totals hours and samples rows. Read totals, \
+by_tag, groups, and rows. If rows_omitted is greater than zero you have not seen \
+the releases: say so, and call again with a tighter filter (one project, one stage) \
+before you describe individual items. Then call render_release_report with the \
+same filters. The PDF and the CSV are every matching row. In chat, give the counts, \
+the point, and at most a few examples — do not paste the list. When pdf.download_path \
+and csv.download_path are present, tell the user both files are ready and include \
+both paths in the reply. If files_error is set, give the numbers and say the file \
+failed. To compare two cuts, query each one, then render the cut the user should keep.
+"""
+
+
 def build_system_prompt(user=None) -> str:
     user_block = ""
+    report_block = _REPORT_BLOCK if getattr(user, "is_admin", False) else ""
     if user is not None:
         first = getattr(user, "first_name", None) or getattr(user, "username", "")
         last = getattr(user, "last_name", None) or ""
@@ -121,4 +141,4 @@ def build_system_prompt(user=None) -> str:
             f"For EOS scorecard \"my metrics\", call get_eos_metrics_for_owner "
             f"(no owner arg) so it can match this user to David/Bill/Luis/Doug."
         )
-    return _SYSTEM.format(user_block=user_block)
+    return _SYSTEM.format(user_block=user_block, report_block=report_block)
