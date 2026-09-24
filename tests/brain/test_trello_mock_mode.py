@@ -12,7 +12,7 @@ import pytest
 
 from app.models import Releases, ReleaseEvents, TrelloOutbox, db
 from app.services.outbox_service import OutboxService
-from tests.conftest import make_release
+from tests.conftest import make_release, tag_gate_photo
 
 
 @pytest.fixture(autouse=True)
@@ -100,7 +100,8 @@ class TestMockModeMakesNoNetworkCalls:
     ):
         """The pre-existing move_card simulation must survive being generalised."""
         with app.app_context():
-            _release(1, "A", stage="Paint Start")
+            r = _release(1, "A", stage="Paint Start")
+            tag_gate_photo(r, "Paint Complete")   # Paint → Ship handoff owes its photo
             db.session.commit()
 
             with patch("app.brain.job_log.scheduling.service.recalculate_all_jobs_scheduling"):

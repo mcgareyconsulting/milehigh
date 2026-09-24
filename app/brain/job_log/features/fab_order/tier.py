@@ -123,9 +123,12 @@ def plan_fab_order_for_stage(job_record, new_stage, old_stage_group=None) -> Opt
         return None
 
     # Dynamic stage from here down.
-    if normalized == "Welded QC" and old_stage_group != "READY_TO_SHIP":
+    if normalized == "Welded QC" and old_stage_group not in ("PAINT", "READY_TO_SHIP"):
         # Department handoff, Fab → Paint: land at the back of the paint deck so
         # a fresh arrival doesn't jump the line on work already in the booth.
+        # Welded QC lives in PAINT since the 2026-09-23 split; READY_TO_SHIP stays
+        # in the exclusion so a row not yet backfilled (or bouncing back from a
+        # shipping hold) re-tiers exactly as it did before the split — nothing else.
         return FabOrderPlan(
             _back_of_deck(["Welded QC", "Paint Start"], job_record.job, job_record.release),
             "paint_handoff",

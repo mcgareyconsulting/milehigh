@@ -28,18 +28,15 @@ import { StageIconRow } from './StageIconRow';
 import { ASAP_PROPAGATED_ROW_CLASS } from './AsapPropagationTag';
 import { PdfMarkupModal } from './PdfMarkupModal';
 import { StagePhotoGateModal } from './StagePhotoGateModal';
+import { gateStageFor, stageGateFromError } from '../utils/stageGroups';
 import { useTheme } from '../context/ThemeContext';
 import { useReleases } from '../context/ReleasesContext';
 
-// Master switch for the stage photo gate. Held OFF for now — the gate UI/infra
-// stays in place so flipping this back to true re-enables it. Keep in sync with
-// the backend flag STAGE_PHOTO_GATE_ENABLED in stage/command.py.
-const STAGE_PHOTO_GATE_ENABLED = false;
-
-// Stages that require a stage-tagged photo before a release may enter them.
-// Selecting one opens the attachment modal in gate mode instead of changing
-// the stage immediately. The backend enforces the same gate (422 photo_required).
-const STAGE_PHOTO_GATES = ['Welded QC', 'Paint Complete'];
+// Department photo gate (T13): a stage pick that crosses into the next department
+// (utils/stageGroups.js gateStageFor) opens the gate dialog instead of writing, and
+// the write goes through only with a tagged photo or a written reason. The backend
+// enforces the same rule (422 photo_required), so this is the polite path, not the
+// only one. The master switch is server-side: STAGE_PHOTO_GATE_ENABLED in stage/command.py.
 
 export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, bandIndex = null, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, compact = false, showActions = true, onOpenReleaseHub = null, onOpenReleaseMarkup = null }) {
     const { refreshMaterialSummary } = useReleases();
@@ -60,6 +57,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // When set, the attachment modal is opened in stage-gate mode for this stage:
     // a photo tagged with it must be uploaded before the stage change applies.
     const [gateStage, setGateStage] = useState(null);
+    // The stage the user actually picked — the gate tags its photo with the department's
+    // entry stage, which is not always the same thing (Ship Planning → Complete owes the
+    // Ship Complete photo, then lands on Complete).
+    const [gateRequestedStage, setGateRequestedStage] = useState(null);
     const [showActionMenu, setShowActionMenu] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [fieldValues, setFieldValues] = useState({});
@@ -409,7 +410,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const rotatedStageOptions = useMemo(() => {
         const baseOptions = stageToGroup
             ? [...stageOptions].sort((a, b) => {
-                const groupOrder = { FABRICATION: 0, READY_TO_SHIP: 1, COMPLETE: 2 };
+                const groupOrder = { FABRICATION: 0, PAINT: 1, READY_TO_SHIP: 2, COMPLETE: 3 };
                 const ga = stageToGroup[a.value] ?? 'FABRICATION';
                 const gb = stageToGroup[b.value] ?? 'FABRICATION';
                 return (groupOrder[ga] ?? 0) - (groupOrder[gb] ?? 0);
@@ -478,20 +479,26 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // is why the border is revealed rather than removed.
     const quietInput = 'bg-transparent border border-transparent hover:border-hairline-strong focus:bg-input-bg focus:border-brand';
 
-    // Handle stage change. Gated stages (Welded QC / Paint Complete) require a
-    // tagged photo first: open the attachment modal in gate mode and defer the
-    // actual change until the user confirms. All other stages apply immediately.
+    // Handle stage change. A pick that crosses into the next department owes that
+    // department's handoff photo: open the gate dialog and defer the write until the
+    // user confirms (photo attached, or a reason given). Everything else applies now.
+    const openGate = (stage, requestedStage) => {
+        setGateStage(stage);
+        setGateRequestedStage(requestedStage);
+        setPdfHistoryOpen(true);
+    };
     const handleStageChange = (newStage) => {
-        if (STAGE_PHOTO_GATE_ENABLED && STAGE_PHOTO_GATES.includes(newStage) && newStage !== localStage) {
-            setGateStage(newStage);
-            setPdfHistoryOpen(true);
+        const gate = newStage !== localStage ? gateStageFor(localStage, newStage) : null;
+        if (gate) {
+            openGate(gate, newStage);
             return;
         }
         applyStageChange(newStage);
     };
 
-    // Perform the stage update (optimistic UI + API call + refetch).
-    const applyStageChange = async (newStage) => {
+    // Perform the stage update (optimistic UI + API call + refetch). `gateExceptionNote`
+    // is the gate dialog's "no photo available" reason, passed straight through.
+    const applyStageChange = async (newStage, gateExceptionNote = null) => {
         const jobNumber = row['Job #'];
         const releaseNumber = row['Release #'];
 
@@ -521,7 +528,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         try {
             console.log(`[STAGE] Updating job ${jobNumber}-${releaseNumber} from ${oldStage} to ${newStage}`);
 
-            await jobsApi.updateStage(jobNumber, releaseNumber, newStage);
+            if (gateExceptionNote) {
+                await jobsApi.updateStage(jobNumber, releaseNumber, newStage, { gateExceptionNote });
+            } else {
+                await jobsApi.updateStage(jobNumber, releaseNumber, newStage);
+            }
 
             console.log(`[STAGE] Successfully updated job ${jobNumber}-${releaseNumber} to ${newStage}`);
 
@@ -539,12 +550,13 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             setFabOrderInputValue(formatFabOrder(oldFabOrder ?? ''));
             // Backend stage gate: a tagged photo is required. Re-open the modal
             // in gate mode so the user can upload one rather than just erroring.
-            const data = error?.response?.data;
-            if (data?.code === 'photo_required' && data?.stage) {
-                setGateStage(data.stage);
-                setPdfHistoryOpen(true);
+            // (jobsApi wraps the axios error, so the 422 body sits under originalError —
+            // stageGateFromError knows where to look.)
+            const gate = stageGateFromError(error);
+            if (gate) {
+                openGate(gate.stage, gate.requestedStage);
             } else {
-                alert(`Failed to update stage: ${data?.error || error.message}`);
+                alert(`Failed to update stage: ${error.message}`);
             }
         } finally {
             setUpdatingStage(false);
@@ -1634,13 +1646,15 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 releaseId={row.id}
                 title={`${row['Job #']}-${row['Release #']}`}
                 gateStage={gateStage}
-                onConfirmStage={() => {
-                    const stageToApply = gateStage;
+                requestedStage={gateRequestedStage}
+                onConfirmStage={(gateExceptionNote) => {
+                    const stageToApply = gateRequestedStage ?? gateStage;
                     setPdfHistoryOpen(false);
                     setGateStage(null);
-                    applyStageChange(stageToApply);
+                    setGateRequestedStage(null);
+                    applyStageChange(stageToApply, gateExceptionNote);
                 }}
-                onClose={() => { setPdfHistoryOpen(false); setGateStage(null); }}
+                onClose={() => { setPdfHistoryOpen(false); setGateStage(null); setGateRequestedStage(null); }}
             />
             {showEditModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

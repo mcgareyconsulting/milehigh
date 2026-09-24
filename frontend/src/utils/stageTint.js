@@ -13,9 +13,10 @@
  *     together, or the table pill and the modal pill disagree for the same release.
  */
 
-// Mirrors jobLogPdf.js STAGE_TO_GROUP + STAGE_GROUP_COLORS (print = source of truth):
+// Mirrors utils/stageGroups.js STAGE_TO_GROUP + jobLogPdf.js STAGE_GROUP_COLORS (print = source of truth):
 //   FABRICATION   → blue   (#dbeafe / #1e40af)
-//   READY_TO_SHIP → green  (#d1fae5 / #065f46)  includes Welded QC + Paint Start
+//   PAINT         → green  (Welded QC + Paint Start — its own department for the photo gate, same hue)
+//   READY_TO_SHIP → green  (#d1fae5 / #065f46)
 //   COMPLETE      → purple (#ede9fe / #5b21b6)
 // Token vars --st-{hue}-bg/fg are the same RGB as the PDF.
 const HUE_BY_STAGE = {

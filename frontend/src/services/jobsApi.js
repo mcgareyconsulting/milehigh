@@ -83,11 +83,17 @@ class JobsApi {
         }
     }
 
-    async updateStage(job, release, stage) {
+    /**
+     * `gateExceptionNote` is the "no photo available" exit from the department photo gate
+     * (T13): a written reason that stands in for the handoff photo. Sent only when given.
+     */
+    async updateStage(job, release, stage, { gateExceptionNote = null } = {}) {
         try {
+            const body = { stage };
+            if (gateExceptionNote) body.gate_exception_note = gateExceptionNote;
             const response = await axios.patch(
                 `${API_BASE_URL}/brain/update-stage/${job}/${release}`,
-                { stage }
+                body
             );
             return response.data;
         } catch (error) {

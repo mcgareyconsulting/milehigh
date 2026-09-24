@@ -45,7 +45,9 @@ import { setAsapAndAssign } from '../utils/asap';
 import { checkAuth } from '../utils/auth';
 import { compressImage } from '../utils/imageCompress';
 import { StartInstallDateModal } from './StartInstallDateModal';
+import { StagePhotoGateModal } from './StagePhotoGateModal';
 import { ConfirmDialog } from './shared/ConfirmDialog';
+import { gateStageFor, stageGateFromError } from '../utils/stageGroups';
 
 const labelFor = (key) => HEADER_OVERRIDES[key] || key;
 
@@ -447,23 +449,41 @@ export function JobDetailsBody({
         }
     };
 
-    const handleStageChange = async (next) => {
-        if (!jobId || relId == null || next === localStage) return;
+    // Department photo gate (T13): a pick that crosses into the next department opens the
+    // gate dialog first; the write goes through only with a tagged photo or a written reason.
+    // Same rule and same dialog as the Job Log row — the server enforces it either way.
+    const [stageGate, setStageGate] = useState(null);   // { stage, requestedStage }
+    const applyStage = async (next, gateExceptionNote = null) => {
         const prev = localStage;
         setLocalStage(next);            // optimistic
         onStageChange?.(next);
         setSavingField('stage');
         setWriteError(null);
         try {
-            await jobsApi.updateStage(jobId, relId, next);
+            if (gateExceptionNote) {
+                await jobsApi.updateStage(jobId, relId, next, { gateExceptionNote });
+            } else {
+                await jobsApi.updateStage(jobId, relId, next);
+            }
             onJobUpdate?.();
         } catch (err) {
             setLocalStage(prev);
             onStageChange?.(prev);
-            setWriteError(err.message || 'Could not update stage');
+            const gate = stageGateFromError(err);
+            if (gate) setStageGate(gate);
+            else setWriteError(err.message || 'Could not update stage');
         } finally {
             setSavingField(null);
         }
+    };
+    const handleStageChange = (next) => {
+        if (!jobId || relId == null || next === localStage) return;
+        const gate = gateStageFor(localStage, next);
+        if (gate) {
+            setStageGate({ stage: gate, requestedStage: next });
+            return;
+        }
+        applyStage(next);
     };
 
     // Install Prog (job_comp) — same write and same stage rules as the Job Log cell: a percentage
@@ -1332,6 +1352,24 @@ export function JobDetailsBody({
                 onConfirm={() => deletePhoto(pendingDeleteId)}
                 onCancel={() => setPendingDeleteId(null)}
             />
+
+            {/* Department photo gate — it portals itself to document.body, so the hub's
+                blurred backdrop never clips it. */}
+            {stageGate && (
+                <StagePhotoGateModal
+                    isOpen
+                    releaseId={releaseId ?? job?.id}
+                    title={`${jobId}-${relId}`}
+                    gateStage={stageGate.stage}
+                    requestedStage={stageGate.requestedStage}
+                    onConfirmStage={(gateExceptionNote) => {
+                        const target = stageGate.requestedStage;
+                        setStageGate(null);
+                        applyStage(target, gateExceptionNote);
+                    }}
+                    onClose={() => setStageGate(null)}
+                />
+            )}
 
             {/* The Job Log row's dialog, verbatim — ASAP, Clear hard date, Break/Link.
                 Portaled out: it positions itself `fixed`, and the hub's blurred

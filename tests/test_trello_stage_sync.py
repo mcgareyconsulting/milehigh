@@ -28,9 +28,12 @@ from tests.conftest import make_release
 
 @pytest.fixture(autouse=True)
 def _disable_stage_photo_gate():
+    # Off via the master switch: since 2026-09-23 the gate derives its stages from
+    # the stage_group axis (features/stage/gate.py), so emptying STAGE_PHOTO_GATES
+    # no longer disarms it. This file's behavior is orthogonal to the gate.
     # Trello sync tests move releases across zones (incl. gated stages); the
     # photo gate is covered in tests/brain/test_stage_photo_gate.py.
-    with patch("app.brain.job_log.features.stage.command.STAGE_PHOTO_GATES", set()):
+    with patch("app.brain.job_log.features.stage.command.STAGE_PHOTO_GATE_ENABLED", False):
         yield
 
 

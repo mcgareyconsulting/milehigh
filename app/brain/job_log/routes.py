@@ -1292,7 +1292,7 @@ def get_gantt_data():
         # Eligibility for the installer timeline:
         #  - start_install must be a hard date (formulaTF != True). NULL formulaTF is treated as hard.
         #  - install_hrs must be present and > 0 so we can derive a comp_eta window.
-        #  - stage_group in FABRICATION, READY_TO_SHIP, or COMPLETE — "Shipping Complete"
+        #  - stage_group in FABRICATION, PAINT, READY_TO_SHIP, or COMPLETE — "Shipping Complete"
         #    rows are shipped-but-not-installed and belong on the timeline. The frontend's
         #    filterComplete path drops only stage == 'Complete' rows.
         jobs = Releases.query.filter(
@@ -1301,7 +1301,7 @@ def get_gantt_data():
                 Releases.start_install_formulaTF.is_(None)),
             Releases.install_hrs.isnot(None),
             Releases.install_hrs > 0,
-            Releases.stage_group.in_(['FABRICATION', 'READY_TO_SHIP', 'COMPLETE'])
+            Releases.stage_group.in_(['FABRICATION', 'PAINT', 'READY_TO_SHIP', 'COMPLETE'])
         ).all()
 
         # Group jobs by project (job number)
@@ -1397,7 +1397,12 @@ def update_stage(job, release):
     app/brain/job_log/features/stage/command.py for the full workflow.
 
     Request Body:
-        {"stage": "Released" | "Cut Start" | "Fitup Complete" | ...}
+        {"stage": "Released" | "Cut Start" | "Fitup Complete" | ...,
+         "gate_exception_note": "why there is no handoff photo"}   # optional (T13)
+
+    A forward department crossing (features/stage/gate.py) answers 422
+    `photo_required` until a photo tagged `stage` (the department's entry stage)
+    exists on the release, or the body carries a `gate_exception_note`.
     """
     from app.brain.job_log.features.stage.command import (
         UpdateStageCommand,
@@ -1411,7 +1416,10 @@ def update_stage(job, release):
         if not stage:
             return jsonify({'error': 'Stage is required'}), 400
 
-        result = UpdateStageCommand(job_id=job, release=release, stage=stage).execute()
+        result = UpdateStageCommand(
+            job_id=job, release=release, stage=stage,
+            gate_exception_note=request.json.get('gate_exception_note'),
+        ).execute()
 
         return jsonify({
             'status': 'success',
@@ -1424,6 +1432,7 @@ def update_stage(job, release):
             'error': str(e),
             'code': 'photo_required',
             'stage': e.stage,
+            'requested_stage': e.requested_stage,
         }), 422
 
     except ValueError as e:

@@ -10,10 +10,22 @@
  * are driven through the DndContext the component actually mounts, with lane rects stubbed.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act, within } from '@testing-library/react';
+import { render, screen, act, within, fireEvent } from '@testing-library/react';
 
 vi.mock('./ReleaseHubModal', () => ({ ReleaseHubModal: () => null }));
 vi.mock('./PdfMarkupModal', () => ({ PdfMarkupModal: () => null }));
+
+// Planning → Completed crosses READY_TO_SHIP → COMPLETE, so the drop parks in the department
+// photo gate (T13) until it is confirmed. The dialog's own behaviour is covered in
+// StagePhotoGateModal.test.jsx; here it is a stub with the two exits the drop cares about.
+vi.mock('./StagePhotoGateModal', () => ({
+    StagePhotoGateModal: ({ isOpen, gateStage, requestedStage, onConfirmStage, onClose }) => (isOpen ? (
+        <div data-testid="gate-dialog" data-gate={gateStage} data-requested={requestedStage}>
+            <button type="button" onClick={() => onConfirmStage(null)}>Confirm gate</button>
+            <button type="button" onClick={onClose}>Cancel gate</button>
+        </div>
+    ) : null),
+}));
 
 const authUser = vi.hoisted(() => ({ current: { is_admin: true } }));
 vi.mock('../utils/auth', () => ({ checkAuth: () => Promise.resolve(authUser.current) }));
@@ -95,6 +107,13 @@ const drop = async ({ row, fromLane = null, overId, clientX = 0 }) =>
 
 const laneEl = (container, lane) => container.querySelector(`[data-lane="${lane}"]`);
 
+// A Planning → Completed drop owes the Ship Complete photo; the gate stub's Confirm stands in
+// for "photo attached", and the drop then commits exactly as it did before the gate existed.
+const confirmGate = async () => {
+    const btn = await screen.findByText('Confirm gate');
+    await act(async () => { fireEvent.click(btn); });
+};
+
 beforeEach(() => {
     mockJobs.current = [];
     patchJob.mockClear();
@@ -112,9 +131,48 @@ describe('dragging a card from Shipping Planning to Shipping Completed', () => {
         stubLaneRects(container);
 
         await drop({ row, fromLane: PLANNING, overId: `lane:${COMPLETED}`, clientX: 5 });
+        await confirmGate();
 
         expect(updateStage).toHaveBeenCalledTimes(1);
         expect(updateStage).toHaveBeenCalledWith(560, '923', 'Ship Complete');
+    });
+
+    it('parks the drop in the photo gate and writes nothing until it is confirmed', async () => {
+        const row = shipRel();
+        mockJobs.current = [row];
+        const { container } = await renderChart();
+        stubLaneRects(container);
+
+        await drop({ row, fromLane: PLANNING, overId: `lane:${COMPLETED}`, clientX: 5 });
+
+        const dialog = await screen.findByTestId('gate-dialog');
+        expect(dialog).toHaveAttribute('data-gate', 'Ship Complete');
+        expect(dialog).toHaveAttribute('data-requested', 'Ship Complete');
+        expect(updateStage).not.toHaveBeenCalled();
+        expect(updateStartInstall).not.toHaveBeenCalled();
+        expect(patchJob).not.toHaveBeenCalled();   // the card has not moved, not even optimistically
+
+        await confirmGate();
+
+        expect(updateStage).toHaveBeenCalledWith(560, '923', 'Ship Complete');
+        expect(patchJob).toHaveBeenCalledWith(7, { Stage: 'Ship Complete' });
+        expect(screen.queryByTestId('gate-dialog')).toBeNull();
+    });
+
+    it('cancelling the gate writes nothing and leaves the card where it was', async () => {
+        const row = shipRel();
+        mockJobs.current = [row];
+        const { container } = await renderChart();
+        stubLaneRects(container);
+
+        await drop({ row, fromLane: PLANNING, overId: `lane:${COMPLETED}`, clientX: 5 });
+        const cancel = await screen.findByText('Cancel gate');
+        await act(async () => { fireEvent.click(cancel); });
+
+        expect(screen.queryByTestId('gate-dialog')).toBeNull();
+        expect(updateStage).not.toHaveBeenCalled();
+        expect(patchJob).not.toHaveBeenCalled();
+        expect(screen.queryByRole('alert')).toBeNull();
     });
 
     it('never writes a date, however far along the lane it is dropped', async () => {
@@ -125,6 +183,7 @@ describe('dragging a card from Shipping Planning to Shipping Completed', () => {
 
         // Column 4 — an installer lane would read a date off this X. A shipping lane must not.
         await drop({ row, fromLane: PLANNING, overId: `lane:${COMPLETED}`, clientX: COL_PX * 4 + 5 });
+        await confirmGate();
 
         expect(updateStartInstall).not.toHaveBeenCalled();
         expect(patchJob).toHaveBeenCalledWith(7, { Stage: 'Ship Complete' });
@@ -137,6 +196,7 @@ describe('dragging a card from Shipping Planning to Shipping Completed', () => {
         stubLaneRects(container);
 
         await drop({ row, fromLane: PLANNING, overId: `lane:${COMPLETED}`, clientX: 5 });
+        await confirmGate();
 
         expect(patchJob.mock.calls[0]).toEqual([7, { Stage: 'Ship Complete' }]);
     });
@@ -149,6 +209,8 @@ describe('dragging a card from Shipping Planning to Shipping Completed', () => {
 
         await drop({ row, fromLane: COMPLETED, overId: `lane:${PLANNING}`, clientX: 5 });
 
+        // Backward moves never gate: no dialog, the write goes straight through.
+        expect(screen.queryByTestId('gate-dialog')).toBeNull();
         expect(updateStage).toHaveBeenCalledWith(560, '923', 'Ship Planning');
     });
 
@@ -160,6 +222,7 @@ describe('dragging a card from Shipping Planning to Shipping Completed', () => {
         stubLaneRects(container);
 
         await drop({ row, fromLane: PLANNING, overId: `lane:${COMPLETED}`, clientX: 5 });
+        await confirmGate();
 
         expect(patchJob).toHaveBeenCalledTimes(2);
         expect(patchJob.mock.calls[1][1]).toEqual(expect.objectContaining({ Stage: 'Ship Planning' }));
