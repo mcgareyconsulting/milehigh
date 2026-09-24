@@ -78,7 +78,9 @@ export default function MobileReleasePage({ api, homePath }) {
     const code = rel ? `${rel['Job #']}-${rel['Release #']}` : '';
     const meta = useMemo(() => {
         if (!rel) return '';
-        return [rel.Description, rel.PM ? `PM ${rel.PM}` : null, rel.BY ? `Detailed by ${rel.BY}` : null]
+        // Crew leads the line: a company login sees several crews' releases in one list,
+        // so the header says which crew this one belongs to.
+        return [rel.installer, rel.Description, rel.PM ? `PM ${rel.PM}` : null, rel.BY ? `Detailed by ${rel.BY}` : null]
             .filter(Boolean).join(' · ');
     }, [rel]);
     const reportCount = useCallback((key, n) => setCounts((c) => (c[key] === n ? c : { ...c, [key]: n })), []);

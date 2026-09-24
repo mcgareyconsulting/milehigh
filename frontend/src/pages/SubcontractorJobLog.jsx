@@ -41,7 +41,11 @@ function UnscheduledCard({ rel, onOpen }) {
             className="sub-card w-full text-left p-4 active:scale-[0.995]">
             <div className="flex items-start justify-between gap-2">
                 <span className="num font-mono text-brand">{code}</span>
-                {rel.Stage && <span className="sub-pill truncate max-w-[10rem]">{rel.Stage}</span>}
+                <span className="flex items-center gap-1.5 shrink-0">
+                    {/* Crew tag: one list for the whole company, each card says which crew. */}
+                    {rel.installer && <span className="sub-pill">{rel.installer}</span>}
+                    {rel.Stage && <span className="sub-pill truncate max-w-[10rem]">{rel.Stage}</span>}
+                </span>
             </div>
             {rel.Job && <div className="mt-1 text-sm font-bold text-ink break-words">{rel.Job}</div>}
             {rel.Description && <div className="mt-1 text-sm text-ink-3 line-clamp-2 break-words">{rel.Description}</div>}
