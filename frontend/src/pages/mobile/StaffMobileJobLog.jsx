@@ -20,20 +20,12 @@ import { useNavigate } from 'react-router-dom';
 import { useDaySchedule } from '../../hooks/useDaySchedule';
 import DaySchedule from '../../components/installSchedule/DaySchedule';
 import SubEmpty from '../../components/sub/SubEmpty';
+import MonthChips from '../../components/mobile/MonthChips';
+import { monthOptions } from '../../components/mobile/format';
+import { useScrollRestore } from '../../hooks/useScrollRestore';
 
 const SHIP = { key: 'ship', label: 'Shipping Planning', stage: 'Ship Planning' };
 const LANE_KEY = 'mobile-joblog-lane';
-
-function monthOptions(today = new Date()) {
-    const out = [];
-    for (let i = -1; i <= 4; i += 1) {
-        const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const label = d.toLocaleDateString('en-US', d.getFullYear() === today.getFullYear() ? { month: 'short' } : { month: 'short', year: '2-digit' });
-        out.push({ key, label });
-    }
-    return out;
-}
 
 export default function StaffMobileJobLog() {
     const [lane, setLane] = useState(() => { try { return localStorage.getItem(LANE_KEY) || SHIP.key; } catch { return SHIP.key; } });
@@ -52,10 +44,11 @@ export default function StaffMobileJobLog() {
     const openRelease = useCallback((card) => navigate(`/m/releases/${card.release_id}`), [navigate]);
 
     const laneLabel = isShip ? SHIP.label : lane;
+    const scrollRef = useScrollRestore(`staff-job-log:${lane}:${month || 'upcoming'}`, !loading && !!data);
     const nothing = data && !data.past_due.length && data.summary.scheduled === 0;
 
     return (
-        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+        <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto flex flex-col">
             <div className="sub-page-head">
                 <h1>Job Log</h1>
                 <div className="sub-ctx">{month ? months.find((m) => m.key === month)?.label : 'next 2 weeks'}</div>
@@ -67,12 +60,7 @@ export default function StaffMobileJobLog() {
                     {roster.map((crew) => <option key={crew} value={crew}>{crew}</option>)}
                 </select>
             </div>
-            <div className="sub-months" role="tablist" aria-label="Time window">
-                <button type="button" role="tab" aria-selected={month === null} className={month === null ? 'active' : ''} onClick={() => setMonth(null)}>Upcoming</button>
-                {months.map((m) => (
-                    <button key={m.key} type="button" role="tab" aria-selected={month === m.key} className={month === m.key ? 'active' : ''} onClick={() => setMonth(m.key)}>{m.label}</button>
-                ))}
-            </div>
+            <MonthChips month={month} onChange={setMonth} months={months} />
 
             {loading && <div className="text-ink-3 text-sm px-4 py-2">Loading timeline…</div>}
             {error && <div className="text-red-600 text-sm px-4 py-2">{error}</div>}

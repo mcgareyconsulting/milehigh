@@ -21,6 +21,7 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { checkAuth, logout } from '../utils/auth';
 import { fetchNotifications, MENTION_TYPES, TODO_TYPES as STAFF_TODO_TYPES } from '../services/notificationApi';
 import MobileTopBar from './mobile/MobileTopBar';
+import { initialsOf } from './mobile/format';
 import '@fontsource/lato/400.css';
 import '@fontsource/lato/700.css';
 import '@fontsource/lato/900.css';
@@ -35,12 +36,6 @@ const ICONS = {
     desktop: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" /></svg>,
     out: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5M21 12H9" /></svg>,
 };
-
-function initialsOf(name) {
-    const words = String(name || '').trim().split(/\s+/).filter(Boolean);
-    if (!words.length) return '?';
-    return (words.length === 1 ? words[0].slice(0, 2) : words[0][0] + words[1][0]).toUpperCase();
-}
 
 export default function StaffMobileShell() {
     const navigate = useNavigate();

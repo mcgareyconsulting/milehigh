@@ -21,17 +21,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { subReleaseApi } from '../mobile/releaseApi';
 import SubDrawingReader from './SubDrawingReader';
+import { fmtShort as fmtDate } from '../mobile/format';
 
 const fmtSize = (b) => {
     if (b == null) return '';
     if (b < 1024) return `${b} B`;
     if (b < 1024 * 1024) return `${Math.round(b / 1024)} KB`;
     return `${(b / (1024 * 1024)).toFixed(1)} MB`;
-};
-const fmtDate = (iso) => {
-    if (!iso) return '';
-    const d = new Date(iso);
-    return isNaN(d) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
 const ICONS = {

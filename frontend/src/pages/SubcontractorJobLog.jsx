@@ -26,22 +26,12 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 import DaySchedule from '../components/installSchedule/DaySchedule';
 import SubEmpty from '../components/sub/SubEmpty';
 import { useScrollRestore } from '../hooks/useScrollRestore';
+import MonthChips from '../components/mobile/MonthChips';
+import { monthOptions } from '../components/mobile/format';
 import { getSubDaySchedule, getSubReleases } from '../services/subPortalApi';
 
 const POLL_MS = 60000;
 
-/** Month chips: last month through four months out, keyed 'YYYY-MM'. */
-function monthOptions(today = new Date()) {
-    const out = [];
-    for (let i = -1; i <= 4; i += 1) {
-        const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const label = d.toLocaleDateString('en-US', i === 0 || d.getFullYear() === today.getFullYear()
-            ? { month: 'short' } : { month: 'short', year: '2-digit' });
-        out.push({ key, label, isCurrent: i === 0 });
-    }
-    return out;
-}
 
 function UnscheduledCard({ rel, onOpen }) {
     const code = `${rel['Job #']}-${rel['Release #']}`;
@@ -116,17 +106,7 @@ export default function SubcontractorJobLog() {
                         : 'No crew assigned'}
                 </div>
             </div>
-            {crew && (
-                <div className="sub-months" role="tablist" aria-label="Time window">
-                    <button type="button" role="tab" aria-selected={month === null} className={month === null ? 'active' : ''} onClick={() => setMonth(null)}>Upcoming</button>
-                    {months.map((m) => (
-                        <button key={m.key} type="button" role="tab" aria-selected={month === m.key}
-                            className={month === m.key ? 'active' : ''} onClick={() => setMonth(m.key)}>
-                            {m.label}
-                        </button>
-                    ))}
-                </div>
-            )}
+            {crew && <MonthChips month={month} onChange={setMonth} months={months} />}
 
             {!crew && (
                 <SubEmpty icon="calendar" title="No crew assigned yet"

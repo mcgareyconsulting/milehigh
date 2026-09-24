@@ -33,6 +33,7 @@ import { useNavigate, Outlet } from 'react-router-dom';
 import { checkSubcontractorAuth, subcontractorLogout } from '../utils/subcontractorAuth';
 import { subUnreadCount } from '../services/subPortalApi';
 import MobileTopBar from './mobile/MobileTopBar';
+import { initialsOf } from './mobile/format';
 import '@fontsource/lato/400.css';
 import '@fontsource/lato/700.css';
 import '@fontsource/lato/900.css';
@@ -41,12 +42,6 @@ import '../styles/sub-portal.css';
 const UNREAD_POLL_MS = 60000;
 
 /** Two-letter tile for a company with no logo asset ("McGarey Construction" -> "MC"). */
-function initialsOf(name) {
-    const words = String(name || '').trim().split(/\s+/).filter(Boolean);
-    if (!words.length) return '?';
-    return (words.length === 1 ? words[0].slice(0, 2) : words[0][0] + words[1][0]).toUpperCase();
-}
-
 const ICONS = {
     bell: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>,
     out: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5M21 12H9" /></svg>,

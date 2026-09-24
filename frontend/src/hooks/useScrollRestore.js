@@ -9,7 +9,7 @@
  * exports:
  *   useScrollRestore: (key, ready) -> ref to attach to the scroll container.
  * imports_from: [react]
- * imported_by: [pages/SubcontractorJobLog.jsx, pages/SubcontractorTodos.jsx]
+ * imported_by: [pages/SubcontractorJobLog.jsx, pages/mobile/StaffMobileJobLog.jsx]
  * invariants:
  *   - Saves on every scroll (cheap: one sessionStorage write per scroll end via rAF) and on unmount.
  *   - Restores exactly once per mount, only after `ready` is true, so an empty loading shell is

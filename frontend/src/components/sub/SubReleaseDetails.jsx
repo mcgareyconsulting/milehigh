@@ -16,12 +16,7 @@
  *   - No fab hours / fab order / paint / invoicing: absent from the payload, so absent here.
  */
 import { DatePill } from '../installSchedule/DatePill';
-
-const fmtDate = (iso) => {
-    if (!iso) return null;
-    const d = new Date(String(iso).length <= 10 ? `${iso}T00:00:00` : iso);
-    return isNaN(d) ? String(iso) : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-};
+import { fmtDay as fmtDate } from '../mobile/format';
 
 function dateKind(rel) {
     if (!rel?.['Start install']) return null;

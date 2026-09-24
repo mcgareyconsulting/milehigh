@@ -22,31 +22,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import SubEmpty from '../sub/SubEmpty';
+import { addDays, fmtDay, timeAgo, todayDenver } from './format';
 
-const COMPANY_TZ = 'America/Denver';
-const todayDenver = () => new Intl.DateTimeFormat('en-CA', { timeZone: COMPANY_TZ }).format(new Date());
-const addDays = (iso, n) => {
-    const d = new Date(`${iso}T00:00:00`);
-    d.setDate(d.getDate() + n);
-    return new Intl.DateTimeFormat('en-CA').format(d);
-};
-const fmtDue = (iso) => {
-    if (!iso) return '';
-    const d = new Date(`${iso}T00:00:00`);
-    return isNaN(d) ? iso : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-};
-const timeAgo = (dateStr) => {
-    const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-    if (!Number.isFinite(seconds)) return '';
-    if (seconds < 60) return 'just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    if (days < 30) return `${days}d ago`;
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-};
+const fmtDue = fmtDay;
 
 const BUCKETS = [
     { key: 'overdue', label: 'Overdue', tone: 'text-red-700' },

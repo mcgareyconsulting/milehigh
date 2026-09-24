@@ -31,11 +31,14 @@ POST  /brain/subcontractor/releases/<id>/photos                multipart image (
 POST  /brain/subcontractor/releases/<id>/files                 multipart PDF -> next drawing version
 PATCH /brain/subcontractor/releases/<id>/stage                  {stage} in SUB_STAGES
 """
+import re
+
 from flask import jsonify, request, send_file
 
 from app.brain import brain_bp
 from app.brain.job_log.features.pdf_markup.storage import absolute_path as drawing_path
 from app.brain.job_log.features.photos.storage import absolute_path as photo_path
+from app.route_utils import int_arg
 from app.brain.sub_portal.service import (
     SUB_STAGES,
     add_note_for_subcontractor,
@@ -91,14 +94,6 @@ def list_subcontractor_installer_teams():
     return jsonify({'installer_teams': [crew] if crew else []}), 200
 
 
-def _int_arg(name, default, lo, hi):
-    try:
-        value = int(request.args.get(name, default))
-    except (TypeError, ValueError):
-        value = default
-    return max(lo, min(value, hi))
-
-
 @brain_bp.route('/subcontractor/releases/<int:release_id>', methods=['GET'])
 @subcontractor_login_required
 def get_subcontractor_release(release_id):
@@ -116,14 +111,13 @@ def subcontractor_day_schedule():
     """The phone Timeline. The crew is the session's, never a query param: a sub cannot
     ask for another crew's days by editing the URL."""
     sub = get_current_subcontractor()
-    import re
     month = (request.args.get('month') or '').strip()
     if month and not re.fullmatch(r'\d{4}-(0[1-9]|1[0-2])', month):
         return jsonify({'error': 'month must be YYYY-MM'}), 400
     return jsonify(build_day_schedule_for_subcontractor(
         sub,
-        days=_int_arg('days', 14, 1, 31),
-        past_days=_int_arg('past_days', 14, 0, 31),
+        days=int_arg('days', 14, 1, 31),
+        past_days=int_arg('past_days', 14, 0, 31),
         month=month or None,
     )), 200
 

@@ -20,7 +20,7 @@ from flask import request, jsonify
 
 from app.brain import brain_bp
 from app.auth.utils import login_required
-from app.route_utils import handle_errors
+from app.route_utils import handle_errors, int_arg
 from app.logging_config import get_logger
 
 from .service import build_day_schedule, build_month_schedule, build_next_week_schedule
@@ -28,21 +28,11 @@ from .service import build_day_schedule, build_month_schedule, build_next_week_s
 logger = get_logger(__name__)
 
 
-def _int_arg(name, default, lo, hi):
-    """Read a clamped int query arg; a junk value falls back to the default rather
-    than 400-ing, since every caller here is a dashboard poll."""
-    try:
-        value = int(request.args.get(name, default))
-    except (TypeError, ValueError):
-        value = default
-    return max(lo, min(value, hi))
-
-
 @brain_bp.route("/install-schedule/next-week", methods=["GET"])
 @login_required
 @handle_errors("load install schedule")
 def install_schedule_next_week():
-    return jsonify(build_next_week_schedule(days=_int_arg("days", 7, 1, 31)))
+    return jsonify(build_next_week_schedule(days=int_arg("days", 7, 1, 31)))
 
 
 @brain_bp.route("/install-schedule/by-day", methods=["GET"])
@@ -59,8 +49,8 @@ def install_schedule_by_day():
         year, mon = (int(p) for p in month.split("-", 1))
         return jsonify(build_month_schedule(year, mon, installer=installer, stage=stage))
     return jsonify(build_day_schedule(
-        days=_int_arg("days", 14, 1, 31),
-        past_days=_int_arg("past_days", 14, 0, 31),
+        days=int_arg("days", 14, 1, 31),
+        past_days=int_arg("past_days", 14, 0, 31),
         installer=installer,
         stage=stage,
     ))
