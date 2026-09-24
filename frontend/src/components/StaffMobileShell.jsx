@@ -49,6 +49,8 @@ export default function StaffMobileShell() {
     const [unread, setUnread] = useState(EMPTY);
 
     useEffect(() => { checkAuth().then((u) => setUser(u || null)); }, []);
+    // Being here means the phone shell is wanted again: drop the "Desktop site" opt-out.
+    useEffect(() => { try { sessionStorage.removeItem(DESKTOP_OPT_OUT_KEY); } catch { /* ignore */ } }, []);
 
     const refreshUnread = useCallback(() => {
         fetchNotifications({ types: [...MENTION_TYPES, ...STAFF_TODO_TYPES], limit: 50 })
