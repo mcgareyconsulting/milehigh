@@ -6,7 +6,7 @@
  *          date changes, sentences for photo / drawing events, note bodies) newest first, with the
  *          note composer pinned to the bottom above the safe area.
  * exports:
- *   SubReleaseActivity: ({ releaseId, onCount })
+ *   SubReleaseActivity: ({ releaseId, rel, api, onCount }) — api = a components/mobile/releaseApi adapter
  * imports_from: [react, ../../services/subPortalApi, ../ReleaseNotesRail (buildTimeline, groupByDay,
  *                initialsOf), ../ReleaseActivityFeed (formatDateValue)]
  * imported_by: [pages/SubcontractorRelease.jsx]
@@ -18,7 +18,7 @@
  *   - Newest first, no ordering toggle on mobile.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { addSubNote, getSubActivity } from '../../services/subPortalApi';
+import { subReleaseApi } from '../mobile/releaseApi';
 import { buildTimeline, groupByDay, initialsOf } from '../ReleaseNotesRail';
 import { formatDateValue } from '../ReleaseActivityFeed';
 
@@ -64,7 +64,7 @@ function EventRow({ item, subKinds }) {
 
 const SEND = <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 2L11 13" /><path d="M22 2L15 22l-4-9-9-4z" /></svg>;
 
-export default function SubReleaseActivity({ releaseId, onCount }) {
+export default function SubReleaseActivity({ releaseId, rel = null, api = subReleaseApi, onCount }) {
     const [raw, setRaw] = useState(null);
     const [error, setError] = useState(null);
     const [draft, setDraft] = useState('');
@@ -73,13 +73,13 @@ export default function SubReleaseActivity({ releaseId, onCount }) {
 
     const load = useCallback(async () => {
         try {
-            const rows = await getSubActivity(releaseId);
+            const rows = await api.getActivity(releaseId, rel);
             setRaw(rows);
             setError(null);
         } catch (e) {
             setError(e?.response?.data?.error || 'Could not load activity');
         }
-    }, [releaseId]);
+    }, [releaseId, rel, api]);
     useEffect(() => { load(); }, [load]);
 
     const items = useMemo(() => buildTimeline(raw || []), [raw]);
@@ -94,7 +94,7 @@ export default function SubReleaseActivity({ releaseId, onCount }) {
         if (!body || posting) return;
         setPosting(true);
         try {
-            await addSubNote(releaseId, body);
+            await api.addNote(releaseId, rel, body);
             setDraft('');
             await load();
             listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });

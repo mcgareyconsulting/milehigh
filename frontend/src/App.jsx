@@ -45,6 +45,7 @@ import SubcontractorJobLog from './pages/SubcontractorJobLog';
 import SubcontractorRelease from './pages/SubcontractorRelease';
 import StaffMobileTodos from './pages/mobile/StaffMobileTodos';
 import StaffMobileJobLog from './pages/mobile/StaffMobileJobLog';
+import StaffMobileRelease from './pages/mobile/StaffMobileRelease';
 import { useBreakpoint } from './hooks/useBreakpoint';
 import Metrics from './pages/Metrics';
 import UserDirectory from './pages/UserDirectory';
@@ -123,6 +124,7 @@ function AppContent() {
                 <Route index element={<Navigate to="todos" replace />} />
                 <Route path="todos" element={<StaffMobileTodos />} />
                 <Route path="job-log" element={<StaffMobileJobLog />} />
+                <Route path="releases/:id" element={<StaffMobileRelease />} />
                 <Route path="tm-tickets" element={<TMTickets />} />
               </Route>
               {/* Shared releases shell: the toolbar/header stays mounted across

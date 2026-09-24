@@ -4,8 +4,7 @@
  * purpose: /m/job-log — the employee's phone Job Log: the Timeline as the vertical day calendar
  *          (DaySchedule), with ONE lane filter — "Shipping Planning" (every crew's releases sitting
  *          in the Ship Planning stage) first, then each installer crew — and the month chips. A
- *          card opens the normal staff ReleaseHubModal, so every release action a PM has at a desk
- *          is available on the phone.
+ *          card pushes /m/releases/:id — the same phone release page subs get, over staff routes.
  * exports:
  *   StaffMobileJobLog: Page component under StaffMobileShell.
  * imports_from: [react, ../../hooks/useDaySchedule, ../../components/installSchedule/DaySchedule,
@@ -16,10 +15,10 @@
  *     entry; the selection persists in localStorage so a PM lands on the lane they last used.
  *   - Month mode drops relative day labels ("Tomorrow"), like the sub portal.
  */
-import { useEffect, useMemo, useState } from 'react';
-import { useDaySchedule, useReleaseHub } from '../../hooks/useDaySchedule';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useDaySchedule } from '../../hooks/useDaySchedule';
 import DaySchedule from '../../components/installSchedule/DaySchedule';
-import { ReleaseHubModal } from '../../components/ReleaseHubModal';
 import SubEmpty from '../../components/sub/SubEmpty';
 
 const SHIP = { key: 'ship', label: 'Shipping Planning', stage: 'Ship Planning' };
@@ -43,13 +42,14 @@ export default function StaffMobileJobLog() {
     useEffect(() => { try { localStorage.setItem(LANE_KEY, lane); } catch { /* ignore */ } }, [lane]);
 
     const isShip = lane === SHIP.key;
-    const { data, loading, error, reload, roster } = useDaySchedule({
+    const navigate = useNavigate();
+    const { data, loading, error, roster } = useDaySchedule({
         days: 14, pastDays: 14,
         installer: isShip ? null : lane,
         stage: isShip ? SHIP.stage : null,
         month,
     });
-    const { hubJob, openRelease, closeHub } = useReleaseHub();
+    const openRelease = useCallback((card) => navigate(`/m/releases/${card.release_id}`), [navigate]);
 
     const laneLabel = isShip ? SHIP.label : lane;
     const nothing = data && !data.past_due.length && data.summary.scheduled === 0;
@@ -84,9 +84,6 @@ export default function StaffMobileJobLog() {
                     <DaySchedule data={data} roster={roster} crewFilter={laneLabel} onOpenRelease={openRelease} relativeLabels={!month} />
                 </div>
             )}
-
-            <ReleaseHubModal isOpen={!!hubJob} job={hubJob} releaseId={hubJob?.id} viewerUrl={hubJob?.viewer_url}
-                initialTab="details" onClose={closeHub} onJobUpdate={reload} />
         </div>
     );
 }

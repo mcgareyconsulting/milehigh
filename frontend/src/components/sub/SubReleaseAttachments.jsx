@@ -10,7 +10,7 @@
  *          Drawings are the release FAMILY's, so a sub on a splice sees the original's PDF pack.
  *          No markup authoring, no Carmen: desktop-only by the spec's own list.
  * exports:
- *   SubReleaseAttachments: ({ releaseId, code, onCount })
+ *   SubReleaseAttachments: ({ releaseId, code, api, onCount }) — api = a components/mobile/releaseApi adapter
  * imports_from: [react, ../../services/subPortalApi, ./SubDrawingReader]
  * imported_by: [pages/SubcontractorRelease.jsx]
  * invariants:
@@ -19,7 +19,7 @@
  *     because a sub has no "⋯" actions to put there yet.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getSubAttachments, subDrawingFileUrl, subPhotoFileUrl, uploadSubFile, uploadSubPhoto } from '../../services/subPortalApi';
+import { subReleaseApi } from '../mobile/releaseApi';
 import SubDrawingReader from './SubDrawingReader';
 
 const fmtSize = (b) => {
@@ -60,7 +60,7 @@ function PhotoViewer({ src, title, meta, onClose }) {
     );
 }
 
-export default function SubReleaseAttachments({ releaseId, code, onCount }) {
+export default function SubReleaseAttachments({ releaseId, code, api = subReleaseApi, onCount }) {
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
     const [openDrawing, setOpenDrawing] = useState(null);
@@ -71,14 +71,14 @@ export default function SubReleaseAttachments({ releaseId, code, onCount }) {
 
     const load = useCallback(async () => {
         try {
-            const d = await getSubAttachments(releaseId);
+            const d = await api.getAttachments(releaseId);
             setData(d);
             setError(null);
             onCount?.((d.drawings?.length || 0) + (d.photos?.length || 0));
         } catch (e) {
             setError(e?.response?.data?.error || 'Could not load attachments');
         }
-    }, [releaseId, onCount]);
+    }, [releaseId, api, onCount]);
     useEffect(() => { load(); }, [load]);
 
     const drawings = data?.drawings || [];
@@ -93,8 +93,8 @@ export default function SubReleaseAttachments({ releaseId, code, onCount }) {
         try {
             for (const f of files) {
                 const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '');
-                if (isPdf) await uploadSubFile(releaseId, f);
-                else await uploadSubPhoto(releaseId, f);
+                if (isPdf) await api.uploadFile(releaseId, f);
+                else await api.uploadPhoto(releaseId, f);
             }
             await load();
         } catch (err) {
@@ -137,7 +137,7 @@ export default function SubReleaseAttachments({ releaseId, code, onCount }) {
                         {photos.length === 0 && <p className="sub-quiet">No photos on this release yet.</p>}
                         {photos.map((p) => (
                             <button key={p.id} type="button" className="sub-file" onClick={() => setOpenPhoto(p)}>
-                                <span className="icon"><img src={subPhotoFileUrl(releaseId, p.id)} alt="" loading="lazy" /></span>
+                                <span className="icon"><img src={api.photoFileUrl(releaseId, p.id)} alt="" loading="lazy" /></span>
                                 <span className="min-w-0 flex-1">
                                     <span className="fname block">{p.note || p.original_filename || 'Photo'}</span>
                                     <span className="fmeta block">
@@ -166,7 +166,7 @@ export default function SubReleaseAttachments({ releaseId, code, onCount }) {
 
             {openDrawing && (
                 <SubDrawingReader
-                    url={subDrawingFileUrl(openDrawing.release_id, openDrawing.id)}
+                    url={api.drawingFileUrl(openDrawing.release_id, openDrawing.id)}
                     title={openDrawing.original_filename || `Drawing v${openDrawing.version_number}`}
                     meta={`v${openDrawing.version_number} · ${openDrawing.release_label || code}`}
                     onClose={() => setOpenDrawing(null)}
@@ -174,7 +174,7 @@ export default function SubReleaseAttachments({ releaseId, code, onCount }) {
             )}
             {openPhoto && (
                 <PhotoViewer
-                    src={subPhotoFileUrl(releaseId, openPhoto.id)}
+                    src={api.photoFileUrl(releaseId, openPhoto.id)}
                     title={openPhoto.note || openPhoto.original_filename || 'Photo'}
                     meta={[fmtDate(openPhoto.uploaded_at), openPhoto.uploaded_by_name].filter(Boolean).join(' · ')}
                     onClose={() => setOpenPhoto(null)}
