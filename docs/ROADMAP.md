@@ -1,7 +1,7 @@
 ---
 project: MHMW
-updated: 2026-09-16
-verified: origin/main @ e6719b1 (PR #383 splice modal v2)
+updated: 2026-09-23
+verified: origin/main @ c7682a6 (PR #387 improved splice v2)
 config:                       # inputs to derived math — store inputs, never results
   horizon:
     - 2027-10 Procore absolute dead date (renewed 2026-08-15)
@@ -13,7 +13,13 @@ classes:                      # what KIND of work an item is — orthogonal to e
   lane: ongoing, never "done"
   deferred: off the active path, with a stated re-check trigger
 queue:                        # agent-maintained, set by agreement in session
-  now: [BUG-24, BUG-25, BUG-26, T11]
+  now: [T13, T11]
+                        # 2026-09-23: T13 pulled to the front — Daniel: "table the bug sweep and just
+                        # jump into the photo gate". The sweep (BUG-28..31, BUG-23, T12 ③ + its two
+                        # drop leftovers, BUG-24's hatching + list) is TABLED behind it, not dropped.
+                        # BUG-24..27 leave `now`: all four built and merged (PRs #380/#381), the last
+                        # ruling (hand-adjust) captured 9/16. BUG-23 is NOT a T13 prerequisite — the
+                        # inbound Trello move bypasses the gate whatever the cascade does (OQ6).
                         # 2026-09-16: order unchanged. The 9/16 session answered the two rulings
                         # BUG-24/25 were waiting on (hand-adjusted bars; mirror keeps start+due)
                         # and REVERSED Open question 5 — default crew back to 2 (PR #381).
@@ -34,7 +40,13 @@ queue:                        # agent-maintained, set by agreement in session
                         # T1 drops to next with its core shipped (PR #361/#366) and its 2026-09-02
                         # scope unlanded. First time since 2026-08-15 that W5 is not queue.now —
                         # a deliberate pause on the front lane, not a re-ranking of it.
-  next: [T12, T13, T9, N19, T14, AUD2, T1, N9, T2, AUD1]
+  next: [T12, T9, N19, T14, AUD2, T1, N9, T2, AUD1]
+                        # 2026-09-23: T13 promoted to now. T12 keeps the head with ①② shipped and ③ +
+                        # the two drop leftovers open. The Paint Complete → Paint QC RENAME IS HELD
+                        # (Daniel) until the gate has landed — a stage-name change ripples far further
+                        # (Trello list map, fixed tiers, column/tray sets, canonicalizing migrations,
+                        # live rows and cards) than the group split did, and the gate fires on entering
+                        # `Paint Complete` today exactly as it will on `Paint QC`.
                         # 2026-09-16 (late): T9 keeps its slot — the 9/16 splice modal spec shipped
                         # (PR #383), but outcome (c) punch mirror is still unbuilt.
                         # 2026-09-16: N19 home page added (un-parks D2) — Daniel: "elevating home
@@ -879,7 +891,52 @@ change.
 - 2026-09-17 · note · src — — **existing tests encode the old tray rule and now fail**: `frontend/src/utils/unassignedLane.test.js` and `components/GanttChart.staging.test.jsx` both place undated `Paint Complete` / `Store at MHMW` rows in the Unassigned tray. They are asserting the duplicate-membership behaviour ① exists to remove, so they need rewriting to the new split, not reverting. Not done in the build session (tests explicitly out of scope there)
 
 ### T13 · Two-stage Photo Evidence Gate + partial shipments
-*W5 · not-started · class build · due — · deps — · owner daniel · src thisweek-2026-09-14#§5.4 · upd 2026-09-16*
+*W5 · in-progress · class build · due — · deps — · owner daniel · src thisweek-2026-09-14#§5.4 · upd 2026-09-23*
+
+> **Status 2026-09-23 — the department photo gate is BUILT on `feature/photo-gate`,
+> armed, unmerged.** The rule: a stage change that crosses **forward** into the next
+> department owes a photo tagged with that department's **entry stage**, or a written
+> reason there is none. Departments are the `stage_group` axis, now four —
+> FABRICATION → **PAINT** → READY_TO_SHIP → COMPLETE — so the gates fall out of the
+> data rather than a hand-kept list: **Fab → Paint at `Welded QC`, Paint → Ship at
+> `Paint Complete`** (Paint QC once renamed), **Ship → Install at `Ship Complete`**. A
+> jump that skips the entry stage (Ship Planning → Complete) owes the same photo.
+> Backward moves never gate; undo never gates.
+> **PAINT was split out of READY_TO_SHIP additively** (`Welded QC` + `Paint Start` —
+> the exact pair `readyToShipColumn.js` already called `PAINT_STAGES`): it wears
+> READY_TO_SHIP's green everywhere a group picks a colour, shares its `fab_order`
+> space (the Welded QC handoff re-tier excludes both), and sits in the same "active"
+> set (installer-timeline query). Every filter, tray, column and Trello mapping is
+> stage-name keyed and untouched. **Migration owed:**
+> `migrations/backfill_paint_stage_group.py` — one idempotent data UPDATE (43 sandbox
+> rows), `--dry-run` supported; the API already serializes the group from the stage,
+> the DB-side readers are what need it.
+> **v0 revived, not rewritten** (Daniel: it was never deployed — timing, not a defect):
+> `STAGE_PHOTO_GATE_ENABLED = True`, `STAGE_PHOTO_GATES` derived from
+> `GATE_ENTRY_STAGE`, the rule in `features/stage/gate.py`, `UpdateStageCommand` the
+> one enforcer (`422 photo_required` + `requested_stage`). The dialog grew the **"No
+> photo available" → required reason** exit [#L107–L113] with the T&M ticket form's
+> touch targets; the reason rides on the stage event (`gate`, `gate_exception`) and
+> photos land in the release's ordinary photo set, per [#L81]. **Writers covered:**
+> Job Log row, release hub, and the Timeline ship-lane drops — the drop asks for the
+> photo *before* writing anything, since the date-first path would otherwise land the
+> date and bounce the stage. One frontend copy of the map now (`utils/stageGroups.js`,
+> `gateStageFor`), replacing three. **Known bypasses, recorded not fixed:** inbound
+> Trello list moves (Open question 6, dies with T4); Install Prog %/X writing `Install
+> Start`/`Install Complete` through `update_job_stage_fields`; creating a release or
+> splice directly at a gated stage.
+> **Not built:** per-department checklists (a per-stage config slot, empty — Daniel:
+> build without, the T&M ticket form is the pattern), location + attestation fields,
+> partial shipments / shipment events, the exceptions queue, photo markup inside the
+> gate, and the Paint QC rename (HELD). **Tests (pass done 2026-09-23):** backend
+> **1646 passed** (the only 4 failures are `main`'s pre-existing T&M mail tests,
+> `APP_BASE_URL`), frontend **489 passed**. 42 tests the gate had broken were repaired
+> and **~127 new tests** cover the rule, the mapping, every boundary, the exception
+> path, the N5 intercept, the route shape, the tier rule, the timeline query, the
+> backfill script, and the dialog's multi-photo queue.
+> **Fixed en route:** the v0 frontend's 422 recovery read `error.response.data`, but
+> `jobsApi` wraps axios errors, so the body was never found; `stageGateFromError`
+> reads both shapes.
 
 Effort L. **Package P1.** A **controlled status gate**, not a reminder: moving a
 release to **`Paint Complete`** or to **`Ship Complete` / Shipped** cannot finish
@@ -966,6 +1023,12 @@ location + shipment photos in the work package.
 - 2026-09-16 · transcript · src bill-2026-09-16#L1–L112 — Bill opened the session on it: *"a QC at every stage change going forward… red stars… you can't ever click the button to say submit it or change stage"* [#L2–L9]; *"as soon as I click welded QC, that's going to pop up and say prove it"* [#L80]. Shape: **photo required, note optional** [#L92]; **"no photos available" forces a comment** — the Photo Exception [#L111]; a short **per-department checklist** (~4 facts: complete package, all parts photographed, misc/hardware accounted for) [#L15–L30]; gate data lands in the normal description/photos, not a side store [#L81]; **markup on photos** with the PDF tool [#L95–L104]
 - 2026-09-16 · transcript · src bill-2026-09-16#L30, L80 — gates named: **Welded QC** and **Paint QC** — answers the 9/14 *"confirm Welded QC is really dropped"*: **it is not**; the parked v0 (`adb0937`, Welded QC + Paint Complete) was the right pair
 - 2026-09-16 · notes · src bill-2026-09-16 — behavior confirmed; it is a **cross-department** check fired on a **stage-group boundary** crossing (`STAGE_TO_GROUP`: FABRICATION → READY_TO_SHIP lands on Welded QC; READY_TO_SHIP → COMPLETE lands on Ship Complete). **Paint QC sits inside READY_TO_SHIP**, so a pure group rule misses the second gate Bill named — **Open question 8**. Per-department checklist items owed by Bill/Louie
+- 2026-09-23 · decision · src — — Daniel: **T13 to the front, the bug sweep tabled** ("we want to photo gate on department changes, that's the goal"). Three answers that unblock it without Bill: **build without the checklists** (per-stage slot, empty; the T&M ticket form is the pattern — "popular"); **the v0 gate was never deployed — wasn't the right time, non-issue**, so `adb0937` is clean infrastructure to revive; **Paint Complete → Paint QC rename HELD** until the gate lands. BUG-23 dropped as a prerequisite: the inbound Trello move bypasses the gate whatever the cascade does. **Still to confirm with Bill:** the gate list is Welded QC / Paint QC / Ship Complete and nothing else
+- 2026-09-23 · decision · src — — **Open question 8 answered: Paint is its own department.** Measured first: `stage_group` is a stored, derived column with three values (sandbox: FABRICATION 59 rows, READY_TO_SHIP 81, COMPLETE 661) and Paint has no group — Welded QC, both Paint stages and the shipping holds all sit in one bucket, so a "group changed" rule sees two gates and never the Paint → Ship handoff. Two splits considered: **P1** PAINT = {Welded QC, Paint Start} → crossings land on Welded QC / Paint Complete / Ship Complete, exactly Bill's list; P2 PAINT = {Paint Start, Paint QC} → an extra gate at Paint Start nobody asked for. P1 it is, and Welded QC *opens* Paint rather than closing Fab — which `tier.py` already called "the Fab → Paint handoff". Daniel's constraint: *"split groups but keep behavior the same"* — so PAINT is display-identical to READY_TO_SHIP (same tint, same dup colour, same active set, same fab_order space) and every stage-name-keyed consumer is untouched. Blast radius counted before deciding: one backend dict + its group-keyed twin, one hardcoded active-groups list (`routes.py`, the trap — PAINT rows would have silently dropped out of the installer timeline), one word in the tier rule, three frontend copies of the map (now one), two palettes, `groupOrder`, and a 43-row backfill
+- 2026-09-23 · build · src — — **built on `feature/photo-gate`** (see Status). Backend: `helpers.py` (PAINT, `STAGE_GROUP_ORDER`, `GATE_ENTRY_STAGE`), new `features/stage/gate.py`, `stage/command.py` (flag on, `gate_exception_note`, event payload `gate`/`gate_exception`), `routes.py` (body + 422 shape, active groups), `fab_order/tier.py`, `migrations/backfill_paint_stage_group.py`. Frontend: new `utils/stageGroups.js`, `StagePhotoGateModal` (no-photo exit, `requestedStage`), gate wiring in `JobsTableRow`, `JobDetailsBody`, `GanttChart` (ship-lane drops park in `pendingGate` until confirmed), `useJobsFilters`/`jobLogPdf` read the shared map, `jobsApi.updateStage` takes the note. Rule exercised on 17 transitions by hand; helper/tier/gate suites green (57/59, the two being gated writes). Verification beyond that is the deliberate test pass to follow
+- 2026-09-23 · decision · src — — **Open question 6 closed: the inbound Trello move is allowed through, nothing built.** Daniel: *"do not want to overkill for a dead tech stack"* — Bill may call the Trello decommission soon. Notify-and-chase was designed and costed (see OQ6) and shelved with a re-check trigger. The gate is hard on every Brain surface and open on the Trello path, by choice
+- 2026-09-23 · build · src thisweek-2026-09-14#§5.4.2 — **multi-photo** (the package's "multi-photo (mobile/tablet/desktop)" field, which the v0 dialog lacked — one file per pick) built into the gate dialog: the library picker takes **up to 10 per pick** (Daniel's cap; extras dropped with a message, pick again for more), one upload queue so two quick picks or a mid-batch retry still go one at a time, a tile per photo from pick to landed with a **real byte-progress bar** (XHR) on the one in flight, "3 of 5" counter, ✓ on landed, **Retry** on the failed one without stopping the rest, and **Confirm held while anything is still uploading** so the stage never moves ahead of its evidence. Camera stays one shot per press (that is what mobile browsers give) and the button reads "Take another" once one has landed. Costed but not built: `captured_at` from EXIF `DateTimeOriginal` before compression strips it — one nullable column, feeds N9's stamp — and the same multi-select on the hub's photo pane (`JobDetailsBody.jsx:811`, still single-file)
+- 2026-09-23 · tests · src — — **test pass, on request after Daniel confirmed the behavior in the app.** Three parallel passes, no product code touched, no product bugs found. **Repairs (42):** 7 backend tests got a `tag_gate_photo(release, stage)` helper (new in `tests/conftest.py`) for the stage the transition owes; 31 more sat in five files that already declared themselves orthogonal to the gate via an autouse fixture that emptied the old `STAGE_PHOTO_GATES` set — that fixture now flips the real master switch instead (one line per file; flip back to per-test photos if the call is wrong); the 4 Timeline ship-lane tests confirm a mocked gate dialog before asserting their original writes. **New (≈127):** `tests/test_stage_groups.py` (25 — the 18-row `gate_stage_for` table, mapping integrity, `STAGE_PHOTO_GATES`, error fields), `tests/brain/test_department_photo_gate.py` (24 — all three boundaries, wrong-stage photo rejected, skip-the-entry-stage, same-group/backward/undo ungated, `stage_group` round-trips PAINT, exception note → `gate`/`gate_exception` on the event, whitespace note rejected, N5 intercept still gated on the requested stage, 422 body shape, tier rule, `/brain/gantt-data` includes a PAINT row), `tests/test_backfill_paint_stage_group.py` (4 — dry-run, exact rows, idempotent, `PAINT_STAGES` matches the map), `frontend/src/utils/stageGroups.test.js` (25), `frontend/src/components/StagePhotoGateModal.test.jsx` (13 — Confirm gating, no-photo reason path, 10-cap notice, FormData carries `stage`, byte-progress + "n of m", Retry per tile and "Retry failed", Confirm held while uploading, camera label), + 2 in `GanttChart.shipLane.test.jsx` (drop parks with no write until confirmed; Cancel writes nothing). One observation recorded in a test comment: `test_job_comp_x_and_stage_command_reach_the_same_state` passes only because the Install Prog path bypasses the gate — the known bypass, now documented where it bites
 
 ### T14 · iPad / PC parity
 *W5 · not-started · class build · due — · deps — · owner daniel · src thisweek-2026-09-14#§7 · upd 2026-09-14*
@@ -2600,6 +2663,17 @@ are never reused or shifted up.
    only at T4. Recommended: **auto-raise the exception** — it is honest, visible,
    needs no Trello-side behavior, and uses the queue the package already asks for.
    **Answers: Daniel, then tell Bill.**
+   **Answered 2026-09-23 (Daniel): allow it, build nothing.** A cold block is
+   unenforceable — the card has already moved, so "blocking" means either refusing
+   to mirror (Trello and Brain disagree, BUG-25 reintroduced on purpose) or bouncing
+   the card (fights the user, echoes, races). The notify-and-chase design was costed
+   (S–M: stamp the inbound stage event `gate_source: trello`, derive a "photo owed"
+   chip, notify the mover via `User.trello_id` → PM by initials → admins) and
+   **deliberately not built**: Bill may call the Trello decommission soon, and it is
+   overkill for a stack on its way out. The gate is hard where the Brain owns the
+   UI and open on the Trello path; the bypass is recorded on T13 and dies with T4.
+   Re-check trigger: Trello outliving 2026 Q4, or Bill asking why a release reached
+   Ship Complete with no photo. **Closed.**
 7. **Paint Complete queue vs the Unassigned tray** *(opened 2026-09-14)* Gates
    **T12 ①**. The tray's 2026-08-29 intake already includes `Paint Complete`, so an
    unassigned Paint Complete release would sit in both columns; and N5's intercept
@@ -2617,6 +2691,12 @@ are never reused or shifted up.
    **Welded QC and Paint QC** [bill-2026-09-16#L30]; Paint QC is inside READY_TO_SHIP.
    Options: add Paint QC as an explicit in-group gate, or treat Paint as its own
    department boundary. **Answers: Daniel, confirm with Bill.**
+   **Answered 2026-09-23 (Daniel): Paint is its own department.** `PAINT` split out
+   of READY_TO_SHIP as `{Welded QC, Paint Start}` — additively, display-identical to
+   READY_TO_SHIP — so the group rule alone yields exactly Bill's three gates (Welded QC,
+   Paint Complete/QC, Ship Complete) with no exception list. Built on
+   `feature/photo-gate`; the T13 trail carries the measurement and the P1-vs-P2
+   reasoning. Left for Bill only to confirm the list has no fourth entry. **Closed.**
 
 ---
 
@@ -2705,6 +2785,8 @@ Append-only log — never edited, never pruned.
 - 2026-09-18 · **BUG-32** · **filed and built** — Bill, from experimenting with splicing: the hours *"are not updating in all locations"* — the Splices tab nets them, the Job Log and the sub assignments do not. Filed as a display/billing bug on shipped T9, not a splice-rule change: the pool stays whole on the parent (every guard measures against it) and the netting moved into the read paths, behind one `install_hours_view` so the Job Log, the release modal, Subs → Invoice Paid (and its export), the install schedule's crew capacity and the `Install HRS` KPI total cannot drift from each other again. Found and fixed en route: a splice never touches its parent's row, so the Job Log's cursor poll would have kept serving the stale original until someone cleared localStorage. **Left open, and it wants a ruling:** the parent's `comp_eta` is still computed from the gross pool, so a spliced release's projected install window is longer than the hours it still carries. No migration — no schema change. src —
 
 - 2026-09-16 · **merged to `main`** · PRs #381–#383, patch notes v2.0.383 — **#381** default crew back to 2 + BUG-25 mirror keeps start + due; **#382** Invoice Paid export + filters (I4); **#383** T9 splice modal v2 (Splices tab, required scope + installer, additional hours outside the pool). **Migrations owed before the splice UI works:** `add_parent_release_id_to_releases.py` → `add_splice_additional_install_hrs.py`. src pr#381, pr#382, pr#383
+
+- 2026-09-23 · **roadmap reconciled + T13 built** — walked `main` @ c7682a6 against the 9/14 package and the 9/16 transcript: everything from both is either shipped (BUG-24..27, T9 a+b, T12 ①②, BUG-32, splice hours math — PRs #384–#387) or filed; **all owed migrations confirmed run** (Daniel), so the splice and issues features are live. Daniel's queue call: **T13 to the front, bug sweep tabled** (sequence recorded on `queue.now`: Sweep A Timeline cleanup → BUG-28 → T13 was proposed, then collapsed to "just the gate"). Three rulings made in session without Bill — build without checklists, v0 was never deployed so revive it, hold the Paint QC rename — and **Open question 8 closed** with PAINT as its own `stage_group`. Gate **built on `feature/photo-gate`, unmerged**; one data backfill owed (`backfill_paint_stage_group.py`); 38 + 4 existing tests now fail on ungated cross-department writes and are left for the test pass. src —
 
 ---
 

@@ -13,7 +13,7 @@ from unittest.mock import patch
 from app.models import Releases, ReleaseEvents, db
 # Defaults (Cut Start / FABRICATION / fab_order 10 / "Test Job") match the root
 # factory exactly, so this is a straight alias.
-from tests.conftest import make_release as _make_release
+from tests.conftest import make_release as _make_release, tag_gate_photo
 
 
 @pytest.fixture(autouse=True)
@@ -42,6 +42,7 @@ class TestStageCompleteCascade:
                 start_install_formula=None,
                 start_install_formulaTF=False,  # hard date present
             )
+            tag_gate_photo(r, "Ship Complete")   # the jump to Complete still owes the Ship handoff photo
             db.session.commit()
 
             from app.brain.job_log.features.stage.command import UpdateStageCommand
@@ -75,6 +76,7 @@ class TestStageCompleteCascade:
                 start_install=None,
                 start_install_formulaTF=True,  # formula-driven, no hard date
             )
+            tag_gate_photo(r, "Ship Complete")
             db.session.commit()
 
             from app.brain.job_log.features.stage.command import UpdateStageCommand
@@ -102,6 +104,7 @@ class TestStageCompleteCascade:
                 start_install_formula=None,
                 start_install_formulaTF=False,  # hard date present
             )
+            tag_gate_photo(r, "Ship Complete")
             db.session.commit()
 
             from app.brain.job_log.features.stage.command import UpdateStageCommand
@@ -140,6 +143,7 @@ class TestStageCompleteCascade:
     def test_stage_to_complete_sets_job_comp(self, app):
         with app.app_context():
             r = _make_release(1, "A", stage="Weld Start", job_comp=None)
+            tag_gate_photo(r, "Ship Complete")
             db.session.commit()
 
             from app.brain.job_log.features.stage.command import UpdateStageCommand

@@ -18,6 +18,10 @@ invariants:
   - Scheduling recalculation failure is logged but does not roll back the update
   - parent_event_id links this stage change to the event that caused it, so the undo endpoint
     reverts both halves of a single gesture as one bundle (mirrors AssignInstallerCommand)
+  - Department photo gate (T13): a forward stage_group crossing owes a photo tagged with the
+    destination's entry stage (features/stage/gate.py) or a gate_exception_note; the requested
+    stage is what is checked, before the N5 intercept; undo never gates; the outcome is recorded
+    on the stage event as `gate` / `gate_exception`
 """
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -27,6 +31,12 @@ from app.models import Releases, db
 from app.services.job_event_service import JobEventService
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
+from app.api.helpers import GATE_ENTRY_STAGE
+from app.brain.job_log.features.stage.gate import (  # noqa: F401 — StagePhotoRequiredError re-exported for routes/tests
+    StagePhotoRequiredError,
+    gate_photo_exists,
+    gate_stage_for,
+)
 from app.brain.job_log.features.fab_order.tier import apply_fab_order_for_stage
 from app.brain.job_log.features.start_install.neutralize_install_date_cascade import (
     neutralize_install_date_cascade,
@@ -41,28 +51,19 @@ from app.brain.job_log.features.start_install.shipping_stage_date_discipline imp
 logger = get_logger(__name__)
 
 
-# Master switch for the stage photo gate. Held OFF for now — the gate
-# infrastructure below stays in place so flipping this back to True re-enables
-# it with no other changes. The frontend has a matching flag
-# (STAGE_PHOTO_GATE_ENABLED in JobsTableRow.jsx); keep the two in sync.
-STAGE_PHOTO_GATE_ENABLED = False
+# Master switch for the department photo gate. ON since 2026-09-23 (T13): every
+# forward department crossing — Fab → Paint, Paint → Ship, Ship → Install — owes
+# a handoff photo or a written reason there is none. Built 2026-06-07 behind
+# this flag and never deployed (timing, not a defect); the rule now comes from
+# the stage_group axis (features/stage/gate.py) instead of a hand-kept set. The
+# frontend pre-opens the gate dialog from the same rule (utils/stageGroups.js);
+# this check is the authoritative one. Flip to False to disarm without a deploy
+# of anything else.
+STAGE_PHOTO_GATE_ENABLED = True
 
-# Stages that require a stage-tagged photo before a release may enter them
-# (only enforced when STAGE_PHOTO_GATE_ENABLED is True). The frontend opens the
-# upload modal proactively; this set is the authoritative server-side gate.
-STAGE_PHOTO_GATES = {"Welded QC", "Paint Complete"}
-
-
-class StagePhotoRequiredError(Exception):
-    """Raised when a stage change is blocked because its required photo is missing.
-
-    Carries the gated `stage` so the route can tell the client which stage needs
-    a photo uploaded.
-    """
-
-    def __init__(self, stage: str):
-        self.stage = stage
-        super().__init__(f"A photo tagged '{stage}' is required to move to {stage}")
+# Kept for readers and tests that ask "which stages are gated": the entry stage
+# of every gated department. Derived, never edited by hand.
+STAGE_PHOTO_GATES = frozenset(GATE_ENTRY_STAGE.values())
 
 
 @dataclass
@@ -120,6 +121,11 @@ class UpdateStageCommand:
     # carrying a parent_event_id and reverts the whole bundle, so linking here is what keeps
     # undoing the date from leaving the release stranded in the stage the date put it in.
     parent_event_id: Optional[int] = None
+    # The "no photos available" exit from the department gate: a written reason the
+    # handoff has no photo. Satisfies the gate in place of a tagged photo and is kept
+    # on the stage event (`gate_exception`) so the trail says why the proof is words.
+    # Ignored when the transition owes no gate.
+    gate_exception_note: Optional[str] = None
 
     def execute(self) -> StageUpdateResult:
         from app.api.helpers import get_stage_group_from_stage
@@ -131,31 +137,27 @@ class UpdateStageCommand:
 
         old_stage = job_record.stage if job_record.stage else 'Released'
 
-        # Photo gate: certain stages require a photo (tagged with that stage)
-        # before a release may enter them. We check the requested stage before
-        # the ASAP intercept so "Paint Complete" still demands its photo even
-        # when it gets rerouted to Ship Planning. Skipped on undo (restoring a
-        # prior valid state) and when the stage isn't actually changing.
-        if (
-            STAGE_PHOTO_GATE_ENABLED
-            and self.stage in STAGE_PHOTO_GATES
-            and self.undone_event_id is None
-            and old_stage != self.stage
-        ):
-            from app.models import ReleasePhoto
-            has_photo = db.session.query(ReleasePhoto.id).filter(
-                ReleasePhoto.release_id == job_record.id,
-                ReleasePhoto.stage == self.stage,
-                ReleasePhoto.is_deleted.is_(False),
-            ).first() is not None
-            if not has_photo:
+        # Department photo gate (T13): a forward crossing between stage groups owes a
+        # photo tagged with the destination department's entry stage, or a written
+        # reason there is none. Checked against the REQUESTED stage, before the N5
+        # intercept below, so "Paint Complete" still demands its photo even when it
+        # gets rerouted to Ship Planning. Skipped on undo (restoring a prior valid
+        # state). Inbound Trello list moves never come through here — that bypass is
+        # recorded on the roadmap (T13, Open question 6) and dies with T4.
+        gate_stage = None
+        gate_note = (self.gate_exception_note or '').strip() or None
+        if STAGE_PHOTO_GATE_ENABLED and self.undone_event_id is None:
+            gate_stage = gate_stage_for(old_stage, self.stage)
+        if gate_stage is not None and gate_note is None:
+            if not gate_photo_exists(job_record.id, gate_stage):
                 logger.debug(
                     "stage_gate_blocked",
                     job=self.job_id,
                     release=self.release,
-                    stage=self.stage,
+                    stage=gate_stage,
+                    requested_stage=self.stage,
                 )
-                raise StagePhotoRequiredError(self.stage)
+                raise StagePhotoRequiredError(gate_stage, requested_stage=self.stage)
 
         # Paint Complete intercept (N5): hard start_install OR ASAP rips the release
         # straight to Ship Planning (widens the earlier ASAP-only intercept). Override
@@ -182,6 +184,13 @@ class UpdateStageCommand:
                 event_payload['hard_date_intercepted'] = True
             if was_asap:
                 event_payload['asap_intercepted'] = True
+
+        # The gate's trail lives on the stage event itself: which handoff was owed and
+        # whether words stood in for the photo. Absent when nothing was owed.
+        if gate_stage is not None:
+            event_payload['gate'] = gate_stage
+            if gate_note is not None:
+                event_payload['gate_exception'] = gate_note
 
         if self.undone_event_id is not None:
             event_payload['undone_event_id'] = self.undone_event_id

@@ -196,6 +196,36 @@ def make_release(job, release, stage="Cut Start", stage_group="FABRICATION",
     return r
 
 
+def tag_gate_photo(release_row, stage, *, is_deleted=False):
+    """Attach a ReleasePhoto tagged `stage` to `release_row`.
+
+    Satisfies the department photo gate (features/stage/gate.py) for a transition that
+    owes that stage's photo — Fab→Paint: 'Welded QC', Paint→Ship: 'Paint Complete',
+    Ship→Install: 'Ship Complete' (see gate_stage_for). Flushes, not commits, like
+    make_release. Columns mirror tests/brain/test_stage_photo_gate.py.
+    """
+    from app.models import ReleasePhoto, db
+    photo = ReleasePhoto(
+        release_id=release_row.id,
+        storage_key=f"{release_row.id}/gate-{stage}.png",
+        mime_type="image/png",
+        file_size_bytes=10,
+        uploaded_by_user_id=1,
+        stage=stage,
+        is_deleted=is_deleted,
+    )
+    db.session.add(photo)
+    db.session.flush()
+    return photo
+
+
+def gate_stage_for(old_stage, new_stage):
+    """The entry stage whose photo a transition owes, or None — the product rule itself,
+    imported lazily so conftest stays importable before the app is."""
+    from app.brain.job_log.features.stage.gate import gate_stage_for as _gate_stage_for
+    return _gate_stage_for(old_stage, new_stage)
+
+
 def make_subcontractor(email, *, company_name="Acme Electrical", contact_name="Sam Sub",
                         is_active=True, invited_by_user_id=None, accepted=False,
                         password_hash="x", **extra):

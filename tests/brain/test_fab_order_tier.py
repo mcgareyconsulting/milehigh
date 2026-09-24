@@ -19,7 +19,7 @@ from app.brain.job_log.features.fab_order.tier import (
     plan_fab_order_for_stage,
 )
 from app.models import ReleaseEvents, Releases, db
-from tests.conftest import make_release as _make_release
+from tests.conftest import make_release as _make_release, tag_gate_photo
 
 
 @pytest.fixture(autouse=True)
@@ -148,6 +148,7 @@ class TestWritePathsAgree:
     def test_stage_command_applies_the_tier(self, app):
         with app.app_context():
             r = _make_release(1, "A", stage="Paint Complete", stage_group="READY_TO_SHIP", fab_order=2)
+            tag_gate_photo(r, "Ship Complete")   # Ship → Install handoff owes its photo
             db.session.commit()
 
             result = _run_stage(1, "A", "Ship Complete")
@@ -179,6 +180,8 @@ class TestWritePathsAgree:
                                       stage_group="READY_TO_SHIP", fab_order=2)
             via_command = _make_release(2, "B", stage="Paint Complete",
                                         stage_group="READY_TO_SHIP", fab_order=2)
+            # Only the command path is gated; the job_comp route bypasses it (known).
+            tag_gate_photo(via_command, "Ship Complete")
             db.session.commit()
 
             resp = admin_client.patch("/brain/update-job-comp/1/A", json={"job_comp": "X"})

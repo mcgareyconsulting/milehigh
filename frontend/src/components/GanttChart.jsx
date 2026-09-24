@@ -138,6 +138,8 @@ import { installCompleteDate } from '../utils/scheduling';
 import { API_BASE_URL } from '../utils/api';
 import { ReleaseHubModal } from './ReleaseHubModal';
 import { PdfMarkupModal } from './PdfMarkupModal';
+import { StagePhotoGateModal } from './StagePhotoGateModal';
+import { gateStageFor, stageGateFromError } from '../utils/stageGroups';
 import { checkAuth } from '../utils/auth';
 
 const addDays = (isoDate, days) => {
@@ -790,6 +792,7 @@ function GanttChart({ filterComplete = false }) {
     const [dragRow, setDragRow] = useState(null);                   // raw release row currently under the pointer (drives DragOverlay)
     const [dropHint, setDropHint] = useState(null);                 // {lane, date, leftPx} — the day the drop would write
     const [dropError, setDropError] = useState(null);               // message shown when a scheduling write is rejected
+    const [pendingGate, setPendingGate] = useState(null);           // a ship-lane drop waiting on its handoff photo: {job, release, releaseId, stage, requestedStage, commit(note)}
     const [trayCollapsed, setTrayCollapsed] = useState(readTrayCollapsed);   // tray folded to a rail, giving the width back to the chart
     const [readyCollapsed, setReadyCollapsed] = useState(readReadyCollapsed); // Ready-to-Ship column folded to a rail, same deal
     const [collapsedLanes, setCollapsedLanes] = useState(readCollapsedLanes);   // lanes folded to their sidebar strip
@@ -1433,6 +1436,11 @@ function GanttChart({ filterComplete = false }) {
                 setDropError(`Can't mark ${job}-${release} ${toShipStage} — ${outcome.reason}.`);
                 return;
             }
+            // The gate dialog's "no photo available" reason rides along only when there is one,
+            // so an ordinary drop still makes the same call the Job Log dropdown does.
+            const writeStage = (gateNote) => (gateNote
+                ? jobsApi.updateStage(job, release, toShipStage, { gateExceptionNote: gateNote })
+                : jobsApi.updateStage(job, release, toShipStage));
             const shipColumn = outcome.writesDate ? dropDateFor(toLane, activatorEvent, delta) : null;
             if (outcome.writesDate && !shipColumn) return;   // geometry not ready — write nothing
             const dropDate = shipColumn ? installDateForShipColumn(shipColumn) : null;
@@ -1451,11 +1459,11 @@ function GanttChart({ filterComplete = false }) {
                     start_install_no_color: false,
                     comp_eta_effective: installCompleteDate(dropDate, row['Install HRS'], row.num_guys) || dropDate,
                 };
-                call = async () => {
+                call = async (gateNote = null) => {
                     await jobsApi.updateStartInstall(job, release, dropDate);
                     if (ROLLS_TO_SHIP_PLANNING.has(String(row['Stage'] ?? '').trim())) return;
                     try {
-                        await jobsApi.updateStage(job, release, toShipStage);
+                        await writeStage(gateNote);
                     } catch (stageErr) {
                         // The DATE landed, and it is the write the drop was aimed at. Letting this
                         // throw would roll the whole drop back optimistically and paint a state the
@@ -1470,7 +1478,7 @@ function GanttChart({ filterComplete = false }) {
                 };
             } else {
                 optimistic = { Stage: toShipStage };
-                call = () => jobsApi.updateStage(job, release, toShipStage);
+                call = (gateNote = null) => writeStage(gateNote);
             }
         } else if (toTray) {
             if (!before.installer) return;   // already unassigned — nothing to write
@@ -1498,17 +1506,37 @@ function GanttChart({ filterComplete = false }) {
             call = () => jobsApi.updateStartInstall(job, release, date, toLane);
         }
 
-        patchJob(row.id, optimistic);
-        try {
-            await call();
-        } catch (err) {
-            patchJob(row.id, before);   // put the card back where it came from
-            const verb = toShipStage ? 'move' : 'schedule';
-            setDropError(
-                `Couldn't ${verb} ${job}-${release}: ${err?.message || 'the update was rejected'}`
-            );
-            console.error('Timeline drag failed:', job, release, err);
+        const commit = async (gateNote = null) => {
+            patchJob(row.id, optimistic);
+            try {
+                await call(gateNote);
+            } catch (err) {
+                patchJob(row.id, before);   // put the card back where it came from
+                // The server's gate can still say no (a stale row, say): ask for the
+                // photo rather than only reporting the bounce.
+                const gate = stageGateFromError(err);
+                if (gate) {
+                    setPendingGate({ job, release, releaseId: row.id, ...gate, commit });
+                    return;
+                }
+                const verb = toShipStage ? 'move' : 'schedule';
+                setDropError(
+                    `Couldn't ${verb} ${job}-${release}: ${err?.message || 'the update was rejected'}`
+                );
+                console.error('Timeline drag failed:', job, release, err);
+            }
+        };
+
+        // Department photo gate (T13): a ship-lane drop that crosses into the next department
+        // (Paint → Ship, Ship → Install) owes that department's handoff photo. Ask BEFORE
+        // writing anything — the date-first path above would otherwise land the date and
+        // bounce the stage, leaving a half-done drop. Cancel writes nothing; the card never moved.
+        const gate = toShipStage ? gateStageFor(before.Stage, toShipStage) : null;
+        if (gate) {
+            setPendingGate({ job, release, releaseId: row.id, stage: gate, requestedStage: toShipStage, commit });
+            return;
         }
+        await commit();
     };
 
     return (
@@ -2039,6 +2067,23 @@ function GanttChart({ filterComplete = false }) {
                     {dropError}
                     <span className="ml-2 opacity-70">(dismiss)</span>
                 </div>
+            )}
+            {/* Department photo gate for a ship-lane drop: the drop is parked in pendingGate
+                until a photo is attached or a reason given, then committed as it would have been. */}
+            {pendingGate && (
+                <StagePhotoGateModal
+                    isOpen
+                    releaseId={pendingGate.releaseId}
+                    title={`${pendingGate.job}-${pendingGate.release}`}
+                    gateStage={pendingGate.stage}
+                    requestedStage={pendingGate.requestedStage}
+                    onConfirmStage={(gateNote) => {
+                        const pg = pendingGate;
+                        setPendingGate(null);
+                        pg.commit(gateNote);
+                    }}
+                    onClose={() => setPendingGate(null)}
+                />
             )}
             {hoveredItem && (
                 <div
