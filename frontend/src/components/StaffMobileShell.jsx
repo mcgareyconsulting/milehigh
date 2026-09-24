@@ -27,6 +27,8 @@ import '@fontsource/lato/900.css';
 import '../styles/sub-portal.css';
 
 const UNREAD_POLL_MS = 60000;
+/** sessionStorage flag: this tab chose the desktop chrome at phone width. */
+export const DESKTOP_OPT_OUT_KEY = 'mhmw-mobile-desktop-opt-out';
 const EMPTY = { unread_count: 0, unread_todos: 0, unread_mentions: 0 };
 
 const ICONS = {
@@ -97,7 +99,10 @@ export default function StaffMobileShell() {
                         <button type="button" className="row" onClick={() => { setSheetOpen(false); navigate('/m/todos?seg=mentions'); }}>
                             Notifications
                         </button>
-                        <button type="button" className="row" onClick={() => { setSheetOpen(false); navigate('/job-log'); }}>
+                        <button type="button" className="row" onClick={() => {
+                            try { sessionStorage.setItem(DESKTOP_OPT_OUT_KEY, '1'); } catch { /* ignore */ }
+                            setSheetOpen(false); navigate('/job-log');
+                        }}>
                             {ICONS.desktop} Desktop site
                         </button>
                         <button type="button" className="row danger" onClick={async () => { await logout(); window.location.href = '/login'; }}>
