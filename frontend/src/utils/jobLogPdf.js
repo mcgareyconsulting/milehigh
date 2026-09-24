@@ -33,6 +33,7 @@ import {
 } from './holdFlag';
 import { HEADER_OVERRIDES } from '../constants/columnHeaders';
 import { DATE_COLUMNS } from './jobLogColumns';
+import { STAGE_TO_GROUP } from './stageGroups';
 
 const PAGE_WIDTH_PT = 1224;
 const PAGE_HEIGHT_PT = 792;
@@ -91,30 +92,14 @@ const COLOR_HEAD_LINE = [40, 40, 40];
 const COLOR_BODY_LINE = [40, 40, 40];
 
 // Stage → stage_group → fill/text RGB. Same triples as stageGroupColors in
-// useJobsFilters.js and --st-* tokens (blue / emerald / violet 100+800).
-const STAGE_TO_GROUP = {
-    'Released': 'FABRICATION',
-    'Material Ordered': 'FABRICATION',
-    'Cut Start': 'FABRICATION',
-    'Cut Complete': 'FABRICATION',
-    'Fitup Start': 'FABRICATION',
-    'Fitup Complete': 'FABRICATION',
-    'Weld Start': 'FABRICATION',
-    'Weld Complete': 'FABRICATION',
-    'Hold': 'FABRICATION',
-    'Welded QC': 'READY_TO_SHIP',
-    'Paint Start': 'READY_TO_SHIP',
-    'Paint Complete': 'READY_TO_SHIP',
-    'Store at MHMW': 'READY_TO_SHIP',
-    'Ship Planning': 'READY_TO_SHIP',
-    'Ship Complete': 'COMPLETE',
-    'Install Start': 'COMPLETE',
-    'Install Complete': 'COMPLETE',
-    'Complete': 'COMPLETE',
-};
+// useJobsFilters.js and --st-* tokens (blue / emerald / violet 100+800). The map
+// itself is the one frontend copy in utils/stageGroups.js; PAINT prints in
+// READY_TO_SHIP's green — the split is a department axis, not a colour band.
+const READY_TO_SHIP_RGB = { fill: [209, 250, 229], text: [6, 95, 70] };
 const STAGE_GROUP_COLORS = {
     FABRICATION:   { fill: [219, 234, 254], text: [30, 64, 175] },
-    READY_TO_SHIP: { fill: [209, 250, 229], text: [6, 95, 70] },
+    PAINT:         READY_TO_SHIP_RGB,
+    READY_TO_SHIP: READY_TO_SHIP_RGB,
     COMPLETE:      { fill: [237, 233, 254], text: [91, 33, 182] },
 };
 

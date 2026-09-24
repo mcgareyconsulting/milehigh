@@ -22,6 +22,7 @@ import { computeTotalFabHrs } from '../utils/fabHours';
 import { installHrsOwn } from '../utils/installHours';
 import { DATE_COLUMNS } from '../utils/jobLogColumns';
 import { READY_TO_SHIP_STAGES } from '../utils/unassignedLane';
+import { STAGE_TO_GROUP } from '../utils/stageGroups';
 // The Paint department's stages. Shared with the Timeline's Ready-to-Ship column, which surfaces
 // the same out-of-department ASAPs propagatedAsapJobs does — one definition so the two can't drift.
 import { PAINT_STAGES } from '../utils/readyToShipColumn';
@@ -573,44 +574,31 @@ export function useJobsFilters(jobs = []) {
 
     /**
      * Stage → stage_group for subset-based dropdown colors (matches backend).
-     * FABRICATION = Fab, READY_TO_SHIP = Ready to Ship, COMPLETE = Complete.
+     * FABRICATION = Fab, PAINT + READY_TO_SHIP = Ready to Ship, COMPLETE = Complete.
+     * One copy for the whole frontend — utils/stageGroups.js.
      */
-    const stageToGroup = {
-        'Released':         'FABRICATION',
-        'Material Ordered': 'FABRICATION',
-        'Cut Start':        'FABRICATION',
-        'Cut Complete':     'FABRICATION',
-        'Fitup Start':      'FABRICATION',
-        'Fitup Complete':   'FABRICATION',
-        'Weld Start':       'FABRICATION',
-        'Weld Complete':    'FABRICATION',
-        'Hold':             'FABRICATION',
-        'Welded QC':        'READY_TO_SHIP',
-        'Paint Start':      'READY_TO_SHIP',
-        'Paint Complete':   'READY_TO_SHIP',
-        'Store at MHMW':    'READY_TO_SHIP',
-        'Ship Planning':    'READY_TO_SHIP',
-        'Ship Complete':    'COMPLETE',
-        'Install Start':    'COMPLETE',
-        'Install Complete': 'COMPLETE',
-        'Complete':         'COMPLETE',
-    };
+    const stageToGroup = STAGE_TO_GROUP;
 
     /**
      * Colors per stage subset — same RGB as jobLogPdf.js STAGE_GROUP_COLORS
-     * (print source of truth) and tokens.css --st-blue/green/purple.
+     * (print source of truth) and tokens.css --st-blue/green/purple. PAINT wears
+     * READY_TO_SHIP's green on purpose: the 2026-09-23 split is a department axis
+     * for the photo gate, not a new colour band.
      */
+    const READY_TO_SHIP_COLORS = { light: 'rgb(209 250 229)', text: 'rgb(6 95 70)', border: 'rgb(110 231 183)' }; // emerald-100 / emerald-800
     const stageGroupColors = {
         FABRICATION: { light: 'rgb(219 234 254)', text: 'rgb(30 64 175)', border: 'rgb(147 197 253)' },   // blue-100 / blue-800
-        READY_TO_SHIP: { light: 'rgb(209 250 229)', text: 'rgb(6 95 70)', border: 'rgb(110 231 183)' }, // emerald-100 / emerald-800
+        PAINT: READY_TO_SHIP_COLORS,
+        READY_TO_SHIP: READY_TO_SHIP_COLORS,
         COMPLETE: { light: 'rgb(237 233 254)', text: 'rgb(91 33 182)', border: 'rgb(196 181 253)' },      // violet-100 / violet-800
     };
 
     // Background color applied to a Fab Order cell when its value duplicates another
     // fab_order *within the same stage group*. Per-group so dups in fabrication and
-    // ready-to-ship are visually distinguishable.
+    // ready-to-ship are visually distinguishable. PAINT shares the shop-side blue.
     const stageGroupDupColors = {
         FABRICATION: '#f97316',
+        PAINT: '#2563eb',
         READY_TO_SHIP: '#2563eb',
         COMPLETE: '#7c3aed',
     };

@@ -3,7 +3,9 @@
 schema_version: 1
 purpose: Centralize stage-mapping constants and job-display transforms so every consumer shares one source of truth.
 exports:
-  STAGE_TO_GROUP: Canonical-name dict mapping every stage to its group (FABRICATION, READY_TO_SHIP, COMPLETE)
+  STAGE_TO_GROUP: Canonical-name dict mapping every stage to its department group (FABRICATION, PAINT, READY_TO_SHIP, COMPLETE)
+  STAGE_GROUP_ORDER: The four groups in shop order — index comparison defines a forward department crossing
+  GATE_ENTRY_STAGE: The stage each gated department is entered through (the photo-gate tag)
   STAGE_HOUR_PERCENTAGES: Per-stage % remaining of fab and install hour budgets
   get_install_modifier: Return the remaining-install-hours multiplier (0.0-1.0) derived from STAGE_HOUR_PERCENTAGES
   transform_job_for_display: Convert a raw job dict into the frontend display format
@@ -31,6 +33,14 @@ from app.models import Releases
 # canonicalized in migration M_canonicalize_stages — case-insensitive lookup
 # in get_stage_group_from_stage / _normalize_stage handles incidental drift
 # (typos, unmigrated mid-flight payloads).
+#
+# A stage_group is a DEPARTMENT: the crew whose hands the release is in. The
+# four groups read in shop order — FABRICATION → PAINT → READY_TO_SHIP →
+# COMPLETE — and the photo gate (features/stage/gate.py) fires on every forward
+# crossing between them. PAINT was split out of READY_TO_SHIP on 2026-09-23 so
+# the Fab → Paint and Paint → Ship handoffs are both boundaries; every other
+# consumer treats PAINT exactly as it treated READY_TO_SHIP (same tint, same
+# "active" set, same fab_order space), so nothing else moved.
 STAGE_TO_GROUP = {
     # FABRICATION
     "Released":         "FABRICATION",
@@ -43,9 +53,12 @@ STAGE_TO_GROUP = {
     "Weld Complete":    "FABRICATION",
     "Hold":             "FABRICATION",
 
-    # READY_TO_SHIP
-    "Welded QC":        "READY_TO_SHIP",
-    "Paint Start":      "READY_TO_SHIP",
+    # PAINT — Welded QC is the Fab → Paint handoff (the fab_order tier logic
+    # already called it that), so it opens the group rather than closing Fab.
+    "Welded QC":        "PAINT",
+    "Paint Start":      "PAINT",
+
+    # READY_TO_SHIP — the in-shop holds between the booth and the truck
     "Paint Complete":   "READY_TO_SHIP",
     "Store at MHMW":    "READY_TO_SHIP",
     "Ship Planning":    "READY_TO_SHIP",
@@ -55,6 +68,20 @@ STAGE_TO_GROUP = {
     "Install Start":    "COMPLETE",
     "Install Complete": "COMPLETE",
     "Complete":         "COMPLETE",
+}
+
+# Department order, least to most complete. Index comparison is what "forward"
+# means for the photo gate; keep it in step with STAGE_TO_GROUP's values.
+STAGE_GROUP_ORDER = ["FABRICATION", "PAINT", "READY_TO_SHIP", "COMPLETE"]
+
+# The stage a release ENTERS a department through — the one its handoff photo is
+# tagged with. A jump that skips the entry stage (Ship Planning → Complete) still
+# owes the entry stage's photo: the department changed hands, the evidence is the
+# same. FABRICATION has no entry gate; a release is born there.
+GATE_ENTRY_STAGE = {
+    "PAINT":         "Welded QC",
+    "READY_TO_SHIP": "Paint Complete",
+    "COMPLETE":      "Ship Complete",
 }
 
 # Default fab_order for newly created releases when no value is provided
@@ -100,9 +127,11 @@ STAGE_ORDER = {
         "Weld Start",
         "Weld Complete",
     ],
-    "READY_TO_SHIP": [
+    "PAINT": [
         "Welded QC",
         "Paint Start",
+    ],
+    "READY_TO_SHIP": [
         "Paint Complete",
         "Store at MHMW",
         "Ship Planning",
@@ -377,8 +406,8 @@ def get_stage_group_from_stage(stage: Optional[str]) -> Optional[str]:
                a fallback to absorb incidental drift.
 
     Returns:
-        Stage group name ('FABRICATION', 'READY_TO_SHIP', or 'COMPLETE') or None
-        if the stage is not mapped.
+        Stage group name ('FABRICATION', 'PAINT', 'READY_TO_SHIP', or 'COMPLETE')
+        or None if the stage is not mapped.
     """
     if not stage:
         return None
