@@ -259,7 +259,7 @@ def _hours(cards):
     return round(sum(known), 1) if known else 0.0
 
 
-def build_month_schedule(year, month, today=None, installer=None, stage=None):
+def build_month_schedule(year, month, today=None, installer=None, stage=None, installer_where=None):
     """
     The day-row envelope for ONE calendar month — the phone view's month filter.
 
@@ -283,6 +283,8 @@ def build_month_schedule(year, month, today=None, installer=None, stage=None):
     )
     if installer:
         q = q.filter(Releases.installer == installer)
+    if installer_where is not None:
+        q = q.filter(installer_where)
     if stage:
         q = q.filter(Releases.stage == stage)
     rows = q.all()
@@ -334,7 +336,9 @@ def build_month_schedule(year, month, today=None, installer=None, stage=None):
     }
 
 
-def build_day_schedule(days=14, past_days=14, today=None, installer=None, stage=None):
+def build_day_schedule(days=14, past_days=14, today=None, installer=None, stage=None, installer_where=None):
+    """``installer_where`` is a ready SQLAlchemy clause for callers whose scope is more
+    than one exact crew name (the sub portal: every crew of one company)."""
     """
     Assemble the installation schedule as DAY ROWS for the vertical calendar.
 
@@ -360,6 +364,8 @@ def build_day_schedule(days=14, past_days=14, today=None, installer=None, stage=
     )
     if installer:
         q = q.filter(Releases.installer == installer)
+    if installer_where is not None:
+        q = q.filter(installer_where)
     # A stage filter is the phone's "Shipping Planning" lane: every crew's releases
     # sitting in that stage, keyed on their install date like everything else here.
     if stage:

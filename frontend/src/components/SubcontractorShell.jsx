@@ -31,7 +31,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { checkSubcontractorAuth, subcontractorLogout } from '../utils/subcontractorAuth';
-import { subUnreadCount } from '../services/subPortalApi';
+import { subUnreadCount, getSubCrews } from '../services/subPortalApi';
 import MobileTopBar from './mobile/MobileTopBar';
 import { initialsOf } from './mobile/format';
 import '@fontsource/lato/400.css';
@@ -47,7 +47,7 @@ const ICONS = {
     out: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5M21 12H9" /></svg>,
 };
 
-function AccountSheet({ subcontractor, onClose, onLogout, onNotifications }) {
+function AccountSheet({ subcontractor, crews = [], onClose, onLogout, onNotifications }) {
     useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
         document.addEventListener('keydown', onKey);
@@ -70,7 +70,8 @@ function AccountSheet({ subcontractor, onClose, onLogout, onNotifications }) {
                 <div className="viewing">
                     <div>
                         <small>Viewing as</small>
-                        <b>{subcontractor?.installer_team || 'No crew assigned'}</b>
+                        <b>{crews.length ? crews.join(' · ') : 'No crew assigned'}</b>
+                        {subcontractor?.phone && <span className="block text-sm text-ink-3">{subcontractor.phone}</span>}
                     </div>
                 </div>
                 <button type="button" className="row" onClick={onNotifications}>
@@ -90,6 +91,9 @@ export default function SubcontractorShell() {
     const [loading, setLoading] = useState(true);
     const [sheetOpen, setSheetOpen] = useState(false);
     const [unread, setUnread] = useState({ unread_count: 0, unread_todos: 0, unread_mentions: 0 });
+    // The crews this login resolves to: every crew of the account's company (via the
+    // invoicing map), or the one crew an admin picked. Server-decided, displayed here.
+    const [crews, setCrews] = useState([]);
 
     useEffect(() => {
         checkSubcontractorAuth().then(sub => {
@@ -108,6 +112,7 @@ export default function SubcontractorShell() {
 
     useEffect(() => {
         if (loading) return undefined;
+        getSubCrews().then(setCrews).catch(() => setCrews([]));
         refreshUnread();
         const t = setInterval(() => {
             if (document.visibilityState === 'visible') refreshUnread();
@@ -145,12 +150,13 @@ export default function SubcontractorShell() {
             />
 
             <main className="sub-page">
-                <Outlet context={{ subcontractor, refreshUnread, unread }} />
+                <Outlet context={{ subcontractor, refreshUnread, unread, crews }} />
             </main>
 
             {sheetOpen && (
                 <AccountSheet
                     subcontractor={subcontractor}
+                    crews={crews}
                     onClose={closeSheet}
                     onLogout={handleLogout}
                     onNotifications={goNotifications}

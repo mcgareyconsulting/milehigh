@@ -28,6 +28,12 @@ export async function getSubReleases() {
 }
 
 /** Returns { release, stage_options } — the allowlisted row plus the stages a sub may set. */
+/** The crew names this login resolves to (company crews, or the one admin-picked crew). */
+export async function getSubCrews() {
+    const { data } = await axios.get(`${BASE}/installer-teams`);
+    return data.installer_teams || [];
+}
+
 export async function getSubRelease(id) {
     const { data } = await axios.get(`${BASE}/releases/${id}`);
     return data;

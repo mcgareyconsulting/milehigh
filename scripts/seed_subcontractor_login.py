@@ -29,7 +29,8 @@ def main():
     parser.add_argument("--password", required=True, help="min 8 chars, same rule as accept-invite")
     parser.add_argument("--company", default=None, help="company_name (required when creating)")
     parser.add_argument("--contact", default=None, help="contact_name (required when creating)")
-    parser.add_argument("--crew", default=None, help="installer crew to scope to (must be on the roster)")
+    parser.add_argument("--crew", default=None, help="installer crew to scope to (only needed when the company is not in SUB_COMPANY_CREWS)")
+    parser.add_argument("--phone", default=None, help="contact phone")
     parser.add_argument("--apply", action="store_true", help="Write the row. Default is dry-run.")
     args = parser.parse_args()
 
@@ -78,6 +79,8 @@ def main():
                 sub.company_name = args.company.strip()
             if args.contact:
                 sub.contact_name = args.contact.strip()
+        if args.phone:
+            sub.phone = args.phone.strip()
         sub.password_hash = hash_password(args.password)
         sub.is_active = True
         sub.invite_accepted_at = sub.invite_accepted_at or now

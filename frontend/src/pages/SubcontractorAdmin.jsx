@@ -55,6 +55,7 @@ export default function SubcontractorAdmin() {
     const [companyName, setCompanyName] = useState('');
     const [contactName, setContactName] = useState('');
     const [email, setEmail] = useState('');
+    const [phone, setPhone] = useState('');
     const [saving, setSaving] = useState(false);
     const [busyId, setBusyId] = useState(null);
     const [teams, setTeams] = useState([]);
@@ -86,8 +87,8 @@ export default function SubcontractorAdmin() {
         e.preventDefault();
         setSaving(true); setError(null);
         try {
-            await inviteSubcontractor({ company_name: companyName, contact_name: contactName, email });
-            setCompanyName(''); setContactName(''); setEmail('');
+            await inviteSubcontractor({ company_name: companyName, contact_name: contactName, email, phone: phone || null });
+            setCompanyName(''); setContactName(''); setEmail(''); setPhone('');
             setFormOpen(false);
             await load();
         } catch (err) {
@@ -183,6 +184,7 @@ export default function SubcontractorAdmin() {
                     <div>
                         <label className={labelClass}>Email</label>
                         <input required type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputClass} />
+                        <input type="tel" placeholder="Phone (optional)" value={phone} onChange={e => setPhone(e.target.value)} className={inputClass} />
                         <p className="mt-1 text-[11px] text-ink-3">
                             They'll get an email with a link to set a password and log in.
                         </p>
@@ -214,7 +216,7 @@ export default function SubcontractorAdmin() {
                                     </span>
                                 </div>
                                 <div className="text-xs text-ink-2">{sub.contact_name}</div>
-                                <div className="text-xs text-ink-3 mb-2">{sub.email}</div>
+                                <div className="text-xs text-ink-3 mb-2">{sub.email}{sub.phone ? ` · ${sub.phone}` : ''}</div>
                                 <div className="flex items-center gap-2 mb-2">
                                     <span className="text-xs text-ink-3 shrink-0">Crew</span>
                                     {renderCrew(sub)}
@@ -242,7 +244,7 @@ export default function SubcontractorAdmin() {
                                     <tr key={sub.id} className="border-t border-hairline">
                                         <td className="px-3 py-2 text-ink">{sub.company_name}</td>
                                         <td className="px-3 py-2 text-ink-2">{sub.contact_name}</td>
-                                        <td className="px-3 py-2 text-ink-2">{sub.email}</td>
+                                        <td className="px-3 py-2 text-ink-2">{sub.email}{sub.phone && <span className="block text-xs text-ink-3">{sub.phone}</span>}</td>
                                         <td className="px-3 py-2">{renderCrew(sub)}</td>
                                         <td className="px-3 py-2">
                                             <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_BADGE[statusOf(sub)]}`}>

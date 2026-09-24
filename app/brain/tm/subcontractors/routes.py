@@ -54,6 +54,7 @@ def create_subcontractor():
             company_name=body['company_name'].strip(),
             contact_name=body['contact_name'].strip(),
             email=email,
+            phone=(body.get('phone') or '').strip() or None,
             invited_by_user_id=user.id,
             invited_by_email=user.username,
             invited_by_name=_display_name(user),

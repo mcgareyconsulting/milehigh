@@ -4,7 +4,8 @@ schema_version: 1
 purpose: Scoped query + allowlist serializer for the subcontractor release view (T3 slice 1).
 exports:
   SUB_FIELDS: The exact key set a subcontractor payload may contain
-  list_releases_for_subcontractor: Crew-scoped release rows, allowlist-serialized
+  scope_clause / scope_crews: email -> account -> company -> crews (SUB_COMPANY_CREWS), or installer_team
+  list_releases_for_subcontractor: Scope-limited release rows, allowlist-serialized
   serialize_release_for_sub: One row -> sub payload (exported for the allowlist test)
   get_release_for_subcontractor: One crew-scoped release (None when off-crew / missing)
   build_day_schedule_for_subcontractor: The phone timeline envelope, crew-scoped, notes stripped
@@ -131,59 +132,81 @@ def serialize_release_for_sub(release: Releases) -> dict:
     }
 
 
-def list_releases_for_subcontractor(subcontractor) -> list:
-    """Releases on this subcontractor's crew, allowlist-serialized.
+def scope_clause(subcontractor):
+    """The SQLAlchemy clause that defines which releases this account may see, or
+    None when the account is unscoped (fail closed).
 
-    Returns [] for an unscoped account. That is the fail-closed half of the crew
-    model: an account with no crew must resolve to no releases, never to an
-    unfiltered query, so a half-finished onboarding cannot expose the job log.
-
-    Archived and soft-deleted rows are excluded here rather than shipped with flags
-    for the client to filter — the flags themselves never travel.
+    email -> account -> company -> that company's crews -> releases: the company on
+    the account is looked up in the same SUB_COMPANY_CREWS table Invoice Paid uses, so
+    an A&N login sees Saul 1, Saul 2 and Saul 3 alike. An account whose company is not
+    in the table falls back to its single installer_team (the admin Crew picker); with
+    neither, nothing.
     """
+    from app.brain.subs.service import crew_stems_for_company, installer_matches_stems
+    stems = crew_stems_for_company(subcontractor.company_name)
+    if stems:
+        return installer_matches_stems(stems)
     crew = (subcontractor.installer_team or '').strip()
-    if not crew:
-        logger.debug("sub_releases_unscoped_account", subcontractor_id=subcontractor.id)
-        return []
+    if crew:
+        return Releases.installer == crew
+    return None
 
-    rows = (
+
+def scope_crews(subcontractor) -> list:
+    """The crew NAMES the account's scope resolves to, for the UI ("Viewing as"): the
+    configured roster entries that match, plus any crew seen on a live release that
+    matches. Sorted; [] when unscoped."""
+    from app.config import Config
+    from app.brain.subs.service import crew_matches_stems, crew_stems_for_company
+    clause = scope_clause(subcontractor)
+    if clause is None:
+        return []
+    stems = crew_stems_for_company(subcontractor.company_name)
+    names = set()
+    if stems:
+        names.update(t for t in Config.INSTALLER_TEAMS if crew_matches_stems(t, stems))
+    else:
+        names.add(subcontractor.installer_team.strip())
+    seen = (Releases.query.with_entities(Releases.installer).filter(clause)
+            .filter(db.or_(Releases.is_archived == False, Releases.is_archived == None))  # noqa: E712
+            .filter(db.or_(Releases.is_active == True, Releases.is_active == None))       # noqa: E712
+            .distinct().all())
+    names.update(r[0] for r in seen if r[0])
+    return sorted(names)
+
+
+def _crew_release_query(subcontractor):
+    """Live (not archived, not soft-deleted) releases inside the account's scope.
+    An unscoped account gets a query that matches nothing — never everything."""
+    clause = scope_clause(subcontractor)
+    return (
         Releases.query
-        .filter(Releases.installer == crew)
+        .filter(clause if clause is not None else db.false())
         .filter(db.or_(Releases.is_archived == False, Releases.is_archived == None))  # noqa: E712
         .filter(db.or_(Releases.is_active == True, Releases.is_active == None))       # noqa: E712
-        .order_by(Releases.start_install.asc(), Releases.id.asc())
-        .all()
     )
+
+
+def list_releases_for_subcontractor(subcontractor) -> list:
+    """Releases in this subcontractor's scope, allowlist-serialized.
+
+    Returns [] for an unscoped account. That is the fail-closed half of the model:
+    an account with no company mapping and no crew must resolve to no releases, never
+    to an unfiltered query, so a half-finished onboarding cannot expose the job log.
+    """
+    if scope_clause(subcontractor) is None:
+        logger.debug("sub_releases_unscoped_account", subcontractor_id=subcontractor.id)
+        return []
+    rows = _crew_release_query(subcontractor).order_by(Releases.start_install.asc(), Releases.id.asc()).all()
     return [serialize_release_for_sub(r) for r in rows]
 
 
-def _crew(subcontractor):
-    return (subcontractor.installer_team or '').strip()
-
-
-def _crew_release_query(crew):
-    return (
-        Releases.query
-        .filter(Releases.installer == crew)
-        .filter(db.or_(Releases.is_archived == False, Releases.is_archived == None))  # noqa: E712
-        .filter(db.or_(Releases.is_active == True, Releases.is_active == None))       # noqa: E712
-    )
-
-
 def get_release_for_subcontractor(subcontractor, release_id):
-    """One release, only if it sits on the caller's crew. None otherwise — the caller
-    404s, and a sub probing ids off their crew learns nothing (not even "exists")."""
-    crew = _crew(subcontractor)
-    if not crew:
-        return None
-    row = _crew_release_query(crew).filter(Releases.id == release_id).first()
+    """One release, only if it sits in the caller's scope. None otherwise — the caller
+    404s, and a sub probing ids off their crews learns nothing (not even "exists")."""
+    row = _crew_release_query(subcontractor).filter(Releases.id == release_id).first()
     return serialize_release_for_sub(row) if row else None
 
-
-# A crew name no release can carry. Used so an UNSCOPED account still gets the
-# day-row envelope shape (empty rows for the window) instead of a shape the phone
-# view would have to special-case — while matching zero rows, never all of them.
-_NO_CREW_SENTINEL = '\x00unscoped'
 
 # Card keys the day-schedule builder emits that a subcontractor must not see.
 # `notes` is the internal notes cell (the sub-facing notes thread is its own,
@@ -200,12 +223,15 @@ def build_day_schedule_for_subcontractor(subcontractor, days=14, past_days=14, m
     keys. Same cards as the staff calendar, minus what the sub is not shown.
     `month` ("YYYY-MM") switches to the one-month window (the phone's month filter).
     """
-    crew = _crew(subcontractor) or _NO_CREW_SENTINEL
+    # An unscoped account gets a clause that matches nothing, so the phone still
+    # receives the day-row envelope shape (empty rows) rather than a special case.
+    clause = scope_clause(subcontractor)
+    where = clause if clause is not None else db.false()
     if month:
         year, mon = (int(p) for p in month.split('-', 1))
-        envelope = build_month_schedule(year, mon, installer=crew)
+        envelope = build_month_schedule(year, mon, installer_where=where)
     else:
-        envelope = build_day_schedule(days=days, past_days=past_days, installer=crew)
+        envelope = build_day_schedule(days=days, past_days=past_days, installer_where=where)
     for card in envelope['past_due']:
         for k in _DAY_CARD_STRIP:
             card.pop(k, None)
@@ -213,7 +239,9 @@ def build_day_schedule_for_subcontractor(subcontractor, days=14, past_days=14, m
         for card in row['cards']:
             for k in _DAY_CARD_STRIP:
                 card.pop(k, None)
-    envelope['window']['installer'] = _crew(subcontractor) or None
+    crews = scope_crews(subcontractor)
+    envelope['window']['installer'] = ' · '.join(crews) if crews else None
+    envelope['window']['crews'] = crews
     return envelope
 
 
@@ -365,10 +393,7 @@ def mark_all_read_for_subcontractor(subcontractor, types=None):
 # ---------------------------------------------------------------------------
 
 def _crew_release_row(subcontractor, release_id):
-    crew = _crew(subcontractor)
-    if not crew:
-        return None
-    return _crew_release_query(crew).filter(Releases.id == release_id).first()
+    return _crew_release_query(subcontractor).filter(Releases.id == release_id).first()
 
 
 # Event actions a subcontractor's Activity tab may show. The staff rail's

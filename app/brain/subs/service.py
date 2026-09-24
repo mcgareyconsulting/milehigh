@@ -27,6 +27,7 @@ invariants:
     open the same modal the Job Log opens (archived rows never reach /brain/jobs).
   - No Trello / outbox / scheduling cascade.
 """
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -61,6 +62,48 @@ SUB_COMPANY_CREWS = (
     # _SUBS_EXCLUDED_INSTALLERS); mapped here so the company is never blank.
     ("MHMW", ("Octavio", "Oscar")),
 )
+
+
+def company_key(name: Optional[str]) -> str:
+    """Normalize a company name for matching: casefold, drop the legal suffix and
+    punctuation, so "S&S Construction" == "S&S Construction, LLC"."""
+    s = (name or "").strip().casefold()
+    s = re.sub(r"[,.]?\s*\b(llc|inc|co|corp|ltd)\.?$", "", s).strip(" ,.")
+    return re.sub(r"\s+", " ", s)
+
+
+def crew_stems_for_company(company_name: Optional[str]) -> tuple:
+    """The crew-name stems a subcontractor COMPANY employs, or () when unmapped.
+
+    This is the login side of the invoicing map: Invoice Paid derives a company from a
+    crew (company_for_installer); a subcontractor login derives its crews from the
+    company on its account. One table, read in both directions, so the two can never
+    disagree about who owns Saul 3.
+    """
+    key = company_key(company_name)
+    if not key:
+        return ()
+    for company, stems in SUB_COMPANY_CREWS:
+        if company_key(company) == key:
+            return tuple(stems)
+    return ()
+
+
+def installer_matches_stems(stems) -> object:
+    """SQLAlchemy clause: Releases.installer is one of the stems or "<stem> <n>"."""
+    from sqlalchemy import func
+    parts = []
+    for stem in stems:
+        s = stem.casefold()
+        parts.append(func.lower(Releases.installer) == s)
+        parts.append(func.lower(Releases.installer).like(f"{s} %"))
+    return or_(*parts) if parts else db.false()
+
+
+def crew_matches_stems(name: Optional[str], stems) -> bool:
+    """Python-side twin of installer_matches_stems, for roster names."""
+    crew = (name or "").strip().casefold()
+    return any(crew == s.casefold() or crew.startswith(s.casefold() + " ") for s in stems)
 
 
 def company_for_installer(name: Optional[str]) -> Optional[str]:

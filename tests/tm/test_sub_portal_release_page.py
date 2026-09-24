@@ -216,3 +216,47 @@ def test_unscoped_account_sees_an_empty_window(app, mine):
         env = c.get('/brain/subcontractor/install-schedule/by-day').get_json()
         assert env['summary']['scheduled'] == 0 and len(env['days']) == 15
         assert c.get('/brain/subcontractor/releases').get_json()['releases'] == []
+
+
+# ---- company scoping: email -> account -> company -> crews ------------------------
+
+def _an_account(app):
+    # No installer_team on purpose: the company alone must resolve the crews.
+    return make_subcontractor('saul@an.test', accepted=True, contact_name='Saul Rodriguez',
+                              company_name='A&N Denver Welding Services, LLC')
+
+
+def test_a_company_login_sees_every_crew_of_that_company(app):
+    for rel, crew in (('1', 'Saul 1'), ('2', 'Saul 3'), ('3', 'Octavio'), ('4', 'saul 2')):
+        make_release(700, rel, stage='Ship Planning', installer=crew, job_name='J', start_install=date.today(),
+                     is_active=True, is_archived=False)
+    db.session.commit()
+    stack, c = subcontractor_authed_client(app, _an_account(app))
+    with stack:
+        codes = sorted(f"{r['Job #']}-{r['Release #']}" for r in c.get('/brain/subcontractor/releases').get_json()['releases'])
+        assert codes == ['700-1', '700-2', '700-4']          # all Saul crews, any casing; never Octavio
+        crews = c.get('/brain/subcontractor/installer-teams').get_json()['installer_teams']
+        assert set(crews) >= {'Saul 1', 'Saul 3', 'saul 2'}
+        env = c.get('/brain/subcontractor/install-schedule/by-day').get_json()
+        assert sorted(x['code'] for d in env['days'] for x in d['cards']) == ['700-1', '700-2', '700-4']
+        assert env['window']['crews'] == crews
+
+
+def test_company_matching_ignores_the_legal_suffix(app):
+    make_release(701, '1', stage='Ship Planning', installer='Eduardo', job_name='J', is_active=True, is_archived=False)
+    db.session.commit()
+    sub = make_subcontractor('e@ss.test', accepted=True, contact_name='Eduardo Saenz', company_name='S&S Construction')
+    stack, c = subcontractor_authed_client(app, sub)
+    with stack:
+        assert [r['Release #'] for r in c.get('/brain/subcontractor/releases').get_json()['releases']] == ['1']
+
+
+def test_unmapped_company_falls_back_to_the_admin_picked_crew(app):
+    make_release(702, '1', stage='Ship Planning', installer='Saul 1', job_name='J', is_active=True, is_archived=False)
+    make_release(702, '2', stage='Ship Planning', installer='Saul 2', job_name='J', is_active=True, is_archived=False)
+    db.session.commit()
+    sub = make_subcontractor('t@test.test', accepted=True, company_name='McGarey Construction', installer_team='Saul 1')
+    stack, c = subcontractor_authed_client(app, sub)
+    with stack:
+        assert [r['Release #'] for r in c.get('/brain/subcontractor/releases').get_json()['releases']] == ['1']
+        assert c.get('/brain/subcontractor/installer-teams').get_json()['installer_teams'] == ['Saul 1']

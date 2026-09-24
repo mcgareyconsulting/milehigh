@@ -163,6 +163,7 @@ class InviteSubcontractorCommand:
     invited_by_user_id: int
     invited_by_email: str
     invited_by_name: str
+    phone: str | None = None
 
     def execute(self) -> Subcontractor:
         _require_external_link_base()  # fail before the row exists, not after
@@ -170,6 +171,7 @@ class InviteSubcontractorCommand:
             company_name=self.company_name,
             contact_name=self.contact_name,
             email=self.email,
+            phone=self.phone,
             invited_by_user_id=self.invited_by_user_id,
             invited_at=datetime.utcnow(),
         )

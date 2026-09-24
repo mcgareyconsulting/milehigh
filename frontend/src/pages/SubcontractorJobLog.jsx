@@ -12,8 +12,9 @@
  *                ../components/installSchedule/DaySchedule, ../components/sub/SubEmpty]
  * imported_by: [App.jsx]
  * invariants:
- *   - No crew picker: the crew is the account's, chosen by an admin. The header names it so an
- *     empty calendar reads as "nothing scheduled for Saul 2" rather than as a broken page.
+ *   - No crew picker: the crews are the account's — every crew of its company (via the invoicing
+ *     map) or the one an admin picked — decided server-side. The header names them so an empty
+ *     calendar reads as "nothing scheduled for Saul 1 · Saul 2" rather than as a broken page.
  *   - ONE time control: a chip row — "Upcoming" (the rolling ±2-week window with past-due triage)
  *     and a run of calendar months. A month shows every day of that month; the labels stop being
  *     relative ("Tomorrow") because the window no longer starts today.
@@ -49,9 +50,10 @@ function UnscheduledCard({ rel, onOpen }) {
 }
 
 export default function SubcontractorJobLog() {
-    const { subcontractor } = useOutletContext();
+    const { crews = [] } = useOutletContext();
     const navigate = useNavigate();
-    const crew = subcontractor?.installer_team || null;
+    // `crew` is the label for the scope: one name, or "Saul 1 · Saul 2 · Saul 3".
+    const crew = crews.length ? crews.join(' · ') : null;
     const [data, setData] = useState(null);
     const [releases, setReleases] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -90,7 +92,7 @@ export default function SubcontractorJobLog() {
         () => releases.filter((r) => !r['Start install'] && r['Job Comp'] !== 'X'),
         [releases],
     );
-    const roster = useMemo(() => (crew ? [crew] : []), [crew]);
+    const roster = useMemo(() => crews, [crews]);
     const openId = useCallback((id) => navigate(`/sub/releases/${id}`), [navigate]);
     const openCard = useCallback((card) => openId(card.release_id), [openId]);
 

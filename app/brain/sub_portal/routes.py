@@ -47,6 +47,7 @@ from app.brain.sub_portal.service import (
     upload_photo_for_subcontractor,
     build_day_schedule_for_subcontractor,
     get_release_for_subcontractor,
+    scope_crews,
     list_activity_for_subcontractor,
     list_attachments_for_subcontractor,
     resolve_drawing_file_for_subcontractor,
@@ -82,7 +83,8 @@ def list_subcontractor_releases():
 @brain_bp.route('/subcontractor/installer-teams', methods=['GET'])
 @subcontractor_login_required
 def list_subcontractor_installer_teams():
-    """The caller's own crew, as a one-element list (empty if unscoped).
+    """The crews the caller's account resolves to — every crew of their company, or
+    the one crew an admin picked (empty if unscoped).
 
     A sub-scoped counterpart to /brain/installer-teams, which is @login_required and
     returns the FULL roster. The timeline blocks its initial load on the teams fetch,
@@ -90,8 +92,7 @@ def list_subcontractor_installer_teams():
     loading — and serving the internal route would name every other crew to them.
     """
     sub = get_current_subcontractor()
-    crew = (sub.installer_team or '').strip()
-    return jsonify({'installer_teams': [crew] if crew else []}), 200
+    return jsonify({'installer_teams': scope_crews(sub)}), 200
 
 
 @brain_bp.route('/subcontractor/releases/<int:release_id>', methods=['GET'])

@@ -2477,6 +2477,7 @@ class Subcontractor(db.Model):
     company_name = db.Column(db.String(128), nullable=False)
     contact_name = db.Column(db.String(128), nullable=False)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    phone = db.Column(db.String(32), nullable=True)
     password_hash = db.Column(db.String(255), nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True, server_default='1')
 
@@ -2507,6 +2508,7 @@ class Subcontractor(db.Model):
             "company_name": self.company_name,
             "contact_name": self.contact_name,
             "email": self.email,
+            "phone": self.phone,
             "is_active": self.is_active,
             "installer_team": self.installer_team,
             "invited_at": _dt(self.invited_at),
