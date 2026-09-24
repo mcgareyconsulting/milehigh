@@ -1394,13 +1394,15 @@ Logged as signal; explicitly **not** treated as a re-tiering trigger (Daniel,
 2026-08-15).
 
 ### N1 · Release tags — Contracted / Change Order / MHMW Cost
-*W2 · built · due — · deps — · owner daniel · src bill-2026-08-06#notes · upd 2026-08-09*
+*W2 · built · due — · deps — · owner daniel · src bill-2026-08-06#notes · upd 2026-09-24*
 
 **Built 2026-08-09**, migration run 2026-08-10. `Releases.release_tag`
 (`app/models.py:530`, nullable) ships with the tag **required at creation** on
 both the pasted and verbal paths, editable afterwards in the release hub's
 Billing section (`JobDetailsBody.jsx`, `ReleasesLayout.jsx`,
-`constants/releaseTags.js`). Existing rows are untagged, exactly as planned —
+`constants/releaseTags.js`). On the Job Log, for admins, the same value is a
+bottom-right triangle on the description cell: green for Contracted, yellow for
+Change Order or MHMW Cost, absent when untagged. Existing rows are untagged, exactly as planned —
 the sequencing holds: nullable now → N10 bulk-edit backfill → required.
 **It shipped ahead of its own definition, and that turned out to be safe.**
 Open question 2 (what *MHMW Cost* means) was half-answered 2026-08-29: it means
@@ -1428,6 +1430,7 @@ question 2).
 - 2026-08-10 · note · src — — migration `add_release_tag.py` run; Open question 2 still open, so MHMW Cost is collecting rows before its meaning is fixed
 - 2026-08-29 · decision · src — — Open question 2 half-answered (Daniel): MHMW Cost = a release MHMW eats the cost on, **flag only, no behavior attached**. De-escalates the "collecting rows before its meaning is fixed" risk — the rows are descriptive. The reason split waits until invoicing actually reads the tag
 - 2026-09-05 · measurement · src — — **coverage counted for the first time** (sandbox, read-only): **12 tagged rows system-wide**, and **91 of 99** releases with a `released` date on or after the 2026-08-09 ship date are untagged. The nullable → backfill → required sequencing is holding exactly as designed, but it means **N10 is now on the critical path for anything that reads the tag** — first instance is **N16**, which has to render an explicit `untagged` bucket because that bucket is currently the whole answer
+- 2026-09-24 · build · src — — Job Log description cell shows the tag to admins as an Excel-style bottom-right triangle (`BillingCornerTag`): green for Contracted, yellow for Change Order and MHMW Cost, no triangle when untagged. Hover names the tag. Other roles see neither the triangle nor the tag name on the cell. Change Order and MHMW Cost share yellow on purpose; the name in the tooltip is what separates them
 
 ### N10 · Bulk edit on the job log
 *W2 · not-started · due — · deps N1 · owner daniel · src bill-2026-08-06#notes · upd 2026-08-06*
