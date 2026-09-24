@@ -92,6 +92,7 @@ def _card(rel, today, spliced_hrs=None):
         "job": rel.job,
         "release": rel.release,
         "project_name": rel.job_name,
+        "description": rel.description,
         "crew": rel.installer or UNASSIGNED,
         "unassigned": rel.installer is None,
         "num_guys": rel.num_guys,

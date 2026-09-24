@@ -93,8 +93,12 @@ function InstallCard({ card, color, overdueBy, onOpen }) {
                 </div>
             </div>
 
+            {/* Project name and the release's scope are the two lines a crew reads a card by. */}
             {card.project_name && (
-                <div className="mt-0.5 text-sm font-medium text-ink break-words">{card.project_name}</div>
+                <div className="mt-1 text-[15px] font-bold text-ink break-words">{card.project_name}</div>
+            )}
+            {card.description && (
+                <div className="mt-0.5 text-sm text-ink-2 line-clamp-2 break-words">{card.description}</div>
             )}
 
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-2">
