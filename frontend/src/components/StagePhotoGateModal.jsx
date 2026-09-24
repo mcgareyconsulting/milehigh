@@ -8,7 +8,7 @@
  *   viewer (pdfViewer/PdfViewerPane).
  * exports:
  *   StagePhotoGateModal: props { isOpen, releaseId, title, gateStage, requestedStage, onConfirmStage, onClose }
- * imports_from: [react, react-dom, ../utils/api, ../utils/imageCompress, ./pdfViewer/format]
+ * imports_from: [react, react-dom, ../constants/modalSize, ../utils/api, ../utils/imageCompress, ./pdfViewer/format]
  * imported_by: [frontend/src/components/JobsTableRow.jsx, frontend/src/components/JobDetailsBody.jsx,
  *   frontend/src/components/GanttChart.jsx]
  * invariants:
@@ -33,6 +33,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { MODAL_PANEL_SIZE } from '../constants/modalSize';
 import { API_BASE_URL } from '../utils/api';
 import { compressImage } from '../utils/imageCompress';
 import { fmtDate, fmtSize } from './pdfViewer/format';
@@ -347,16 +348,16 @@ export function StagePhotoGateModal({
 
     return createPortal(
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center"
+            className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
             style={{ background: 'rgba(10,16,28,.55)', backdropFilter: 'blur(2px)' }}
             onClick={onClose}
         >
             <div
-                className="bg-surface flex flex-col border border-hairline-strong"
+                className="bg-surface flex flex-col border border-hairline-strong overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
                 style={{
-                    width: 'min(720px, 94vw)',
-                    maxHeight: 'min(860px, 92dvh, 92vh)',
+                    // Same panel as the release hub on desktop. See constants/modalSize.js.
+                    ...MODAL_PANEL_SIZE,
                     borderRadius: 14,
                     boxShadow: 'var(--shadow, 0 24px 60px rgba(15,26,48,.22))',
                 }}

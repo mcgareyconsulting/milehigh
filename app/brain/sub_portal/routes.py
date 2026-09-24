@@ -28,6 +28,7 @@ GET   /brain/subcontractor/releases/<id>/attachments       drawings + photos, al
 GET   /brain/subcontractor/releases/<id>/drawing/versions/<vid>/file
 GET   /brain/subcontractor/releases/<id>/photos/<pid>/file
 POST  /brain/subcontractor/releases/<id>/photos                multipart image (+ note, + stage tag for the gate)
+PATCH /brain/subcontractor/releases/<id>/photos/<pid>         {stage} — retag a photo already on the release for the gate
 POST  /brain/subcontractor/releases/<id>/files                 multipart PDF -> next drawing version
 PATCH /brain/subcontractor/releases/<id>/stage                  {stage in SUB_STAGES, gate_exception_note?} — 422 photo_required when the gate is owed
 """
@@ -45,6 +46,7 @@ from app.brain.sub_portal.service import (
     set_stage_for_subcontractor,
     upload_file_for_subcontractor,
     upload_photo_for_subcontractor,
+    tag_photo_for_subcontractor,
     build_day_schedule_for_subcontractor,
     get_release_for_subcontractor,
     scope_crews,
@@ -257,6 +259,22 @@ def subcontractor_upload_photo(release_id):
     if payload is None:
         return jsonify({'error': 'Release not found'}), 404
     return jsonify(payload), 201
+
+
+@brain_bp.route('/subcontractor/releases/<int:release_id>/photos/<int:photo_id>', methods=['PATCH'])
+@subcontractor_login_required
+def subcontractor_tag_photo(release_id, photo_id):
+    """Point a photo already on this crew release at a stage, so it can stand as the
+    handoff evidence. The photo stays whoever uploaded it."""
+    body = request.get_json(silent=True) or {}
+    try:
+        payload = tag_photo_for_subcontractor(
+            get_current_subcontractor(), release_id, photo_id, body.get('stage'))
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    if payload is None:
+        return jsonify({'error': 'Not found'}), 404
+    return jsonify(payload)
 
 
 @brain_bp.route('/subcontractor/releases/<int:release_id>/stage', methods=['PATCH'])

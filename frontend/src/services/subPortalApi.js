@@ -120,6 +120,12 @@ export async function uploadSubPhoto(releaseId, file, { note = '', stage = null 
     return data; // the new photo row
 }
 
+/** Retag a photo already on the release so it can satisfy the department photo gate. */
+export async function tagSubPhoto(releaseId, photoId, stage) {
+    const { data } = await axios.patch(`${BASE}/releases/${releaseId}/photos/${photoId}`, { stage });
+    return data;
+}
+
 /** stage must be one of the release payload's stage_options (SUB_STAGES server-side).
  *  gateExceptionNote is the written reason there is no handoff photo (T13 gate). */
 export async function setSubStage(releaseId, stage, { gateExceptionNote = null } = {}) {
