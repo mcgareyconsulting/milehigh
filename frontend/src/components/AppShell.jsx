@@ -20,7 +20,7 @@
  *     (header or upper-right pod); the chat drops down from that bubble.
  */
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation, Outlet } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet, Navigate } from 'react-router-dom';
 import { logout, checkAuth, cacheRoleFlags, readCachedRoleFlags } from '../utils/auth';
 import { useTheme } from '../context/ThemeContext';
 import { LocationProvider, useLocationContext } from '../context/LocationContext';
@@ -28,13 +28,25 @@ import { ReleasesProvider } from '../context/ReleasesContext';
 import QuickSearch from './QuickSearch';
 import NotificationBell from './NotificationBell';
 import MobileNavDrawer from './MobileNavDrawer';
+import StaffMobileShell, { DESKTOP_OPT_OUT_KEY } from './StaffMobileShell';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import Rail from './Rail';
 import BBChatWidget, { CarmenButton } from './BBChatWidget';
 import PatchNotesModal from './PatchNotesModal';
 import { CURRENT_VERSION } from '../data/patchNotes';
 import { SHOW_INVOICING_NAV } from '../constants/navFlags';
 
+/** Where a desktop path lands in the phone shell. */
+function mobileRouteFor(pathname) {
+  if (pathname.startsWith('/job-log') || pathname.startsWith('/pm-board') || pathname.startsWith('/install-schedule')) return '/m/job-log';
+  if (pathname.startsWith('/tm-tickets')) return '/m/tm-tickets';
+  return '/m/todos';
+}
+
 function AppShellInner({ isAuthenticated, subcontractor }) {
+  const { isMobile } = useBreakpoint();
+  let desktopOptOut = false;
+  try { desktopOptOut = sessionStorage.getItem(DESKTOP_OPT_OUT_KEY) === '1'; } catch { /* ignore */ }
   const navigate = useNavigate();
   const location = useLocation();
   const { isDark, isOldMan, isSidebarMode, toggleDark, toggleOldMan, toggleSidebarMode } = useTheme();
@@ -126,6 +138,21 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
       {icon}
     </button>
   );
+
+  // The employee PHONE shell: /m/* swaps the desktop chrome for the Option A top bar
+  // (To-Dos · Job Log · T&M). Same providers above us, so the staff release modal,
+  // releases context and location all keep working inside it.
+  const onMobileRoute = location.pathname === '/m' || location.pathname.startsWith('/m/');
+  if (isAuthenticated && onMobileRoute) {
+    return <StaffMobileShell />;
+  }
+  // A PHONE on any staff route goes to the mobile shell — a login lands on /dashboard,
+  // a bookmark on /job-log, a notification on /pm-board; none of them is "/". Phone =
+  // the < 768px bucket only: an iPad (Pro or otherwise, either orientation) keeps the
+  // desktop view. The sheet's "Desktop site" link sets a session opt-out for this tab.
+  if (isAuthenticated && isMobile && !onMobileRoute && !desktopOptOut) {
+    return <Navigate to={mobileRouteFor(location.pathname)} replace />;
+  }
 
   return (
     // `app-shell-topbar` keeps --app-chrome-h reserved whenever the top bar is
@@ -328,7 +355,7 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
           ) : subcontractor ? (
             <button
               type="button"
-              onClick={() => navigate('/sub/tickets')}
+              onClick={() => navigate('/sub/todos')}
               className="hidden min-[1440px]:inline-flex px-4 py-2 text-sm font-medium text-white bg-accent-500 hover:bg-accent-600 rounded-lg shadow-md ring-2 ring-accent-400 ring-offset-2 dark:ring-offset-slate-800 focus:outline-none focus:ring-2 focus:ring-accent-500"
             >
               My tickets
@@ -369,7 +396,7 @@ function AppShellInner({ isAuthenticated, subcontractor }) {
         locationRequesting={locationRequesting}
         onLocationToggle={handleLocationToggle}
         onLogout={handleLogout}
-        onLogin={() => navigate(subcontractor ? '/sub/tickets' : '/login')}
+        onLogin={() => navigate(subcontractor ? '/sub/todos' : '/login')}
       />
 
       <PatchNotesModal isOpen={showPatchNotes} onClose={() => setShowPatchNotes(false)} isAdmin={isAdmin} />

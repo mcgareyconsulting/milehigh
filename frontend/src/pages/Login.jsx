@@ -186,7 +186,7 @@ function Login({ onLogin }) {
             const data = await response.json();
 
             if (response.ok) {
-                navigate('/sub/tickets');
+                navigate('/sub/todos');
             } else {
                 setError(data.error || 'An error occurred');
             }

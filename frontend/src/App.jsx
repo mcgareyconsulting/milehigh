@@ -40,6 +40,13 @@ import SubcontractorShell from './components/SubcontractorShell';
 import SubcontractorAcceptInvite from './pages/SubcontractorAcceptInvite';
 import SubcontractorTicketList from './pages/SubcontractorTicketList';
 import SubcontractorTicketDetail from './pages/SubcontractorTicketDetail';
+import SubcontractorTodos from './pages/SubcontractorTodos';
+import SubcontractorJobLog from './pages/SubcontractorJobLog';
+import SubcontractorRelease from './pages/SubcontractorRelease';
+import StaffMobileTodos from './pages/mobile/StaffMobileTodos';
+import StaffMobileJobLog from './pages/mobile/StaffMobileJobLog';
+import StaffMobileRelease from './pages/mobile/StaffMobileRelease';
+import { useBreakpoint } from './hooks/useBreakpoint';
 import Metrics from './pages/Metrics';
 import UserDirectory from './pages/UserDirectory';
 import InstallSchedule from './pages/InstallSchedule';
@@ -48,6 +55,12 @@ import Subs from './pages/Subs';
 import { checkAuth } from './utils/auth';
 import { checkSubcontractorAuth } from './utils/subcontractorAuth';
 import './App.css';
+
+/** Staff landing: a phone opens the mobile shell, everything else the Job Log. */
+function HomeRedirect() {
+  const { isMobile } = useBreakpoint();
+  return <Navigate to={isMobile ? '/m/todos' : '/job-log'} replace />;
+}
 
 function AppContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
@@ -63,7 +76,7 @@ function AppContent() {
     setIsAuthenticated(!!user);
     // Only relevant when NOT a staff session — a subcontractor who wanders into
     // the staff area (e.g. an old bookmark, a mistyped URL) gets a tailored
-    // message pointing them back to /sub/tickets instead of a generic "log in".
+    // message pointing them back to /sub/todos instead of a generic "log in".
     if (!user) {
       setSubcontractor(await checkSubcontractorAuth());
     }
@@ -91,13 +104,29 @@ function AppContent() {
         <Route path="/sub/login" element={<Login onLogin={verifyAuth} />} />
         <Route path="/sub/accept-invite/:token" element={<SubcontractorAcceptInvite />} />
         <Route path="/sub" element={<SubcontractorShell />}>
+          {/* Two tabs (SubcontractorShell's bottom bar): To-Dos is home, Job Log is the crew
+              Timeline. T&M tickets stay routable from the shell's overflow menu. */}
+          <Route index element={<Navigate to="todos" replace />} />
+          <Route path="todos" element={<SubcontractorTodos />} />
+          <Route path="job-log" element={<SubcontractorJobLog />} />
+          {/* A release is a PAGE on the phone, not a modal (docs/design/release-mobile-recommendations.md). */}
+          <Route path="releases/:id" element={<SubcontractorRelease />} />
           <Route path="tickets" element={<SubcontractorTicketList />} />
           <Route path="tickets/:id" element={<SubcontractorTicketDetail />} />
         </Route>
         <Route path="/" element={<AppShell isAuthenticated={isAuthenticated} subcontractor={subcontractor} />}>
           {isAuthenticated ? (
             <>
-              <Route index element={<Navigate to="/job-log" replace />} />
+              <Route index element={<HomeRedirect />} />
+              {/* Employee phone shell (AppShell renders StaffMobileShell for /m/*):
+                  To-Dos, the Job Log as the day calendar, and T&M tickets. */}
+              <Route path="m">
+                <Route index element={<Navigate to="todos" replace />} />
+                <Route path="todos" element={<StaffMobileTodos />} />
+                <Route path="job-log" element={<StaffMobileJobLog />} />
+                <Route path="releases/:id" element={<StaffMobileRelease />} />
+                <Route path="tm-tickets" element={<TMTickets />} />
+              </Route>
               {/* Shared releases shell: the toolbar/header stays mounted across
                   Table ↔ Board ↔ Timeline; only the Outlet content swaps. */}
               <Route element={<ReleasesLayout />}>

@@ -25,9 +25,13 @@ export const getNextWeekSchedule = async (days = 7) => {
     return data;
 };
 
-export const getDaySchedule = async ({ days = 14, pastDays = 14, installer = null } = {}) => {
+/** stage = a stage-name lane ("Ship Planning": every crew's releases in that stage);
+ *  month = 'YYYY-MM' switches to one calendar month (no past-due bucket). */
+export const getDaySchedule = async ({ days = 14, pastDays = 14, installer = null, stage = null, month = null } = {}) => {
     const params = { days, past_days: pastDays };
     if (installer) params.installer = installer;
+    if (stage) params.stage = stage;
+    if (month) params.month = month;
     const { data } = await axios.get(`${API_BASE_URL}/brain/install-schedule/by-day`, { params });
     return data;
 };

@@ -989,7 +989,14 @@ class Notification(db.Model):
     """In-app notifications for @mentions and other events."""
     __tablename__ = "notifications"
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    # The recipient is EITHER an internal user OR a subcontractor account, never both.
+    # user_id went nullable when subcontractors became mention / to-do targets (T3);
+    # every staff-facing query filters on user_id == <me>, so a sub-targeted row can
+    # never surface in a staff bell, and vice versa (the sub portal filters on
+    # subcontractor_id == <me>). Enforced by the migration's CHECK on Postgres.
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    subcontractor_id = db.Column(db.Integer, db.ForeignKey('subcontractors.id', ondelete='CASCADE'),
+                                 nullable=True, index=True)
     type = db.Column(db.String(50), nullable=False, default='mention')
     message = db.Column(db.Text, nullable=False)
     board_item_id = db.Column(db.Integer, db.ForeignKey('board_items.id', ondelete='CASCADE'), nullable=True)
@@ -1006,6 +1013,7 @@ class Notification(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     user = db.relationship('User', backref='notifications', lazy='select')
+    subcontractor = db.relationship('Subcontractor', lazy='select')
     board_item = db.relationship('BoardItem', lazy='select')
     board_activity = db.relationship('BoardActivity', lazy='select')
     submittal = db.relationship('Submittals', lazy='select')
@@ -1039,6 +1047,8 @@ class Notification(db.Model):
         return {
             'id': self.id,
             'user_id': self.user_id,
+            'subcontractor_id': self.subcontractor_id,
+            'subcontractor_name': (self.subcontractor.contact_name if self.subcontractor else None),
             'type': self.type,
             'message': self.message,
             'board_item_id': self.board_item_id,
@@ -1146,7 +1156,10 @@ class ReleaseDrawingVersion(db.Model):
     original_filename = db.Column(db.String(256), nullable=True)
     mime_type = db.Column(db.String(64), nullable=False, default='application/pdf')
     file_size_bytes = db.Column(db.BigInteger, nullable=False)
-    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # The uploader is EITHER a staff user OR a subcontractor account (T3 sub portal
+    # "Upload file"); exactly one is set — CHECK in migrations/add_subcontractor_uploads.py.
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    uploaded_by_subcontractor_id = db.Column(db.Integer, db.ForeignKey('subcontractors.id'), nullable=True, index=True)
     uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     source_version_id = db.Column(
         db.Integer,
@@ -1158,14 +1171,19 @@ class ReleaseDrawingVersion(db.Model):
 
     release = db.relationship('Releases', backref=db.backref('drawing_versions', lazy='dynamic'))
     uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_user_id])
+    uploaded_by_subcontractor = db.relationship('Subcontractor', foreign_keys=[uploaded_by_subcontractor_id])
     source_version = db.relationship('ReleaseDrawingVersion', remote_side=[id])
 
-    def to_dict(self):
-        uploaded_by_name = None
+    def uploader_name(self):
         if self.uploaded_by:
             first = (self.uploaded_by.first_name or '').strip()
             last = (self.uploaded_by.last_name or '').strip()
-            uploaded_by_name = (f"{first} {last}".strip()) or self.uploaded_by.username
+            return (f"{first} {last}".strip()) or self.uploaded_by.username
+        s = self.uploaded_by_subcontractor
+        return f"{s.contact_name} ({s.company_name})" if s else None
+
+    def to_dict(self):
+        uploaded_by_name = self.uploader_name()
         return {
             'id': self.id,
             'release_id': self.release_id,
@@ -1175,6 +1193,7 @@ class ReleaseDrawingVersion(db.Model):
             'file_size_bytes': self.file_size_bytes,
             'uploaded_by': {
                 'id': self.uploaded_by_user_id,
+                'subcontractor_id': self.uploaded_by_subcontractor_id,
                 'name': uploaded_by_name,
             },
             'uploaded_at': _dt(self.uploaded_at),
@@ -1241,7 +1260,11 @@ class ReleasePhoto(db.Model):
     # (e.g. "Welded QC", "Paint Complete") so the stage-change validation can
     # require proof for that specific stage.
     stage = db.Column(db.String(64), nullable=True)
-    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # The uploader is EITHER a staff user OR a subcontractor account (T3 sub portal):
+    # exactly one is set, enforced by the migration's CHECK on Postgres. Written only
+    # by UploadPhotoCommand, which stamps the matching actor on the upload_photo event.
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    uploaded_by_subcontractor_id = db.Column(db.Integer, db.ForeignKey('subcontractors.id'), nullable=True, index=True)
     uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     # Attribution for the most recent note edit. Photos are open to all users, so
     # these track who last changed a photo's note (and when) after upload. Null
@@ -1252,7 +1275,15 @@ class ReleasePhoto(db.Model):
 
     release = db.relationship('Releases', backref=db.backref('photos', lazy='dynamic'))
     uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_user_id])
+    uploaded_by_subcontractor = db.relationship('Subcontractor', foreign_keys=[uploaded_by_subcontractor_id])
     last_edited_by = db.relationship('User', foreign_keys=[last_edited_by_user_id])
+
+    def uploader_name(self):
+        """Display name of whoever uploaded it, staff or subcontractor."""
+        if self.uploaded_by_user_id:
+            return self._display_name(self.uploaded_by)
+        s = self.uploaded_by_subcontractor
+        return f"{s.contact_name} ({s.company_name})" if s else None
 
     @staticmethod
     def _display_name(user):
@@ -1273,7 +1304,8 @@ class ReleasePhoto(db.Model):
             'stage': self.stage,
             'uploaded_by': {
                 'id': self.uploaded_by_user_id,
-                'name': self._display_name(self.uploaded_by),
+                'subcontractor_id': self.uploaded_by_subcontractor_id,
+                'name': self.uploader_name(),
             },
             'uploaded_at': _dt(self.uploaded_at),
             'last_edited_by': {
@@ -1927,6 +1959,12 @@ class ChecklistItem(db.Model):
 
     # Final, human-curated values (set on accept/edit; owner + date editable)
     owner_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    # A to-do can instead be owned by a SUBCONTRACTOR account (T3): the reviewer picks a
+    # sub from the same owner dropdown. Exactly one of the two owner columns is set;
+    # service.review_item clears the other on every owner write. Sub-owned items live
+    # on the sub's To-Dos page (app/brain/sub_portal), never in a staff user's queue.
+    owner_subcontractor_id = db.Column(db.Integer, db.ForeignKey('subcontractors.id'),
+                                       nullable=True, index=True)
     due_date = db.Column(db.Date, nullable=True)
 
     # Optional links to internal records (expands to the lake reference spine later)
@@ -1960,6 +1998,7 @@ class ChecklistItem(db.Model):
 
     # joined eager-load avoids an N+1 on owner-name lookups when serializing item lists
     owner = db.relationship('User', foreign_keys=[owner_user_id], lazy='joined')
+    owner_subcontractor = db.relationship('Subcontractor', foreign_keys=[owner_subcontractor_id], lazy='joined')
     proposed_owner = db.relationship('User', foreign_keys=[proposed_owner_user_id], lazy='joined')
     reviewer = db.relationship('User', foreign_keys=[reviewed_by])
     # The concrete linked release (when matched/picked) — surfaces its job-release # and
@@ -1973,6 +2012,12 @@ class ChecklistItem(db.Model):
         full = f"{(u.first_name or '').strip()} {(u.last_name or '').strip()}".strip()
         return full or u.username
 
+    @staticmethod
+    def _sub_name(s):
+        if not s:
+            return None
+        return f"{s.contact_name} ({s.company_name})"
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -1985,7 +2030,11 @@ class ChecklistItem(db.Model):
             'proposed_owner_name': self._name(self.proposed_owner),
             'proposed_due_date': _dt(self.proposed_due_date),
             'owner_user_id': self.owner_user_id,
-            'owner_name': self._name(self.owner),
+            'owner_subcontractor_id': self.owner_subcontractor_id,
+            # owner_name resolves to whichever owner is set, so staff views that only
+            # print the name keep working for sub-owned items.
+            'owner_name': (self._name(self.owner) if self.owner_user_id
+                           else self._sub_name(self.owner_subcontractor)),
             'due_date': _dt(self.due_date),
             'release_id': self.release_id,
             'release_job_release': (f"{self.release.job}-{self.release.release}"
@@ -2428,8 +2477,19 @@ class Subcontractor(db.Model):
     company_name = db.Column(db.String(128), nullable=False)
     contact_name = db.Column(db.String(128), nullable=False)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    phone = db.Column(db.String(32), nullable=True)
     password_hash = db.Column(db.String(255), nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True, server_default='1')
+
+    # The installer crew this account is scoped to. Holds the crew NAME, matching
+    # `Releases.installer` (and the Trello list name) by value — the same string key
+    # the Subs tab, the install schedule and the timeline lanes already scope on, so
+    # sub visibility needs no new join. NULL means not yet scoped, and a NULL-crew
+    # account resolves to ZERO releases: the scope query fails closed, never open.
+    # Written only via command.set_installer_team, which validates against
+    # assignable_installer_teams() — an unvalidated typo would scope to nothing and
+    # present as "the sub sees an empty timeline", which is near-undebuggable.
+    installer_team = db.Column(db.String(64), nullable=True)
 
     invited_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     invited_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -2448,7 +2508,9 @@ class Subcontractor(db.Model):
             "company_name": self.company_name,
             "contact_name": self.contact_name,
             "email": self.email,
+            "phone": self.phone,
             "is_active": self.is_active,
+            "installer_team": self.installer_team,
             "invited_at": _dt(self.invited_at),
             "invite_accepted": self.invite_accepted_at is not None,
             "invite_accepted_at": _dt(self.invite_accepted_at),

@@ -32,7 +32,7 @@ import { jobsApi } from '../services/jobsApi';
 import { useReleases } from '../context/ReleasesContext';
 import { crewFilterOptions } from '../utils/crewColor';
 
-export function useDaySchedule({ days = 14, pastDays = 14, installer = null, enabled = true } = {}) {
+export function useDaySchedule({ days = 14, pastDays = 14, installer = null, stage = null, month = null, enabled = true } = {}) {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(enabled);
     const [error, setError] = useState(null);
@@ -53,7 +53,7 @@ export function useDaySchedule({ days = 14, pastDays = 14, installer = null, ena
         setLoading(true);
         setError(null);
         try {
-            const envelope = await getDaySchedule({ days, pastDays, installer });
+            const envelope = await getDaySchedule({ days, pastDays, installer, stage, month });
             setData(envelope);
             const crews = envelope?.summary?.crews || [];
             setSeenCrews((prev) => {
@@ -65,7 +65,7 @@ export function useDaySchedule({ days = 14, pastDays = 14, installer = null, ena
         } finally {
             setLoading(false);
         }
-    }, [days, pastDays, installer, enabled]);
+    }, [days, pastDays, installer, stage, month, enabled]);
 
     useEffect(() => { reload(); }, [reload]);
 

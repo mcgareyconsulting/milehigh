@@ -60,6 +60,10 @@ class UpdateNotesCommand:
     source: str = "Brain"
     source_of_update: str = "Brain"
     undone_event_id: Optional[int] = None
+    # Actor outside the users table (a subcontractor account posts as "sub:<id>").
+    # Stamped on the event's external_user_id; the internal id stays None because
+    # get_current_user() is None in a subcontractor session.
+    external_user_id: Optional[str] = None
 
     def execute(self) -> NotesUpdateResult:
         notes = "" if self.notes is None else str(self.notes).strip()
@@ -81,6 +85,7 @@ class UpdateNotesCommand:
             action='update_notes',
             source=self.source,
             payload=event_payload,
+            external_user_id=self.external_user_id,
         )
         if event is None:
             logger.debug(

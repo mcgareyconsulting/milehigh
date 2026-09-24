@@ -7,6 +7,9 @@
  * exports:
  *   listSubcontractors, getSubcontractor, inviteSubcontractor, resendInvite,
  *   deactivateSubcontractor, reactivateSubcontractor: Roster CRUD.
+ *   listAssignableInstallerTeams, setInstallerTeam: Crew scoping — which installer crew's
+ *     releases the account may see. Not /brain/installer-teams: that roster includes MHMW's
+ *     own crews, which an external account must never be scoped to.
  *   listTicketSubcontractors, assignSubcontractor, unassignSubcontractor: Per-ticket assignment.
  * imports_from: [axios, ../utils/api]
  * imported_by: [pages/SubcontractorAdmin.jsx, components/TMTicketFormModal.jsx]
@@ -48,6 +51,20 @@ export async function deactivateSubcontractor(id) {
 export async function reactivateSubcontractor(id) {
     const { data } = await axios.post(`${ROSTER_BASE}/${id}/reactivate`);
     return data;
+}
+
+export async function listAssignableInstallerTeams() {
+    const { data } = await axios.get(`${ROSTER_BASE}/installer-teams`);
+    return data.installer_teams || [];
+}
+
+/** Pass null to clear the crew — that revokes release visibility without
+ *  deactivating the account (the scope query fails closed on NULL). */
+export async function setInstallerTeam(id, installerTeam) {
+    const { data } = await axios.patch(`${ROSTER_BASE}/${id}/installer-team`, {
+        installer_team: installerTeam,
+    });
+    return data; // the updated subcontractor
 }
 
 export async function listTicketSubcontractors(ticketId) {

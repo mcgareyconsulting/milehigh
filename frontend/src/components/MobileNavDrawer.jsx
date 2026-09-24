@@ -23,6 +23,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { SHOW_INVOICING_NAV } from '../constants/navFlags';
 import { useTheme } from '../context/ThemeContext';
 import { CURRENT_VERSION } from '../data/patchNotes';
+import { DESKTOP_OPT_OUT_KEY } from './StaffMobileShell';
 
 const NAV_ITEMS = [
     { label: 'Projects', path: '/projects' },
@@ -221,6 +222,22 @@ export default function MobileNavDrawer({
                             title="What's new — view patch notes"
                         >
                             {CURRENT_VERSION} · What&apos;s new
+                        </button>
+                    )}
+                    {/* The way BACK to the phone shell after "Desktop site": clears the per-tab
+                        opt-out and lands on the mobile To-Dos. md:hidden — the phone shell only
+                        exists below 768px, so an iPad never sees this row. */}
+                    {isAuthenticated && !subcontractor && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                try { sessionStorage.removeItem(DESKTOP_OPT_OUT_KEY); } catch { /* ignore */ }
+                                onClose();
+                                navigate('/m/todos');
+                            }}
+                            className="md:hidden w-full mb-1 px-4 py-3 text-sm font-medium text-accent-600 dark:text-accent-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors min-h-[44px]"
+                        >
+                            Mobile site
                         </button>
                     )}
                     {isAuthenticated ? (

@@ -3,6 +3,7 @@
 schema_version: 1
 purpose: Query and update helpers for the admin Subs installer-invoice page.
 exports:
+  assignable_installer_teams: Crew names a subcontractor account may be scoped to
   list_subs_releases: Assigned releases for Invoice Paid (active + archived-until-complete)
   set_installer_invoice_paid: Toggle paid flag + audit event (no-op if unchanged)
   set_installer_invoice_progress: Set 0–100 progress + audit event (no-op if unchanged)
@@ -11,10 +12,11 @@ imports_from: [app.models, app.services.job_event_service, app.logging_config]
 imported_by: [app/brain/subs/routes.py]
 invariants:
   - Live assigned releases appear; archived assigned releases stay until invoiced complete.
-  - Oscar is MHMW staff (still in INSTALLER_TEAMS for scheduling) — hidden from this tab.
+  - Oscar is MHMW staff (still in INSTALLER_TEAMS for scheduling) — hidden from this tab,
+    and not assignable as a subcontractor account's crew (same exclusion set, one source).
   - "Drop Ship" is not a crew at all — it marks material that leaves the shop straight to the
     customer with nobody installing it. It belongs to no company and there is no one to invoice,
-    so it is hidden here for the same reason Oscar is.
+    so it is hidden here for the same reason Oscar is (and is equally not assignable).
   - Every row carries `company` (the sub company that owns the crew) derived from
     `installer` via SUB_COMPANY_CREWS; the installer name itself is the crew.
   - installer_invoice_* fields are independent of Releases.invoiced (customer billing).
@@ -25,6 +27,7 @@ invariants:
     open the same modal the Job Log opens (archived rows never reach /brain/jobs).
   - No Trello / outbox / scheduling cascade.
 """
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -61,6 +64,48 @@ SUB_COMPANY_CREWS = (
 )
 
 
+def company_key(name: Optional[str]) -> str:
+    """Normalize a company name for matching: casefold, drop the legal suffix and
+    punctuation, so "S&S Construction" == "S&S Construction, LLC"."""
+    s = (name or "").strip().casefold()
+    s = re.sub(r"[,.]?\s*\b(llc|inc|co|corp|ltd)\.?$", "", s).strip(" ,.")
+    return re.sub(r"\s+", " ", s)
+
+
+def crew_stems_for_company(company_name: Optional[str]) -> tuple:
+    """The crew-name stems a subcontractor COMPANY employs, or () when unmapped.
+
+    This is the login side of the invoicing map: Invoice Paid derives a company from a
+    crew (company_for_installer); a subcontractor login derives its crews from the
+    company on its account. One table, read in both directions, so the two can never
+    disagree about who owns Saul 3.
+    """
+    key = company_key(company_name)
+    if not key:
+        return ()
+    for company, stems in SUB_COMPANY_CREWS:
+        if company_key(company) == key:
+            return tuple(stems)
+    return ()
+
+
+def installer_matches_stems(stems) -> object:
+    """SQLAlchemy clause: Releases.installer is one of the stems or "<stem> <n>"."""
+    from sqlalchemy import func
+    parts = []
+    for stem in stems:
+        s = stem.casefold()
+        parts.append(func.lower(Releases.installer) == s)
+        parts.append(func.lower(Releases.installer).like(f"{s} %"))
+    return or_(*parts) if parts else db.false()
+
+
+def crew_matches_stems(name: Optional[str], stems) -> bool:
+    """Python-side twin of installer_matches_stems, for roster names."""
+    crew = (name or "").strip().casefold()
+    return any(crew == s.casefold() or crew.startswith(s.casefold() + " ") for s in stems)
+
+
 def company_for_installer(name: Optional[str]) -> Optional[str]:
     """Sub company for a crew name, or None when the crew isn't mapped."""
     crew = (name or "").strip().casefold()
@@ -78,6 +123,21 @@ def _is_subs_excluded_installer(name: Optional[str]) -> bool:
     if not name:
         return False
     return name.strip().casefold() in _SUBS_EXCLUDED_INSTALLERS
+
+
+def assignable_installer_teams() -> list:
+    """Crew names a Subcontractor account may be scoped to: the configured installer
+    roster minus the MHMW-staff crews.
+
+    One source for two callers that must not drift — the admin roster's crew dropdown
+    and the validator behind it. If they disagreed, the UI would offer a crew the API
+    refuses (or worse, accept one the UI never offers).
+
+    Read from Config at call time, not import time, so a deploy that changes
+    INSTALLER_TEAMS takes effect without a code change here.
+    """
+    from app.config import Config
+    return [t for t in Config.INSTALLER_TEAMS if not _is_subs_excluded_installer(t)]
 
 
 def _iso(value):

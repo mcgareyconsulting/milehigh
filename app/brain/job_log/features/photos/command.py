@@ -30,9 +30,12 @@ class UploadPhotoCommand:
     file_bytes: bytes
     filename: Optional[str]
     mime_type: str
-    uploaded_by_user_id: int
+    uploaded_by_user_id: Optional[int]
     note: Optional[str] = None
     stage: Optional[str] = None
+    # A subcontractor account uploading from the sub portal. Exactly one of the two
+    # uploader ids is set; the event is attributed to the same actor.
+    uploaded_by_subcontractor_id: Optional[int] = None
 
     def execute(self) -> ReleasePhoto:
         release: Releases = db.session.get(Releases, self.release_id)
@@ -48,6 +51,7 @@ class UploadPhotoCommand:
             note=self.note,
             stage=self.stage,
             uploaded_by_user_id=self.uploaded_by_user_id,
+            uploaded_by_subcontractor_id=self.uploaded_by_subcontractor_id,
             uploaded_at=datetime.utcnow(),
         )
         db.session.add(photo)
@@ -65,6 +69,8 @@ class UploadPhotoCommand:
                 action='upload_photo',
                 source="Brain",
                 internal_user_id=self.uploaded_by_user_id,
+                external_user_id=(f"sub:{self.uploaded_by_subcontractor_id}"
+                                  if self.uploaded_by_subcontractor_id else None),
                 payload={
                     'from': None,
                     'to': {

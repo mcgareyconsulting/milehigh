@@ -1,27 +1,99 @@
 /**
  * @milehigh-header
- * schema_version: 1
- * purpose: Minimal layout + auth gate for subcontractor-facing pages — just a header (company
- *          name, logout) and an Outlet, nothing like AppShell's nav bar. Self-contained auth
- *          check (unlike AppShell, which relies on App.jsx's top-level isAuthenticated state)
- *          because subcontractor routes are a separate top-level route tree in App.jsx, not
- *          nested under the internal-staff AppShell.
+ * schema_version: 3
+ * purpose: The subcontractor app shell, Option A (docs: subs-mobile-option-a.md) — ONE 56px top bar
+ *          holding the Brain logo (display only), a pill tab track with the three sections
+ *          (To-Dos · Job Log · T&M) and a hamburger menu that opens the account sheet; the routed
+ *          page scrolls under it. The sheet carries the company information that left the header:
+ *          company, signed-in contact, the crew the account views as, a Notifications shortcut
+ *          and Sign out.
+ *          Self-contained auth check (unlike AppShell, which relies on App.jsx's staff
+ *          isAuthenticated) because /sub is a separate top-level route tree.
  * exports:
- *   SubcontractorShell: Layout shell, renders child routes via Outlet once authenticated.
- * imports_from: [react, react-router-dom, ../utils/subcontractorAuth]
+ *   SubcontractorShell: Layout shell; child routes render via Outlet once authenticated and
+ *     receive { subcontractor, refreshUnread, unread } through useOutletContext().
+ * imports_from: [react, react-router-dom, ../utils/subcontractorAuth, ../services/subPortalApi,
+ *                ../styles/sub-portal.css, @fontsource/lato]
  * imported_by: [frontend/src/App.jsx]
  * invariants:
- *   - Redirects to /sub/login if checkSubcontractorAuth() returns null — never falls back to
- *     the internal /login page, keeping the two identity spaces visually separate too.
+ *   - Redirects to /sub/login if checkSubcontractorAuth() returns null — never the staff /login.
+ *   - Fixed chrome is the 56px bar and nothing else: no bottom nav, no second header row. Page
+ *     context (crew, window) lives in each page's title row, not in the bar.
+ *   - The tab track and the sheet use the .sub-* classes from styles/sub-portal.css, which also
+ *     rewrites the design tokens for this subtree — the portal is Lato + the spec palette in both
+ *     themes; the staff app is untouched.
+ *   - The red tab badge = unread to-do pings + unread mentions, from the sub-scoped count endpoint
+ *     (never the staff bell), polled while visible and refreshed eagerly by pages that mark things
+ *     read, via the outlet context. `unread` in the context is the {unread_count, unread_todos,
+ *     unread_mentions} object so the To-Dos page can badge its two segments separately.
+ *   - The sheet closes on scrim tap and Escape.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { checkSubcontractorAuth, subcontractorLogout } from '../utils/subcontractorAuth';
+import { subUnreadCount, getSubCrews } from '../services/subPortalApi';
+import MobileTopBar from './mobile/MobileTopBar';
+import { initialsOf } from './mobile/format';
+import '@fontsource/lato/400.css';
+import '@fontsource/lato/700.css';
+import '@fontsource/lato/900.css';
+import '../styles/sub-portal.css';
+
+const UNREAD_POLL_MS = 60000;
+
+/** Two-letter tile for a company with no logo asset ("McGarey Construction" -> "MC"). */
+const ICONS = {
+    bell: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>,
+    out: <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5M21 12H9" /></svg>,
+};
+
+function AccountSheet({ subcontractor, crews = [], onClose, onLogout, onNotifications }) {
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [onClose]);
+
+    return (
+        <>
+            <div className="sub-scrim" onClick={onClose} aria-hidden="true" />
+            <section className="sub-sheet" role="dialog" aria-modal="true" aria-label="Account">
+                <div className="grab" />
+                <div className="who">
+                    <div className="tile" aria-hidden="true">{initialsOf(subcontractor?.company_name)}</div>
+                    <div className="min-w-0">
+                        <b className="truncate">{subcontractor?.company_name}</b>
+                        <span>{subcontractor?.contact_name} · signed in</span>
+                    </div>
+                    <button type="button" className="close" aria-label="Close" onClick={onClose}>×</button>
+                </div>
+                <div className="viewing">
+                    <div>
+                        <small>Viewing as</small>
+                        <b>{crews.length ? crews.join(' · ') : 'No crew assigned'}</b>
+                        {subcontractor?.phone && <span className="block text-sm text-ink-3">{subcontractor.phone}</span>}
+                    </div>
+                </div>
+                <button type="button" className="row" onClick={onNotifications}>
+                    {ICONS.bell} Notifications
+                </button>
+                <button type="button" className="row danger" onClick={onLogout}>
+                    {ICONS.out} Sign out
+                </button>
+            </section>
+        </>
+    );
+}
 
 export default function SubcontractorShell() {
     const navigate = useNavigate();
     const [subcontractor, setSubcontractor] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [sheetOpen, setSheetOpen] = useState(false);
+    const [unread, setUnread] = useState({ unread_count: 0, unread_todos: 0, unread_mentions: 0 });
+    // The crews this login resolves to: every crew of the account's company (via the
+    // invoicing map), or the one crew an admin picked. Server-decided, displayed here.
+    const [crews, setCrews] = useState([]);
 
     useEffect(() => {
         checkSubcontractorAuth().then(sub => {
@@ -34,32 +106,62 @@ export default function SubcontractorShell() {
         });
     }, [navigate]);
 
+    const refreshUnread = useCallback(() => {
+        subUnreadCount().then(setUnread).catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        if (loading) return undefined;
+        getSubCrews().then(setCrews).catch(() => setCrews([]));
+        refreshUnread();
+        const t = setInterval(() => {
+            if (document.visibilityState === 'visible') refreshUnread();
+        }, UNREAD_POLL_MS);
+        return () => clearInterval(t);
+    }, [loading, refreshUnread]);
+
+    const closeSheet = useCallback(() => setSheetOpen(false), []);
     const handleLogout = async () => {
         await subcontractorLogout();
         navigate('/sub/login', { replace: true });
     };
+    const goNotifications = () => {
+        setSheetOpen(false);
+        navigate('/sub/todos?seg=mentions');
+    };
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] dark:bg-slate-900">
-                <div className="text-gray-600 dark:text-slate-400">Loading…</div>
+            <div className="sub-shell items-center justify-center">
+                <div className="text-ink-3">Loading…</div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-[#f8fafc] dark:bg-slate-900">
-            <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-                <div className="min-w-0">
-                    <div className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{subcontractor?.company_name}</div>
-                    <div className="text-xs text-gray-500 dark:text-slate-400 truncate">{subcontractor?.contact_name}</div>
-                </div>
-                <button onClick={handleLogout}
-                    className="shrink-0 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">
-                    Logout
-                </button>
-            </header>
-            <Outlet />
+        <div className="sub-shell">
+            <MobileTopBar
+                tabs={[
+                    { to: '/sub/todos', label: 'To-Dos', badge: unread.unread_count },
+                    { to: '/sub/job-log', label: 'Job Log' },
+                    { to: '/sub/tickets', label: 'T&M' },
+                ]}
+                onMenu={() => setSheetOpen(true)}
+            />
+
+            <main className="sub-page">
+                <Outlet context={{ subcontractor, refreshUnread, unread, crews }} />
+            </main>
+
+            {sheetOpen && (
+                <AccountSheet
+                    subcontractor={subcontractor}
+                    crews={crews}
+                    onClose={closeSheet}
+                    onLogout={handleLogout}
+                    onNotifications={goNotifications}
+                />
+            )}
         </div>
     );
 }

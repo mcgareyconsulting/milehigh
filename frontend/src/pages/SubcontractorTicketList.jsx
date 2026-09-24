@@ -1,24 +1,28 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: A subcontractor's list of T&M tickets shared with them — the /sub/tickets landing
- *          page. Mirrors TMTickets.jsx's card-list styling but without status-tab filtering
- *          (a subcontractor typically has few tickets, unlike the admin roster).
+ * purpose: A subcontractor's list of T&M tickets shared with them — the T&M tab of the sub
+ *          portal. Option A styling (subs-mobile-option-a.md §6): a title row with the crew and
+ *          draft count, then one .sub-card per ticket. No status-tab filtering (a subcontractor
+ *          typically has few tickets, unlike the admin roster). No FAB: subs cannot create tickets
+ *          today (the sub T&M routes are list / view / edit-draft / submit), so a "+" would lead
+ *          nowhere.
  * exports:
  *   SubcontractorTicketList: Page component, rendered inside SubcontractorShell's Outlet.
  * imports_from: [react, react-router-dom, ../services/subcontractorTmApi]
  * imported_by: [App.jsx]
  */
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { listAssignedTickets } from '../services/subcontractorTmApi';
+import SubEmpty from '../components/sub/SubEmpty';
 
 const STATUS_BADGE = {
-    draft: 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-300',
-    submitted: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
-    pending_approval: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-    approved: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-    invoiced: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+    draft: '',
+    submitted: '!bg-indigo-100 text-indigo-800',
+    pending_approval: '!bg-amber-100 text-amber-800',
+    approved: '!bg-blue-100 text-blue-800',
+    invoiced: '!bg-green-100 text-green-800',
 };
 const STATUS_LABEL = {
     draft: 'Draft', submitted: 'Submitted', pending_approval: 'Pending approval',
@@ -38,6 +42,8 @@ export default function SubcontractorTicketList() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const navigate = useNavigate();
+    const { subcontractor } = useOutletContext();
+    const crew = subcontractor?.installer_team;
 
     const load = useCallback(async () => {
         setError(null);
@@ -53,40 +59,42 @@ export default function SubcontractorTicketList() {
 
     useEffect(() => { load(); }, [load]);
 
+    const drafts = tickets.filter(t => t.status === 'draft').length;
+    const ctx = [crew, drafts > 0 ? `${drafts} ${drafts === 1 ? 'draft' : 'drafts'}` : null].filter(Boolean).join(' · ');
+
     return (
-        <div className="flex-1 p-4 md:p-6 max-w-[800px] mx-auto w-full">
-            <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-4">Your T&amp;M Tickets</h1>
+        <div className="flex-1 min-h-0 flex flex-col">
+            <div className="sub-page-head">
+                <h1>T&amp;M</h1>
+                {ctx && <div className="sub-ctx">{ctx}</div>}
+            </div>
 
             {error && (
-                <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-sm">{error}</div>
+                <div className="mx-4 mb-3 px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
             )}
 
             {loading ? (
-                <div className="flex items-center justify-center py-16">
-                    <span className="text-gray-500 dark:text-slate-400">Loading…</span>
-                </div>
+                <div className="text-ink-3 text-sm px-4 py-2">Loading…</div>
             ) : tickets.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-gray-300 dark:border-slate-700 p-12 text-center text-sm text-gray-400 dark:text-slate-500">
-                    No tickets have been shared with you yet.
-                </div>
+                <SubEmpty icon="file" title="No tickets yet" body="When MHMW shares a T&M ticket with you, it shows up here." />
             ) : (
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2.5 px-4 pb-4">
                     {tickets.map(t => (
                         <button
                             key={t.id} onClick={() => navigate(`/sub/tickets/${t.id}`)}
-                            className="w-full text-left rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 active:bg-gray-50 dark:active:bg-slate-700/50"
+                            className="sub-card w-full text-left p-4 flex flex-col gap-2 active:scale-[0.995]"
                         >
-                            <div className="flex items-center justify-between gap-2 mb-1.5">
-                                <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="num">
                                     {t.release ? `${t.release.job}-${t.release.release}` : (t.job ?? `Ticket #${t.id}`)}
                                 </span>
-                                <span className={`shrink-0 px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_BADGE[t.status] || STATUS_BADGE.draft}`}>
+                                <span className={`sub-pill ${STATUS_BADGE[t.status] || STATUS_BADGE.draft}`}>
                                     {STATUS_LABEL[t.status] || t.status}
                                 </span>
                             </div>
-                            <div className="flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-slate-400">
-                                <span>{t.location || t.customer || '—'}</span>
-                                <span>{fmtDate(t.date_of_work)}</span>
+                            <div className="flex items-center justify-between gap-2 text-sm text-ink-3">
+                                <span className="truncate">{t.location || t.customer || '—'}</span>
+                                <span className="shrink-0">{fmtDate(t.date_of_work)}</span>
                             </div>
                         </button>
                     ))}

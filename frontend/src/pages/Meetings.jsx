@@ -77,7 +77,10 @@ const draftFromItem = (it) => ({
     detail: it.detail || '',
     item_type: it.item_type || 'action',
     gc_facing: !!it.gc_facing,
-    owner_user_id: String(it.owner_user_id ?? it.proposed_owner_user_id ?? ''),
+    // One select carries either a user id or 'sub:<id>' (a subcontractor account owner).
+    owner_user_id: it.owner_subcontractor_id
+        ? `sub:${it.owner_subcontractor_id}`
+        : String(it.owner_user_id ?? it.proposed_owner_user_id ?? ''),
     due_date: it.due_date ?? it.proposed_due_date ?? '',
     release_id: it.release_id != null ? String(it.release_id) : '',
     submittal_id: it.submittal_id != null ? String(it.submittal_id) : '',
@@ -291,7 +294,7 @@ export default function Meetings() {
             detail: d.detail || null,
             item_type: d.item_type,
             gc_facing: d.gc_facing,
-            owner_user_id: d.owner_user_id ? Number(d.owner_user_id) : null,
+            ...ownerFields(d.owner_user_id),
             due_date: d.due_date || null,
             release_id: d.release_id ? Number(d.release_id) : null,
             submittal_id: d.submittal_id || null,
@@ -477,6 +480,14 @@ export default function Meetings() {
         </div>
         </div>
     );
+}
+
+/** Split the owner select's value back into the two owner columns. 'sub:<id>' is a
+ *  subcontractor account (see /brain/meetings/assignable-users); a bare id is a user. */
+function ownerFields(value) {
+    const v = String(value || '');
+    if (v.startsWith('sub:')) return { owner_user_id: null, owner_subcontractor_id: Number(v.slice(4)) };
+    return { owner_user_id: v ? Number(v) : null, owner_subcontractor_id: null };
 }
 
 function MeetingsList({ meetings, onOpen }) {
@@ -867,7 +878,8 @@ function RecordPicker({ releaseId, submittalId, matchSource, matchedLabel, match
 function ChecklistRow({ item, users, draft, busy, onDraft, onAccept, onReject, onDone }) {
     const isProposed = item.status === 'proposed';
     const badge = ITEM_TYPE_BADGE[item.item_type] || ITEM_TYPE_BADGE.action;
-    const ownerName = users.find(u => String(u.id) === String(item.owner_user_id));
+    const ownerKey = item.owner_subcontractor_id ? `sub:${item.owner_subcontractor_id}` : String(item.owner_user_id);
+    const ownerName = users.find(u => String(u.id) === ownerKey);
     const STATUS_PILL = {
         accepted: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
         rejected: 'bg-surface-2 text-ink-3',

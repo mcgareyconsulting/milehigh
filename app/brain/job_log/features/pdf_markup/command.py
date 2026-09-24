@@ -28,8 +28,10 @@ class UploadInitialDrawingCommand:
     file_bytes: bytes
     filename: Optional[str]
     mime_type: str
-    uploaded_by_user_id: int
+    uploaded_by_user_id: Optional[int]
     note: Optional[str] = None
+    # A subcontractor account uploading from the sub portal (exactly one uploader id set).
+    uploaded_by_subcontractor_id: Optional[int] = None
 
     def execute(self) -> ReleaseDrawingVersion:
         release: Releases = db.session.get(Releases, self.release_id)
@@ -53,6 +55,7 @@ class UploadInitialDrawingCommand:
                 mime_type=self.mime_type,
                 file_size_bytes=len(self.file_bytes),
                 uploaded_by_user_id=self.uploaded_by_user_id,
+                uploaded_by_subcontractor_id=self.uploaded_by_subcontractor_id,
                 uploaded_at=datetime.utcnow(),
                 source_version_id=None,
                 note=self.note,
@@ -66,6 +69,7 @@ class UploadInitialDrawingCommand:
                 action='upload_drawing',
                 source="Brain",
                 internal_user_id=self.uploaded_by_user_id,
+                external_user_id=(f"sub:{self.uploaded_by_subcontractor_id}" if self.uploaded_by_subcontractor_id else None),
                 payload={
                     'from': None,
                     'to': {
@@ -94,10 +98,11 @@ class SaveDrawingVersionCommand:
     """Save a marked-up PDF as the next version derived from `source_version_id`."""
     release_id: int
     file_bytes: bytes
-    uploaded_by_user_id: int
+    uploaded_by_user_id: Optional[int]
     source_version_id: int
     note: Optional[str] = None
     mime_type: str = 'application/pdf'
+    uploaded_by_subcontractor_id: Optional[int] = None
 
     def execute(self) -> ReleaseDrawingVersion:
         release: Releases = db.session.get(Releases, self.release_id)
@@ -126,6 +131,7 @@ class SaveDrawingVersionCommand:
                 mime_type=self.mime_type,
                 file_size_bytes=len(self.file_bytes),
                 uploaded_by_user_id=self.uploaded_by_user_id,
+                uploaded_by_subcontractor_id=self.uploaded_by_subcontractor_id,
                 uploaded_at=datetime.utcnow(),
                 source_version_id=self.source_version_id,
                 note=self.note,
@@ -139,6 +145,7 @@ class SaveDrawingVersionCommand:
                 action='save_drawing_version',
                 source="Brain",
                 internal_user_id=self.uploaded_by_user_id,
+                external_user_id=(f"sub:{self.uploaded_by_subcontractor_id}" if self.uploaded_by_subcontractor_id else None),
                 payload={
                     'from': {'version': source.version_number, 'version_id': source.id},
                     'to': {

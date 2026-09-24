@@ -114,3 +114,13 @@ def get_release_or_404(job, release, error_msg="Job not found"):
     if record is None:
         return None, (jsonify({"error": error_msg}), 404)
     return record, None
+
+
+def int_arg(name, default, lo, hi):
+    """Read a clamped int query arg from the current request; a junk value falls back
+    to the default rather than 400-ing, since the callers are dashboard polls."""
+    try:
+        value = int(request.args.get(name, default))
+    except (TypeError, ValueError):
+        value = default
+    return max(lo, min(value, hi))

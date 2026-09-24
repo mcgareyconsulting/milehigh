@@ -15,7 +15,7 @@ from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import func
 
-from app.brain.mentions import parse_mentions, resolve_mentioned_users, user_display_name
+from app.brain.mentions import mention_targets, parse_mentions, user_display_name
 from app.brain.release_issues import constants as C
 from app.brain.release_issues.storage import extension_for_mime, save_attachment
 from app.logging_config import get_logger
@@ -90,7 +90,7 @@ def _as_text(field, value):
 
 
 def _notify_mentions(names, *, message, issue, comment=None):
-    users = resolve_mentioned_users(names)
+    users, subs = mention_targets(names)
     for user in users:
         db.session.add(Notification(
             user_id=user.id,
@@ -99,7 +99,17 @@ def _notify_mentions(names, *, message, issue, comment=None):
             release_issue_id=issue.id,
             release_issue_comment_id=comment.id if comment else None,
         ))
-    return len(users)
+    # A subcontractor gets the same row keyed on subcontractor_id; the sub portal
+    # serves it back through its own allowlist (app/brain/sub_portal/service.py).
+    for sub in subs:
+        db.session.add(Notification(
+            subcontractor_id=sub.id,
+            type='mention',
+            message=message,
+            release_issue_id=issue.id,
+            release_issue_comment_id=comment.id if comment else None,
+        ))
+    return len(users) + len(subs)
 
 
 def _record_release_event(issue, action, user, detail):

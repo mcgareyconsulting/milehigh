@@ -17,7 +17,7 @@ from flask import request, jsonify, current_app
 
 from app.brain import brain_bp
 from app.auth.utils import admin_required, get_current_user
-from app.models import db, Meeting, ChecklistItem, User
+from app.models import db, Meeting, ChecklistItem, Subcontractor, User
 from app.brain.meetings import service, recall
 from app.brain.meetings.recall import RecallError
 from app.logging_config import get_logger
@@ -43,11 +43,22 @@ _TRANSCRIPT_STATUS = {'processing': 'transcribing', 'done': 'done', 'failed': 'f
 @brain_bp.route('/meetings/assignable-users', methods=['GET'])
 @admin_required
 def list_assignable_users():
-    """Active users for the owner dropdown in the review UI."""
+    """Active users for the owner dropdown in the review UI.
+
+    Active subcontractor accounts are listed after staff with a `sub:<id>` id and
+    kind='subcontractor', so one dropdown assigns either. The frontend splits the
+    prefixed id back into owner_subcontractor_id (see Meetings.jsx review()).
+    """
     users = User.query.filter_by(is_active=True).order_by(User.first_name).all()
+    subs = Subcontractor.query.filter_by(is_active=True).order_by(Subcontractor.contact_name).all()
     return jsonify({'users': [
-        {'id': u.id, 'first_name': u.first_name or u.username, 'last_name': u.last_name or ''}
+        {'id': u.id, 'first_name': u.first_name or u.username, 'last_name': u.last_name or '',
+         'kind': 'user'}
         for u in users
+    ] + [
+        {'id': f'sub:{s.id}', 'first_name': s.contact_name, 'last_name': f'({s.company_name})',
+         'kind': 'subcontractor'}
+        for s in subs
     ]})
 
 

@@ -2986,11 +2986,30 @@ def _resolve_event_user_names(all_events):
             full_name = f"{u.first_name or ''} {u.last_name or ''}".strip()
             user_by_id[u.id] = (full_name or u.username or f"User {u.id}").strip()
 
+    # Subcontractor actors carry no internal id; their events are stamped
+    # external_user_id="sub:<subcontractors.id>" (the sub portal's note composer).
+    # Resolve those too, or a sub's note posts to the rail as bare "Brain".
+    sub_by_id = {}
+    sub_ids = set()
+    for event in all_events:
+        ext = getattr(event, 'external_user_id', None) or ''
+        if isinstance(ext, str) and ext.startswith('sub:') and ext[4:].isdigit():
+            sub_ids.add(int(ext[4:]))
+    if sub_ids:
+        from app.models import Subcontractor
+        for sub in Subcontractor.query.filter(Subcontractor.id.in_(sub_ids)).all():
+            sub_by_id[sub.id] = f"{sub.contact_name} ({sub.company_name})"
+
     result = {}
     for event in all_events:
         key = (event.id, 'job' if hasattr(event, 'job') else 'submittal')
         iid = getattr(event, 'internal_user_id', None) or getattr(event, 'user_id', None)
-        result[key] = user_by_id.get(iid) if iid is not None else None
+        name = user_by_id.get(iid) if iid is not None else None
+        if name is None:
+            ext = getattr(event, 'external_user_id', None) or ''
+            if isinstance(ext, str) and ext.startswith('sub:') and ext[4:].isdigit():
+                name = sub_by_id.get(int(ext[4:]))
+        result[key] = name
     return result
 
 

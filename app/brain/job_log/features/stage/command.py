@@ -110,6 +110,9 @@ class UpdateStageCommand:
     # the /brain/events/<id>/undo bundling path so the cascade runs once after
     # the parent + linked children all revert.
     defer_cascade: bool = False
+    # Actor outside the users table (a subcontractor account changes stage as
+    # "sub:<id>"); stamped on the primary event and its job_comp cascade rows.
+    external_user_id: Optional[str] = None
     # When set, merged into the primary event payload as `undone_event_id`. Used by the
     # /brain/events/<id>/undo endpoint to (a) link the undo event back to its source for
     # audit trail rendering and (b) perturb the dedup hash so undo-the-undo within the
@@ -203,6 +206,7 @@ class UpdateStageCommand:
             action='update_stage',
             source=self.source,
             payload=event_payload,
+            external_user_id=self.external_user_id,
         )
         if event is None:
             logger.debug(
@@ -265,6 +269,7 @@ class UpdateStageCommand:
                 JobEventService.create_and_close(
                     job=self.job_id, release=self.release,
                     action='updated', source=self.source,
+                    external_user_id=self.external_user_id,
                     payload={
                         'field': 'job_comp',
                         'old_value': old_jc,
@@ -286,6 +291,7 @@ class UpdateStageCommand:
                 JobEventService.create_and_close(
                     job=self.job_id, release=self.release,
                     action='updated', source=self.source,
+                    external_user_id=self.external_user_id,
                     payload={
                         'field': 'job_comp',
                         'old_value': old_jc,
