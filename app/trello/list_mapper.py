@@ -92,7 +92,7 @@ class TrelloListMapper:
         "Welded QC":        "Fit Up Complete.",
         "Paint Start":      "Fit Up Complete.",
         # 1:1 mappings to the remaining 4 lists
-        "Paint Complete":   "Paint complete",
+        "Paint QC":         "Paint complete",
         "Store at MHMW":    "Store at MHMW for shipping",
         "Ship Planning":    "Shipping planning",
         "Ship Complete":    "Shipping completed",
@@ -116,7 +116,7 @@ class TrelloListMapper:
     TRELLO_LIST_TO_DB_STAGE = {
         "Released":                   "Released",
         "Fit Up Complete.":           "Fitup Complete",
-        "Paint complete":             "Paint Complete",
+        "Paint complete":             "Paint QC",
         "Store at MHMW for shipping": "Store at MHMW",
         "Shipping planning":          "Ship Planning",
         "Shipping completed":         "Ship Complete",

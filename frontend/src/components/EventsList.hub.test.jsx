@@ -20,7 +20,7 @@ const EVENTS = [
         created_at: '2026-04-16T07:00:00',
         job: 340,
         release: '481',
-        payload: { from: 'Paint complete', to: 'Shipping completed' },
+        payload: { from: 'Paint QC', to: 'Shipping completed' },
         current_value: 'Shipping completed',
     },
     {
@@ -59,7 +59,7 @@ describe('fieldLabelForAction / fromToOf', () => {
     });
 
     it('extracts from/to from job payloads', () => {
-        expect(fromToOf(EVENTS[0])).toEqual({ from: 'Paint complete', to: 'Shipping completed' });
+        expect(fromToOf(EVENTS[0])).toEqual({ from: 'Paint QC', to: 'Shipping completed' });
     });
 });
 
@@ -84,7 +84,7 @@ describe('EventsList variant=hub', () => {
         expect(screen.getByText('Fab Order')).toBeInTheDocument();
         expect(screen.getByText('Notes')).toBeInTheDocument();
 
-        expect(screen.getByText('Paint complete')).toBeInTheDocument();
+        expect(screen.getByText('Paint QC')).toBeInTheDocument();
         expect(screen.getByText('Shipping completed')).toBeInTheDocument();
 
         expect(screen.queryByText('Identifier')).not.toBeInTheDocument();

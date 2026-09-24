@@ -47,7 +47,7 @@ STAGE_ORDER = [
     "Weld Complete",
     "Welded QC",
     "Paint Start",
-    "Paint Complete",
+    "Paint QC",
     "Store at MHMW",
     "Ship Planning",
     "Ship Complete",

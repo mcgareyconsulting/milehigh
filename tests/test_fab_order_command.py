@@ -91,7 +91,7 @@ def test_shipping_completed_overrides_input(app):
 def test_fixed_tier_paint_complete(app):
     """Paint complete always gets fab_order=2."""
     with app.app_context():
-        pc = make_release(1, "A", "Paint Complete", "READY_TO_SHIP", None)
+        pc = make_release(1, "A", "Paint QC", "READY_TO_SHIP", None)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
@@ -143,7 +143,7 @@ def test_fixed_tiers_unchanged_on_manual_edit(app):
     """Fixed-tier releases keep their values when other releases are edited."""
     with app.app_context():
         complete = make_release(1, "A", "Complete", "COMPLETE", 1)
-        paint = make_release(2, "A", "Paint Complete", "READY_TO_SHIP", 2)
+        paint = make_release(2, "A", "Paint QC", "READY_TO_SHIP", 2)
         wqc = make_release(3, "A", "Welded QC", "READY_TO_SHIP", 4)
         welded = make_release(4, "A", "Weld Complete", "FABRICATION", 5)
         db.session.commit()

@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { READY_TO_SHIP_STAGES, isUnassigned, selectUnassigned, trayDateKey } from './unassignedLane';
 
-// Defaults to a HARD Start install: since T12 the tray only takes a Store / Paint Complete release
+// Defaults to a HARD Start install: since T12 the tray only takes a Store / Paint QC release
 // once it has a day (an undated one belongs to the Ready-to-Ship column instead).
 const rel = (over = {}) => ({
     'Job #': 560,
     'Release #': '923',
-    'Stage': 'Paint Complete',
+    'Stage': 'Paint QC',
     'Start install': '2026-09-09',
     start_install_formulaTF: false,
     installer: null,
@@ -49,13 +49,13 @@ describe('isUnassigned — membership rule', () => {
         expect(isUnassigned(rel({ Stage: '  Ship Planning  ' }))).toBe(true);
     });
 
-    it('leaves an undated Store / Paint Complete release to the Ready-to-Ship column', () => {
-        for (const stage of ['Store at MHMW', 'Paint Complete']) {
+    it('leaves an undated Store / Paint QC release to the Ready-to-Ship column', () => {
+        for (const stage of ['Store at MHMW', 'Paint QC']) {
             expect(isUnassigned(rel({ Stage: stage, 'Start install': null }))).toBe(false);
         }
     });
 
-    it('treats a projected (formula) date as no date for Store / Paint Complete', () => {
+    it('treats a projected (formula) date as no date for Store / Paint QC', () => {
         expect(isUnassigned(rel({ start_install_formulaTF: true }))).toBe(false);
     });
 

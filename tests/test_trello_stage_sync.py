@@ -154,7 +154,7 @@ class TestRankGate:
         job = stub_job("Welded QC")
         applied = TrelloListMapper.apply_trello_list_to_db(job, "Paint complete", "op-1")
         assert applied is True
-        assert job.stage == "Paint Complete"
+        assert job.stage == "Paint QC"
 
     def test_hold_is_sticky_against_inbound(self):
         """DB Hold (rank 99) blocks every inbound, regardless of list."""
@@ -201,8 +201,8 @@ class TestRankGate:
         job = stub_job("Cut Complete")
         applied = TrelloListMapper.apply_trello_list_to_db(job, "Paint complete", "op-1")
         assert applied is True
-        assert job.stage == "Paint Complete"
-        # Paint Complete is in READY_TO_SHIP per STAGE_TO_GROUP
+        assert job.stage == "Paint QC"
+        # Paint QC is in READY_TO_SHIP per STAGE_TO_GROUP
         assert job.stage_group == "READY_TO_SHIP"
 
 
@@ -314,7 +314,7 @@ class TestUpdateStageCommandOutbound:
             from app.brain.job_log.features.stage.command import UpdateStageCommand
             patches = self._patches()
             with patches[0] as m_add, patches[1], patches[2]:
-                cmd = UpdateStageCommand(job_id=1, release="A", stage="Paint Complete")
+                cmd = UpdateStageCommand(job_id=1, release="A", stage="Paint QC")
                 cmd.execute()
 
             assert m_add.called, "Cross-zone moves must push to Trello"
@@ -393,7 +393,7 @@ class TestInboundListMoveRetiersFabOrder:
     def test_paint_list_to_shipping_flips_two_to_one(self, app):
         """Bill's exact report: 'it's not flipping the two and the one'."""
         with app.app_context():
-            make_release(500, "101", "Paint Complete", "READY_TO_SHIP", 2,
+            make_release(500, "101", "Paint QC", "READY_TO_SHIP", 2,
                          trello_card_id="card-1", trello_list_name="Paint complete",
                          last_updated_at=datetime.utcnow())
             db.session.commit()
@@ -407,7 +407,7 @@ class TestInboundListMoveRetiersFabOrder:
         with app.app_context():
             from app.models import ReleaseEvents
 
-            make_release(500, "101", "Paint Complete", "READY_TO_SHIP", 2,
+            make_release(500, "101", "Paint QC", "READY_TO_SHIP", 2,
                          trello_card_id="card-1", trello_list_name="Paint complete",
                          last_updated_at=datetime.utcnow())
             db.session.commit()
@@ -496,7 +496,7 @@ class TestInboundAsapDrop:
 
             db.session.expire_all()
             r = Releases.query.filter_by(job=1, release="A").one()
-            assert r.stage == "Paint Complete"
+            assert r.stage == "Paint QC"
             assert r.start_install_asap is True, "still a rush — it has not shipped"
             assert not any(
                 isinstance(e.payload, dict)

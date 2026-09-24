@@ -51,7 +51,7 @@ const rel = (over = {}) => ({
     'Release #': '923',
     'Job': 'Alta Metro',
     'Description': 'Bldg C stair',
-    'Stage': 'Paint Complete',
+    'Stage': 'Paint QC',
     'Start install': null,
     start_install_formulaTF: true,
     start_install_asap: false,
@@ -146,7 +146,7 @@ describe('dropping an unassigned card on a crew lane', () => {
             'Start install': null,
             start_install_formulaTF: true,
             start_install_no_color: null,   // a Shipping Planning drop now writes it, so it is restored too
-            Stage: 'Paint Complete',   // rollback restores the stage too, now that a drop can move it
+            Stage: 'Paint QC',   // rollback restores the stage too, now that a drop can move it
             // ...and the bar's end (BUG-26): the optimistic patch now recomputes comp_eta so the
             // bar is the right length on the first frame, so a rejected write has to put the old
             // end back or the card keeps a length nothing in the DB supports.

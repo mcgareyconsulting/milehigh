@@ -559,7 +559,7 @@ def get_fab_hours_total():
         (Releases.stage == 'Hold', 0.0),
         (Releases.stage == 'Welded QC', 0.0),
         (Releases.stage == 'Paint Start', 0.0),
-        (Releases.stage == 'Paint Complete', 0.0),
+        (Releases.stage == 'Paint QC', 0.0),
         (Releases.stage == 'Store at MHMW', 0.0),
         (Releases.stage == 'Ship Planning', 0.0),
         (Releases.stage == 'Ship Complete', 0.0),

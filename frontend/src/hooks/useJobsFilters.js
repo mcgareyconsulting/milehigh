@@ -10,7 +10,7 @@
  *   - selectedProjectNames and selectedSubset are persisted to localStorage across sessions
  *   - Subset views apply stage-group filters then sort by fab_order, EXCEPT
  *     ready_to_ship and paint sort by stage priority (Ship Planning → Store at MHMW →
- *     Paint Complete → Paint Start → Welded QC) then last_updated_at ascending.
+ *     Paint QC → Paint Start → Welded QC) then last_updated_at ascending.
  *     paint_fab uses that same stage+date sort for the paint band, then fab_order
  *     for the FABRICATION band. katie (downstream: Ready-to-Ship + COMPLETE bands)
  *     sorts by KATIE_STAGE_PRIORITY (most-complete first) then last_updated_at ascending.
@@ -37,7 +37,7 @@ const KATIE_STAGE_PRIORITY = {
     'Ship Complete':    4,
     'Ship Planning':    5,
     'Store at MHMW':    6,
-    'Paint Complete':   7,
+    'Paint QC':         7,
 };
 
 // Per-stage % of install hours remaining. Mirrors STAGE_HOUR_PERCENTAGES.install
@@ -56,7 +56,7 @@ const _INSTALL_MODIFIER = {
     'Hold':             1.0,
     'Welded QC':        1.0,
     'Paint Start':      1.0,
-    'Paint Complete':   1.0,
+    'Paint QC':         1.0,
     'Store at MHMW':    1.0,
     'Ship Planning':    1.0,
     'Ship Complete':    1.0,
@@ -226,7 +226,7 @@ export function useJobsFilters(jobs = []) {
     const STAGE_SORT_PRIORITY = {
         'Ship Planning':  1,
         'Store at MHMW':  2,
-        'Paint Complete': 3,
+        'Paint QC':       3,
         'Paint Start':    3.5,
         'Welded QC':      4,
     };
@@ -451,7 +451,7 @@ export function useJobsFilters(jobs = []) {
             const paintOnly = base.filter(job => PAINT_STAGES.includes(String(job['Stage'] ?? '').trim()));
             return sortByStageThenFabOrder(paintOnly);
         } else if (selectedSubset === 'paint_fab') {
-            const paintStages = ['Paint Complete', ...PAINT_STAGES];
+            const paintStages = ['Paint QC', ...PAINT_STAGES];
             const paintOnly = base.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
             const paintSorted = sortByStageThenFabOrder(paintOnly);
             const fabOnly = base.filter(job => String(job['Stage Group'] ?? '').trim() === 'FABRICATION');
@@ -617,7 +617,7 @@ export function useJobsFilters(jobs = []) {
         { value: 'Weld Complete', label: 'Weld comp' },
         { value: 'Welded QC', label: 'Welded QC' },
         { value: 'Paint Start', label: 'Paint Start' },
-        { value: 'Paint Complete', label: 'Paint comp' },
+        { value: 'Paint QC', label: 'Paint QC' },
         { value: 'Hold', label: 'Hold' },
         { value: 'Store at MHMW', label: 'Store' },
         { value: 'Ship Planning', label: 'Ship plan' },
@@ -659,7 +659,7 @@ export function useJobsFilters(jobs = []) {
         'Hold':             _BLUE,
         'Welded QC':        _YELLOW,
         'Paint Start':      _BLUE,
-        'Paint Complete':   _EMERALD,
+        'Paint QC':         _EMERALD,
         'Store at MHMW':    _EMERALD,
         'Ship Planning':    _EMERALD,
         'Ship Complete':    _VIOLET,

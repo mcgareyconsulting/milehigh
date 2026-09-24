@@ -1257,7 +1257,7 @@ class ReleasePhoto(db.Model):
     file_size_bytes = db.Column(db.BigInteger, nullable=False)
     note = db.Column(db.Text, nullable=True)
     # Optional stage tag. Set when a photo is uploaded to satisfy a stage gate
-    # (e.g. "Welded QC", "Paint Complete") so the stage-change validation can
+    # (e.g. "Welded QC", "Paint QC") so the stage-change validation can
     # require proof for that specific stage.
     stage = db.Column(db.String(64), nullable=True)
     # The uploader is EITHER a staff user OR a subcontractor account (T3 sub portal):

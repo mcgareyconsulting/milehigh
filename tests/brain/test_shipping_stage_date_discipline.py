@@ -1,4 +1,4 @@
-"""N5 shipping-stage date discipline + Paint Complete hard-date intercept.
+"""N5 shipping-stage date discipline + Paint QC hard-date intercept.
 
 When a release enters Ship Planning or Ship Complete:
   - Formula/estimated dates → blank start_install + ship_date and lock (formulaTF=False)
@@ -10,7 +10,7 @@ made an overdue date vanish while the install was still ahead of us. It now surv
 the ship stages and drops only on a transition into `Install Start` or later — see
 tests/brain/test_install_start_color_dump.py for the dump itself.
 
-Paint Complete with a hard install date (or ASAP) auto-rolls to Ship Planning.
+Paint QC with a hard install date (or ASAP) auto-rolls to Ship Planning.
 """
 from datetime import date
 from unittest.mock import patch
@@ -52,7 +52,7 @@ class TestFormulaDateBlanking:
         with app.app_context():
             r = _make_release(
                 1, "A",
-                stage="Paint Complete",
+                stage="Paint QC",
                 stage_group="READY_TO_SHIP",
                 start_install=date(2026, 8, 15),
                 ship_date=date(2026, 8, 14),
@@ -158,7 +158,7 @@ class TestHardDateSurvivesShippingStages:
         with app.app_context():
             r = _make_release(
                 1, "A",
-                stage="Paint Complete",
+                stage="Paint QC",
                 stage_group="READY_TO_SHIP",
                 start_install=date(2026, 8, 20),
                 ship_date=date(2026, 8, 19),
@@ -242,7 +242,7 @@ class TestHardDateSurvivesShippingStages:
 
 
 # ---------------------------------------------------------------------------
-# Paint Complete intercept: hard date (non-ASAP)
+# Paint QC intercept: hard date (non-ASAP)
 # ---------------------------------------------------------------------------
 
 class TestHardDatePaintCompleteIntercept:
@@ -264,7 +264,7 @@ class TestHardDatePaintCompleteIntercept:
             from app.brain.job_log.features.stage.command import UpdateStageCommand
             patches = _stage_command_patches()
             with patches[0] as outbox_add, patches[1], patches[2]:
-                UpdateStageCommand(job_id=1, release="A", stage="Paint Complete").execute()
+                UpdateStageCommand(job_id=1, release="A", stage="Paint QC").execute()
 
             db.session.refresh(r)
             assert r.stage == "Ship Planning"
@@ -277,8 +277,39 @@ class TestHardDatePaintCompleteIntercept:
             assert stage_event.payload["to"] == "Ship Planning"
             assert stage_event.payload.get("hard_date_intercepted") is True
             assert stage_event.payload.get("asap_intercepted") is None
-            assert stage_event.payload.get("via") == "Paint Complete"
+            assert stage_event.payload.get("via") == "Paint QC"
             assert outbox_add.call_count == 1
+
+    def test_legacy_paint_complete_name_is_canonicalized_before_intercept(self, app):
+        """A stale caller (old undo payload, old client) sending the pre-rename
+        stage name 'Paint Complete' is normalized to 'Paint QC' before gating/
+        the N5 intercept runs — the old name never lands in the DB."""
+        with app.app_context():
+            r = _make_release(
+                1, "A",
+                stage="Paint Start",
+                stage_group="READY_TO_SHIP",
+                fab_order=12.5,
+                start_install=date(2026, 8, 25),
+                start_install_formulaTF=False,
+                start_install_asap=False,
+                trello_card_id="card-legacy",
+                trello_list_name="Paint start",
+            )
+            db.session.commit()
+
+            from app.brain.job_log.features.stage.command import UpdateStageCommand
+            patches = _stage_command_patches()
+            with patches[0], patches[1], patches[2]:
+                UpdateStageCommand(job_id=1, release="A", stage="Paint Complete").execute()
+
+            db.session.refresh(r)
+            # Hard date intercept fires exactly as it does for the canonical name.
+            assert r.stage == "Ship Planning"
+
+            stage_event = ReleaseEvents.query.filter_by(action="update_stage").one()
+            assert stage_event.payload.get("via") == "Paint QC"
+            assert stage_event.payload["to"] == "Ship Planning"
 
     def test_paint_complete_without_hard_date_or_asap_stays(self, app):
         with app.app_context():
@@ -296,10 +327,10 @@ class TestHardDatePaintCompleteIntercept:
             from app.brain.job_log.features.stage.command import UpdateStageCommand
             patches = _stage_command_patches()
             with patches[0], patches[1], patches[2]:
-                UpdateStageCommand(job_id=1, release="A", stage="Paint Complete").execute()
+                UpdateStageCommand(job_id=1, release="A", stage="Paint QC").execute()
 
             db.session.refresh(r)
-            assert r.stage == "Paint Complete"
+            assert r.stage == "Paint QC"
             # Not yet at a shipping stage — formula dates untouched.
             assert r.start_install == date(2026, 8, 25)
             assert r.start_install_formulaTF is True

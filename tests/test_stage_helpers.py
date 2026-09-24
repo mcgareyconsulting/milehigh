@@ -1,6 +1,7 @@
 """Pure-helper tests for fab_order ordering — no DB, no Flask."""
 from app.api.helpers import (
     _normalize_stage,
+    canonical_stage,
     get_stage_position,
     clamp_fab_order,
     get_fixed_tier,
@@ -8,7 +9,21 @@ from app.api.helpers import (
     STAGE_HOUR_PERCENTAGES,
     STAGE_PROGRESSION_RANK,
     FIXED_TIER_STAGES,
+    LEGACY_STAGE_ALIASES,
 )
+
+
+def test_canonical_stage_rewrites_legacy_paint_complete():
+    """The old 'Paint Complete' name is normalized to 'Paint QC' (rename, 2026-09-23)."""
+    assert canonical_stage("Paint Complete") == "Paint QC"
+    assert LEGACY_STAGE_ALIASES["Paint Complete"] == "Paint QC"
+
+
+def test_canonical_stage_passes_through_current_and_unknown_names():
+    assert canonical_stage("Paint QC") == "Paint QC"
+    assert canonical_stage("Welded QC") == "Welded QC"
+    assert canonical_stage(None) is None
+    assert canonical_stage("") == ""
 
 
 def test_normalize_stage_exact():
@@ -49,7 +64,7 @@ def test_get_stage_position_fixed_tiers_return_none():
     assert get_stage_position("Install Start") is None
     assert get_stage_position("Install Complete") is None
     assert get_stage_position("Complete") is None
-    assert get_stage_position("Paint Complete") is None
+    assert get_stage_position("Paint QC") is None
     assert get_stage_position("Store at MHMW") is None
     assert get_stage_position("Ship Planning") is None
 
@@ -71,8 +86,8 @@ def test_get_fixed_tier():
     assert get_fixed_tier("Ship Complete") == 1
     # Complete is intentionally not in any tier — it holds fab_order=NULL.
     assert get_fixed_tier("Complete") is None
-    # Tier 2 — Paint Complete + the in-shop shipping holds
-    assert get_fixed_tier("Paint Complete") == 2
+    # Tier 2 — Paint QC + the in-shop shipping holds
+    assert get_fixed_tier("Paint QC") == 2
     assert get_fixed_tier("Store at MHMW") == 2
     assert get_fixed_tier("Ship Planning") == 2
 

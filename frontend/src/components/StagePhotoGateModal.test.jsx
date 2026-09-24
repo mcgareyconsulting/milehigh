@@ -114,9 +114,9 @@ describe('unlocking Confirm', () => {
     });
 
     it('is not satisfied by a photo tagged with another stage', async () => {
-        photosRef.current = [photo({ stage: 'Paint Complete' })];
+        photosRef.current = [photo({ stage: 'Paint QC' })];
         renderGate();
-        await screen.findByText('Paint Complete');   // the photo rendered with its own tag
+        await screen.findByText('Paint QC');   // the photo rendered with its own tag
         expect(confirmBtn()).toBeDisabled();
     });
 });
@@ -191,7 +191,7 @@ describe('picking photos', () => {
     });
 
     it('sends each file tagged with the gate stage', async () => {
-        renderGate({ gateStage: 'Paint Complete', requestedStage: 'Paint Complete' });
+        renderGate({ gateStage: 'Paint QC', requestedStage: 'Paint QC' });
         await pick([file('p1.jpg')]);
         await nextSend(1);
 
@@ -200,7 +200,7 @@ describe('picking photos', () => {
         expect(xhr.url).toBe('http://api.test/brain/releases/7/photos');
         expect(xhr.withCredentials).toBe(true);
         expect(xhr.body).toBeInstanceOf(FormData);
-        expect(xhr.body.get('stage')).toBe('Paint Complete');
+        expect(xhr.body.get('stage')).toBe('Paint QC');
         expect(xhr.body.get('file')).toBeInstanceOf(File);
         expect(xhr.body.get('file').name).toBe('p1.jpg');
     });

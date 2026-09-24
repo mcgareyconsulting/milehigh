@@ -18,11 +18,11 @@ import { createPortal } from 'react-dom';
 // Quick-filter definitions. Review is a special boolean mode, not a subset value.
 const QUICK_FILTERS = [
     { key: 'job_order',     label: 'Job Order',     activeClass: 'bg-blue-700 text-white',    title: 'Show all active releases sorted by the unified Fab Order sequence. Useful for seeing the full production queue in order.' },
-    { key: 'ready_to_ship', label: 'Ready to Ship', activeClass: 'bg-emerald-600 text-white', title: 'Show only releases in Ship Planning, Store at MHMW, or Paint Complete — i.e., work that\'s finished production and ready to leave.' },
+    { key: 'ready_to_ship', label: 'Ready to Ship', activeClass: 'bg-emerald-600 text-white', title: 'Show only releases in Ship Planning, Store at MHMW, or Paint QC — i.e., work that\'s finished production and ready to leave.' },
     { key: 'paint',         label: 'Paint',         activeClass: 'bg-emerald-600 text-white', title: 'Show only releases in Welded QC or Paint Start stages, sorted by Fab Order. Use to focus on jobs currently in paint.' },
-    { key: 'paint_fab',     label: 'Paint+Fab',     activeClass: 'bg-emerald-600 text-white', title: 'Combined view of Paint stages (Welded QC, Paint Start, Paint Complete) followed by all Fabrication-group stages, sorted by Fab Order with Start Install date as tiebreaker.' },
+    { key: 'paint_fab',     label: 'Paint+Fab',     activeClass: 'bg-emerald-600 text-white', title: 'Combined view of Paint stages (Welded QC, Paint Start, Paint QC) followed by all Fabrication-group stages, sorted by Fab Order with Start Install date as tiebreaker.' },
     { key: 'fab',           label: 'Fab',           activeClass: 'bg-blue-700 text-white',    title: 'Show only releases in the Fabrication stage group, sorted by Fab Order. Use to focus on shop floor work.' },
-    { key: 'katie',         label: 'Katie',         activeClass: 'bg-violet-600 text-white',  title: 'Downstream view: Paint Complete, Store at MHMW, Ship Planning, Ship Complete, Installs, and Complete — most-complete first. Upstream (Fab/Paint) ASAPs shown at the bottom.' },
+    { key: 'katie',         label: 'Katie',         activeClass: 'bg-violet-600 text-white',  title: 'Downstream view: Paint QC, Store at MHMW, Ship Planning, Ship Complete, Installs, and Complete — most-complete first. Upstream (Fab/Paint) ASAPs shown at the bottom.' },
     { key: 'review',        label: 'Review',        activeClass: 'bg-blue-700 text-white',    title: 'Group releases by PM (alphabetical), then by Project # ascending, with the most-complete stage first within each project. Intended for PM review meetings.' },
 ];
 

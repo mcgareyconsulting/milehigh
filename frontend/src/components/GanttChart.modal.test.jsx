@@ -41,8 +41,8 @@ const rel = (over = {}) => ({
     'Release #': '923',
     'Job': 'Alta Metro',
     'Description': 'Bldg C stair',
-    'Stage': 'Paint Complete',
-    // Hard-dated: since T12 an UNDATED Paint Complete release sits in the Ready-to-Ship column,
+    'Stage': 'Paint QC',
+    // Hard-dated: since T12 an UNDATED Paint QC release sits in the Ready-to-Ship column,
     // and these tests click the Unassigned tray's card.
     'Start install': '2026-09-10',
     start_install_formulaTF: false,

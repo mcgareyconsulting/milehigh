@@ -101,19 +101,19 @@ class TestMockModeMakesNoNetworkCalls:
         """The pre-existing move_card simulation must survive being generalised."""
         with app.app_context():
             r = _release(1, "A", stage="Paint Start")
-            tag_gate_photo(r, "Paint Complete")   # Paint → Ship handoff owes its photo
+            tag_gate_photo(r, "Paint QC")   # Paint → Ship handoff owes its photo
             db.session.commit()
 
             with patch("app.brain.job_log.scheduling.service.recalculate_all_jobs_scheduling"):
                 resp = admin_client.patch(
-                    "/brain/update-stage/1/A", json={"stage": "Paint Complete"}
+                    "/brain/update-stage/1/A", json={"stage": "Paint QC"}
                 )
             assert resp.status_code == 200
 
             OutboxService.process_pending_items(limit=10)
             db.session.expire_all()
             r = Releases.query.filter_by(job=1, release="A").first()
-            assert r.stage == "Paint Complete"
+            assert r.stage == "Paint QC"
             assert r.trello_list_name == "Paint complete"
             assert r.trello_list_id is not None
 

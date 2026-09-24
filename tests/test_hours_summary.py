@@ -48,7 +48,7 @@ class TestGetFabModifier:
         assert get_fab_modifier('Welded QC') == 0.0
 
     def test_paint_complete_zero(self):
-        assert get_fab_modifier('Paint Complete') == 0.0
+        assert get_fab_modifier('Paint QC') == 0.0
 
     def test_install_start_zero(self):
         assert get_fab_modifier('Install Start') == 0.0
@@ -190,9 +190,9 @@ class TestCalculateTotalInstallHrs:
     def test_job_comp_does_not_affect_total(self):
         # Job Comp is not part of the formula anymore; same stage + same Install HRS
         # must yield the same total regardless of Job Comp value.
-        a = [{'Install HRS': 100, 'Job Comp': 0.0, 'Stage': 'Paint Complete'}]
-        b = [{'Install HRS': 100, 'Job Comp': 0.75, 'Stage': 'Paint Complete'}]
-        c = [{'Install HRS': 100, 'Job Comp': 'X',  'Stage': 'Paint Complete'}]
+        a = [{'Install HRS': 100, 'Job Comp': 0.0, 'Stage': 'Paint QC'}]
+        b = [{'Install HRS': 100, 'Job Comp': 0.75, 'Stage': 'Paint QC'}]
+        c = [{'Install HRS': 100, 'Job Comp': 'X',  'Stage': 'Paint QC'}]
         assert calculate_total_install_hrs(a) == calculate_total_install_hrs(b)
         assert calculate_total_install_hrs(b) == calculate_total_install_hrs(c)
 

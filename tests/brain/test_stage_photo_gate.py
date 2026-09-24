@@ -1,6 +1,6 @@
 """Tests for the stage-change photo gate.
 
-Moving a release into "Welded QC" or "Paint Complete" requires a non-deleted
+Moving a release into "Welded QC" or "Paint QC" requires a non-deleted
 ReleasePhoto tagged with that exact stage. The gate is enforced in
 UpdateStageCommand and surfaced as HTTP 422 (code=photo_required) by the
 /brain/update-stage route.
@@ -104,7 +104,7 @@ def test_photo_for_other_stage_does_not_satisfy(app):
     with app.app_context():
         r = _make_release(1, "A")
         db.session.commit()
-        _add_photo(r.id, "Paint Complete")  # wrong stage tag
+        _add_photo(r.id, "Paint QC")  # wrong stage tag
 
         from app.brain.job_log.features.stage.command import (
             UpdateStageCommand, StagePhotoRequiredError,

@@ -42,11 +42,10 @@ queue:                        # agent-maintained, set by agreement in session
                         # a deliberate pause on the front lane, not a re-ranking of it.
   next: [T12, T9, N19, T14, AUD2, T1, N9, T2, AUD1]
                         # 2026-09-23: T13 promoted to now. T12 keeps the head with ①② shipped and ③ +
-                        # the two drop leftovers open. The Paint Complete → Paint QC RENAME IS HELD
-                        # (Daniel) until the gate has landed — a stage-name change ripples far further
-                        # (Trello list map, fixed tiers, column/tray sets, canonicalizing migrations,
-                        # live rows and cards) than the group split did, and the gate fires on entering
-                        # `Paint Complete` today exactly as it will on `Paint QC`.
+                        # the two drop leftovers open. 2026-09-23 (late): T13 merged (PR #388) and the
+                        # Paint Complete → Paint QC RENAME landed right behind it on `audit/paint-qc`
+                        # (code + tests + backfill `rename_paint_complete_to_paint_qc.py`, NOT yet run);
+                        # Trello list stays `Paint complete`. See the T12 trail.
                         # 2026-09-16 (late): T9 keeps its slot — the 9/16 splice modal spec shipped
                         # (PR #383), but outcome (c) punch mirror is still unbuilt.
                         # 2026-09-16: N19 home page added (un-parks D2) — Daniel: "elevating home
@@ -809,7 +808,7 @@ impact; an unsafe condition routes to Safety Hold without losing the issue.
 - 2026-09-16 · notes · src bill-2026-09-16 — owner may be **any user, subs eventually** (T3); the weekly **FC-error report** off issues [#L185] is **deferred**; BUG-29 (mention missing from to-dos) and BUG-28 (PDF modal load) filed off this walkthrough
 
 ### T12 · Release flow on the Timeline — Paint Complete queue, Drop Ship Only, load order
-*W5 · in-progress · class build · due — · deps — · owner daniel · src thisweek-2026-09-14#§5.1 · upd 2026-09-17*
+*W5 · in-progress · class build · due — · deps — · owner daniel · src thisweek-2026-09-14#§5.1 · upd 2026-09-23*
 
 **① and ② BUILT 2026-09-17; ③ load order not started.**
 
@@ -905,6 +904,7 @@ change.
   still assume an install happened. A Drop Ship release is not yet exempt from any of them.
   | `frontend/src/utils/readyToShipColumn.js` (new), `utils/unassignedLane.js`, `utils/shipLaneDrop.js`, `components/GanttChart.jsx`, `hooks/useJobsFilters.js`; `app/brain/job_log/features/start_install/ship_planning_roll.py` (new), `.../start_install/command.py`, `.../start_install/assign_installer.py`, `.../stage/command.py`, `app/config.py`, `app/brain/subs/service.py`
 - 2026-09-17 · note · src — — **existing tests encode the old tray rule and now fail**: `frontend/src/utils/unassignedLane.test.js` and `components/GanttChart.staging.test.jsx` both place undated `Paint Complete` / `Store at MHMW` rows in the Unassigned tray. They are asserting the duplicate-membership behaviour ① exists to remove, so they need rewriting to the new split, not reverting. Not done in the build session (tests explicitly out of scope there)
+- 2026-09-23 · build · src — — **`Paint Complete` → `Paint QC` rename landed** on `audit/paint-qc` (the 9/16 decision, held until T13 merged — it did, PR #388, the same day). Scope as audited: 13 backend files (`STAGE_TO_GROUP`, `GATE_ENTRY_STAGE`, fixed tiers, N5 intercept `via`, `ROLL_STAGES`, photo-gate set, EOS alias map), 15 frontend files (`stageGroups.js`, filters/tints/column sets, `Paint comp` labels → `Paint QC`), 28 test files; `list_mapper.py` keeps the Trello list `Paint complete` (lowercase) on both maps, Trello-side scripts/seed/`trello_list_name` untouched. `canonical_stage()` alias in `UpdateStageCommand` so an undo of an old event payload, an old client or the Trello inbound path never writes the old name. Backfill `migrations/rename_paint_complete_to_paint_qc.py` (releases.stage, release_photos.stage, release_events.payload from/to/via, job_change_logs) — Daniel runs it; sandbox counts 5 / 0 / 232 / 1,138.
 
 ### T13 · Two-stage Photo Evidence Gate + partial shipments
 *W5 · in-progress · class build · due — · deps — · owner daniel · src thisweek-2026-09-14#§5.4 · upd 2026-09-23*

@@ -32,14 +32,14 @@ from app.brain.job_log.features.stage.gate import (
     ("Paint Start", "Welded QC", None),
     ("Welded QC", "Paint Start", None),
     # Paint → Ship, including a jump past the entry stage
-    ("Paint Start", "Paint Complete", "Paint Complete"),
-    ("Welded QC", "Store at MHMW", "Paint Complete"),
+    ("Paint Start", "Paint QC", "Paint QC"),
+    ("Welded QC", "Store at MHMW", "Paint QC"),
     # inside Ready to Ship
     ("Store at MHMW", "Ship Planning", None),
     # Ship → Install, including jumps past the entry stage
     ("Ship Planning", "Ship Complete", "Ship Complete"),
     ("Ship Planning", "Complete", "Ship Complete"),
-    ("Paint Complete", "Ship Complete", "Ship Complete"),
+    ("Paint QC", "Ship Complete", "Ship Complete"),
     # multi-department jumps owe the destination's gate only
     ("Weld Complete", "Ship Complete", "Ship Complete"),
     ("Released", "Complete", "Ship Complete"),
@@ -78,14 +78,14 @@ def test_legacy_stage_order_matches_the_mapping():
         # STAGE_ORDER omits Hold on purpose (STAGE_ORDER_EXEMPT); everything else agrees.
         assert set(stages) == mapped - {"Hold"}, group
     assert STAGE_ORDER["PAINT"] == ["Welded QC", "Paint Start"]
-    assert STAGE_ORDER["READY_TO_SHIP"] == ["Paint Complete", "Store at MHMW", "Ship Planning"]
+    assert STAGE_ORDER["READY_TO_SHIP"] == ["Paint QC", "Store at MHMW", "Ship Planning"]
 
 
 def test_paint_stages_map_to_paint():
     assert get_stage_group_from_stage("Welded QC") == "PAINT"
     assert get_stage_group_from_stage("Paint Start") == "PAINT"
     assert get_stage_group_from_stage("welded qc") == "PAINT"   # case-insensitive fallback
-    assert get_stage_group_from_stage("Paint Complete") == "READY_TO_SHIP"
+    assert get_stage_group_from_stage("Paint QC") == "READY_TO_SHIP"
 
 
 def test_command_exposes_the_derived_gate_set():
@@ -94,7 +94,7 @@ def test_command_exposes_the_derived_gate_set():
         STAGE_PHOTO_GATES,
     )
     assert STAGE_PHOTO_GATE_ENABLED is True
-    assert set(STAGE_PHOTO_GATES) == {"Welded QC", "Paint Complete", "Ship Complete"}
+    assert set(STAGE_PHOTO_GATES) == {"Welded QC", "Paint QC", "Ship Complete"}
 
 
 # ---------------------------------------------------------------------------

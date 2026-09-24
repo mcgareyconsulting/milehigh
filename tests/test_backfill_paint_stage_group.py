@@ -41,7 +41,7 @@ def sqlite_url(tmp_path):
                 for rel, stage, group in [
                     ("A", "Welded QC", "READY_TO_SHIP"),
                     ("B", "Paint Start", "READY_TO_SHIP"),
-                    ("C", "Paint Complete", "READY_TO_SHIP"),
+                    ("C", "Paint QC", "READY_TO_SHIP"),
                     ("D", "Weld Complete", "FABRICATION"),
                 ]
             ])

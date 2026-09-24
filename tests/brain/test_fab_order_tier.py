@@ -52,7 +52,7 @@ class TestPlan:
         ("Install Start", 0),
         ("Install Complete", 0),
         ("Ship Complete", 1),
-        ("Paint Complete", 2),
+        ("Paint QC", 2),
         ("Store at MHMW", 2),
         ("Ship Planning", 2),
     ])
@@ -65,7 +65,7 @@ class TestPlan:
     def test_paint_complete_to_ship_complete_flips_two_to_one(self, app):
         """The literal report: 2 → 1 at the paint → ship handoff."""
         with app.app_context():
-            r = _make_release(1, "A", stage="Paint Complete", stage_group="READY_TO_SHIP", fab_order=2)
+            r = _make_release(1, "A", stage="Paint QC", stage_group="READY_TO_SHIP", fab_order=2)
             plan = plan_fab_order_for_stage(r, "Ship Complete", "READY_TO_SHIP")
             assert plan is not None and plan.fab_order == 1
 
@@ -147,7 +147,7 @@ class TestPlan:
 class TestWritePathsAgree:
     def test_stage_command_applies_the_tier(self, app):
         with app.app_context():
-            r = _make_release(1, "A", stage="Paint Complete", stage_group="READY_TO_SHIP", fab_order=2)
+            r = _make_release(1, "A", stage="Paint QC", stage_group="READY_TO_SHIP", fab_order=2)
             tag_gate_photo(r, "Ship Complete")   # Ship → Install handoff owes its photo
             db.session.commit()
 
@@ -176,9 +176,9 @@ class TestWritePathsAgree:
         """The 'cleared and not cleared' half: the same end stage, reached two
         ways, used to leave fab_order NULL one way and tier 0 the other."""
         with app.app_context():
-            via_route = _make_release(1, "A", stage="Paint Complete",
+            via_route = _make_release(1, "A", stage="Paint QC",
                                       stage_group="READY_TO_SHIP", fab_order=2)
-            via_command = _make_release(2, "B", stage="Paint Complete",
+            via_command = _make_release(2, "B", stage="Paint QC",
                                         stage_group="READY_TO_SHIP", fab_order=2)
             # Only the command path is gated; the job_comp route bypasses it (known).
             tag_gate_photo(via_command, "Ship Complete")
@@ -201,7 +201,7 @@ class TestWritePathsAgree:
             from app.trello.list_mapper import TrelloListMapper
             from app.brain.job_log.features.fab_order.tier import apply_fab_order_for_stage
 
-            r = _make_release(1, "A", stage="Paint Complete", stage_group="READY_TO_SHIP",
+            r = _make_release(1, "A", stage="Paint QC", stage_group="READY_TO_SHIP",
                               fab_order=2, trello_card_id="card-1")
             db.session.commit()
 
@@ -225,7 +225,7 @@ class TestWritePathsAgree:
         with app.app_context():
             from app.brain.job_log.features.fab_order import tier
 
-            r = _make_release(1, "A", stage="Paint Complete", stage_group="READY_TO_SHIP", fab_order=2)
+            r = _make_release(1, "A", stage="Paint QC", stage_group="READY_TO_SHIP", fab_order=2)
             db.session.commit()
 
             with patch.object(tier.JobEventService, "create", return_value=None):

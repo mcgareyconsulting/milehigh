@@ -1,7 +1,7 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Lets users set or clear the Start Install date on a release, or flag the release ASAP. Any date entered is treated as a hard date. ASAP is a rush FLAG only — it paints the row red and triggers the Paint Complete → Ship Planning auto-advance, but the user must enter the Start Install date themselves. Ship and Install stay linked (ship = install − 1 biz day) until the user hits Break (N6).
+ * purpose: Lets users set or clear the Start Install date on a release, or flag the release ASAP. Any date entered is treated as a hard date. ASAP is a rush FLAG only — it paints the row red and triggers the Paint QC → Ship Planning auto-advance, but the user must enter the Start Install date themselves. Ship and Install stay linked (ship = install − 1 biz day) until the user hits Break (N6).
  * exports:
  *   StartInstallDateModal: Date-picker modal with Save, Set ASAP, Clear Hard Date, Clear ASAP, Break/Link actions
  * imports_from: [react]
@@ -235,7 +235,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShi
                                     ? 'Unavailable once install has started.'
                                     : isAsap
                                         ? 'This release is flagged a rush. Untick and Save to remove it; the date stays.'
-                                        : 'Marks the release a rush (red) and rips to Shipping Planning at Paint Complete. Set the Start Install date below — ASAP will not pick one for you.'}
+                                        : 'Marks the release a rush (red) and rips to Shipping Planning at Paint QC. Set the Start Install date below — ASAP will not pick one for you.'}
                             </span>
                         </span>
                     </label>

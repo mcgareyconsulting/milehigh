@@ -77,7 +77,7 @@ describe('buildTimeline', () => {
                 action: 'update_stage',
                 user_name: 'David Servold',
                 created_at: '2026-04-16T07:00:10',
-                payload: { from: 'Paint complete', to: 'Shipping completed' },
+                payload: { from: 'Paint QC', to: 'Shipping completed' },
             },
             {
                 id: 21,

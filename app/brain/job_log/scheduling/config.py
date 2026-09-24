@@ -47,7 +47,7 @@ class SchedulingConfig:
         'Welded QC':        0.1,
         'Paint Start':      0.1,
         'Hold':             1.0,  # full hours, cascades off previous release
-        'Paint Complete':   0.0,
+        'Paint QC':         0.0,
         'Store at MHMW':    0.0,
         'Ship Planning':    0.0,
         'Ship Complete':    0.0,

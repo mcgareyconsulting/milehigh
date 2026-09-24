@@ -10,7 +10,7 @@ invariants:
   - Stage='Complete' has fab_order=NULL (terminal; nothing to order)
   - Tier 0 (Install Start, Install Complete) always gets fab_order=0
   - Tier 1 (Ship Complete) always gets fab_order=1
-  - Tier 2 (Paint Complete, Store at MHMW, Ship Planning) always gets fab_order=2
+  - Tier 2 (Paint QC, Store at MHMW, Ship Planning) always gets fab_order=2
   - Dynamic stages start at fab_order=3 and preserve relative ordering within each stage
   - dry_run=True rolls back all changes
 updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
@@ -28,7 +28,7 @@ Ordering:
     fab_order = NULL : Stage='Complete' (terminal)
     fab_order = 0    : Install Start, Install Complete (post-shipping)
     fab_order = 1    : Ship Complete
-    fab_order = 2    : Paint Complete, Store at MHMW, Ship Planning (shared)
+    fab_order = 2    : Paint QC, Store at MHMW, Ship Planning (shared)
     fab_order = 3+   : Dynamic stages in order:
                        Welded QC -> Paint Start -> Weld Complete -> Weld Start ->
                        Fitup Complete -> Fitup Start -> Cut Complete -> Cut Start ->
@@ -116,7 +116,7 @@ def renumber_fab_orders(dry_run=False):
             r.fab_order = 1
             stats['fixed_tier_1'] += 1
 
-    # Step 2: Set fixed tier 2 (Paint Complete, Store at MHMW, Ship Planning)
+    # Step 2: Set fixed tier 2 (Paint QC, Store at MHMW, Ship Planning)
     tier_2_stages = FIXED_TIER_STAGES[2]
     tier_2_variants = _get_all_variants_for_stages(tier_2_stages)
     tier_2_releases = Releases.query.filter(active_filter, Releases.stage.in_(tier_2_variants)).all()
