@@ -17,6 +17,62 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.390',
+    date: 'September 23, 2026',
+    summary:
+      'Moving a release to the next department now needs a photo. Subs get a phone portal, and the Timeline gets a Ready to Ship column and a Drop Ship lane. Splices get several fixes, and Paint Complete is now called Paint QC.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Moving to the next department needs a photo',
+        detail:
+          'Moving into Paint, Ship, or Install needs a photo tagged Welded QC, Paint QC, or Ship Complete. If none exists, add up to 10 photos, or press No photo available and give a reason. Moving back and Undo never ask.',
+      },
+      {
+        type: 'new',
+        title: 'The Brain on a phone, and a portal for subcontractors',
+        detail:
+          'Phones get a simple view with To-Dos, Job Log, and T&M tabs. Subs log in to see their own crews, where they can change field stages and add notes, photos, and PDFs. Subs can also be given to-dos and @mentioned.',
+      },
+      {
+        type: 'new',
+        title: 'A Ready to Ship column and a Drop Ship lane on the Timeline',
+        detail:
+          'A new column lists releases that are ready to ship but have no date. Drop one on Shipping Planning to give it a ship day. Drop Ship is now a lane you can assign to.',
+      },
+      {
+        type: 'improved',
+        title: 'Paint Complete is now Paint QC',
+        detail:
+          'The stage is called Paint QC everywhere in the Brain, including old releases, photos, and history. The Trello list keeps the name Paint complete.',
+      },
+      {
+        type: 'improved',
+        title: 'Spliced hours come off the original everywhere',
+        detail:
+          'The original now shows only the hours it still installs itself, in the Job Log, Details, Invoice Paid, and the install schedule. It no longer double-counts hours that went to splices.',
+      },
+      {
+        type: 'improved',
+        title: 'The Splices tab shows the math',
+        detail:
+          'A bar, a running total, and a subtotal table show how the budget is split. A release with 4 or more splices is marked in amber.',
+      },
+      {
+        type: 'improved',
+        title: 'Zero-hour splices and a billing tag',
+        detail:
+          'A splice can have zero install hours and then needs no installer. The + Splice form also lets you set the billing tag.',
+      },
+      {
+        type: 'improved',
+        title: 'A splice shares the original\'s drawings',
+        detail:
+          'Every release in a splice group shows all of the group\'s drawing versions. A Final PDF Pack pulled from a splice goes onto the original.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.383',
     date: 'September 16, 2026',
     summary:
