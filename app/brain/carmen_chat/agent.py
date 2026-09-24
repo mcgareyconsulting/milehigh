@@ -30,7 +30,7 @@ def _system_blocks(user) -> list:
     return [{"type": "text", "text": build_system_prompt(user), "cache_control": {"type": "ephemeral"}}]
 
 
-def _post(messages: list, system: list, key: str):
+def _post(messages: list, system: list, key: str, user):
     resp = requests.post(
         ANTHROPIC_URL,
         headers=_headers(key),
@@ -39,7 +39,7 @@ def _post(messages: list, system: list, key: str):
             "max_tokens": cfg.CARMEN_CHAT_MAX_TOKENS,
             "output_config": {"effort": cfg.CARMEN_CHAT_EFFORT},
             "system": system,
-            "tools": tools.TOOL_DEFINITIONS,
+            "tools": tools.tools_for_user(user),
             "messages": messages,
         },
         timeout=_TIMEOUT_SECONDS,
@@ -55,6 +55,21 @@ def _final_text(content: list) -> str:
 
 def _artifact_from_tool(name: str, out: dict) -> dict | None:
     """Pull a UI-facing artifact envelope from a tool result (look-ahead PDF, etc.)."""
+    if name == tools.TOOL_RENDER_RELEASE_REPORT:
+        pdf = out.get("pdf") or {}
+        path = pdf.get("download_path")
+        if not path:
+            return None
+        csv = out.get("csv") or {}
+        return {
+            "kind": "release_report",
+            "artifact_id": pdf.get("artifact_id"),
+            "download_path": path,
+            "download_csv": csv.get("download_path"),
+            "title": pdf.get("title") or "Release report",
+            "summary": out.get("summary"),
+            "totals": out.get("totals"),
+        }
     if name not in (tools.TOOL_RENDER_LOOKAHEAD_PDF, tools.TOOL_PROJECT_LOOKAHEAD):
         return None
     if not isinstance(out, dict) or not out.get("found") or out.get("error"):
@@ -91,7 +106,7 @@ def run_chat(history: list, user_text: str, user=None, user_id=None) -> dict:
         }
 
     system = _system_blocks(user)
-    tool_context = {"user_id": user_id}
+    tool_context = {"user_id": user_id, "is_admin": bool(getattr(user, "is_admin", False))}
     messages = [{"role": m["role"], "content": m["content"]} for m in history]
     messages.append({"role": "user", "content": user_text})
 
@@ -102,7 +117,7 @@ def run_chat(history: list, user_text: str, user=None, user_id=None) -> dict:
 
     try:
         for _ in range(cfg.CARMEN_CHAT_MAX_STEPS):
-            body, request_id = _post(messages, system, key)
+            body, request_id = _post(messages, system, key, user)
             if request_id:
                 request_ids.append(request_id)
             pricing.accumulate(totals, pricing.usage_from_body(body, cfg.CARMEN_CHAT_MODEL))

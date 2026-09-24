@@ -67,7 +67,9 @@ def test_user_scoped_tool_gets_user_id(app):
             agent.run_chat([], "any notifications for me?", user_id=42)
 
     assert captured["name"] == "get_my_notifications"
-    assert captured["ctx"] == {"user_id": 42}
+    assert captured["ctx"]["user_id"] == 42
+    # No user object was passed, so the admin flag the report tools gate on must be False.
+    assert captured["ctx"]["is_admin"] is False
 
 
 def test_render_lookahead_pdf_tool_surfaces_artifact(app):

@@ -19,6 +19,7 @@ Routes:
     GET /api/jobs/<job>/<release>/history
     GET /api/jobs/history
     GET /api/submittals/history
+    GET /api/reports/monthly-invoicing
 """
 
 from datetime import datetime, timezone
@@ -646,6 +647,6 @@ def monthly_invoicing_report():
             'projects': result_projects,
         }), 200
 
-    except Exception as e:
-        logger.exception("Error generating monthly invoicing report")
-        return jsonify({'error': 'Failed to generate report', 'message': str(e)}), 500
+    except Exception:
+        logger.error("monthly_invoicing_report_failed", exc_info=True)
+        return jsonify({"error": "Failed to generate report"}), 500

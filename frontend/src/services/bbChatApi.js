@@ -48,6 +48,28 @@ export async function fetchLookaheadPdfBlob(downloadPath) {
     return data;
 }
 
+/**
+ * Fetch a release-report PDF or CSV with session credentials.
+ * @param {string} downloadPath e.g. /brain/reports/artifacts/<id>.pdf
+ */
+export async function fetchReportFile(downloadPath) {
+    if (!downloadPath || typeof downloadPath !== 'string') {
+        throw new Error('Missing download path');
+    }
+    if (
+        !downloadPath.startsWith('/brain/reports/artifacts/')
+        || downloadPath.includes('..')
+        || !/\.(pdf|csv)$/.test(downloadPath)
+    ) {
+        throw new Error('Invalid report file path');
+    }
+    const { data } = await axios.get(`${API_BASE_URL}${downloadPath}`, {
+        responseType: 'blob',
+        withCredentials: true,
+    });
+    return data;
+}
+
 export async function listConversations() {
     const { data } = await axios.get(`${BASE}/conversations`);
     return data.conversations; // [{ id, title, created_at, updated_at }]

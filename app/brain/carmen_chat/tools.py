@@ -363,7 +363,8 @@ TOOL_DEFINITIONS = [
             "and the answer is the company's number, not one person's scorecard. "
             "ALWAYS report the untagged bucket when it is non-zero — the billing tag only "
             "became required on releases created from 2026-08-09, so older releases are "
-            "untagged and a total that omits them understates the work."
+            "untagged and a total that omits them understates the work. "
+            "This is hour totals for a window, not a release list."
         ),
         "input_schema": {
             "type": "object",
@@ -801,7 +802,26 @@ def get_eos_metrics_for_owner(
     )
 
 
+from .release_report import (  # noqa: E402
+    QUERY_DEFINITION,
+    RENDER_DEFINITION,
+    TOOL_QUERY_RELEASE_REPORT,
+    TOOL_RENDER_RELEASE_REPORT,
+    query_release_report,
+    render_release_report,
+)
+
+TOOL_DEFINITIONS.extend([QUERY_DEFINITION, RENDER_DEFINITION])
+
 USER_SCOPED_TOOLS = {TOOL_NOTIFICATIONS, TOOL_EOS_FOR_OWNER}
+ADMIN_ONLY_TOOLS = {TOOL_QUERY_RELEASE_REPORT, TOOL_RENDER_RELEASE_REPORT}
+
+
+def tools_for_user(user) -> list:
+    """Tool list sent to the model. The release report is admin-only."""
+    if getattr(user, "is_admin", False):
+        return TOOL_DEFINITIONS
+    return [tool for tool in TOOL_DEFINITIONS if tool["name"] not in ADMIN_ONLY_TOOLS]
 
 TOOL_EXECUTORS = {
     TOOL_SEARCH_BY_ID: search_jobs_by_identifier,
@@ -817,6 +837,8 @@ TOOL_EXECUTORS = {
     TOOL_EOS_METRIC: get_eos_metric,
     TOOL_EOS_FOR_OWNER: get_eos_metrics_for_owner,
     TOOL_HOURS_RELEASED: get_hours_released_to_production,
+    TOOL_QUERY_RELEASE_REPORT: query_release_report,
+    TOOL_RENDER_RELEASE_REPORT: render_release_report,
 }
 
 
@@ -825,10 +847,19 @@ def execute_tool(name: str, arguments: dict, context: dict | None = None) -> dic
     fn = TOOL_EXECUTORS.get(name)
     if fn is None:
         return {"error": f"unknown tool: {name}"}
+    if name in ADMIN_ONLY_TOOLS and not (context or {}).get("is_admin"):
+        logger.warning("carmen_report_tool_denied", tool=name, user_id=(context or {}).get("user_id"))
+        return {"error": "This tool is limited to admins."}
     try:
         if name == TOOL_NOTIFICATIONS:
             return fn(context or {}, **(arguments or {}))
-        if name in (TOOL_RENDER_LOOKAHEAD_PDF, TOOL_PROJECT_LOOKAHEAD, TOOL_EOS_FOR_OWNER):
+        if name in (
+            TOOL_RENDER_LOOKAHEAD_PDF,
+            TOOL_PROJECT_LOOKAHEAD,
+            TOOL_EOS_FOR_OWNER,
+            TOOL_QUERY_RELEASE_REPORT,
+            TOOL_RENDER_RELEASE_REPORT,
+        ):
             return fn(**(arguments or {}), context=context or {})
         return fn(**(arguments or {}))
     except TypeError as exc:

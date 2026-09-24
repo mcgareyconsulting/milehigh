@@ -1,6 +1,6 @@
 ---
 project: MHMW
-updated: 2026-09-23
+updated: 2026-09-24
 verified: origin/main @ c7682a6 (PR #387 improved splice v2)
 config:                       # inputs to derived math — store inputs, never results
   horizon:
@@ -2365,6 +2365,21 @@ point rather than discovering it in an answer.
 - 2026-09-05 · decision · src daniel-2026-09-05 — **all admins use this tool** (Daniel, David, Bill, Katie, …). No new gate was needed — `carmen_chat_required` already admits every admin — so the change is to the *framing*: tool description and system prompt now state it is not owner-restricted
 - 2026-09-05 · build · src — — **built** on `feature/carmen-hours-by-tag`: `resolve_window` (week ⟷ arbitrary range, unbounded-below supported), `by_tag` + `tag_coverage` with an explicit untagged bucket, `RANGE_CAPABLE_METRICS` so a range on a weekly metric errors instead of silently returning a week, `finite_hours` closing the NaN landmine, prompt guidance requiring the untagged share to be reported, and `--start`/`--end` on the eyeball harness. 12 new tests in `tests/carmen_chat/test_tools.py`
 - 2026-09-05 · verification · src — — read-only sandbox run, Aug 1 – Sep 5: 34 releases, 639.58 fab hrs, **81% of hours untagged** (517.9 of 639.58 across 25 releases). Confirms both the query and the reason the untagged bucket had to be visible
+- 2026-09-24 · note · src katie-carmen-chats — Katie asked nine times for the release list behind this breakdown. The hours tool still returns a capped sample and defaults to the current week. The list is **N21**, a read-only report, not another prompt.
+
+### N21 · Release report — the list behind the billing tag
+*W2 · built · class fix · due — · deps N1 · owner daniel · src katie-carmen-chats-2026-09-23 · upd 2026-09-24*
+
+Effort M. **Katie Hearn, Aug 12 – Sep 23.** She asked Carmen nine times for the releases tagged Change Order, and once for notes containing "Needs Executed." The hours-by-tag tool (N16) can total a week. It cannot list the rows: it caps the sample at 100, defaults to the current Mon–Sun, and a "break out by project" turn came back empty, then as totals that were not the releases. Two of those replies cost half of everything she has spent in Carmen.
+
+**What shipped.** An admin-only Carmen tool. She filters the releases table — billing tag (including Untagged), invoice progress, install progress, notes, project, release, stage, PM, assigned installer, released-from/to — against Actives (the job log), Archive, or both, then reasons over that cut and attaches the PDF and CSV. Soft-deleted rows stay out. Drafting workload is not included. Dates default to the whole set, not the current week. Counts are the full match. There is no standalone Reports page.
+
+**Trail**
+- 2026-09-24 · finding · src katie-carmen-chats — six conversations, 36 messages. The scorecard questions worked. The list questions did not: no billing-tag list tool, a 100-row cap, a week default, an empty reply, then a breakdown Carmen later took back.
+- 2026-09-24 · decision · src — — this is a report page, not a Carmen tool. A chat that samples rows cannot promise the list. N16 stays the hours prompt.
+- 2026-09-24 · build · src — — `app/reports/` query + CSV + PDF, `/reports` for khearn and admins. Tests in `tests/test_release_report.py` cover the full change-order list past 100 rows, untagged, notes, progress, archive, splice hours, and that the CSV and PDF are the JSON list.
+- 2026-09-24 · decision · src — — Carmen calls that same query. `query_release_report` lets her read the cut and call it again to compare. `render_release_report` writes the PDF and CSV of the cut she settled on. Counts are the full match. Row text shown to the model stops at 200 so she cannot invent a list she did not see, and she is told to narrow and call again. The hours tool stays the week total, not the list.
+- 2026-09-24 · decision · src — — the `/reports` page and `GET /api/reports/releases` are removed. The list is the admin Carmen tool only.
 
 ### N17 · Carmen chat surface — side-push panel, poppable out
 *W4 · not-started · class fix · due — · deps — · owner daniel · src bill-2026-09-02#L1305 · upd 2026-09-05*

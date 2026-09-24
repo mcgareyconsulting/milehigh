@@ -52,4 +52,5 @@ from app.brain.metrics import routes as metrics_routes  # noqa: F401  (registers
 from app.brain.install_schedule import routes as install_schedule_routes  # noqa: F401  (registers /install-schedule endpoints)
 from app.brain.subs import routes as subs_routes  # noqa: F401  (registers /subs endpoints)
 from app.brain.lookahead import routes as lookahead_routes  # noqa: F401  (registers /lookahead PDF endpoints)
+from app.reports import carmen_routes as release_report_downloads  # noqa: F401  (registers /reports/artifacts downloads)
 from app.brain.directory import routes as directory_routes  # noqa: F401  (registers /directory endpoint)
