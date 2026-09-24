@@ -5,9 +5,12 @@
  * exports:
  *   useJobsFilters: Hook returning filter state, stage options/colors, displayJobs, KPI totals, and reset/toggle handlers
  * imports_from: [react, ../utils/fabHours, ../utils/jobLogColumns, ../utils/unassignedLane, ../utils/readyToShipColumn]
- * imported_by: [../pages/JobLog.jsx, ../pages/Archive.jsx]
+ * imported_by: [../pages/ReleasesLayout.jsx, ../pages/Archive.jsx]
  * invariants:
  *   - selectedProjectNames and selectedSubset are persisted to localStorage across sessions
+ *   - Column-header filters and column sort persist under caller-supplied keys
+ *     (default jl_column_filters / jl_column_sort). Archive passes its own keys
+ *     so a paint-color filter there does not rewrite the live Job Log.
  *   - Subset views apply stage-group filters then sort by fab_order, EXCEPT
  *     ready_to_ship and paint sort by stage priority (Ship Planning → Store at MHMW →
  *     Paint QC → Paint Start → Welded QC) then last_updated_at ascending.
@@ -73,9 +76,15 @@ function _getInstallModifier(stage) {
 /**
  * Custom hook for managing filters in Jobs
  * @param {Array} jobs - The raw jobs data to filter
+ * @param {{ columnFilterKey?: string, columnSortKey?: string }} [options]
+ *   localStorage keys for the per-column dropdown filters and the column sort.
+ *   Defaults keep the Job Log keys. Pass different keys for a view that must
+ *   not share that filter state (the Archive paint-color header).
  * @returns {Object} Filter state, options, handlers, and filtered rows
  */
-export function useJobsFilters(jobs = []) {
+export function useJobsFilters(jobs = [], options = {}) {
+    const columnFilterKey = options.columnFilterKey || 'jl_column_filters';
+    const columnSortKey = options.columnSortKey || 'jl_column_sort';
     // Filter state (persisted to localStorage)
     const [selectedProjectNames, setSelectedProjectNames] = useState(
         () => JSON.parse(localStorage.getItem('jl_projects') || '[]')
@@ -89,7 +98,7 @@ export function useJobsFilters(jobs = []) {
     // Per-column dropdown filters: { [columnName]: string[] of allowed values; '(Blanks)' represents null/empty }
     const [columnFilters, setColumnFiltersState] = useState(() => {
         try {
-            const raw = localStorage.getItem('jl_column_filters');
+            const raw = localStorage.getItem(columnFilterKey);
             return raw ? JSON.parse(raw) : {};
         } catch {
             return {};
@@ -98,7 +107,7 @@ export function useJobsFilters(jobs = []) {
     // Per-column sort override: { column: string|null, direction: 'asc'|'desc'|null }
     const [columnSort, setColumnSortState] = useState(() => {
         try {
-            const raw = localStorage.getItem('jl_column_sort');
+            const raw = localStorage.getItem(columnSortKey);
             const parsed = raw ? JSON.parse(raw) : null;
             if (parsed && parsed.column && (parsed.direction === 'asc' || parsed.direction === 'desc')) {
                 return parsed;
@@ -120,18 +129,18 @@ export function useJobsFilters(jobs = []) {
     }, [selectedSubset]);
     useEffect(() => {
         if (Object.keys(columnFilters).length === 0) {
-            localStorage.removeItem('jl_column_filters');
+            localStorage.removeItem(columnFilterKey);
         } else {
-            localStorage.setItem('jl_column_filters', JSON.stringify(columnFilters));
+            localStorage.setItem(columnFilterKey, JSON.stringify(columnFilters));
         }
-    }, [columnFilters]);
+    }, [columnFilters, columnFilterKey]);
     useEffect(() => {
         if (!columnSort.column || !columnSort.direction) {
-            localStorage.removeItem('jl_column_sort');
+            localStorage.removeItem(columnSortKey);
         } else {
-            localStorage.setItem('jl_column_sort', JSON.stringify(columnSort));
+            localStorage.setItem(columnSortKey, JSON.stringify(columnSort));
         }
-    }, [columnSort]);
+    }, [columnSort, columnSortKey]);
 
     const setColumnFilter = useCallback((column, values) => {
         setColumnFiltersState(prev => {
@@ -711,9 +720,9 @@ export function useJobsFilters(jobs = []) {
         setColumnSortState({ column: null, direction: null });
         localStorage.removeItem('jl_projects');
         localStorage.removeItem('jl_subset');
-        localStorage.removeItem('jl_column_filters');
-        localStorage.removeItem('jl_column_sort');
-    }, []);
+        localStorage.removeItem(columnFilterKey);
+        localStorage.removeItem(columnSortKey);
+    }, [columnFilterKey, columnSortKey]);
 
     return {
         // Filter state

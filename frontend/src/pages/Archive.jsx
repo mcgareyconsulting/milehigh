@@ -3,19 +3,21 @@
  * schema_version: 1
  * purpose: Displays archived job releases in a filterable, read-only table so users can review completed work and optionally un-archive entries.
  * exports:
- *   Archive: Page component rendering the archived-jobs table with project filters and search
- * imports_from: [react, react-router-dom, ../hooks/useArchiveDataFetching, ../hooks/useJobsFilters, ../components/JobsTableRow, ../services/jobsApi, ../utils/auth]
+ *   Archive: Page component rendering the archived-jobs table with project filters, search, and an Excel-style Paint Color header filter
+ * imports_from: [react, react-router-dom, ../hooks/useArchiveDataFetching, ../hooks/useJobsFilters, ../components/JobsTableRow, ../components/ColumnHeaderFilter, ../services/jobsApi, ../utils/auth]
  * imported_by: [App.jsx]
  * invariants:
  *   - Un-archive action is only available to admin users
  *   - Filter minimized state persists in localStorage under key 'ar_minimized'
- * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ *   - Paint Color header filter persists under ar_column_filters, separate from the live Job Log
+ * updated_by_agent: 2026-09-24T00:00:00Z
  */
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useArchiveDataFetching } from '../hooks/useArchiveDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import { JobsTableRow } from '../components/JobsTableRow';
+import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
 import { ReleaseHubModal } from '../components/ReleaseHubModal';
 import { PdfMarkupModal } from '../components/PdfMarkupModal';
 import { jobsApi } from '../services/jobsApi';
@@ -102,10 +104,38 @@ function Archive() {
         stageToGroup,
         stageGroupColors,
         displayJobs,
+        boardJobs,
         totalFabHrs,
         totalInstallHrs,
         resetFilters,
-    } = useJobsFilters(jobs);
+        columnFilters,
+        columnSort,
+        setColumnFilter,
+        setColumnSort,
+    } = useJobsFilters(jobs, {
+        // Own keys so a paint-color pick here does not filter the live Job Log.
+        columnFilterKey: 'ar_column_filters',
+        columnSortKey: 'ar_column_sort',
+    });
+
+    const paintColorSelected = columnFilters['Paint color'] ?? [];
+
+    // Colors reachable under the project / search / subset filters, ignoring the
+    // paint-color selection itself so checking one color does not hide the rest
+    // of the list (same Excel narrowing the Job Log header uses).
+    const paintColorOptions = useMemo(() => {
+        const set = new Set();
+        let hasBlanks = false;
+        for (const job of boardJobs) {
+            const v = job['Paint color'];
+            if (v === null || v === undefined || String(v).trim() === '') hasBlanks = true;
+            else set.add(String(v).trim());
+        }
+        return {
+            values: [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })),
+            hasBlanks,
+        };
+    }, [boardJobs]);
 
     useEffect(() => {
         if (restoredHub.current || loading) return;
@@ -378,6 +408,29 @@ function Archive() {
                                     </span>
                                 </div>
                             </div>
+
+                            {paintColorSelected.length > 0 && (
+                                <div className="flex items-center gap-1.5 min-w-0 overflow-x-auto border-t border-gray-200 dark:border-slate-600 pt-1.5">
+                                    <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 whitespace-nowrap shrink-0">Active filters:</span>
+                                    {paintColorSelected.map((value) => (
+                                        <span
+                                            key={value}
+                                            className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-xs font-medium shrink-0"
+                                        >
+                                            <span className="whitespace-nowrap">Paint Color: {value}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setColumnFilter('Paint color', paintColorSelected.filter((v) => v !== value))}
+                                                className="flex items-center justify-center w-4 h-4 rounded-full leading-none text-blue-500 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 hover:text-blue-800 dark:hover:text-blue-100 transition-colors"
+                                                aria-label={`Remove Paint Color filter ${value}`}
+                                                title={`Remove Paint Color: ${value}`}
+                                            >
+                                                ×
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {loading && (
@@ -432,13 +485,29 @@ function Archive() {
                                                     const isReleaseNumber = column === 'Release #';
                                                     const displayHeader = HEADER_OVERRIDES[column] ?? column;
                                                     const colWidthPct = columnWidthPercents[column];
+                                                    const isPaintColor = column === 'Paint color';
                                                     return (
                                                         <th
                                                             key={column}
                                                             className={`${isReleaseNumber ? 'px-0.5' : 'px-1'} py-1.5 text-jl-head align-middle text-center font-bold text-ink bg-head-bg leading-tight`}
                                                             style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                         >
-                                                            {displayHeader}
+                                                            {isPaintColor ? (
+                                                                <ColumnHeaderFilter
+                                                                    column={column}
+                                                                    values={paintColorOptions.values}
+                                                                    hasBlanks={paintColorOptions.hasBlanks}
+                                                                    selected={new Set(paintColorSelected)}
+                                                                    onChange={(next) => setColumnFilter(column, [...next])}
+                                                                    sort={columnSort}
+                                                                    onSort={(dir) => setColumnSort(column, dir)}
+                                                                    isActive={paintColorSelected.length > 0}
+                                                                >
+                                                                    {displayHeader}
+                                                                </ColumnHeaderFilter>
+                                                            ) : (
+                                                                displayHeader
+                                                            )}
                                                         </th>
                                                     );
                                                 })}
