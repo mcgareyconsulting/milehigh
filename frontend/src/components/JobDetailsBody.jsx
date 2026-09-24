@@ -1248,7 +1248,7 @@ export function JobDetailsBody({
                     </ControlRow>
                     <ControlRow
                         label="Billing tag"
-                        title="Contracted / Change Order / MHMW Cost — not shown on the job log row"
+                        title="Admins see a corner on the Job Log description: green for Contracted, yellow for Change Order and MHMW Cost."
                     >
                         <select
                             value={releaseTag || ''}

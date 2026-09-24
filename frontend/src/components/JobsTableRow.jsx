@@ -4,7 +4,7 @@
  * purpose: Renders a single job-log table row with inline stage editing, urgency indicators, action menus, and detail/date modals.
  * exports:
  *   JobsTableRow: Feature-rich table row for the Job Log with inline editing and admin actions
- * imports_from: [react, ../services/jobsApi, ../constants/jumpToHighlight, ./ReleaseHubModal, ./StartInstallDateModal, ./StageIconRow]
+ * imports_from: [react, ../services/jobsApi, ../constants/jumpToHighlight, ../constants/releaseTags, ./ReleaseHubModal, ./StartInstallDateModal, ./StageIconRow, ./BillingCornerTag]
  * imported_by: [frontend/src/pages/JobLog.jsx, frontend/src/pages/Archive.jsx]
  * invariants:
  *   - Stage dropdown options must stay in sync with constants/stages.js definitions
@@ -23,6 +23,8 @@ import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import { ReleaseHubModal } from './ReleaseHubModal';
 import { MaterialOrderBadge } from './MaterialOrderBadge';
 import { PhotoBadge } from './PhotoBadge';
+import { BillingCornerTag } from './BillingCornerTag';
+import { releaseTagLabel } from '../constants/releaseTags';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { StageIconRow } from './StageIconRow';
 import { ASAP_PROPAGATED_ROW_CLASS } from './AsapPropagationTag';
@@ -1423,11 +1425,14 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         // it just saves opening the hub to find out there is nothing to see.
                         const photoCount = Number(row.photo_count) || 0;
                         const photoNote = photoCount === 1 ? ' · 1 photo' : ` · ${photoCount} photos`;
+                        // Admins only. Green = contracted work. Yellow = Change Order or MHMW Cost.
+                        // Hover names which. No tag, no triangle.
+                        const billingLabel = isAdmin ? releaseTagLabel(row.release_tag) : null;
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
-                                title={`${hasText ? `${tooltipValue} — click to open` : 'Click to open'}${photoCount ? photoNote : ''}`}
+                                className={`relative px-1 ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
+                                title={`${hasText ? `${tooltipValue} — click to open` : 'Click to open'}${photoCount ? photoNote : ''}${billingLabel ? ` · ${billingLabel}` : ''}`}
                                 onClick={() => openHub('details')}
                             >
                                 <div
@@ -1454,6 +1459,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         {hasText ? rawValue : '—'}
                                     </span>
                                 </div>
+                                {isAdmin && <BillingCornerTag tag={row.release_tag} />}
                             </td>
                         );
                     }
