@@ -6,7 +6,7 @@
  * exports:
  *   StaffMobileTodos: Page component under StaffMobileShell.
  * imports_from: [react, react-router-dom, ../../services/todosApi, ../../services/notificationApi,
- *                ../../components/mobile/TodosMobile, ../../components/ReleaseHubModal, ../../hooks/useDaySchedule]
+ *                ../../components/mobile/TodosMobile]
  * imported_by: [App.jsx]
  */
 import { useMemo } from 'react';

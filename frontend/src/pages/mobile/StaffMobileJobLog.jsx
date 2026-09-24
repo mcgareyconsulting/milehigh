@@ -8,7 +8,7 @@
  * exports:
  *   StaffMobileJobLog: Page component under StaffMobileShell.
  * imports_from: [react, ../../hooks/useDaySchedule, ../../components/installSchedule/DaySchedule,
- *                ../../components/ReleaseHubModal, ../../components/sub/SubEmpty]
+ *                ../../components/sub/SubEmpty]
  * imported_by: [App.jsx]
  * invariants:
  *   - The lane list is the roster (GET /brain/installer-teams) behind the fixed Shipping Planning
