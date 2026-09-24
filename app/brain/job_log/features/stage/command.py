@@ -10,7 +10,7 @@ imported_by: [app/brain/job_log/routes.py]
 invariants:
   - fab_order re-tiering is delegated to features/fab_order/tier.py, shared with the Trello sync and job_comp paths
   - Setting stage='Complete' cascades job_comp='X'; leaving Complete clears job_comp='X'
-  - Paint Complete + hard start_install auto-rolls to Ship Planning (N5; generalizes ASAP intercept)
+  - Paint QC + hard start_install auto-rolls to Ship Planning (N5; generalizes ASAP intercept)
   - Ship Planning / Ship Complete apply N5 formula-date blanking only; a hard date keeps its color there (BUG-11)
   - A transition into `Install Start` or later dumps a hard date's color (COLOR_DUMP_STAGES);
     the date itself is kept — ASAP rows included, since ASAP no longer stamps a date
@@ -31,7 +31,7 @@ from app.models import Releases, db
 from app.services.job_event_service import JobEventService
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
-from app.api.helpers import GATE_ENTRY_STAGE
+from app.api.helpers import GATE_ENTRY_STAGE, canonical_stage
 from app.brain.job_log.features.stage.gate import (  # noqa: F401 — StagePhotoRequiredError re-exported for routes/tests
     StagePhotoRequiredError,
     gate_photo_exists,
@@ -133,6 +133,11 @@ class UpdateStageCommand:
     def execute(self) -> StageUpdateResult:
         from app.api.helpers import get_stage_group_from_stage
 
+        # Normalize a possibly-legacy stage name (old undo payload, stale client,
+        # inbound Trello) before any validation/gating so the old name never lands
+        # in the DB again (Paint QC rename, 2026-09-23).
+        self.stage = canonical_stage(self.stage)
+
         job_record: Releases = Releases.resolve(self.job_id, self.release)
         if not job_record:
             logger.debug("job_not_found", job=self.job_id, release=self.release)
@@ -143,7 +148,7 @@ class UpdateStageCommand:
         # Department photo gate (T13): a forward crossing between stage groups owes a
         # photo tagged with the destination department's entry stage, or a written
         # reason there is none. Checked against the REQUESTED stage, before the N5
-        # intercept below, so "Paint Complete" still demands its photo even when it
+        # intercept below, so "Paint QC" still demands its photo even when it
         # gets rerouted to Ship Planning. Skipped on undo (restoring a prior valid
         # state). Inbound Trello list moves never come through here — that bypass is
         # recorded on the roadmap (T13, Open question 6) and dies with T4.
@@ -162,10 +167,10 @@ class UpdateStageCommand:
                 )
                 raise StagePhotoRequiredError(gate_stage, requested_stage=self.stage)
 
-        # Paint Complete intercept (N5): hard start_install OR ASAP rips the release
+        # Paint QC intercept (N5): hard start_install OR ASAP rips the release
         # straight to Ship Planning (widens the earlier ASAP-only intercept). Override
         # self.stage so stage_group / fab_order / Trello target Ship Planning. Payload
-        # keeps `via: 'Paint Complete'` plus intercept flags for audit. One event, one move.
+        # keeps `via: 'Paint QC'` plus intercept flags for audit. One event, one move.
         event_payload = {'from': old_stage, 'to': self.stage}
         has_hard_install = (
             job_record.start_install_formulaTF is False
@@ -173,7 +178,7 @@ class UpdateStageCommand:
         )
         was_asap = bool(getattr(job_record, 'start_install_asap', False))
         if (
-            self.stage == 'Paint Complete'
+            self.stage == 'Paint QC'
             and (has_hard_install or was_asap)
             and old_stage != 'Ship Planning'
         ):
@@ -181,7 +186,7 @@ class UpdateStageCommand:
             event_payload = {
                 'from': old_stage,
                 'to': 'Ship Planning',
-                'via': 'Paint Complete',
+                'via': 'Paint QC',
             }
             if has_hard_install:
                 event_payload['hard_date_intercepted'] = True

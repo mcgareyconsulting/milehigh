@@ -178,7 +178,7 @@ def test_missing_install_does_not_invent_cascade():
 def test_paint_complete_stage_omits_fab_and_paint():
     out = build_lookahead_schedule(
         _pipeline(releases=[_release_row(
-            stage="Paint Complete",
+            stage="Paint QC",
             stage_group="READY_TO_SHIP",
             ship_date="2026-08-06",
             start_install="2026-08-10",

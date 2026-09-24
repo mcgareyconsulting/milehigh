@@ -4,7 +4,7 @@ ASAP is a FLAG, not a date. Flagging it marks the release red and nothing else �
 the user sets the hard start_install themselves, through the same modal, and that
 save is what writes the date, pushes Trello and recalcs scheduling. (It used to
 stamp start_install five business days out and derive comp_eta from num_guys;
-that placeholder is gone.) While set, a transition into stage 'Paint Complete'
+that placeholder is gone.) While set, a transition into stage 'Paint QC'
 makes UpdateStageCommand rip the release straight to 'Ship Planning' — one event
 in DB (action='update_stage', payload includes asap_intercepted/via), one Trello
 move (to Shipping planning list). Ship Complete KEEPS the flag (BUG-27); reaching
@@ -23,7 +23,7 @@ def _disable_stage_photo_gate():
     # Off via the master switch: since 2026-09-23 the gate derives its stages from
     # the stage_group axis (features/stage/gate.py), so emptying STAGE_PHOTO_GATES
     # no longer disarms it. This file's behavior is orthogonal to the gate.
-    # ASAP tests move releases to Paint Complete; the photo gate is covered
+    # ASAP tests move releases to Paint QC; the photo gate is covered
     # separately in tests/brain/test_stage_photo_gate.py.
     with patch("app.brain.job_log.features.stage.command.STAGE_PHOTO_GATE_ENABLED", False):
         yield
@@ -281,7 +281,7 @@ class TestAsapPmLimit:
 
 
 # ---------------------------------------------------------------------------
-# UpdateStageCommand: Paint Complete + ASAP → Ship Planning
+# UpdateStageCommand: Paint QC + ASAP → Ship Planning
 # ---------------------------------------------------------------------------
 
 class TestAsapAutoAdvance:
@@ -302,7 +302,7 @@ class TestAsapAutoAdvance:
 
             patches = _stage_command_patches()
             with patches[0] as outbox_add, patches[1], patches[2]:
-                UpdateStageCommand(job_id=1, release="A", stage="Paint Complete").execute()
+                UpdateStageCommand(job_id=1, release="A", stage="Paint QC").execute()
 
             db.session.refresh(r)
             assert r.stage == "Ship Planning"
@@ -320,7 +320,7 @@ class TestAsapAutoAdvance:
             assert stage_event.payload["to"] == "Ship Planning"
             assert stage_event.payload.get("asap_intercepted") is True
             assert stage_event.payload.get("hard_date_intercepted") is None
-            assert stage_event.payload.get("via") == "Paint Complete"
+            assert stage_event.payload.get("via") == "Paint QC"
 
             # Exactly one Trello outbox enqueue, tied to the stage event
             assert outbox_add.call_count == 1
@@ -344,12 +344,12 @@ class TestAsapAutoAdvance:
             from app.brain.job_log.features.stage.command import UpdateStageCommand
             patches = _stage_command_patches()
             with patches[0], patches[1], patches[2]:
-                UpdateStageCommand(job_id=1, release="A", stage="Paint Complete").execute()
+                UpdateStageCommand(job_id=1, release="A", stage="Paint QC").execute()
 
             db.session.refresh(r)
-            assert r.stage == "Paint Complete"
+            assert r.stage == "Paint QC"
             stage_event = ReleaseEvents.query.filter_by(action="update_stage").one()
-            assert stage_event.payload["to"] == "Paint Complete"
+            assert stage_event.payload["to"] == "Paint QC"
             assert stage_event.payload.get("asap_intercepted") is None
 
     def test_re_apply_paint_complete_when_already_ship_planning_is_noop(self, app):
@@ -368,14 +368,14 @@ class TestAsapAutoAdvance:
             from app.brain.job_log.features.stage.command import UpdateStageCommand
             patches = _stage_command_patches()
             with patches[0], patches[1], patches[2]:
-                UpdateStageCommand(job_id=1, release="A", stage="Paint Complete").execute()
+                UpdateStageCommand(job_id=1, release="A", stage="Paint QC").execute()
 
             db.session.refresh(r)
             # Not intercepted — old_stage was already 'Ship Planning' so the guard
-            # bypasses the override. Normal Paint Complete transition occurs.
-            assert r.stage == "Paint Complete"
+            # bypasses the override. Normal Paint QC transition occurs.
+            assert r.stage == "Paint QC"
             ev = ReleaseEvents.query.filter_by(action="update_stage").one()
-            assert ev.payload["to"] == "Paint Complete"
+            assert ev.payload["to"] == "Paint QC"
             assert ev.payload.get("asap_intercepted") is None
 
 

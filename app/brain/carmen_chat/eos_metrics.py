@@ -117,7 +117,8 @@ DETAIL_CAP = 100
 _STAGE_ALIASES: dict[str, str] = {
     "shipping completed": "Ship Complete",
     "shipping planning": "Ship Planning",
-    "paint complete": "Paint Complete",
+    "paint complete": "Paint QC",
+    "paint qc": "Paint QC",
     "fit up complete.": "Fitup Complete",
     "fit up complete": "Fitup Complete",
     "cut start": "Cut Start",
@@ -129,7 +130,7 @@ _STAGE_ALIASES: dict[str, str] = {
 _POST_FAB_STAGES = frozenset({
     "Welded QC",
     "Paint Start",
-    "Paint Complete",
+    "Paint QC",
     "Store at MHMW",
     "Ship Planning",
     "Ship Complete",
@@ -395,7 +396,7 @@ def canonicalize_stage(label: str | None) -> str | None:
     s = str(label).strip()
     # Exact known
     if get_fab_modifier(s) != 1.0 or s in (
-        "Released", "Material Ordered", "Hold", "Paint Complete", "Store at MHMW",
+        "Released", "Material Ordered", "Hold", "Paint QC", "Store at MHMW",
         "Ship Planning", "Ship Complete", "Install Start", "Install Complete",
         "Complete", "Welded QC", "Weld Complete",
     ):

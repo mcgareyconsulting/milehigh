@@ -31,7 +31,7 @@ describe('the dump zone', () => {
         expect(isInstallStartOrLater(s)).toBe(true);
     });
 
-    it.each(['Ship Planning', 'Ship Complete', 'Paint Complete', 'Store at MHMW'])(
+    it.each(['Ship Planning', 'Ship Complete', 'Paint QC', 'Store at MHMW'])(
         'excludes %s', (s) => {
             expect(isInstallStartOrLater(s)).toBe(false);
         });
@@ -79,11 +79,11 @@ describe('color drops at Install Start or later', () => {
 
 describe('precedence and the rest', () => {
     it('honors the stored noColor flag at any stage', () => {
-        expect(hard({ stage: 'Paint Complete', noColor: true }).isNoColor).toBe(true);
+        expect(hard({ stage: 'Paint QC', noColor: true }).isNoColor).toBe(true);
     });
 
     it('treats ASAP as outranking a hard date, matching the backend', () => {
-        const c = hard({ stage: 'Paint Complete', asap: true });
+        const c = hard({ stage: 'Paint QC', asap: true });
         expect(c.isAsap).toBe(true);
         expect(c.isHardDate).toBe(false);
     });

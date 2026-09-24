@@ -36,7 +36,7 @@ export const STAGE_TO_GROUP = {
     'Hold':             'FABRICATION',
     'Welded QC':        'PAINT',
     'Paint Start':      'PAINT',
-    'Paint Complete':   'READY_TO_SHIP',
+    'Paint QC':         'READY_TO_SHIP',
     'Store at MHMW':    'READY_TO_SHIP',
     'Ship Planning':    'READY_TO_SHIP',
     'Ship Complete':    'COMPLETE',
@@ -49,7 +49,7 @@ export const STAGE_GROUP_ORDER = ['FABRICATION', 'PAINT', 'READY_TO_SHIP', 'COMP
 
 export const GATE_ENTRY_STAGE = {
     PAINT: 'Welded QC',
-    READY_TO_SHIP: 'Paint Complete',
+    READY_TO_SHIP: 'Paint QC',
     COMPLETE: 'Ship Complete',
 };
 

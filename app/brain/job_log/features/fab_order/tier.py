@@ -10,7 +10,7 @@ imports_from: [app.models, app.api.helpers, app.services.job_event_service, app.
 imported_by: [app/brain/job_log/features/stage/command.py, app/brain/job_log/routes.py, app/trello/sync.py]
 invariants:
   - Stage 'Complete' is terminal — fab_order is always NULL there
-  - Fixed-tier stages always hold their tier value (0 Install, 1 Ship Complete, 2 Paint Complete/Store/Ship Planning)
+  - Fixed-tier stages always hold their tier value (0 Install, 1 Ship Complete, 2 Paint QC/Store/Ship Planning)
   - Dynamic stages never hold a reserved value (< 3) or NULL — arriving with one is repaired to the back of that stage's deck
   - The DB field is written even when the audit event deduplicates; a dropped event must never leave fab_order stale
 updated_by_agent: 2026-08-15T00:00:00Z

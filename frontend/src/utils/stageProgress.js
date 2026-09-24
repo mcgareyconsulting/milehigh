@@ -46,7 +46,7 @@ export const STAGE_TO_ICON_ROW = {
     'Welded QC':        ['yellow', 'yellow', 'yellow', 'yellow', 'gray',   'gray',   'gray'],
     'Hold':             ['yellow', 'yellow', 'yellow', 'gray',   'gray',   'gray',   'gray'],
     'Paint Start':      ['yellow', 'yellow', 'yellow', 'yellow', 'green',  'gray',   'gray'],
-    'Paint Complete':   ['yellow', 'yellow', 'yellow', 'yellow', 'yellow', 'gray',   'gray'],
+    'Paint QC':         ['yellow', 'yellow', 'yellow', 'yellow', 'yellow', 'gray',   'gray'],
     'Store at MHMW':    ['yellow', 'yellow', 'yellow', 'yellow', 'yellow', 'gray',   'gray'],
     'Ship Planning':    ['yellow', 'yellow', 'yellow', 'yellow', 'yellow', 'green',  'gray'],
     'Ship Complete':    ['yellow', 'yellow', 'yellow', 'yellow', 'yellow', 'yellow', 'gray'],

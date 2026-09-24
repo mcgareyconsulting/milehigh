@@ -17,7 +17,7 @@ import { isCompleteStage } from './stageProgress';
 const STAGE_COMPLETENESS = {
     'Released':         0, 'Material Ordered': 1, 'Cut Start':       2, 'Cut Complete':     3,
     'Fitup Start':      4, 'Fitup Complete':   5, 'Weld Start':      6, 'Weld Complete':    7,
-    'Welded QC':        9, 'Paint Start':     10, 'Paint Complete': 11,
+    'Welded QC':        9, 'Paint Start':     10, 'Paint QC':       11,
     'Store at MHMW':   12, 'Ship Planning':   13, 'Ship Complete':  14,
     'Install Start':   15, 'Install Complete':16, 'Complete':       17,
 };

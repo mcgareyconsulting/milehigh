@@ -8,7 +8,7 @@ Shop' into 'Store at MHMW' (lossy — the distinction is gone post-migration).
 The new canonical names are:
     Released, Material Ordered, Cut Start, Cut Complete, Fitup Start,
     Fitup Complete, Weld Start, Weld Complete, Hold, Welded QC, Paint Start,
-    Paint Complete, Store at MHMW, Ship Planning, Ship Complete,
+    Paint QC, Store at MHMW, Ship Planning, Ship Complete,
     Install Start, Install Complete, Complete.
 
 Usage:
@@ -36,8 +36,9 @@ STAGE_RENAMES = {
     "Fit Up Complete":            "Fitup Complete",
     "Fit up Comp":                "Fitup Complete",
     "Fitup comp":                 "Fitup Complete",
-    "Paint complete":             "Paint Complete",
-    "Paint comp":                 "Paint Complete",
+    "Paint complete":             "Paint QC",
+    "Paint comp":                 "Paint QC",
+    "Paint Complete":             "Paint QC",
     "Store at Shop":              "Store at MHMW",
     "Store at MHMW for shipping": "Store at MHMW",
     "Shipping planning":          "Ship Planning",

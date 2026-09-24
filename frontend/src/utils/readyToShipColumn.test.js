@@ -1,7 +1,7 @@
 /**
  * Ready-to-Ship column membership + order (utils/readyToShipColumn).
  *
- * The column is two work sections — Paint Complete, then Store at MHMW, each soonest-date first —
+ * The column is two work sections — Paint QC, then Store at MHMW, each soonest-date first —
  * plus a trailing visibility-only block of ASAPs still in Fab or Paint.
  */
 import { describe, it, expect } from 'vitest';
@@ -11,7 +11,7 @@ const rel = (over = {}) => ({
     id: over.id ?? Math.floor(Math.random() * 1e6),
     'Job #': 560,
     'Release #': '100',
-    'Stage': 'Paint Complete',
+    'Stage': 'Paint QC',
     'Stage Group': 'READY_TO_SHIP',
     'Start install': null,
     start_install_formulaTF: true,
@@ -22,8 +22,8 @@ const rel = (over = {}) => ({
 const ids = (rows) => rows.map((r) => r['Release #']);
 
 describe('isReadyToShip', () => {
-    it('takes Paint Complete and Store at MHMW with no hard date', () => {
-        expect(isReadyToShip(rel({ Stage: 'Paint Complete' }))).toBe(true);
+    it('takes Paint QC and Store at MHMW with no hard date', () => {
+        expect(isReadyToShip(rel({ Stage: 'Paint QC' }))).toBe(true);
         expect(isReadyToShip(rel({ Stage: 'Store at MHMW' }))).toBe(true);
     });
 
@@ -62,11 +62,11 @@ describe('isUpstreamAsap', () => {
 });
 
 describe('selectReadyToShip', () => {
-    it('orders Paint Complete, then Store at MHMW, then upstream ASAPs, tagging each section', () => {
+    it('orders Paint QC, then Store at MHMW, then upstream ASAPs, tagging each section', () => {
         const rows = selectReadyToShip([
             rel({ 'Release #': 'fab', Stage: 'Cut Start', 'Stage Group': 'FABRICATION', start_install_asap: true }),
             rel({ 'Release #': 'store', Stage: 'Store at MHMW' }),
-            rel({ 'Release #': 'paint', Stage: 'Paint Complete' }),
+            rel({ 'Release #': 'paint', Stage: 'Paint QC' }),
         ]);
         expect(ids(rows)).toEqual(['paint', 'store', 'fab']);
         expect(rows.map((r) => r._rtsSection)).toEqual(['paint', 'store', 'upstream']);

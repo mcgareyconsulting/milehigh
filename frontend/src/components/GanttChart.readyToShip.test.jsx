@@ -28,7 +28,7 @@ const rel = (over = {}) => ({
     'Release #': '923',
     'Job': 'Alta Metro',
     'Description': 'Bldg C stair',
-    'Stage': 'Paint Complete',
+    'Stage': 'Paint QC',
     'Stage Group': 'READY_TO_SHIP',
     'Start install': null,
     start_install_formulaTF: true,
@@ -63,7 +63,7 @@ const MIXED = () => [
 ];
 
 describe('Ready-to-Ship column sections', () => {
-    it('groups Paint Complete, then Store at MHMW, then the Fab/Paint ASAPs, each group by date', async () => {
+    it('groups Paint QC, then Store at MHMW, then the Fab/Paint ASAPs, each group by date', async () => {
         mockJobs.current = MIXED();
         const { container } = await renderChart();
         const cards = within(readyColumn(container)).getAllByRole('button').map((b) => b.textContent);
@@ -82,7 +82,7 @@ describe('Ready-to-Ship column sections', () => {
         // Everything in the column is a card; nothing sits between them.
         expect(col.querySelectorAll('[role="button"]').length).toBe(4);
         expect(col.textContent).not.toMatch(/ASAP · in Fab/);
-        expect(within(col).getAllByText('Paint Comp').length).toBe(2);
+        expect(within(col).getAllByText('Paint QC').length).toBe(2);
     });
 
     it('counts only the in-shop holds as needing a ship date', async () => {
@@ -146,7 +146,7 @@ describe('staging card shape', () => {
         mockJobs.current = MIXED();
         const { container } = await renderChart();
         expect(within(cardFor(container, '560-store')).getByText('Store').title).toBe('Store at MHMW');
-        expect(within(cardFor(container, '560-paint-early')).getByText('Paint Comp').title).toBe('Paint Complete');
+        expect(within(cardFor(container, '560-paint-early')).getByText('Paint QC').title).toBe('Paint QC');
         expect(within(cardFor(container, '560-rush')).getByText('Cut Start')).toBeInTheDocument();
     });
 });

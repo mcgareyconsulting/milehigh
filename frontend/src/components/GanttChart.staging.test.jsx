@@ -30,8 +30,8 @@ const rel = (over = {}) => ({
     'Release #': '923',
     'Job': 'Alta Metro',
     'Description': 'Bldg C stair',
-    'Stage': 'Paint Complete',
-    // Hard-dated: since T12 the tray takes a Store / Paint Complete release only once it has a day.
+    'Stage': 'Paint QC',
+    // Hard-dated: since T12 the tray takes a Store / Paint QC release only once it has a day.
     'Start install': '2026-09-10',
     start_install_formulaTF: false,
     start_install_asap: false,

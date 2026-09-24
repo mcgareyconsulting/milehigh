@@ -106,7 +106,7 @@ class TestFabToPaint:
         with app.app_context():
             r = _make_release(1, "A")
             db.session.commit()
-            _add_photo(r.id, "Paint Complete")
+            _add_photo(r.id, "Paint QC")
             _expect_gate(1, "A", "Welded QC", gate="Welded QC")
 
 
@@ -115,11 +115,11 @@ class TestPaintToShip:
         with app.app_context():
             r = _make_release(1, "A", stage="Paint Start", stage_group="PAINT")
             db.session.commit()
-            _expect_gate(1, "A", "Paint Complete", gate="Paint Complete")
-            _add_photo(r.id, "Paint Complete")
-            _run(1, "A", "Paint Complete")
+            _expect_gate(1, "A", "Paint QC", gate="Paint QC")
+            _add_photo(r.id, "Paint QC")
+            _run(1, "A", "Paint QC")
             db.session.refresh(r)
-            assert r.stage == "Paint Complete"
+            assert r.stage == "Paint QC"
             assert r.stage_group == "READY_TO_SHIP"
 
 
@@ -253,19 +253,19 @@ class TestN5Intercept:
         with app.app_context():
             self._hard_dated_paint_start()
             db.session.commit()
-            _expect_gate(1, "A", "Paint Complete", gate="Paint Complete")
+            _expect_gate(1, "A", "Paint QC", gate="Paint QC")
 
     def test_with_photo_the_intercept_lands_on_ship_planning(self, app):
         with app.app_context():
             r = self._hard_dated_paint_start()
             db.session.commit()
-            _add_photo(r.id, "Paint Complete")
-            _run(1, "A", "Paint Complete")
+            _add_photo(r.id, "Paint QC")
+            _run(1, "A", "Paint QC")
             db.session.refresh(r)
             assert r.stage == "Ship Planning"
             payload = _stage_event(1, "A").payload
-            assert payload["via"] == "Paint Complete"
-            assert payload["gate"] == "Paint Complete"
+            assert payload["via"] == "Paint QC"
+            assert payload["gate"] == "Paint QC"
 
 
 # ---------------------------------------------------------------------------

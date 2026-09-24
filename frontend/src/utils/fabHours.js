@@ -27,7 +27,7 @@ export const FAB_MODIFIER = {
     'Hold':             0.0,
     'Welded QC':        0.0,
     'Paint Start':      0.0,
-    'Paint Complete':   0.0,
+    'Paint QC':         0.0,
     'Store at MHMW':    0.0,
     'Ship Planning':    0.0,
     'Ship Complete':    0.0,

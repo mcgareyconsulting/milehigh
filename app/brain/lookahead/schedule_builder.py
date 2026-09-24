@@ -89,7 +89,7 @@ LEGEND = {
 
 # Stages at or past which remaining shop work (fab/paint) is done.
 _POST_PAINT = frozenset({
-    "paint complete", "store at mhmw", "ship planning", "ship complete",
+    "paint qc", "store at mhmw", "ship planning", "ship complete",
     "install start", "install complete", "complete",
 })
 _POST_FAB = frozenset({
@@ -129,7 +129,7 @@ def _needs_fab(stage: Optional[str], is_complete: bool) -> bool:
     key = _stage_key(stage)
     if key in _POST_FAB:
         return False
-    # Remaining hours map: Paint Complete+ are 0; Welded QC / Paint Start still have shop work
+    # Remaining hours map: Paint QC+ are 0; Welded QC / Paint Start still have shop work
     # that is paint-ish, but fab remaining is already low — still show fab only pre-Welded QC.
     return key not in _POST_FAB
 
@@ -167,7 +167,7 @@ def _gc_stage_label(row: dict) -> str:
         return "Shipped"
     if stage in ("ship planning", "store at mhmw"):
         return "Ready to ship"
-    if stage in ("paint start", "paint complete"):
+    if stage in ("paint start", "paint qc"):
         return "In paint"
     if stage in ("welded qc",):
         return "Fabrication complete — paint / QC"

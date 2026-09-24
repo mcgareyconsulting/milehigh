@@ -60,8 +60,8 @@ describe('shipLaneDropOutcome', () => {
     });
 
     it('lets a release arrive from outside the shipping stages', () => {
-        expect(shipLaneDropOutcome(row({ 'Stage': 'Paint Complete' }), 'Ship Planning').kind).toBe('write');
-        expect(shipLaneDropOutcome(row({ 'Stage': 'Paint Complete' }), SHIP_COMPLETE_STAGE).kind).toBe('write');
+        expect(shipLaneDropOutcome(row({ 'Stage': 'Paint QC' }), 'Ship Planning').kind).toBe('write');
+        expect(shipLaneDropOutcome(row({ 'Stage': 'Paint QC' }), SHIP_COMPLETE_STAGE).kind).toBe('write');
     });
 
     it('treats a missing stage as "not there yet" rather than matching', () => {

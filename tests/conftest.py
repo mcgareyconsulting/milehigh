@@ -200,7 +200,7 @@ def tag_gate_photo(release_row, stage, *, is_deleted=False):
     """Attach a ReleasePhoto tagged `stage` to `release_row`.
 
     Satisfies the department photo gate (features/stage/gate.py) for a transition that
-    owes that stage's photo — Fab→Paint: 'Welded QC', Paint→Ship: 'Paint Complete',
+    owes that stage's photo — Fab→Paint: 'Welded QC', Paint→Ship: 'Paint QC',
     Ship→Install: 'Ship Complete' (see gate_stage_for). Flushes, not commits, like
     make_release. Columns mirror tests/brain/test_stage_photo_gate.py.
     """

@@ -109,7 +109,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         { value: 'Weld Complete', label: 'Weld comp' },
         { value: 'Welded QC', label: 'Welded QC' },
         { value: 'Paint Start', label: 'Paint Start' },
-        { value: 'Paint Complete', label: 'Paint comp' },
+        { value: 'Paint QC', label: 'Paint QC' },
         { value: 'Hold', label: 'Hold' },
         { value: 'Store at MHMW', label: 'Store' },
         { value: 'Ship Planning', label: 'Ship plan' },
@@ -179,7 +179,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(110 231 183)',
             className: 'bg-emerald-100 text-emerald-800 border-emerald-300'
         },
-        'Paint Complete': {
+        'Paint QC': {
             light: 'rgb(209 250 229)', // emerald-100 (green)
             base: 'rgb(16 185 129)', // emerald-500
             dark: 'rgb(5 150 105)', // emerald-600
@@ -1273,7 +1273,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         }
 
                         const titleText = isAsap
-                            ? `ASAP ${displayValue} — release will jump from Paint Complete to Shipping Planning. Click to edit.`
+                            ? `ASAP ${displayValue} — release will jump from Paint QC to Shipping Planning. Click to edit.`
                             : isFormulaDate
                                 ? `${displayValue} (Formula-driven - Click to set hard date)`
                                 : `${displayValue} - Click to edit`;

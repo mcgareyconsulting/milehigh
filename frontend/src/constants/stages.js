@@ -13,7 +13,7 @@ export const STAGE_OPTIONS = [
     { value: 'Weld Complete', label: 'Weld comp' },
     { value: 'Welded QC', label: 'Welded QC' },
     { value: 'Paint Start', label: 'Paint Start' },
-    { value: 'Paint Complete', label: 'Paint comp' },
+    { value: 'Paint QC', label: 'Paint QC' },
     { value: 'Hold', label: 'Hold' },
     { value: 'Store at MHMW', label: 'Store' },
     { value: 'Ship Planning', label: 'Ship plan' },

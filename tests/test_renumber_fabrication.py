@@ -47,7 +47,7 @@ def test_does_not_touch_non_fabrication_rows(app):
         make_release(2, "A", "Welded QC", "READY_TO_SHIP", 3)
         make_release(3, "A", "Paint Start", "READY_TO_SHIP", 4)
         make_release(4, "A", "Ship Complete", "COMPLETE", 1)
-        make_release(5, "A", "Paint Complete", "READY_TO_SHIP", 2)
+        make_release(5, "A", "Paint QC", "READY_TO_SHIP", 2)
         make_release(6, "A", "Complete", "COMPLETE", None)
         db.session.commit()
 

@@ -51,7 +51,7 @@
  *     sits on ship = install − 1 business day), so the hard Start install written is the column plus
  *     one business day — which is both what makes the card land under the pointer and the rule as
  *     stated, "start_install = next business day" [bill-2026-09-16#L1336–L1358]. The DATE is written first: the
- *     backend rolls Store at MHMW / Paint Complete into Ship Planning off the back of it
+ *     backend rolls Store at MHMW / Paint QC into Ship Planning off the back of it
  *     (ship_planning_roll.py) and links the two events, so the drop undoes as one bundle. Only a
  *     card from further upstream (a Fab or Paint ASAP, which gets no roll) needs the stage named
  *     explicitly afterwards — ROLLS_TO_SHIP_PLANNING is what decides, and it mirrors the server's set.
@@ -66,14 +66,14 @@
  *     whenever an installer is assigned — regardless of stage or install hours. So one release can
  *     appear in two lanes (its shipping lane + its installer lane), both backed by the same raw row
  *     (1:1 data). A release with no shipping stage and no installer appears nowhere.
- *   - The UNASSIGNED TRAY holds rows with no installer whose Stage is Paint Complete / Store at MHMW /
+ *   - The UNASSIGNED TRAY holds rows with no installer whose Stage is Paint QC / Store at MHMW /
  *     Ship Planning (utils/unassignedLane — the same set the Job Log's "Ready to Ship" quick filter
  *     uses, imported from one place so the two surfaces cannot drift) AND that already carry a hard
  *     Start install date (Ship Planning rows always qualify). Deliberately not "any release
  *     with no installer": that pulls in every drafting and fab row and the tray stops being a work
  *     surface. A tray release in Ship Planning ALSO appears in its shipping lane, like the mirror.
- *   - The READY TO SHIP COLUMN holds the rows the tray's date test excludes — Paint Complete / Store
- *     at MHMW with NO hard Start install, grouped Paint Complete then Store at MHMW (by card tint and
+ *   - The READY TO SHIP COLUMN holds the rows the tray's date test excludes — Paint QC / Store
+ *     at MHMW with NO hard Start install, grouped Paint QC then Store at MHMW (by card tint and
  *     order, no headers — each card names its own stage in its pill), each group sorted by date — plus a trailing, NON-DRAGGABLE block of ASAPs still in Fab or Paint, tagged
  *     "in Fab" / "in Paint", for visibility (utils/readyToShipColumn). The two columns are DISJOINT
  *     by construction, so no
@@ -493,7 +493,7 @@ function trayDateState(job) {
 // abbreviated; anything unlisted shows verbatim (and truncates if it has to).
 const STAGE_PILL_LABEL = {
     'Store at MHMW': 'Store',
-    'Paint Complete': 'Paint Comp',
+    'Paint QC': 'Paint QC',
     'Ship Planning': 'Ship Plan',
     'Ship Complete': 'Shipped',
     'Fit Up Complete': 'Fit Up',

@@ -38,7 +38,7 @@ logger = get_logger(__name__)
 # READY_TO_SHIP_COLUMN_STAGES / ROLLS_TO_SHIP_PLANNING (frontend/src/utils/readyToShipColumn.js,
 # frontend/src/components/GanttChart.jsx) — the Timeline decides whether it must name the stage
 # itself off this exact set, so keep the two identical.
-ROLL_STAGES = ("Store at MHMW", "Paint Complete")
+ROLL_STAGES = ("Store at MHMW", "Paint QC")
 
 SHIP_PLANNING_STAGE = "Ship Planning"
 

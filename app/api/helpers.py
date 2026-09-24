@@ -12,6 +12,7 @@ exports:
   get_stage_group_from_stage: Resolve a stage name to its group with case-insensitive fallback
   add_scheduling_fields_to_jobs: Enrich job dicts with projected dates and queue metrics
   get_fab_order_bounds: Return (lower, upper) fab_order constraints for a stage
+  canonical_stage: Resolve a possibly-legacy stage name (LEGACY_STAGE_ALIASES) to its current canonical form
 imports_from: [typing, datetime, app.models]
 imported_by: [app/api/routes.py, app/seed.py, app/trello/api.py, app/trello/list_mapper.py, app/trello/scripts/sync_releases.py, app/trello/scripts/find_missing_cards.py, app/brain/job_log/routes.py, app/brain/job_log/features/fab_order/command.py, app/brain/job_log/features/fab_order/migrate_unified.py, app/brain/job_log/features/fab_order/fix_null_fab_orders.py]
 invariants:
@@ -19,6 +20,8 @@ invariants:
   - FIXED_TIER_STAGES (tiers 0-2) are reserved; dynamic fab_order must be >= 3
   - STAGE_HOUR_PERCENTAGES must have an entry for every stage in STAGE_TO_GROUP (asserted in tests)
   - clamp_fab_order skips bounds when lower >= upper (inverted ranges from overlapping stages)
+  - LEGACY_STAGE_ALIASES/canonical_stage renames old stage names on the way in so a stale
+    value (old undo payload, stale client, inbound Trello) never lands in the DB again
 updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
 
 Helper functions for transforming job data for API responses.
@@ -59,7 +62,7 @@ STAGE_TO_GROUP = {
     "Paint Start":      "PAINT",
 
     # READY_TO_SHIP — the in-shop holds between the booth and the truck
-    "Paint Complete":   "READY_TO_SHIP",
+    "Paint QC":         "READY_TO_SHIP",
     "Store at MHMW":    "READY_TO_SHIP",
     "Ship Planning":    "READY_TO_SHIP",
 
@@ -80,7 +83,7 @@ STAGE_GROUP_ORDER = ["FABRICATION", "PAINT", "READY_TO_SHIP", "COMPLETE"]
 # same. FABRICATION has no entry gate; a release is born there.
 GATE_ENTRY_STAGE = {
     "PAINT":         "Welded QC",
-    "READY_TO_SHIP": "Paint Complete",
+    "READY_TO_SHIP": "Paint QC",
     "COMPLETE":      "Ship Complete",
 }
 
@@ -89,14 +92,14 @@ DEFAULT_FAB_ORDER = 80.555
 
 # Fixed tiers: stages auto-assigned to a shared fab_order value (not user-orderable).
 # Tier 0 is reserved for the post-shipping/installation stages (closest to done);
-# tier 1 = Ship Complete; tier 2 = Paint Complete + the in-shop shipping holds.
+# tier 1 = Ship Complete; tier 2 = Paint QC + the in-shop shipping holds.
 # Stage='Complete' is intentionally NOT in any tier — Complete releases hold
 # fab_order=NULL (terminal stage; nothing to order). The fab_order migration
 # clears any stale value on Complete releases.
 FIXED_TIER_STAGES = {
     0: ["Install Start", "Install Complete"],
     1: ["Ship Complete"],
-    2: ["Paint Complete", "Store at MHMW", "Ship Planning"],
+    2: ["Paint QC", "Store at MHMW", "Ship Planning"],
 }
 
 # Dynamic stages ordered by priority (lower index = lower fab_order = closer to completion).
@@ -132,7 +135,7 @@ STAGE_ORDER = {
         "Paint Start",
     ],
     "READY_TO_SHIP": [
-        "Paint Complete",
+        "Paint QC",
         "Store at MHMW",
         "Ship Planning",
     ],
@@ -161,7 +164,7 @@ STAGE_HOUR_PERCENTAGES = {
     "Hold":             {"fab": 0,   "install": 100},
     "Welded QC":        {"fab": 0,   "install": 100},
     "Paint Start":      {"fab": 0,   "install": 100},
-    "Paint Complete":   {"fab": 0,   "install": 100},
+    "Paint QC":         {"fab": 0,   "install": 100},
     "Store at MHMW":    {"fab": 0,   "install": 100},
     "Ship Planning":    {"fab": 0,   "install": 100},
     "Ship Complete":    {"fab": 0,   "install": 100},
@@ -234,7 +237,7 @@ STAGE_PROGRESSION_RANK = {
     "Weld Complete":     7,
     "Welded QC":         9,
     "Paint Start":      10,
-    "Paint Complete":   11,
+    "Paint QC":         11,
     "Store at MHMW":    12,
     "Ship Planning":    13,
     "Ship Complete":    14,
@@ -243,6 +246,22 @@ STAGE_PROGRESSION_RANK = {
     "Complete":         17,
     "Hold":             99,
 }
+
+
+# Backward-compat rename map: old canonical stage name -> current canonical name.
+# An old DB row, the undo of a pre-rename ReleaseEvents payload, or a stale client
+# can still send the old name; canonicalize it before validation/gating so the old
+# name never lands in the DB again (Paint QC rename, 2026-09-23).
+LEGACY_STAGE_ALIASES = {
+    "Paint Complete": "Paint QC",
+}
+
+
+def canonical_stage(stage: Optional[str]) -> Optional[str]:
+    """Resolve a possibly-legacy stage name to its current canonical form."""
+    if not stage:
+        return stage
+    return LEGACY_STAGE_ALIASES.get(stage, stage)
 
 
 def _normalize_stage(stage: Optional[str]) -> Optional[str]:

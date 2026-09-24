@@ -16,7 +16,7 @@
  *   - Membership is "no installer assigned AND (ready to ship OR stored at Mile High OR past paint
  *     complete)". Deliberately NOT "any release with no installer": that pulls in every drafting and
  *     fabrication row and the column stops being a work surface.
- *   - The two staging columns are DISJOINT. A Store-at-MHMW / Paint-Complete release with no hard
+ *   - The two staging columns are DISJOINT. A Store-at-MHMW / Paint-QC release with no hard
  *     Start install date belongs to the Ready-to-Ship column (./readyToShipColumn), not here, so no
  *     card is ever shown twice. The pipeline reads left to right: Ready to Ship (no date yet) →
  *     dropped on Shipping Planning, which stamps the date → Unassigned (dated, needs a crew) →
@@ -37,9 +37,9 @@
 import { hasHardInstall } from './shipLaneDrop';
 
 // The three shop states Bill named as the staging intake: "see what's ready to ship, see what's
-// stored at Mile High, grab anything past paint complete." Canonical DB Stage values — see
+// stored at Mile High, grab anything past paint QC." Canonical DB Stage values — see
 // app/api/helpers.py STAGE_PROGRESSION_RANK (11, 12, 13).
-export const READY_TO_SHIP_STAGES = ['Ship Planning', 'Store at MHMW', 'Paint Complete'];
+export const READY_TO_SHIP_STAGES = ['Ship Planning', 'Store at MHMW', 'Paint QC'];
 
 // The lane a dated release belongs in. Named here because both staging columns key off it: it is
 // the Ready-to-Ship column's exit and the Unassigned tray's unconditional member.
@@ -57,7 +57,7 @@ const installerOf = (job) => String(job?.installer ?? '').trim();
  * scheduled. A release that already has an installer lives in that installer's lane instead, so it
  * must never appear in both places.
  *
- * An undated Store-at-MHMW / Paint-Complete release is deliberately NOT here: it has not been
+ * An undated Store-at-MHMW / Paint-QC release is deliberately NOT here: it has not been
  * given a day yet, so the question it is waiting on is "when does this ship", not "who installs
  * it". That one belongs to the Ready-to-Ship column immediately to the left.
  */

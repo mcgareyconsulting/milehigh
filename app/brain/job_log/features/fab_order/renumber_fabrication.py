@@ -34,7 +34,7 @@ def renumber_fabrication_fab_orders(dry_run=False):
     """Compress FABRICATION-group fab_order values to a contiguous 3..N block.
 
     Preserves the current relative order. Does not touch any release outside
-    FABRICATION (i.e. ignores Welded QC, Paint Start, Paint Complete, Store at
+    FABRICATION (i.e. ignores Welded QC, Paint Start, Paint QC, Store at
     MHMW, Ship Planning, Ship Complete, Install Start/Complete, Complete) —
     fab_order space is split per stage_group.
 

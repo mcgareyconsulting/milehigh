@@ -22,7 +22,7 @@
  *     is meant to surface. Hard-vs-projected is `hasHardInstall` (./shipLaneDrop), the same test the
  *     ship lanes and the Job Log's Start install cell use.
  *   - Two intakes:
- *       (a) the in-shop holds — Store at MHMW and Paint Complete with no hard Start install. These
+ *       (a) the in-shop holds — Store at MHMW and Paint QC with no hard Start install. These
  *          are the column's WORK: each needs a ship day, and is dragged to Shipping Planning for one.
  *       (b) ASAPs still in Paint or Fabrication, for VISIBILITY only — the shipping desk should see
  *          rush work coming before it lands. Setting ASAP always writes a hard date, so these are
@@ -31,7 +31,7 @@
  *          on Shipping Planning would move a release that is still being built.
  *   - DISJOINT from the Unassigned tray by construction (see ./unassignedLane): the tray keeps the
  *     dated and the Ship Planning rows, this column keeps the undated ones. No card appears twice.
- *   - Sections, in order: Paint Complete, Store at MHMW, then the upstream ASAPs as a trailing block
+ *   - Sections, in order: Paint QC, Store at MHMW, then the upstream ASAPs as a trailing block
  *     (a heads-up about what is coming never interleaves with painted steel on the floor). Each row
  *     is tagged `_rtsSection` so the column can draw a header where the section changes; upstream
  *     rows also carry `_asapOrigin` ('Fab' / 'Paint') for the card's "in Fab" / "in Paint" chip.
@@ -44,7 +44,7 @@ import { hasHardInstall } from './shipLaneDrop';
 
 // This column's own intake: the Ready-to-Ship set (./unassignedLane) minus Ship Planning, which is
 // where a release goes when it LEAVES here. Canonical DB Stage values — app/api/helpers.py.
-export const READY_TO_SHIP_COLUMN_STAGES = ['Store at MHMW', 'Paint Complete'];
+export const READY_TO_SHIP_COLUMN_STAGES = ['Store at MHMW', 'Paint QC'];
 
 // Stages that make up the Paint department (also the Job Log's `paint` quick-filter set).
 export const PAINT_STAGES = ['Welded QC', 'Paint Start'];
@@ -57,7 +57,7 @@ const stageGroupOf = (job) => String(job?.['Stage Group'] ?? '').trim();
 
 // Display order of the column's sections. Keys are what `_rtsSection` carries.
 export const READY_TO_SHIP_SECTIONS = [
-    { key: 'paint', label: 'Paint Complete' },
+    { key: 'paint', label: 'Paint QC' },
     { key: 'store', label: 'Store at MHMW' },
     { key: 'upstream', label: 'ASAP · in Fab / Paint' },
 ];
@@ -83,7 +83,7 @@ export const isUpstreamAsap = (job) =>
 
 const sectionOf = (job) => {
     if (isUpstreamAsap(job)) return 'upstream';
-    return stageOf(job) === 'Paint Complete' ? 'paint' : 'store';
+    return stageOf(job) === 'Paint QC' ? 'paint' : 'store';
 };
 
 /**
