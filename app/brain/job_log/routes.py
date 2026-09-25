@@ -2954,10 +2954,10 @@ def get_event_filters():
         internal_ids = {r[0] for r in user_id_rows if r[0] is not None}
         users = []
         if internal_ids:
+            from app.models import user_display_name
             for u in User.query.filter(User.id.in_(internal_ids)).all():
-                full_name = f"{u.first_name or ''} {u.last_name or ''}".strip()
-                display = full_name or u.username or f"User {u.id}"
-                users.append({'id': u.id, 'name': display})
+                users.append({'id': u.id, 'name': user_display_name(u) or f"User {u.id}",
+                              'is_agent': bool(u.is_agent)})
             users.sort(key=lambda x: x['name'])
 
         return jsonify({'dates': dates, 'sources': sources, 'users': users, 'total': len(dates)}), 200
@@ -2971,7 +2971,7 @@ def _resolve_event_user_names(all_events):
     via the users table.
     Returns dict: event_key -> user_display (e.g. "John Smith" or None).
     """
-    from app.models import User
+    from app.models import User, user_display_name
 
     # Collect all internal user IDs
     internal_ids = set()
@@ -2980,11 +2980,12 @@ def _resolve_event_user_names(all_events):
         if iid is not None:
             internal_ids.add(iid)
 
+    # user_display_name tags agent accounts "(agent)" so a bot's rows never read
+    # as a person in the events views.
     user_by_id = {}
     if internal_ids:
         for u in User.query.filter(User.id.in_(internal_ids)).all():
-            full_name = f"{u.first_name or ''} {u.last_name or ''}".strip()
-            user_by_id[u.id] = (full_name or u.username or f"User {u.id}").strip()
+            user_by_id[u.id] = (user_display_name(u) or f"User {u.id}").strip()
 
     # Subcontractor actors carry no internal id; their events are stamped
     # external_user_id="sub:<subcontractors.id>" (the sub portal's note composer).

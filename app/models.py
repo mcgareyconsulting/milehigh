@@ -33,8 +33,13 @@ def _dt(value):
     return value.isoformat() if value else None
 
 
+# Appended to an agent account's display name by user_display_name().
+AGENT_NAME_SUFFIX = "(agent)"
+
+
 def user_display_name(user):
     """Canonical byline for a user: "First Last", falling back to the username.
+    Agent accounts get the AGENT_NAME_SUFFIX appended ("Grok Bot (agent)").
 
     Every path that stamps a person's name onto a comment or a mention
     notification goes through this. Writing the byline two ways (first name on
@@ -44,7 +49,12 @@ def user_display_name(user):
     if user is None:
         return None
     full = f"{(user.first_name or '').strip()} {(user.last_name or '').strip()}".strip()
-    return full or user.username
+    name = full or user.username
+    # Agent accounts (User.is_agent) are labelled everywhere a name is shown or
+    # stamped, so an audit row written by a bot never reads as a person.
+    if getattr(user, 'is_agent', False):
+        return f"{name} {AGENT_NAME_SUFFIX}"
+    return name
 
 
 def _byline_by_first_name():
@@ -109,6 +119,14 @@ class User(db.Model):
     # per-user from the admin UI so we can roll the feature out incrementally without
     # a redeploy. server_default keeps the ADD COLUMN metadata-only on Postgres.
     is_carmen_chat = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    # Non-human login. An external agent (e.g. a Grok bot) that performs actions in
+    # the Brain signs in with its OWN account so every audit row it writes carries
+    # the agent's users.id, never the sponsoring human's. `agent_sponsor_user_id`
+    # records which employee vouches for the agent; it is display-only (no
+    # permission inheritance — the agent's own role flags govern what it can do).
+    # Created via scripts/create_agent_user.py; never through the first-login flow.
+    is_agent = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    agent_sponsor_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     procore_id = db.Column(db.String(255), unique=True, nullable=True)
     trello_id = db.Column(db.String(255), unique=True, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -122,6 +140,9 @@ class User(db.Model):
     submittal_events = db.relationship(
         'SubmittalEvents', backref='user', lazy='dynamic',
         foreign_keys='SubmittalEvents.internal_user_id'
+    )
+    agent_sponsor = db.relationship(
+        'User', remote_side='User.id', foreign_keys=[agent_sponsor_user_id], lazy='select'
     )
     
     def __repr__(self):

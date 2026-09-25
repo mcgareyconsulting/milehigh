@@ -26,7 +26,7 @@ from app.brain import brain_bp
 from app.auth.utils import admin_required, get_current_user
 from app.logging_config import get_logger
 from app.route_utils import handle_errors, require_json
-from app.models import User, Subcontractor, db
+from app.models import User, Subcontractor, db, user_display_name
 
 logger = get_logger(__name__)
 
@@ -91,14 +91,22 @@ def _sort_key(row):
 
 
 def _employee_row(user):
-    return {
+    row = {
         "id": user.id,
         "first_name": user.first_name or "",
         "last_name": user.last_name or "",
         "email": user.username or "",
         "role": employee_role(user),
         "role_key": employee_role_key(user),
+        "is_agent": bool(user.is_agent),
     }
+    if user.is_agent:
+        # Who vouches for the bot. Display-only; the agent's own role governs access.
+        sponsor = user.agent_sponsor
+        row["agent_sponsor"] = (
+            {"id": sponsor.id, "name": user_display_name(sponsor)} if sponsor else None
+        )
+    return row
 
 
 def _subcontractor_row(sub):

@@ -39,12 +39,8 @@ def _user_names(ids):
     ids = {i for i in ids if i is not None}
     if not ids:
         return {}
-    names = {}
-    for u in User.query.filter(User.id.in_(ids)).all():
-        first = (u.first_name or "").strip()
-        last = (u.last_name or "").strip()
-        names[u.id] = (f"{first} {last}".strip()) or u.username
-    return names
+    from app.models import user_display_name
+    return {u.id: user_display_name(u) for u in User.query.filter(User.id.in_(ids)).all()}
 
 
 def _sorted_user_list(counts, names, value_key="count"):

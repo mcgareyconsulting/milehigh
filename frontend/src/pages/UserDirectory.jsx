@@ -64,6 +64,21 @@ function RoleBadge({ role }) {
     );
 }
 
+// Non-human login (users.is_agent). Shown beside the name so a bot account is
+// never mistaken for an employee; the hover names the sponsoring employee.
+function AgentBadge({ row }) {
+    if (!row.is_agent) return null;
+    const sponsor = row.agent_sponsor?.name;
+    return (
+        <span
+            className="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 align-middle"
+            title={sponsor ? `Agent account sponsored by ${sponsor}` : 'Agent account'}
+        >
+            agent
+        </span>
+    );
+}
+
 // The editable permission control. A bare <select> rather than a modal: role is the
 // only writable field on the row, so a round-trip through a dialog buys nothing.
 //
@@ -137,6 +152,7 @@ function DirectorySection({ title, rows, editableRoles, roles, currentUserId, pe
                                 <div className="flex items-center justify-between gap-2 mb-1.5">
                                     <span className="text-sm font-semibold text-ink">
                                         {fullName(row)}
+                                        <AgentBadge row={row} />
                                     </span>
                                     {renderRole(row)}
                                 </div>
@@ -160,7 +176,10 @@ function DirectorySection({ title, rows, editableRoles, roles, currentUserId, pe
                                 {rows.map((row) => (
                                     <tr key={row.id} className="border-t border-hairline">
                                         <td className="px-3 py-2 text-ink truncate">{display(row.first_name)}</td>
-                                        <td className="px-3 py-2 text-ink truncate">{display(row.last_name)}</td>
+                                        <td className="px-3 py-2 text-ink truncate">
+                                            {display(row.last_name)}
+                                            <AgentBadge row={row} />
+                                        </td>
                                         <td className="px-3 py-2 text-ink-2 truncate">{display(row.email)}</td>
                                         <td className="px-3 py-2 whitespace-nowrap">
                                             {renderRole(row)}
