@@ -68,7 +68,8 @@ def login():
         session['username'] = user.username
         session.permanent = True
 
-        logger.info("user_logged_in", user_id=user.id, username=user.username)
+        logger.info("user_logged_in", user_id=user.id, username=user.username,
+                    is_agent=bool(user.is_agent))
         
         return jsonify({
             'status': 'success',
@@ -76,7 +77,8 @@ def login():
                 'id': user.id,
                 'username': user.username,
                 'is_admin': user.is_admin,
-                'is_drafter': user.is_drafter
+                'is_drafter': user.is_drafter,
+                'is_agent': bool(user.is_agent),
             }
         }), 200
 
@@ -113,6 +115,7 @@ def get_current_user_info():
             'is_admin': user.is_admin,
             'is_drafter': user.is_drafter,
             'is_carmen_chat': bool(getattr(user, 'is_carmen_chat', False)),
+            'is_agent': bool(user.is_agent),
             'is_active': user.is_active,
             'last_login': user.last_login.isoformat() if user.last_login else None
         }), 200

@@ -244,10 +244,16 @@ function Login({ onLogin }) {
                                     <label htmlFor="username" className="sr-only">
                                         Email
                                     </label>
+                                    {/* type="text", not "email": agent accounts (users.is_agent)
+                                        sign in with a bare username like "grok-bot" and have no
+                                        mailbox. Employees still type their email here. */}
                                     <input
                                         id="username"
                                         name="username"
-                                        type="email"
+                                        type="text"
+                                        inputMode="email"
+                                        autoCapitalize="none"
+                                        spellCheck={false}
                                         required
                                         autoComplete="username"
                                         className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-slate-500 placeholder-gray-500 dark:placeholder-slate-400 text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-700 rounded-t-md focus:outline-none focus:ring-accent-500 focus:border-accent-500 focus:z-10 sm:text-sm"

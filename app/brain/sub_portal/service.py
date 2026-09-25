@@ -38,7 +38,7 @@ from app.brain.job_log.utils import serialize_value
 from app.logging_config import get_logger
 from app.models import (
     ChecklistItem, Notification, ReleaseDrawingVersion, ReleaseEvents, ReleasePhoto,
-    Releases, Subcontractor, User, db,
+    Releases, Subcontractor, User, db, user_display_name,
 )
 
 logger = get_logger(__name__)
@@ -412,7 +412,7 @@ SUB_ACTOR_PREFIX = 'sub:'
 
 
 def _actor_names(events):
-    """{event.id: (name, kind)} for staff (users) and subcontractor ("sub:<id>") actors."""
+    """{event.id: (name, kind)} for staff / agent (users) and subcontractor ("sub:<id>") actors."""
     uids = {e.internal_user_id for e in events if e.internal_user_id}
     sids = set()
     for e in events:
@@ -425,8 +425,7 @@ def _actor_names(events):
     for e in events:
         if e.internal_user_id and e.internal_user_id in users:
             u = users[e.internal_user_id]
-            name = f"{(u.first_name or '').strip()} {(u.last_name or '').strip()}".strip() or u.username
-            out[e.id] = (name, 'staff')
+            out[e.id] = (user_display_name(u), 'agent' if u.is_agent else 'staff')
             continue
         ext = e.external_user_id or ''
         if ext.startswith(SUB_ACTOR_PREFIX) and ext[len(SUB_ACTOR_PREFIX):].isdigit():

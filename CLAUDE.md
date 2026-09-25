@@ -93,6 +93,8 @@ Key decorators in `app/auth/utils.py`:
 
 Helper: `get_current_user()` returns the `User` from session (returns `None` outside request context, e.g. background threads).
 
+Actor attribution in every audit table (`ReleaseEvents`, `SubmittalEvents`, board/issue/photo rows) is the session's `users.id` only — there is no API-key auth, no user-agent or IP capture, and no "acting on behalf of" field. An external bot (e.g. a Grok agent) therefore gets its OWN account: `User.is_agent` marks it, `User.agent_sponsor_user_id` names the employee who vouches for it (display-only; the agent's own role flags govern access). `user_display_name()` appends `(agent)` to its name, so every events view, metrics rollup, sub-portal activity row and byline shows it as an agent. Create one with `scripts/create_agent_user.py` (dry-run by default, `--apply` to write); schema via `migrations/add_agent_users.py`. Never let a bot share an employee's login — the audit cannot tell them apart.
+
 ### Data flow
 Three external systems feed into the app via webhooks and scheduled polling:
 
