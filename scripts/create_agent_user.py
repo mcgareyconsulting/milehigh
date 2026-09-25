@@ -8,22 +8,29 @@ users.id. A bot signed in with an employee's personal credentials is
 indistinguishable from that employee. With its own account the bot's rows carry
 its own id, and user_display_name() tags it "(agent)" in every events view.
 
-Upserts ONE User row by username (email). Sets password directly (password_set=True,
-so the first-login flow never applies), marks is_agent=True, records the sponsoring
+Upserts ONE User row by username. Marks is_agent=True, records the sponsoring
 employee, and assigns a role. The agent's OWN role flags govern what it may do —
 nothing is inherited from the sponsor.
+
+Password, one of:
+  --password '...'   set it now (password_set=True; the first-login flow never applies)
+  --claimable        leave password_set=False so whoever signs the bot in picks the
+                     password on the login page (check-user -> set-password flow).
+                     Anyone who knows the username can claim it until then, so create
+                     it right before they sit down to do it.
 
 Dry-run by default — prints what it would do. Pass --apply to write.
 
     .venv/bin/python -m scripts.create_agent_user \\
-        --username grok-bot@mhmw.com --name "Grok Bot" \\
+        --username grok-bot --name "Grok Bot" \\
         --sponsor doug@mhmw.com --role default \\
-        --password 'pick-a-real-one' --apply
+        --claimable --apply
 
 Respects ENVIRONMENT from .env (local / sandbox / production) like the app does.
 Never prints the password back. Requires migrations/add_agent_users.py to have run.
 """
 import argparse
+import secrets
 
 from app import create_app
 from app.auth.utils import hash_password
@@ -45,12 +52,16 @@ def main():
     parser.add_argument("--sponsor", default=None, help="username (email) of the employee who vouches for the agent")
     parser.add_argument("--role", default=None, choices=sorted(ROLE_FLAGS),
                         help="permission role (default role 'default' when creating)")
-    parser.add_argument("--password", default=None, help="min 8 chars (required when creating)")
+    parser.add_argument("--password", default=None, help="min 8 chars; sets the password now")
+    parser.add_argument("--claimable", action="store_true",
+                        help="create with password_set=False so the password is chosen on first login")
     parser.add_argument("--apply", action="store_true", help="Write the row. Default is dry-run.")
     args = parser.parse_args()
 
     if args.password is not None and len(args.password) < 8:
         parser.error("--password must be at least 8 characters")
+    if args.password and args.claimable:
+        parser.error("--password and --claimable are mutually exclusive")
 
     app = create_app()
     with app.app_context():
@@ -73,12 +84,16 @@ def main():
 
         role = args.role
         if user is None:
-            if not (args.name and args.password):
-                parser.error("--name and --password are required to create a new agent")
+            if not args.name:
+                parser.error("--name is required to create a new agent")
+            if not (args.password or args.claimable):
+                parser.error("pass --password to set it now, or --claimable to let the "
+                             "first sign-in choose it")
             role = role or "default"
             first, last = _split_name(args.name)
             print(f"CREATE agent username={username} name={args.name!r} role={role} "
-                  f"sponsor={sponsor.username if sponsor else None!r}")
+                  f"sponsor={sponsor.username if sponsor else None!r} "
+                  f"password={'set now' if args.password else 'claimable on first login'}")
         else:
             first, last = _split_name(args.name) if args.name else (user.first_name, user.last_name)
             print(f"UPDATE agent id={user.id} username={username} "
@@ -86,17 +101,21 @@ def main():
                   f"role {employee_role_key(user)} -> {role or employee_role_key(user)}, "
                   f"sponsor {user.agent_sponsor_user_id!r} -> "
                   f"{sponsor.id if sponsor else user.agent_sponsor_user_id!r}, "
-                  f"password {'reset' if args.password else 'unchanged'}, active -> True)")
+                  f"password {'reset' if args.password else ('reopened for first-login setup' if args.claimable else 'unchanged')}, "
+                  f"active -> True)")
 
         if not args.apply:
             print("Dry-run: nothing written. Re-run with --apply.")
             return
 
         if user is None:
+            # A claimable account gets an unguessable throwaway hash so /login
+            # cannot succeed until /set-password (gated on password_set=False)
+            # overwrites it.
             user = User(
                 username=username,
-                password_hash=hash_password(args.password),
-                password_set=True,
+                password_hash=hash_password(args.password or secrets.token_urlsafe(32)),
+                password_set=bool(args.password),
                 is_active=True,
                 is_agent=True,
                 first_name=first,
@@ -108,14 +127,20 @@ def main():
             if args.password:
                 user.password_hash = hash_password(args.password)
                 user.password_set = True
+            elif args.claimable:
+                user.password_hash = hash_password(secrets.token_urlsafe(32))
+                user.password_set = False
         if role:
             user.is_admin, user.is_drafter = ROLE_FLAGS[role]
         if sponsor is not None:
             user.agent_sponsor_user_id = sponsor.id
         user.is_active = True
         db.session.commit()
-        print(f"OK agent id={user.id} ready: sign in at /login with {username}; "
-              f"its audit rows will read \"{first} {last}\".strip() + \" (agent)\"")
+        label = f"{first} {last}".strip()
+        how = ("sign in at /login" if user.password_set
+               else "first sign-in at /login will prompt to set the password")
+        print(f"OK agent id={user.id} ready: {how} with {username}; "
+              f"its audit rows will read \"{label} (agent)\"")
 
 
 if __name__ == "__main__":

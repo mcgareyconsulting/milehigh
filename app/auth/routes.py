@@ -232,7 +232,8 @@ def set_password():
         session['username'] = user.username
         session.permanent = True
 
-        logger.info("password_set", user_id=user.id, username=user.username)
+        logger.info("password_set", user_id=user.id, username=user.username,
+                    is_agent=bool(user.is_agent))
 
         return jsonify({
             'status': 'success',
@@ -240,7 +241,8 @@ def set_password():
                 'id': user.id,
                 'username': user.username,
                 'is_admin': user.is_admin,
-                'is_drafter': user.is_drafter
+                'is_drafter': user.is_drafter,
+                'is_agent': bool(user.is_agent),
             }
         }), 200
 
