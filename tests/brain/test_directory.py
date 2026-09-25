@@ -42,6 +42,7 @@ def test_directory_splits_employees_and_subcontractors(app, admin_client):
         "email": "carendt@mhmw.com",
         "role": "Drafter",
         "role_key": "drafter",
+        "is_agent": False,
     }
     # Admin wins over a legacy row that also carries is_drafter.
     assert employees["boneill@mhmw.com"]["role"] == "Admin"
@@ -57,6 +58,22 @@ def test_directory_splits_employees_and_subcontractors(app, admin_client):
     assert subs["sam@acme.test"]["role"] == "Subcontractor"
     assert subs["solo@acme.test"]["first_name"] == "Madonna"
     assert subs["solo@acme.test"]["last_name"] == ""
+
+
+def test_directory_labels_agent_accounts_with_sponsor(app, admin_client):
+    from app.models import db
+    sponsor = make_user("doug@mhmw.com", first_name="Doug", last_name="Smith")
+    bot = make_user("grok-bot", first_name="Grok", last_name="Bot")
+    bot.is_agent = True
+    bot.agent_sponsor_user_id = sponsor.id
+    db.session.commit()
+
+    body = admin_client.get("/brain/directory").get_json()
+    rows = {row["email"]: row for row in body["employees"]}
+    assert rows["grok-bot"]["is_agent"] is True
+    assert rows["grok-bot"]["agent_sponsor"] == {"id": sponsor.id, "name": "Doug Smith"}
+    assert rows["doug@mhmw.com"]["is_agent"] is False
+    assert "agent_sponsor" not in rows["doug@mhmw.com"]
 
 
 def test_directory_omits_secrets(app, admin_client):
