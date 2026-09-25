@@ -17,6 +17,40 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.395',
+    date: 'September 24, 2026',
+    summary:
+      'The photo gate can use photos already on the release. The Archive filters by paint color, the Job Log shows the billing tag, and Carmen can build a release report.',
+    changes: [
+      {
+        type: 'improved',
+        title: 'The photo gate can use photos already on the release',
+        detail:
+          'When a stage move asks for a photo, tick any photo already on the release and it is tagged for that department. Upload adds several at once. Take photo adds one shot at a time. Subs get the same on their phone.',
+      },
+      {
+        type: 'new',
+        title: 'Filter the Archive by paint color',
+        detail:
+          'The Paint Color column header on the Archive has a checklist filter. Picked colors show as chips above the table. It does not affect the Job Log.',
+      },
+      {
+        type: 'new',
+        adminOnly: true,
+        title: 'The billing tag shows on the Job Log',
+        detail:
+          'A small triangle in the corner of the description cell: green for Contracted, yellow for Change Order or MHMW Cost, none when untagged.',
+      },
+      {
+        type: 'new',
+        adminOnly: true,
+        title: 'Ask Carmen for a release report',
+        detail:
+          'Ask for the releases tagged Change Order, or with a note that says Needs Executed, on one project or across the Archive. Carmen filters by billing tag, notes, invoice and install progress, project, release, stage, PM, or installer, gives the counts, and attaches a PDF and CSV of every row.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.390',
     date: 'September 23, 2026',
     summary:
